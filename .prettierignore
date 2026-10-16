@@ -1,0 +1,3 @@
+node_modules/
+build/
+quality/wemake-baseline.json

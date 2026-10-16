@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Countersign</title>
+    <script src="/theme.js" defer></script>
+    <link rel="stylesheet" href="/dashboard.css" />
+  </head>
+  <body>
+    <header>
+      <div>
+        <h1>Countersign</h1>
+        <small>Plan → implement → review</small>
+      </div>
+      <div class="header-actions">
+        <div id="connection" role="status">Connecting…</div>
+        <button id="theme-toggle" type="button" aria-label="Dark theme" aria-pressed="false">
+          Dark theme
+        </button>
+      </div>
+    </header>
+    <main>
+      <nav aria-label="Tasks">
+        <button id="new-task" type="button" class="primary">+ New task</button
+        ><input id="filter" placeholder="Search tasks" aria-label="Search tasks" />
+        <div id="runs"></div>
+      </nav>
+      <article>
+        <section id="composer" hidden>
+          <h2>New task</h2>
+          <p class="muted">
+            Describe the outcome. The planner will discover related files and propose the change
+            scope.
+          </p>
+          <form id="task-form">
+            <label for="task-title">Title *</label
+            ><input
+              id="task-title"
+              name="title"
+              required
+              maxlength="160"
+              placeholder="Rebuild the API image without cache"
+            />
+            <fieldset>
+              <legend>Projects *</legend>
+              <p class="hint">
+                Use paths on the computer running this server. Roots must exist and must not
+                overlap.
+              </p>
+              <div id="project-roots"></div>
+              <button id="add-root" type="button">Add project</button>
+            </fieldset>
+            <label for="task-goal">Goal *</label
+            ><textarea
+              id="task-goal"
+              name="goal"
+              required
+              maxlength="16000"
+              placeholder="What behavior should change, and why?"
+            ></textarea>
+            <label
+              ><input type="checkbox" name="read_only" id="task-read-only" /> Answer only (no source
+              changes)</label
+            >
+            <label for="task-criteria">Acceptance criteria *</label
+            ><textarea
+              id="task-criteria"
+              name="criteria"
+              required
+              maxlength="16000"
+              placeholder="Observable outcomes that prove the task is complete."
+            ></textarea>
+            <details>
+              <summary>Additional context</summary>
+              <label for="task-current">Current behavior or relevant logs</label
+              ><textarea id="task-current" name="current_behavior" maxlength="16000"></textarea>
+              <label for="task-entry">Known entry points</label
+              ><textarea
+                id="task-entry"
+                name="entry_points"
+                maxlength="16000"
+                placeholder="project/path/to/file — optional; the planner can discover related files."
+              ></textarea>
+              <label for="task-constraints">Additional constraints</label
+              ><textarea
+                id="task-constraints"
+                name="constraints"
+                maxlength="16000"
+                placeholder="Compatibility, settings or behavior that must remain unchanged."
+              ></textarea>
+              <label for="task-verification">Deferred runtime checks</label
+              ><textarea
+                id="task-verification"
+                name="verification"
+                maxlength="16000"
+                placeholder="One check per line: action and expected result."
+              ></textarea>
+              <p class="hint">These checks are listed in the report, not executed automatically.</p>
+            </details>
+            <p class="hint">
+              This task edits original project files. Unrelated changes must be preserved. No Git
+              commands, deployment or automatic rollback. Models and timeouts come from the server
+              settings.
+            </p>
+            <p id="form-error" role="alert"></p>
+            <div class="form-actions">
+              <button id="create-task" type="submit" class="primary">Create and run</button
+              ><button id="cancel-task" type="button">Cancel</button>
+            </div>
+          </form>
+        </section>
+        <div id="chat">
+          <div id="empty">
+            Select a run or create a new task. Progress and conclusions update automatically.
+          </div>
+        </div>
+        <section id="followup-panel" hidden>
+          <h2>Continue the conversation</h2>
+          <form id="followup-form">
+            <label for="reply-goal">Goal *</label>
+            <textarea
+              id="reply-goal"
+              required
+              maxlength="16000"
+              placeholder="What should change, or what would you like to understand?"
+            ></textarea>
+            <label for="reply-intent">Mode</label>
+            <select id="reply-intent">
+              <option value="followup">Change code</option>
+              <option value="answer">Answer only</option>
+            </select>
+            <p class="hint">
+              A new planning pass uses current sources and saved task conclusions. Previous runs and
+              partial edits are preserved.
+            </p>
+            <p id="reply-error" role="alert"></p>
+            <button id="send-reply" type="submit">Send and start planning</button>
+          </form>
+        </section>
+      </article>
+      <aside id="monitor" aria-label="Run monitoring">
+        <h2>Monitoring</h2>
+        <p class="muted">Select a task to see live usage.</p>
+      </aside>
+    </main>
+    <script src="/dashboard.js"></script>
+  </body>
+</html>

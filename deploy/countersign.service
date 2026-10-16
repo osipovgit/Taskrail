@@ -1,0 +1,29 @@
+[Unit]
+Description=Countersign application
+Documentation=https://www.freedesktop.org/software/systemd/man/systemd.service.html
+After=network.target
+StartLimitIntervalSec=60
+StartLimitBurst=5
+
+[Service]
+Type=simple
+WorkingDirectory=%h/.local/share/countersign/current
+Environment=PYTHONUNBUFFERED=1
+Environment=PYTHONDONTWRITEBYTECODE=1
+Environment=COUNTERSIGN_WEB_PORT=8787
+EnvironmentFile=-%h/.config/countersign/service.env
+ExecStart="%h/.local/share/countersign/current/venv/bin/python" -m countersign.web.service --settings "%h/.config/countersign/settings.json" --port ${COUNTERSIGN_WEB_PORT}
+ExecStartPost="%h/.local/share/countersign/current/venv/bin/python" -m countersign.web.health
+TimeoutStartSec=45
+Restart=on-failure
+RestartSec=5
+KillMode=mixed
+KillSignal=SIGTERM
+TimeoutStopSec=180
+UMask=0077
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=countersign
+
+[Install]
+WantedBy=default.target

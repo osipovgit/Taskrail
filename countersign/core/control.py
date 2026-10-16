@@ -1,0 +1,40 @@
+"""Workflow controls shared by the CLI worker and local dashboard."""
+
+STOP_FILE = "stop.request"
+
+
+def check_stop(run):
+    """Interrupt through the existing checkpoint and process cleanup path."""
+    if (run / STOP_FILE).exists():
+        raise KeyboardInterrupt
+
+
+def clear_stop(run, resumed):
+    """Clear the previous request only after resume integrity checks pass."""
+    if resumed:
+        (run / STOP_FILE).unlink(missing_ok=True)
+
+
+def check_stage(stage, config):
+    """Never enter a writer for an answer-only task, including imported plans."""
+    if config.get("read_only") and stage == "implementer":
+        raise ValueError("Answer-only tasks cannot enter implementation")
+
+
+def check_plan(plan, config):
+    """Reject changes suggested by a model for a read-only request."""
+    if config.get("read_only") and (plan["proposed_change_files"] or plan["steps"]):
+        raise ValueError("Answer-only tasks require empty steps and proposed_change_files")
+
+
+def check_delta(delta, allowed, git_unchanged):
+    """Source writes remain scoped even when remote execution is enabled."""
+    forbidden = [name for name in delta if name not in allowed]
+    if forbidden or not git_unchanged:
+        raise ValueError(f"Scope violation or Git modification: {forbidden!r}")
+
+
+def check_reads(reads, evidence):
+    """History-only results can cite executor evidence without reading project files."""
+    if not isinstance(reads, list) or not (reads or evidence):
+        raise ValueError("Plan needs source reads or observed Git evidence")

@@ -1,0 +1,13 @@
+.venv/
+__pycache__/
+*.pyc
+*.egg-info/
+build/
+dist/
+node_modules/
+.ruff_cache/
+.upgrade-backup/
+.idea/
+tmp/
+# Machine-local overlays and private settings; never committed.
+/local/
