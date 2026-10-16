@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "countersign"
+version = "0.17.1"
+description = "Reviewed, approval-gated, resumable opencode task workflows"
+requires-python = ">=3.8"
+dependencies = []
+
+[project.scripts]
+countersign = "countersign.__main__:main"
+
+[tool.setuptools.packages.find]
+include = ["countersign*"]
+
+[tool.setuptools.package-data]
+"countersign.core" = ["*.json"]
+"countersign.application" = ["*.md", "*.json"]
+"countersign.web" = ["static/*.html", "static/*.js", "static/*.css"]
+
+[tool.ruff]
+target-version = "py38"
+line-length = 100
+exclude = ["build"]
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "I"]

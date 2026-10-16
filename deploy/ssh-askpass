@@ -1,0 +1,3 @@
+#!/bin/sh
+# Only the dedicated executor receives this process environment.
+printf '%s\n' "$COUNTERSIGN_SSH_PASSWORD"
