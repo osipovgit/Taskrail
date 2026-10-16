@@ -1,0 +1,120 @@
+"""Route intermediate operations while retaining the original stage/session."""
+
+import json
+import subprocess
+from pathlib import Path
+
+from countersign.git import dispatch, requests
+from countersign.git.deadline import Deadline
+from countersign.interactions import access, approvals, events, local, remote, transcripts
+from countersign.interactions.clock import ApprovalPause
+
+
+class Actions:
+    """Exact requests and personal decisions are data, not stage verdicts."""
+
+    def __init__(self, session):
+        self.session = session
+        self.run = session.environment["run"]
+        self.folder = session.active[0]
+
+    def route(self, outcome):
+        """Keep tool-free format repair separate from executable requests."""
+        if self.session.environment["format_only"]:
+            return None
+        if outcome["status"] == "BLOCKED_PERMISSION":
+            return self.access_action(outcome)
+        if outcome["status"] != "OK":
+            return None
+        response = run_git(self, outcome)
+        if response is None:
+            payload = local.extract(outcome["final_text"])
+            response = (
+                remote.consume(self.session, outcome["final_text"])
+                if payload is None
+                else run_local(self, payload)
+            )
+        return response
+
+    def git_action(self, outcome):
+        """Use the existing policy and checkpointed Git executor."""
+        session = self.session
+        effect = dispatch.consume(outcome, session.active, session.state, session.environment)
+        if not effect:
+            return None
+        session.environment.update(expected=effect[0], git_before=effect[1])
+        session.state["git_effect"] = effect
+        entry = session.state["git_jobs"][-1]
+        path = Path(entry["output_file"])
+        text = path.read_text()
+        return transcripts.delivered(self.run, self.folder, path, text)
+
+    def access_action(self, outcome):
+        """Declined reads return feedback; an approved scope remains read-only."""
+        calls = outcome.get("tool_errors", [])
+        decision = self.approve(dict(status="ACCESS_REQUEST", calls=calls))
+        answer = dict(status="DECLINED", decision=decision)
+        if decision["decision"] == "allow":
+            answer = access.apply_all(self.session.environment, calls)
+        text = json.dumps(answer)
+        events.append(self.folder, "permission", dict(calls=calls), text)
+        return f"{text}\nDo not repeat denied calls. Continue with the user decision or permitted alternatives."
+
+    def local_action(self, payload):
+        """Review exact argv and recheck sources immediately before execution."""
+        try:
+            local.validate(payload, self.session.environment["roots"])
+        except ValueError as error:
+            return self.local_result(payload, dict(status="REJECTED", reason=str(error)))
+        decision = self.approve(payload)
+        if decision["decision"] != "allow":
+            return self.local_result(payload, dict(status="DECLINED", decision=decision))
+        self.session.check_sources()
+        context = dict(self.session.environment, timeout=self.session.clock.remaining())
+        try:
+            answer = local.execute(payload, context)
+        except (ValueError, OSError, subprocess.SubprocessError) as error:
+            answer = dict(status="UNKNOWN", reason=str(error))
+        response = self.local_result(payload, answer)
+        self.session.check_sources()
+        return response
+
+    def approve(self, payload):
+        """Pause only approval time, with no deadline for the operator."""
+        request = dict(stage=self.folder.name, **payload)
+        with ApprovalPause(self.session):
+            return approvals.wait(self.run, request)
+
+    def local_result(self, payload, answer):
+        """Keep command results in the public transcript and evidence ledger."""
+        return transcripts.local_snapshot(self.run, self.folder, payload, answer)
+
+
+def run_local(actions, payload):
+    """Keep a visible running call even during approval or process execution."""
+    event = events.begin(actions.folder, "local_command", payload)
+    try:
+        response = actions.local_action(payload)
+    except BaseException:
+        events.finish(actions.folder, event, "Interrupted; inspect local effects before retrying.")
+        raise
+    events.finish(actions.folder, event, response)
+    return response
+
+
+def run_git(actions, outcome):
+    """Show Git execution immediately and share the stage deadline across probes."""
+    payload = requests.extract(outcome["final_text"])
+    if payload is None:
+        return None
+    event = events.begin(actions.folder, "git", payload)
+    try:
+        with Deadline(actions.session.clock.remaining(), actions.run):
+            response = actions.git_action(outcome)
+    except BaseException:
+        events.finish(
+            actions.folder, event, "Interrupted; inspect the Git action journal before retrying."
+        )
+        raise
+    events.finish(actions.folder, event, response)
+    return response

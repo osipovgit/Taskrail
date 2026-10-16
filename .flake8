@@ -1,0 +1,3 @@
+[flake8]
+select = WPS
+exclude = .venv,build,node_modules
