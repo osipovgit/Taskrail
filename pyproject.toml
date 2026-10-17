@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "countersign"
-version = "0.17.1"
+dynamic = ["version"]
 description = "Reviewed, approval-gated, resumable opencode task workflows"
 requires-python = ">=3.10"
 license = {text = "Apache-2.0"}
@@ -14,10 +14,14 @@ dependencies = []
 [project.scripts]
 countersign = "countersign.__main__:main"
 
+[tool.setuptools.dynamic]
+version = {attr = "countersign.__version__"}
+
 [tool.setuptools.packages.find]
 include = ["countersign*"]
 
 [tool.setuptools.package-data]
+"countersign" = ["settings.json", "agents/*.md"]
 "countersign.core" = ["*.json"]
 "countersign.application" = ["*.md", "*.json"]
 "countersign.web" = ["static/*.html", "static/*.js", "static/*.css", "static/modules/*.js"]

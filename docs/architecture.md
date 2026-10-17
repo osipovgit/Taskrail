@@ -13,16 +13,17 @@ UI updates read the ordered stage index and public event stream.
 | `interactions/` | Same-session executor turns, exact-command approvals, active clock and local commands |
 | `git/` | Controlled Git grammar, scope checks, isolated process execution and output snapshots |
 | `core/` | Result contract, schema validation, file/path utilities and stop/read-only guards |
-| `infrastructure/` | opencode launch (1.x direct, 2.x through an adapter), JSONL parsing, permission profiles |
+| `infrastructure/` | opencode launch (1.x direct, 2.x through an adapter), process watch, JSONL event summary, permission profiles |
 | `observability/` | Public progress, usage and compaction telemetry |
 | `executor/` | Separate system service: peer-authenticated socket, immutable tickets, root-only approval, SSH transport |
-| `web/server.py` | Loopback HTTP API and static resources |
+| `web/server.py`, `http_handler.py`, `http_policy.py` | Loopback HTTP API, request checks and static resources |
+| `web/run_view.py`, `run_list.py`, `run_files.py`, `run_messages.py`, `run_sources.py` | Bounded, contained run views for the dashboard |
 | `web/service.py`, `health.py` | Managed process lifecycle and bounded readiness check |
 | `web/submissions.py`, `worker.py` | Validated task creation and detached workflow launch |
 | `web/history.py`, `requests.py`, `lifecycle.py` | Editable task drafts, conversation history and lifecycle controls |
 | `web/static/` | Browser JavaScript, CSS, HTML and theme handling |
 | `deploy/` | Offline release installation, CLI wrapper and systemd units |
-| `agents/` | Editable role templates, frozen per run |
+| `countersign/agents/`, `countersign/settings.json` | Bundled role templates (frozen per run) and default settings |
 | `tests/` | Workflow, contracts, permissions, API, telemetry and DOM regressions |
 | `tools/`, `quality/` | Development quality gates and the reviewed Wemake debt baseline |
 | `docs/`, `examples/` | Documentation and example tasks |
@@ -39,8 +40,20 @@ global execution lock enforce task boundaries.
 
 Stage transitions live in `application/transitions.py`: pure decisions select the
 next stage and requested write effects. The engine keeps the single-writer lock,
-source checks, checkpoints and file operations; `execute_task` is still one large
-function and remains the main refactoring target. The browser has no runtime
+source checks, checkpoints and file operations:
+
+| Module (`application/`) | Responsibility |
+|---|---|
+| `workflow_engine.py` | Lock, stage loop, transitions and write effects |
+| `run_setup.py`, `run_state.py`, `task_config.py`, `task_roots.py` | Run directory, frozen inputs and validated configuration |
+| `worktree_isolation.py` | Optional linked Git worktree per root and run |
+| `workflow_start.py`, `workflow_finish.py` | Fresh start or checkpoint continuation; interruption and the final report |
+| `workflow_state.py`, `source_guard.py` | Run state, flow, checkpoints and source/Git integrity |
+| `stage_attempts.py`, `attempt_*.py` | One model stage: profile, launch, validation and bounded retries |
+| `check_stage.py`, `builtin_checks.py`, `verify_*.py` | Syntax checks and settings verification commands |
+| `source_tree.py`, `git_state.py`, `planned_paths.py`, `plan_validation.py`, `changes.py` | Fingerprints, path safety, plan checks, preimages and the diff |
+
+The browser has no runtime
 dependencies; Node packages are only linting and formatting tools. The runtime needs
 Python 3.10+ for both the runtime and development tools, and Node 24.19+ for UI linting.
 

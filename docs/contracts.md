@@ -2,7 +2,7 @@
 
 | Owner | Responsibility |
 |---|---|
-| `agents/*.md` | Role-specific method; no duplicate schema or budget |
+| `countersign/agents/*.md` | Role-specific method; no duplicate schema or budget |
 | `application/policy.md` | Shared trust, paths, recovery and execution boundaries |
 | `application/stage-instructions.json` | Stage-specific objective |
 | `core/result-schemas.json` | Exact machine-readable response shape |
@@ -66,7 +66,7 @@ untouched response.
 Custom `agent_source` directories take precedence over bundled roles, and updates
 never overwrite installed custom roles. Each role must contain the exact line
 `Instruction contract: 1.` after its frontmatter; a missing declaration fails
-before any model runs. Review a custom role against `agents/` before adding the
+before any model runs. Review a custom role against `countersign/agents/` before adding the
 declaration, or select the maintained roles with `deploy/install.sh --agents=bundled`.
 Managed opencode profiles use stable role names, and their permissions come from the
 engine, not from role frontmatter. Each stage records the source path, role hash,

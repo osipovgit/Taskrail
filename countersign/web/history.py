@@ -4,6 +4,8 @@ import json
 import re
 from types import MappingProxyType
 
+from countersign.application import worktree_isolation
+
 FIELDS = MappingProxyType(
     {
         "goal": "Goal",
@@ -84,11 +86,10 @@ def task_draft(run):
     draft = parsed.fields()
     draft["title"] = parsed.title(run.name)
     draft["read_only"] = parsed.metadata.get("read_only") is True
+    draft["worktree"] = parsed.metadata.get("isolation") == "worktree"
     draft["verification"] = "\n".join(parsed.metadata.get("verification", []))
-    roots = json.loads(read_artifact(run, "run.json"))["roots"]
-    draft["roots"] = []
-    for alias, path in roots.items():
-        draft["roots"].append(dict(alias=alias, path=path))
+    index = json.loads(read_artifact(run, "run.json"))
+    draft["roots"] = worktree_isolation.source_roots(index)
     return draft
 
 
