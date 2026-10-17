@@ -46,7 +46,7 @@ Mechanically identical content restrictions across these routes would require on
 broker for all source, search and Git operations.
 
 The SSH executor requires its separate installation, socket access, configured
-inventory, password authentication and verified host keys. It does not inherit SSH
+inventory, password or key authentication and verified host keys. It does not inherit SSH
 agents/config or grant remote sudo. Stop pauses observation; it does not prove the
 remote process stopped. Git network operations use their separate noninteractive
 transport and do not use the SSH ticket approval flow. Only request them when the
@@ -60,7 +60,8 @@ single-use; Deny skips execution; Alternative sends your text back to the agent.
 Waiting has no expiry and is excluded from active stage time. Stop remains available.
 Each decision is bound to a random ticket and retained for audit.
 
-Local commands use exec without implicit shell expansion. Explicit Bash and project
+Local commands use exec without implicit shell expansion and a host environment
+without secret-shaped variables, provider keys included. Explicit Bash and project
 code are trusted code, not sandboxed: they can have effects beyond their argv text.
 Review scripts before allowing them. Direct Git/SSH/deployment commands use their
 separate controlled routes. Source and Git integrity checks detect unexpected

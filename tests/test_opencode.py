@@ -7,8 +7,8 @@ from pathlib import Path
 from unittest import mock
 
 from countersign.core.source_claims import supports
-from countersign.infrastructure import opencode_api, opencode_cli
-from countersign.infrastructure.agent_sync import launch_settings, verify_permissions
+from countersign.infrastructure import environment, opencode_api, opencode_cli
+from countersign.infrastructure.agent_sync import launch_settings, make_profile, verify_permissions
 from countersign.infrastructure.opencode_events import EventTranslator
 from countersign.infrastructure.profile_rules import permissions
 from countersign.infrastructure.runner import run_agent
@@ -32,6 +32,7 @@ from pathlib import Path
 args = sys.argv[1:]
 state = Path(os.environ["FAKE_STATE"])
 if args[:1] == ["serve"]:
+    (state / "serve-started").write_text("yes")
     print(json.dumps({"url": "http://127.0.0.1:9"}), flush=True)
     sys.stdin.read()
     sys.exit(0)
@@ -91,6 +92,26 @@ class SettingsTests(unittest.TestCase):
                 launch_settings({"models": models}, Path("/"))
 
 
+class RepairToolTests(unittest.TestCase):
+    def test_read_mode_keeps_reads_and_never_edits(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            role = root / "role.md"
+            role.write_text("role")
+            target = root / "a.py"
+            target.write_text("x")
+            for mode, read in (("none", "deny"), ("read", "allow")):
+                profile, _ = make_profile(
+                    role, root / "profiles", mode, [root], [], [target], format_only=mode
+                )
+                rules = json.loads(profile.read_text().split("---")[1])["permission"]
+                self.assertEqual(rules["edit"], "deny")
+                self.assertEqual(rules["glob"], read)
+            self.assertEqual(launch_settings({}, root)["format_repair_tools"], "none")
+            with self.assertRaisesRegex(ValueError, "format_repair_tools"):
+                launch_settings({"format_repair_tools": "all"}, root)
+
+
 class DirectoryTests(unittest.TestCase):
     def test_profiles_and_tool_output_follow_opencode_environment(self):
         variables = {"XDG_CONFIG_HOME": "/x/config", "XDG_DATA_HOME": "/x/data"}
@@ -131,6 +152,50 @@ class LaunchTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             argv = self.launch(Path(temp), "p/m")["argv"]
             self.assertEqual(argv[argv.index("--model") + 1], "p/m")
+
+
+class EnvironmentTests(unittest.TestCase):
+    def test_secret_shaped_names_are_dropped_unless_allowed(self):
+        for name in (
+            "GITHUB_TOKEN",
+            "DB_PASSWORD",
+            "STRIPE_API_KEY",
+            "TOKEN_FILE",
+            "SSH_AUTH_SOCK",
+        ):
+            self.assertTrue(environment.secret(name), name)
+        for name in ("PATH", "HOME", "KEYBOARD", "AWS_REGION", "PWD"):
+            self.assertFalse(environment.secret(name), name)
+        values = {"A_TOKEN": "x", "ANTHROPIC_API_KEY": "k", "HARMLESS": "1"}
+        with mock.patch.dict(os.environ, values):
+            kept = environment.filtered(environment.agent_allowlist(["A_TOKEN"]))
+            self.assertEqual((kept["A_TOKEN"], kept["ANTHROPIC_API_KEY"]), ("x", "k"))
+            local = environment.filtered()
+            self.assertNotIn("A_TOKEN", local)
+            self.assertNotIn("ANTHROPIC_API_KEY", local)
+            self.assertEqual(local["HARMLESS"], "1")
+        with self.assertRaisesRegex(ValueError, "agent_env_allow"):
+            environment.agent_allowlist("A_TOKEN")
+
+    def test_opencode_receives_only_allowed_secrets(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            script, record = root / "cli.py", root / "env.json"
+            script.write_text(
+                "import json, os, sys\n"
+                "from pathlib import Path\n"
+                "Path(sys.argv[0]).with_name('env.json').write_text(json.dumps(dict(os.environ)))\n"
+            )
+            prompt = root / "request.md"
+            prompt.write_text("task")
+            values = {"HOST_SECRET_TOKEN": "x", "OPENAI_API_KEY": "k"}
+            runtime = dict(env_allow=environment.agent_allowlist([]))
+            with mock.patch.dict(os.environ, values):
+                command = [sys.executable, str(script)]
+                run_agent(command, root, "a", None, prompt, root / "t", 10, runtime=runtime)
+            seen = json.loads(record.read_text())
+            self.assertNotIn("HOST_SECRET_TOKEN", seen)
+            self.assertEqual(seen["OPENAI_API_KEY"], "k")
 
 
 class DenialTests(unittest.TestCase):
@@ -223,6 +288,13 @@ class TranslationTests(unittest.TestCase):
         state = dict(status="error", input=dict(path="/a"), error=offset)
         expected = "Error: Offset 4 is out of range for this file (1 lines)"
         self.assertEqual(self.tool(state)["state"]["error"], expected)
+
+    def test_unknown_tool_call_continues_like_opencode_1(self):
+        message = 'No tool named "GIT_REQUEST" is currently available. Please use a tool.'
+        part = self.tool(dict(status="error", input=dict(root="/x"), error=message), "GIT_REQUEST")
+        self.assertEqual(part["state"]["status"], "completed")
+        self.assertEqual(part["state"]["output"], message)
+        self.assertNotIn("error", part["state"])
 
     def test_step_total_and_missing_final_step(self):
         translator = EventTranslator("/work")
@@ -351,6 +423,31 @@ class AdapterTests(unittest.TestCase):
         self.assertIn('"partID": "prt_1"', raw)
         events = (self.root / "attempt" / "events.jsonl").read_text()
         self.assertIn('"filePath": "{0}/a.py"'.format(self.workspace), events)
+
+    def test_turns_attach_to_the_stage_server(self):
+        prompt = self.root / "request.md"
+        prompt.write_text("task")
+        attachment = {"COUNTERSIGN_OPENCODE_SERVER": "http://127.0.0.1:9", "OPENCODE_PASSWORD": "p"}
+        runtime = dict(attachment=attachment)
+        result = run_agent(
+            self.command,
+            self.workspace,
+            "managed",
+            None,
+            prompt,
+            self.root / "a3",
+            30,
+            runtime=runtime,
+        )
+        self.assertEqual(result["status"], "OK", result)
+        self.assertFalse((self.root / "serve-started").exists())
+        with opencode_api.stage_server(self.command, self.workspace, ()) as server:
+            self.assertEqual(
+                server.attachment()["COUNTERSIGN_OPENCODE_SERVER"], "http://127.0.0.1:9"
+            )
+        self.assertTrue((self.root / "serve-started").exists())
+        with opencode_api.stage_server(["opencode"], self.workspace, ()) as server:
+            self.assertIsNone(server)
 
     def test_denied_read_stops_the_turn_for_a_decision(self):
         prompt = self.root / "request.md"

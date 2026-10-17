@@ -58,12 +58,7 @@ def command(host):
         "GlobalKnownHostsFile=/dev/null",
         SSH_OPTION,
         "IdentityAgent=none",
-        SSH_OPTION,
-        "PubkeyAuthentication=no",
-        SSH_OPTION,
-        "PreferredAuthentications=password",
-        SSH_OPTION,
-        "NumberOfPasswordPrompts=1",
+        *authentication(host),
         SSH_OPTION,
         "ConnectTimeout=15",
         SSH_OPTION,
@@ -79,16 +74,38 @@ def command(host):
     ]
 
 
+def authentication(host):
+    """Either one configured private key or one password prompt; never both."""
+    identity = host.get("identity_file")
+    if identity:
+        options = (
+            "PasswordAuthentication=no",
+            "KbdInteractiveAuthentication=no",
+            "PreferredAuthentications=publickey",
+            "IdentitiesOnly=yes",
+            "BatchMode=yes",
+            "IdentityFile={0}".format(identity),
+        )
+    else:
+        options = (
+            "PubkeyAuthentication=no",
+            "PreferredAuthentications=password",
+            "NumberOfPasswordPrompts=1",
+        )
+    return [argument for option in options for argument in (SSH_OPTION, option)]
+
+
 def environment(host):
-    """Expose the password only to the isolated SSH/askpass process."""
+    """Expose a password only to the isolated SSH/askpass process."""
+    base = dict(PATH="/usr/bin:/bin", HOME="/nonexistent", LANG="C.UTF-8")
+    if "password" not in host:
+        return base
     return dict(
-        PATH="/usr/bin:/bin",
-        HOME="/nonexistent",
+        base,
         DISPLAY="countersign:0",
         SSH_ASKPASS=ASKPASS,
         SSH_ASKPASS_REQUIRE="force",
         COUNTERSIGN_SSH_PASSWORD=host["password"],
-        LANG="C.UTF-8",
     )
 
 

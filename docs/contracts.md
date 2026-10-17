@@ -47,8 +47,9 @@ does not waive required evidence. Permission denials, failed writes and other to
 errors keep their safeguards.
 
 Format repair receives the saved response, the validation error, the schema and the
-server-assigned requirements. It has no tools, cannot invent requirement IDs or
-quotations, and cannot research. Research recovery receives bounded observed source
+server-assigned requirements. It has no tools (or read-only tools with
+`format_repair_tools: read`), cannot invent requirement IDs or quotations, and must
+not research. Research recovery receives bounded observed source
 material and keeps unresolved requirements explicit. A no-change completion still
 needs independent review of all requirements. Text imported with `--plan-response`
 is only an untrusted draft for fresh planning.

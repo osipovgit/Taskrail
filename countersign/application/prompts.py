@@ -118,7 +118,8 @@ def contract(role, version):
 def repair(response, error, role, version, requirements):
     """Conversion cannot inherit research directives or introduce new evidence."""
     return (
-        "FORMAT REPAIR ONLY. No tools are available. Return exactly one JSON object. "
+        "FORMAT REPAIR ONLY. Do not research or use tools except to re-read cited evidence. "
+        "Return exactly one JSON object. "
         "Preserve supplied facts and uncertainty. Never invent evidence or source reads. "
         "Use only the assigned requirement IDs in coverage and step criteria. "
         "Missing evidence requires gap/BLOCKED, not invented quotations or a new search. "

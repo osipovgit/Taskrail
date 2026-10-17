@@ -1,12 +1,13 @@
 """Select the opencode CLI generation; 2.x runs behind the 1.x-compatible adapter."""
 
+import contextlib
 import json
 import re
 import subprocess
 import sys
 from pathlib import Path
 
-from countersign.infrastructure import opencode_cli
+from countersign.infrastructure import opencode_cli, opencode_server
 from countersign.infrastructure.profile_rules import permission_worktree
 
 ONE_X = "1.x"
@@ -48,6 +49,14 @@ def launch_command(command, version):
     if version == ONE_X:
         return command
     return [sys.executable, "-I", "-c", ADAPTER, PACKAGE_ROOT, json.dumps(command)]
+
+
+def stage_server(command, workspace, allow):
+    """2.x turns of one stage share a private server; 1.x launches need none."""
+    if ADAPTER not in command:
+        return contextlib.nullcontext()
+    target = json.loads(command[-1])
+    return opencode_server.Server(target, str(workspace), env=opencode_cli.environment(allow))
 
 
 def relative_base(config, roots, files):

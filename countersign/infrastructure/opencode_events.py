@@ -15,6 +15,8 @@ READ_ERROR_PREFIX = "Error: "
 MISSING_PREFIX = "File not found: "
 FULL_READ = "<path>{0}</path>\n<type>file</type>\n<content>\n{1}\n\n(End of file - total {2} lines)\n</content>"
 STOP = "stop"
+# 1.x answers an unknown tool call with a completed `invalid` call; 2.x reports an error.
+UNKNOWN_TOOL = re.compile(r'No tool named "[^"]+" is currently available\..*', re.S)
 COUNTERS = (INPUT, "output")
 CACHE_COUNTERS = ("read", "write")
 
@@ -84,8 +86,11 @@ def tool_part(part, directory):
 
 
 def tool_state(tool, state):
-    if state.get("status") == ERROR:
-        message = str(state.get(ERROR, ""))
+    message = str(state.get(ERROR, ""))
+    if state.get("status") == ERROR and UNKNOWN_TOOL.fullmatch(message):
+        state.pop(ERROR)
+        state.update(status="completed", output=message)
+    elif state.get("status") == ERROR:
         state[ERROR] = tool_error(message, tool, state[INPUT])
     elif tool == READ:
         state["output"] = read_output(state)

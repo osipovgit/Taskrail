@@ -60,7 +60,8 @@ class DashboardTests(unittest.TestCase):
         self.assertIn("/dashboard.js", self.get("/"))
         self.assertIn("/dashboard.css", self.get("/"))
         self.assertIn(".stage-meta", self.get("/dashboard.css"))
-        self.assertIn("textContent", self.get("/dashboard.js"))
+        self.assertIn("./modules/app.js", self.get("/dashboard.js"))
+        self.assertIn("textContent", self.get("/modules/dom.js"))
 
     def test_messages_ignore_reasoning_tools_and_incomplete_lines(self):
         events = [

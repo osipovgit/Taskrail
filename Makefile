@@ -12,6 +12,8 @@ format-check:
 	$(PYTHON) -m ruff format --check countersign tests tools
 	npm run format:check
 test:
-	$(PYTHON) -m unittest discover -s tests
+	@# A private HOME keeps the real workflow lock and installed settings out of the tests.
+	home=$$(mktemp -d) && HOME=$$home $(PYTHON) -m unittest discover -s tests; \
+		status=$$?; rm -rf "$$home"; exit $$status
 	npm test
 check: lint format-check test

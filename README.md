@@ -7,7 +7,7 @@ all roles; task-required writes are restricted to the implementer. CLI remains s
 
 ## Start
 
-Requirements: Linux user systemd, Python 3.8+ with venv, bash, tar, flock and a working
+Requirements: Linux user systemd, Python 3.10+ with venv, bash, tar, flock and a working
 opencode 1.x or 2.x installation on PATH. Install as your normal user, without sudo:
 
 ```sh
@@ -76,3 +76,8 @@ For a deliberate clean reinstall use
 `bash deploy/install.sh --fresh --wait=3600 --autostart=keep --agents=bundled`. It deletes
 managed history and configuration; read the [reset scope](docs/deployment.md#full-reinstallation)
 first. [Access routes](docs/access.md) describe what agents may read, edit and run.
+
+## License and security
+
+Countersign is licensed under the [Apache License 2.0](LICENSE). Report vulnerabilities
+privately as described in [SECURITY.md](SECURITY.md); see [CONTRIBUTING.md](CONTRIBUTING.md) to contribute.

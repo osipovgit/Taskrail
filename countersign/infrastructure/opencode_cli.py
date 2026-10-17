@@ -3,6 +3,8 @@
 import os
 from pathlib import Path
 
+from countersign.infrastructure import environment as host_environment
+
 DEFAULT_COMMAND = ("opencode",)
 # The 2.x adapter keeps the untouched event stream next to the translated one.
 RAW_EVENTS = "COUNTERSIGN_RAW_EVENTS"
@@ -42,9 +44,9 @@ def permission_error(message):
     return any(marker in message for marker in PERMISSION_MARKERS)
 
 
-def environment():
-    """opencode rejects unknown flags, so update checks are disabled by environment."""
-    return dict(os.environ, OPENCODE_DISABLE_AUTOUPDATE="true")
+def environment(allow=()):
+    """Secrets stay filtered; opencode rejects unknown flags, so updates are disabled here."""
+    return dict(host_environment.filtered(allow), OPENCODE_DISABLE_AUTOUPDATE="true")
 
 
 def agent_directory():

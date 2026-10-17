@@ -1,7 +1,7 @@
 # Deployment and operations
 
 Run as your normal Linux user with working opencode credentials. Requirements: user
-systemd, Python 3.8+ with venv, bash, tar and flock. No runtime pip/npm download is
+systemd, Python 3.10+ with venv, bash, tar and flock. No runtime pip/npm download is
 required. The UI binds to `127.0.0.1:8787`; it is not a public multi-user service.
 
 ## Install and update
@@ -79,6 +79,8 @@ source templates. See [instruction contracts](contracts.md).
 | `opencode_version` | `auto` | `1.x` or `2.x`; `auto` selects `2.x` only for an exact `--version` line of 2.0.0 or later |
 | `models` | `{}` | Role to `provider/model`; a missing role uses opencode's configured default model |
 | `agent_directory` | opencode agent directory | Where managed role profiles are written; relative to the settings file |
+| `agent_env_allow` | `[]` | Extra environment variables opencode may receive despite their secret-shaped names; common provider keys are always allowed |
+| `format_repair_tools` | `none` | `read` keeps read-only tools in format repair passes, for providers that reject tool-less requests |
 | `permission_worktree` | inferred | Base directory for relative permission names (Git worktree for 1.x, first root for 2.x); required when `.git` is a file or symlink |
 
 opencode 1.x is called as `opencode run --session --dir --agent --format json --file`
@@ -87,16 +89,20 @@ waits until the managed agent is loaded, lists its effective rules through
 `opencode api` and runs `opencode run --server`; the shared background service is
 never used. The adapter writes 1.x-shaped events to `events.jsonl` and keeps the
 untouched 2.x stream in `events.raw.jsonl`. Every call sets
-`OPENCODE_DISABLE_AUTOUPDATE=true`.
+`OPENCODE_DISABLE_AUTOUPDATE=true`. opencode and approved local commands never receive
+secret-shaped variables (`*_TOKEN`, `*_KEY`, `*_SECRET`, `*_PASSWORD`, their `*_FILE`
+locators, `SSH_AUTH_SOCK`, `GIT_ASKPASS` and similar); opencode alone keeps common
+provider keys and the names in `agent_env_allow`.
 
 Managed profiles default to `$OPENCODE_CONFIG_DIR/agent`, else
 `$XDG_CONFIG_HOME/opencode/agent`. opencode names a file either absolutely or relative
 to one base directory: the Git worktree for 1.x, the first root (the run directory)
 for 2.x. Profiles allow every declared path in both forms and deny everything else.
 
-Format repair runs with every tool denied. opencode's free Zen models reject such
-tool-less requests (`FreeTierError`), so with them an invalid first answer cannot be
-repaired; use a provider model for reliable runs.
+Format repair runs with every tool denied by default. opencode's free Zen models
+reject such tool-less requests (`FreeTierError`); for them set `format_repair_tools`
+to `read`, which keeps read-only tools in format passes (edits stay denied) and
+instructs the model to re-read only evidence it already cites.
 
 ## Configuration changes
 

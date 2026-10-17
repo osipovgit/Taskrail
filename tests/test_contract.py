@@ -217,7 +217,7 @@ class ContractTests(unittest.TestCase):
         self.assertNotIn("Context:", request)
         self.assertNotIn("Search each", request)
         self.assertNotIn("Find necessary", request)
-        self.assertIn("No tools are available", request)
+        self.assertIn("Do not research", request)
         self.assertIn("saved_response", request)
 
     def test_complete_task_blocks_get_stable_ids_without_history(self):

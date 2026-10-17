@@ -1,6 +1,5 @@
 """Personally approved local diagnostics; no implicit shell expansion."""
 
-import os
 import shutil
 import subprocess
 import tempfile
@@ -8,6 +7,7 @@ import time
 
 from countersign.core import control, json_response, schema
 from countersign.git import transport
+from countersign.infrastructure import environment as host_environment
 from countersign.infrastructure.runner import stop_group
 from countersign.interactions import local_policy
 
@@ -57,7 +57,7 @@ def execute(payload, context):
         process = subprocess.Popen(
             argv,
             cwd=payload["cwd"],
-            env=dict(os.environ),
+            env=host_environment.filtered(),
             stdin=subprocess.DEVNULL,
             stdout=output,
             stderr=errors,

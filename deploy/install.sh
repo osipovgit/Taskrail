@@ -11,7 +11,7 @@ unit_dir="$HOME/.config/systemd/user"
 service=countersign.service
 source "$source_dir/deploy/options.sh"
 systemctl --user show-environment >/dev/null
-"$python_bin" -c 'import sys; assert sys.version_info >= (3, 8), "Python 3.8+ is required"'
+"$python_bin" -c 'import sys; assert sys.version_info >= (3, 10), "Python 3.10+ is required"'
 mkdir -p "$app_dir/releases" "$config_dir" "$state_dir/runs" "$unit_dir" "$HOME/.local/bin"
 # Serialize installers. Never switch releases underneath an active workflow.
 exec 8>"$app_dir/install.lock"
