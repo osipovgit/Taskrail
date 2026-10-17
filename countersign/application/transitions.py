@@ -93,7 +93,7 @@ def checked(flow, state, limit):
     failed = any(check[STATUS] == "FAIL" for check in state["checks"])
     if failed:
         if flow[REPAIRS] >= limit:
-            state.update(status="CHECK_FAILED", summary="Built-in syntax check failed")
+            state.update(status="CHECK_FAILED", summary="Checks failed after the last repair")
         else:
             flow.update(stage=IMPLEMENTER, feedback={"checks": state["checks"]})
             flow[REPAIRS] += 1

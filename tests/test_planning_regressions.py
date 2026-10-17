@@ -46,7 +46,7 @@ class PlanningRegressions(unittest.TestCase):
 
     def test_roles_fail_before_model_launch_and_bundled_roles_pass(self):
         for role in instruction_sources.ROLES:
-            instruction_sources.validate_role_source(BASE / "agents" / (role + ".md"))
+            instruction_sources.validate_role_source(BASE / "countersign/agents" / (role + ".md"))
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "planner.md"
             path.write_text("steps MUST be a list of nonempty strings, not objects.")

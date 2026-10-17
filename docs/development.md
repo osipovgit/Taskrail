@@ -20,8 +20,12 @@ reviewed relocation keeps the rule and never increases its count or complexity.
 Tests use fake opencode 1.x and 2.x subprocesses, temporary source trees and real
 local HTTP workers. They exercise contracts, permissions, workflow and recovery,
 checkpoints, budgets, telemetry, UI DOM behavior and deployment; systemd uses stubs.
-GitHub Actions (`.github/workflows/ci.yml`) runs `make check` on Python 3.12 and the
-test suite on Python 3.10 to 3.14. `make test` runs the Python tests with a temporary
+GitHub Actions (`.github/workflows/ci.yml`) runs `make check` on Python 3.12, the
+test suite on Python 3.10 to 3.14, and `countersign init` plus `countersign check`
+against a pinned opencode 1.x without calling a model. CodeQL and Dependabot watch
+the code and pinned dependencies. `tests/fixtures/` holds recorded opencode 1.19.3
+and 2.0.30 event streams; when opencode changes its events, record a new stream with
+paths replaced by `/fixture` and keep both. `make test` runs the Python tests with a temporary
 `HOME`, so a running task's global lock and installed settings cannot affect them.
 Passing tests does not establish model quality, provider behavior, visual rendering
 or runtime acceptance in the target environment.

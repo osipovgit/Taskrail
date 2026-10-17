@@ -66,7 +66,7 @@ files untouched. Subsequent releases update bundled roles through `current`.
 The default `--agents=keep` preserves the existing selection. Role changes apply
 to new tasks; Continue keeps the frozen roles of its run.
 
-Bundled roles follow `current/agents`. Imported custom roles are copied once and
+Bundled roles follow `current/countersign/agents`. Imported custom roles are copied once and
 preserved on update: merge their instructions deliberately or point `agent_source`
 to bundled roles. Generated opencode profiles are temporary permissions, not editable
 source templates. See [instruction contracts](contracts.md).
@@ -84,10 +84,10 @@ source templates. See [instruction contracts](contracts.md).
 | `permission_worktree` | inferred | Base directory for relative permission names (Git worktree for 1.x, first root for 2.x); required when `.git` is a file or symlink |
 
 opencode 1.x is called as `opencode run --session --dir --agent --format json --file`
-and `opencode agent list`. For 2.x, each call starts a private `opencode serve`,
+and `opencode agent list`. For 2.x, each stage starts one private `opencode serve`,
 waits until the managed agent is loaded, lists its effective rules through
-`opencode api` and runs `opencode run --server`; the shared background service is
-never used. The adapter writes 1.x-shaped events to `events.jsonl` and keeps the
+`opencode api` and runs every turn of the stage with `opencode run --server`; the
+shared background service is never used. The adapter writes 1.x-shaped events to `events.jsonl` and keeps the
 untouched 2.x stream in `events.raw.jsonl`. Every call sets
 `OPENCODE_DISABLE_AUTOUPDATE=true`. opencode and approved local commands never receive
 secret-shaped variables (`*_TOKEN`, `*_KEY`, `*_SECRET`, `*_PASSWORD`, their `*_FILE`
@@ -104,6 +104,37 @@ reject such tool-less requests (`FreeTierError`); for them set `format_repair_to
 to `read`, which keeps read-only tools in format passes (edits stay denied) and
 instructs the model to re-read only evidence it already cites.
 
+## Worktree isolation
+
+`worktree_base` (absolute; default `worktrees` beside `run_base`) holds the linked
+worktrees of runs with `"isolation": "worktree"`; it must lie outside every declared
+root. Worktrees are created with hooks and repository filters disabled and are never
+removed automatically. See [task format](task-format.md#worktree-isolation).
+
+## Verification commands
+
+`verify_commands` lists project checks that run in the check stage after every
+implementation whose changed files pass the built-in syntax checks:
+
+```json
+{
+  "verify_commands": [
+    {"cwd": "/home/me/src/shop", "argv": ["python3", "-m", "unittest"], "timeout_seconds": 600}
+  ]
+}
+```
+
+Writing a command into server settings is the operator's personal approval of that
+exact argv; task files, imported drafts and models cannot add commands. A command
+runs only for runs whose declared roots include its `cwd`; in a
+[worktree-isolated](task-format.md#worktree-isolation) run it runs in that root's worktree. It runs without a shell,
+as the service user, with the filtered environment and the local command policy (no
+Git, SSH or privilege commands). `timeout_seconds` defaults to 600 (at most 3600).
+Output is kept in `verify-NN.log` of the check stage; a nonzero exit is a failed
+check whose output tail goes back to the implementer, within `max_repairs`. Commands
+must not write inside declared roots (generated folders such as `__pycache__`,
+`node_modules` or `.pytest_cache` are ignored): any other change stops the run.
+
 ## Configuration changes
 
 New tasks read current settings and roles. Continue retains frozen task, role and
@@ -117,6 +148,7 @@ to the existing mode-0600 `service.env`, preserving its PATH. Use `KEY=value`, n
 your opencode installation; do not copy them into tasks or logs.
 
 ```sh
+countersign check        # settings, opencode, permission enforcement, run storage
 systemctl --user status countersign
 systemctl --user restart countersign
 journalctl --user -u countersign -n 100 --no-pager

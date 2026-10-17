@@ -19,7 +19,7 @@ def settings_path(explicit=None):
     installed = Path.home() / ".config/countersign/settings.json"
     if installed.is_file():
         return installed
-    return Path(__file__).resolve().parents[2] / "settings.json"
+    return Path(__file__).resolve().parents[1] / "settings.json"
 
 
 def run_storage(settings=None, explicit=None):

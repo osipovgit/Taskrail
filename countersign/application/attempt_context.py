@@ -83,9 +83,3 @@ def with_allowance(request, budget):
     if not marker:
         return request
     return f"{head}{marker}Effective observed allowance: {budget}\n{tail}"
-
-
-def record_effect(run, state, record, outcome, prior):
-    """Record usage and adopt only verified Git-executor fingerprints."""
-    expected, metadata = state.pop("git_effect", prior)
-    return record_outcome(run, state, record, outcome), expected, metadata

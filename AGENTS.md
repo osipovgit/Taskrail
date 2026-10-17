@@ -26,7 +26,7 @@ baselines to make failures disappear. New modules receive no debt allowance.
 For existing debt, a reviewed fingerprint relocation must retain the same rule
 and must not increase its count or complexity; remove resolved baseline entries.
 
-Keep instructions short and single-owned: role responsibilities in `agents/`,
+Keep instructions short and single-owned: role responsibilities in `countersign/agents/`,
 shared runtime rules in `application/policy.md`, response contracts in
 `core/result-schemas.json`. Update behavior tests and current documentation with
 changes. Do not accumulate release narratives in docs/.

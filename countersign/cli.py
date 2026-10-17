@@ -6,17 +6,55 @@ import sys
 from pathlib import Path
 
 ERROR_PREFIX = "Error: "
+SETTINGS_OPTION = "--settings"
+COMMAND_ARGUMENT = "command"
 
 
 def main():
     argv = sys.argv[1:] or ["serve"]
-    if argv[0] in ("web", "serve"):
-        return serve_command(argv)
-    if argv[0] == "status":
-        return status_command(argv)
-    if argv[0] == "resume":
-        return resume_command(argv)
-    return run_command(argv)
+    commands = dict(
+        web=serve_command,
+        serve=serve_command,
+        status=status_command,
+        resume=resume_command,
+        check=check_command,
+        init=init_command,
+    )
+    return commands.get(argv[0], run_command)(argv)
+
+
+def check_command(argv):
+    """Verify settings, the opencode CLI, permission enforcement and run storage."""
+    parser = argparse.ArgumentParser(description=check_command.__doc__)
+    parser.add_argument(COMMAND_ARGUMENT)
+    parser.add_argument(SETTINGS_OPTION)
+    from countersign.onboarding import check
+
+    failures = 0
+    for passed, message in check(parser.parse_args(argv).settings):
+        failures += not passed
+        sys.stdout.write("{0} {1}\n".format("OK  " if passed else "FAIL", message))
+    return 1 if failures else 0
+
+
+def init_command(argv):
+    """Create ~/.config/countersign/settings.json; prompts on a terminal for missing values."""
+    parser = argparse.ArgumentParser(description=init_command.__doc__)
+    parser.add_argument(COMMAND_ARGUMENT)
+    parser.add_argument("--opencode", help="opencode command, default: opencode on PATH")
+    parser.add_argument("--model", action="append", default=[], help="ROLE=provider/model")
+    parser.add_argument("--format-repair-tools", choices=("none", "read"))
+    parser.add_argument("--force", action="store_true", help="Replace existing settings")
+    args = parser.parse_args(argv)
+    from countersign.onboarding import init
+
+    try:
+        target = init(args.opencode, args.model, args.format_repair_tools, force=args.force)
+    except (OSError, ValueError) as error:
+        sys.stderr.write(f"{ERROR_PREFIX}{error}\n")
+        return 2
+    sys.stdout.write(f"Wrote {target}. Run: countersign check\n")
+    return 0
 
 
 def resume_command(argv):
@@ -24,9 +62,9 @@ def resume_command(argv):
     parser = argparse.ArgumentParser(
         description="Continue an interrupted run after source integrity checks"
     )
-    parser.add_argument("command")
+    parser.add_argument(COMMAND_ARGUMENT)
     parser.add_argument("run_dir", type=Path)
-    parser.add_argument("--settings")
+    parser.add_argument(SETTINGS_OPTION)
     parser.add_argument(
         "--extend-budget",
         action="store_true",
@@ -51,10 +89,10 @@ def resume_command(argv):
 def serve_command(argv):
     """Start the local dashboard."""
     parser = argparse.ArgumentParser(description="Local task dashboard")
-    parser.add_argument("command")
+    parser.add_argument(COMMAND_ARGUMENT)
     parser.add_argument("--runs-dir", type=Path)
     parser.add_argument("--port", type=int, default=8787)
-    parser.add_argument("--settings", help="Server-side workflow settings for new tasks")
+    parser.add_argument(SETTINGS_OPTION, help="Server-side workflow settings for new tasks")
     args = parser.parse_args(argv)
     from countersign.web.service import serve
 
@@ -71,7 +109,7 @@ def serve_command(argv):
 def status_command(argv):
     """Display a saved run without launching a worker."""
     parser = argparse.ArgumentParser(description="Read saved run status")
-    parser.add_argument("command")
+    parser.add_argument(COMMAND_ARGUMENT)
     parser.add_argument("run_dir", type=Path)
     args = parser.parse_args(argv)
     try:
@@ -101,7 +139,7 @@ def run_command(argv):
         "task", help="Task Markdown file; countersign-task header declares project roots"
     )
     parser.add_argument(
-        "--settings",
+        SETTINGS_OPTION,
         help="Settings JSON; defaults to $COUNTERSIGN_SETTINGS, then the installed settings",
     )
     parser.add_argument("--run-dir", help="New log directory outside projects (normally automatic)")

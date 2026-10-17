@@ -6,7 +6,7 @@ import tempfile
 import time
 
 from countersign.git import deadline as stage_deadline
-from countersign.infrastructure.runner import stop_group
+from countersign.infrastructure.process_group import stop_group
 
 OUTPUT_LIMIT = 4 * 1024 * 1024
 TIMEOUT_SECONDS = 60

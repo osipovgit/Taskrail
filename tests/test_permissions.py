@@ -6,8 +6,9 @@ from pathlib import Path
 
 from countersign.infrastructure.agent_sync import make_profile
 from countersign.infrastructure.artifact_access import manifest, model_inputs, result_inputs
+from countersign.infrastructure.process_watch import permission_denied_event
 from countersign.infrastructure.profile_rules import permission_worktree
-from countersign.infrastructure.runner import permission_denied_event, run_agent
+from countersign.infrastructure.runner import run_agent
 
 
 class PermissionTests(unittest.TestCase):

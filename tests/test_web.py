@@ -6,7 +6,8 @@ from pathlib import Path
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
-from countersign.web.server import make_server, public_messages
+from countersign.web.run_messages import public_messages
+from countersign.web.server import make_server
 
 
 class DashboardTests(unittest.TestCase):

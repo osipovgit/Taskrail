@@ -8,7 +8,7 @@ import time
 from countersign.core import control, json_response, schema
 from countersign.git import transport
 from countersign.infrastructure import environment as host_environment
-from countersign.infrastructure.runner import stop_group
+from countersign.infrastructure.process_group import stop_group
 from countersign.interactions import local_policy
 
 MAX_TIMEOUT = 3600

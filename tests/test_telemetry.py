@@ -22,12 +22,12 @@ class TelemetryTests(unittest.TestCase):
         )
         for event in (finish, finish, dict(type="text", part=dict(text="I compacted the context"))):
             t.observe(json.dumps(event))
-        value = t.value()
+        value = t.summary()
         self.assertEqual(value["tokens"]["total"], 100)
         self.assertEqual(value["compaction_completed"], 0)
         self.assertEqual(value["compaction_coverage"], "unknown")
         t.observe(json.dumps(dict(type="session.compacted", timestamp=123)))
-        self.assertEqual(t.value()["compaction_completed"], 1)
+        self.assertEqual(t.summary()["compaction_completed"], 1)
 
     def test_tool_trace_preserves_arguments_status_errors_and_timing(self):
         t = Telemetry()
@@ -51,7 +51,7 @@ class TelemetryTests(unittest.TestCase):
                     )
                 )
             )
-        value = t.value()
+        value = t.summary()
         self.assertEqual(value["tool_calls"], 2)
         self.assertEqual(value["repeated_reads"], 1)
         self.assertEqual(value["timeline"][0]["duration_seconds"], 1.5)

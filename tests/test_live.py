@@ -6,14 +6,11 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from countersign.application.live import (
-    canonical_plan,
-    configuration,
-    execute_task,
-    safe_file,
-    tool_paths,
-    validate_plan,
-)
+from countersign.application.live import execute_task
+from countersign.application.plan_validation import canonical_plan, validate_plan
+from countersign.application.planned_paths import safe_file
+from countersign.application.task_config import configuration
+from countersign.core.paths import tool_paths
 from countersign.infrastructure.runner import run_agent as real_run_agent
 
 BASE = Path(__file__).resolve().parents[1]
@@ -49,7 +46,7 @@ class LiveTests(unittest.TestCase):
                 "--mode",
                 mode,
             ],
-            agent_source=str(getattr(self, "source", BASE / "agents")),
+            agent_source=str(getattr(self, "source", BASE / "countersign/agents")),
             agent_directory=str(self.profiles),
             timeout_seconds=1
             if mode
@@ -92,7 +89,7 @@ class LiveTests(unittest.TestCase):
         self.assertEqual(process.checked(self.root, ["rev-parse", "HEAD^"]).strip(), head)
         self.assertIn("return 2", (self.root / "hello.py").read_text())
         checkpoint = json.loads((run / "checkpoint.json").read_text())
-        from countersign.application.live import git_metadata
+        from countersign.application.git_state import git_metadata
 
         self.assertEqual(checkpoint["git_before"], git_metadata({"project": self.root}))
         self.assertIn("G0", (run / "01-plan/evidence-bindings.json").read_text())
@@ -224,7 +221,7 @@ class LiveTests(unittest.TestCase):
         self.source.mkdir()
         for role in ("planner", "implementer", "reviewer"):
             (self.source / (role + ".md")).write_bytes(
-                (BASE / "agents" / (role + ".md")).read_bytes()
+                (BASE / "countersign/agents" / (role + ".md")).read_bytes()
             )
         original = (self.source / "reviewer.md").read_text()
         changed = original + "\nNEW_INSTRUCTIONS_NEXT_RUN\n"
@@ -703,6 +700,121 @@ class LiveTests(unittest.TestCase):
         _, status, state = self.run_mode("syntax")
         self.assertEqual(status, "READY_FOR_REVIEW")
         self.assertEqual(len(state["attempts"]), 5)
+
+    def verify_command(self, code, **options):
+        return dict(cwd=str(self.root), argv=[sys.executable, "-c", code], **options)
+
+    def test_settings_verify_command_passes_and_keeps_output(self):
+        code = "print('verified', open('hello.py').read().count('return 2'))"
+        run, status, state = self.run_mode("ok", verify_commands=[self.verify_command(code)])
+        self.assertEqual(status, "READY_FOR_REVIEW", state.get("summary"))
+        command = state["checks"][-1]
+        self.assertEqual(command["status"], "PASS")
+        self.assertEqual(command["cwd"], str(self.root))
+        log = next(run.glob("*-check/verify-01.log"))
+        self.assertIn("verified 1", log.read_text())
+        frozen = json.loads((run / "00-input/settings.json").read_text())
+        self.assertEqual(frozen["verify_commands"][0]["timeout_seconds"], 600)
+
+    def test_failed_verify_command_returns_output_to_bounded_repair(self):
+        failing = self.verify_command("import sys; print('boom'); sys.exit(3)")
+        run, status, state = self.run_mode("ok", verify_commands=[failing], max_repairs=1)
+        self.assertEqual(status, "CHECK_FAILED")
+        self.assertEqual(len(list(run.glob("*-check"))), 2)
+        self.assertIn("exit 3", state["checks"][-1]["detail"])
+        self.assertIn("boom", state["checks"][-1]["detail"])
+
+    def test_verify_command_writing_sources_stops_the_run(self):
+        writer = self.verify_command("open('generated.txt', 'w').write('x')")
+        _, status, state = self.run_mode("ok", verify_commands=[writer])
+        self.assertEqual(status, "BLOCKED")
+        self.assertIn("verification commands must not write", state["summary"])
+
+    def test_verify_commands_are_validated_with_settings(self):
+        for entry in (
+            dict(cwd="relative", argv=["python3"]),
+            dict(cwd=str(self.root), argv=["git", "status"]),
+            dict(cwd=str(self.root), argv=[]),
+            dict(cwd=str(self.root), argv=["python3"], shell=True),
+        ):
+            self.settings.write_text(json.dumps(dict(verify_commands=[entry])))
+            with self.assertRaises(ValueError):
+                configuration(self.task, self.settings)
+
+    def isolated_repository(self):
+        from countersign.git import process
+
+        (self.root / ".git/HEAD").unlink()
+        (self.root / ".git").rmdir()
+        process.checked(self.root, ["init", "-b", "main"])
+        process.checked(self.root, ["config", "user.name", "Fixture"])
+        process.checked(self.root, ["config", "user.email", "fixture@example.invalid"])
+        process.checked(self.root, ["add", "."])
+        process.checked(self.root, ["commit", "-m", "Initial"])
+        header = {"roots": {"project": str(self.root)}, "isolation": "worktree"}
+        self.task.write_text(f"```countersign-task\n{json.dumps(header)}\n```\nReturn 2")
+        return process
+
+    def test_worktree_isolation_leaves_the_source_checkout_untouched(self):
+        process = self.isolated_repository()
+        probe = self.verify_command("import os; print('cwd', os.getcwd())")
+        run, status, state = self.run_mode(
+            "ok", worktree_base=str(self.base / "worktrees"), verify_commands=[probe]
+        )
+        self.assertEqual(status, "READY_FOR_REVIEW", state.get("summary"))
+        entry = state["worktrees"]["project"]
+        worktree = Path(entry["worktree"])
+        self.assertEqual(worktree, (self.base / "worktrees" / run.name / "project").resolve())
+        self.assertEqual(entry["branch"], f"countersign/{run.name}")
+        self.assertEqual(state["roots"], {"project": str(worktree)})
+        self.assertIn("return 1", (self.root / "hello.py").read_text())
+        self.assertIn("return 2", (worktree / "hello.py").read_text())
+        self.assertEqual(process.checked(self.root, ["status", "--porcelain"]), "")
+        report = (run / "report.md").read_text()
+        self.assertIn("## Isolated worktrees", report)
+        self.assertIn("edited in isolated worktrees", report)
+        log = next(run.glob("*-check/verify-01.log")).read_text()
+        self.assertIn(f"cwd {worktree}", log)
+        from countersign.application.worktree_isolation import source_roots
+
+        self.assertEqual(source_roots(state), [{"alias": "project", "path": str(self.root)}])
+
+    def test_isolated_run_continues_in_its_worktree(self):
+        self.isolated_repository()
+        run, status, state = self.run_mode("review-timeout", worktree_base=str(self.base / "wt"))
+        self.assertEqual(status, "TIMEOUT")
+        _, status = self.continue_with_ok_model(run)
+        self.assertEqual(status, "READY_FOR_REVIEW")
+        resumed = json.loads((run / "run.json").read_text())
+        self.assertEqual(resumed["worktrees"], state["worktrees"])
+        self.assertEqual(len(list((self.base / "wt").iterdir())), 1)
+
+    def test_isolation_needs_a_repository_top_level(self):
+        self.isolated_repository()
+        nested = self.root / "nested"
+        nested.mkdir()
+        header = {"roots": {"project": str(nested)}, "isolation": "worktree"}
+        self.task.write_text(f"```countersign-task\n{json.dumps(header)}\n```\nReturn 2")
+        with self.assertRaisesRegex(ValueError, "top-level"):
+            self.run_mode("ok", worktree_base=str(self.base / "wt"))
+        header["isolation"] = "copy"
+        self.task.write_text(f"```countersign-task\n{json.dumps(header)}\n```\nReturn 2")
+        with self.assertRaisesRegex(ValueError, "isolation"):
+            configuration(self.task)
+
+    def test_linked_worktree_ignores_other_branches_but_tracks_its_own(self):
+        from countersign.application.git_state import git_metadata
+
+        process = self.isolated_repository()
+        linked = self.base / "linked"
+        process.checked(self.root, ["worktree", "add", "-b", "work", str(linked), "HEAD"])
+        before = git_metadata({"linked": linked})
+        (self.root / "unrelated.txt").write_text("main checkout keeps working\n")
+        process.checked(self.root, ["commit", "-am", "Main checkout commit"])
+        self.assertEqual(git_metadata({"linked": linked}), before)
+        (linked / "hello.py").write_text("changed\n")
+        process.checked(linked, ["commit", "-am", "Worktree commit"])
+        self.assertNotEqual(git_metadata({"linked": linked}), before)
 
     def test_unsafe_permissions_no_model(self):
         _, status, state = self.run_mode("unsafe")

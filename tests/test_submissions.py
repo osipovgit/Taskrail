@@ -127,7 +127,7 @@ class SubmissionTests(unittest.TestCase):
                         "--mode",
                         "ok",
                     ],
-                    agent_source=str(BASE / "agents"),
+                    agent_source=str(BASE / "countersign/agents"),
                     agent_directory=str(self.base / "profiles"),
                     timeout_seconds=5,
                 )

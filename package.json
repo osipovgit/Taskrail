@@ -1,7 +1,6 @@
 {
   "name": "countersign-quality",
   "private": true,
-  "version": "0.17.1",
   "type": "module",
   "scripts": {
     "lint": "eslint . && stylelint 'countersign/web/static/*.css'",

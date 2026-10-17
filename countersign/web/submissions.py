@@ -103,7 +103,7 @@ def build_task(payload, runs):
             "Discover related files and the minimal change scope within the declared roots.",
             "Preserve unrelated changes. Use controlled Git access; never hard-reset, clean, rewrite history or force-push. Do not edit Git metadata directly.",
             "Use English for generated explanations, comments, documentation and reports.",
-            "Use built-in syntax checks and static review. Report all unexecuted checks as unverified.",
+            "The server runs syntax checks and configured verification commands. Report all unexecuted checks as unverified.",
             "Remote actions require the isolated SSH executor and personal approval of exact scripts and targets.",
         ]
     )

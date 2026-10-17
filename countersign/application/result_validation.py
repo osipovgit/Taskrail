@@ -7,6 +7,8 @@ from countersign.core import coverage, plan_contract, schema, source_claims
 from countersign.core.files import atomic_json
 from countersign.git.requests import output_directory
 
+PLAN_FILES = "declared roots (files_read and proposed_change_files name project files; cite executor snapshots only in evidence)"
+
 
 def validate(response, context):
     """Return a versioned result only after all independent validations pass."""
@@ -39,12 +41,12 @@ def validate(response, context):
     return payload
 
 
-def approved_path(filename, roots):
+def approved_path(filename, roots, scope="declared roots or executor snapshots"):
     """Do not resolve guessed aliases or allow symlinks to expand source access."""
     path = Path(filename)
     schema.require(path.is_absolute() and path.resolve() == path, "Use canonical absolute paths")
     inside = any(root in path.parents for root in roots.values())
-    schema.require(inside, f"Path outside declared roots or executor snapshots: {path}")
+    schema.require(inside, f"Path outside {scope}: {path}")
 
 
 def validate_role(payload, context):
@@ -52,7 +54,7 @@ def validate_role(payload, context):
     if context["role"] == "planner":
         plan_contract.validate_plan_steps(payload, context["requirements"])
         for filename in payload["files_read"] + payload["proposed_change_files"]:
-            approved_path(filename, context["roots"])
+            approved_path(filename, context["roots"], PLAN_FILES)
         observed = {
             record["input"]["filePath"]
             for record in evidence.validation_records(context["run"])

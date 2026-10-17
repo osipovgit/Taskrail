@@ -15,7 +15,7 @@ def validate_role_source(path):
     require(
         "Instruction contract: 1." in path.read_text(encoding="utf-8").splitlines(),
         f"Outdated role instructions: {path}. Use deploy/install.sh --agents=bundled "
-        "or update the custom role against agents/ before declaring Instruction contract: 1.",
+        "or update the custom role against countersign/agents/ before declaring Instruction contract: 1.",
     )
 
 

@@ -2,9 +2,16 @@
 
 import json
 import re
+import sys
 from datetime import datetime
 
 from countersign.core.files import atomic_json
+
+
+def say(text):
+    """Write one progress line for the CLI or the worker log."""
+    sys.stdout.write(f"{text}\n")
+    sys.stdout.flush()
 
 
 def clock():

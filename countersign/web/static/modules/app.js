@@ -107,6 +107,8 @@ export function approvalCard(pending) {
   return card;
 }
 
+const CHECKBOXES = new Set(['read_only', 'worktree']);
+
 export function openComposer(draft = null, context = {}) {
   state.composerContext = context;
   const form = document.getElementById('task-form');
@@ -115,9 +117,10 @@ export function openComposer(draft = null, context = {}) {
   if (draft) {
     for (const [key, value] of Object.entries(draft)) {
       const input = form.elements.namedItem(key);
-      if (input && key !== 'read_only') input.value = value;
+      if (input && !CHECKBOXES.has(key)) input.value = value;
     }
     document.getElementById('task-read-only').checked = !!draft.read_only;
+    document.getElementById('task-worktree').checked = !!draft.worktree;
     draft.roots.forEach((root) => addRoot(root.alias, root.path));
   } else addRoot('project');
   state.composing = true;
@@ -341,6 +344,7 @@ export async function submitTask(event) {
   try {
     const payload = Object.fromEntries(new FormData(event.target).entries());
     payload.read_only = document.getElementById('task-read-only').checked;
+    payload.worktree = document.getElementById('task-worktree').checked;
     Object.assign(payload, state.composerContext);
     payload.roots = [...document.querySelectorAll('.root-row')].map((row) => ({
       alias: row.querySelector('.root-alias').value.trim(),

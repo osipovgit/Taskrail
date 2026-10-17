@@ -8,7 +8,9 @@ from pathlib import Path
 from unittest.mock import patch
 
 from countersign.application import result_validation
-from countersign.application.live import git_metadata, snapshot, validate_plan
+from countersign.application.git_state import git_metadata
+from countersign.application.plan_validation import validate_plan
+from countersign.application.source_tree import snapshot
 from countersign.core import coverage
 from countersign.git import dispatch, execution, policy, process, requests
 from countersign.interactions.session import StageSession
@@ -188,6 +190,10 @@ class GitExecutorTests(unittest.TestCase):
         )
         with self.assertRaises(ValueError):
             result_validation.approved_path(str(transcript), self.roots)
+        with self.assertRaisesRegex(ValueError, "cite executor snapshots only in evidence"):
+            result_validation.approved_path(
+                str(transcript), self.roots, result_validation.PLAN_FILES
+            )
 
     def test_read_request_envelopes_preserve_exact_arguments(self):
         payload = self.payload(
