@@ -2,10 +2,11 @@
   "name": "countersign-quality",
   "private": true,
   "version": "0.17.1",
+  "type": "module",
   "scripts": {
     "lint": "eslint . && stylelint 'countersign/web/static/*.css'",
     "test": "node tests/test_dashboard.cjs",
-    "format:check": "prettier --check 'countersign/web/static/*' 'tests/*.cjs' eslint.config.mjs"
+    "format:check": "prettier --check 'countersign/web/static/**/*' 'tests/*.cjs' eslint.config.mjs"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
@@ -17,5 +18,6 @@
   },
   "engines": {
     "node": ">=24.19.0"
-  }
+  },
+  "license": "Apache-2.0"
 }

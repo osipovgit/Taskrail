@@ -5,8 +5,12 @@ export default [
   { ignores: ['build/**', 'node_modules/**'] },
   js.configs.recommended,
   {
-    files: ['countersign/web/static/*.js'],
+    files: ['countersign/web/static/theme.js'],
     languageOptions: { sourceType: 'script', globals: globals.browser },
+  },
+  {
+    files: ['countersign/web/static/dashboard.js', 'countersign/web/static/modules/*.js'],
+    languageOptions: { sourceType: 'module', globals: globals.browser },
   },
   { files: ['tests/*.cjs'], languageOptions: { sourceType: 'commonjs', globals: globals.node } },
   { rules: { eqeqeq: ['error', 'always'], 'no-var': 'error', 'prefer-const': 'error' } },

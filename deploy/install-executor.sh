@@ -20,6 +20,7 @@ if [[ $client_uid -eq 0 ]]; then
   exit 2
 fi
 command -v python3 >/dev/null
+/usr/bin/python3 -c 'import sys; assert sys.version_info >= (3, 10), "Python 3.10+ is required"'
 command -v ssh >/dev/null
 command -v systemctl >/dev/null
 source_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)

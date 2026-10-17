@@ -38,6 +38,7 @@ from countersign.infrastructure.agent_sync import (
     atomic_write,
     launch_settings,
     make_profile,
+    repair_mode,
     verify_permissions,
 )
 from countersign.interactions.session import run_stage
@@ -711,7 +712,7 @@ def execute_task(task, settings=None, debug=False, run_dir=None, plan_response=N
                         roots.values(),
                         artifact_access.model_inputs(run, folder),
                         files,
-                        format_only=format_only,
+                        format_only=repair_mode(config, format_only),
                         worktree=edit_base,
                     )
                     profiles.append(profile)
@@ -771,6 +772,7 @@ def execute_task(task, settings=None, debug=False, run_dir=None, plan_response=N
                             format_only=format_only,
                             runtime=dict(
                                 token_budget=max(0, budget - observed) if budget else None,
+                                env_allow=config["agent_env_allow"],
                             ),
                         ),
                     )

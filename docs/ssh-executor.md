@@ -47,8 +47,18 @@ adding them to `known_hosts`; the executor never accepts unknown keys automatica
 For nonstandard ports use OpenSSH's `[hostname]:port` known-hosts notation.
 After editing an existing inventory, restart the executor when no actions are
 running; inventory changes are loaded at service startup.
-Password authentication is supported; key authentication and remote sudo password
-handling are not implemented. Choose the remote account's permissions deliberately.
+Each host uses either `password` or `identity_file`. For key authentication, replace
+`password` with the absolute path of an unencrypted private key inside
+`/etc/countersign-executor/`, owned by `root:countersign-executor` with mode `0640`:
+
+```sh
+sudo install -d -m 0750 -o root -g countersign-executor /etc/countersign-executor/keys
+sudo install -m 0640 -o root -g countersign-executor id_ed25519 /etc/countersign-executor/keys/qa-node-1
+```
+
+The key is offered alone (`IdentitiesOnly`, no agent, no password prompt). Remote
+sudo password handling is not implemented; choose the remote account's permissions
+deliberately.
 
 ## Use from a task
 

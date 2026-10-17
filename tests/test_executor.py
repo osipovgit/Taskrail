@@ -132,6 +132,31 @@ class ExecutorTest(unittest.TestCase):
         self.assertNotIn("SSH_AUTH_SOCK", env)
         self.assertEqual(env["SSH_ASKPASS_REQUIRE"], "force")
 
+    def test_key_hosts_use_one_identity_and_no_password_helper(self):
+        key_host = dict(INVENTORY["server-a"])
+        key_host.pop("password")
+        key_host["identity_file"] = "/etc/countersign-executor/keys/server-a"
+        hosts.validate(key_host)
+        argv = transport.command(key_host)
+        for option in (
+            "IdentityFile=/etc/countersign-executor/keys/server-a",
+            "IdentitiesOnly=yes",
+            "BatchMode=yes",
+            "PasswordAuthentication=no",
+            "IdentityAgent=none",
+        ):
+            self.assertIn(option, argv)
+        self.assertNotIn("PreferredAuthentications=password", argv)
+        env = transport.environment(key_host)
+        self.assertNotIn("SSH_ASKPASS", env)
+        self.assertNotIn("COUNTERSIGN_SSH_PASSWORD", env)
+        self.assertEqual(hosts.redact("text", {"k": key_host}), "text")
+        for identity in ("relative/key", "/root/.ssh/id_ed25519", "/etc/countersign-executor/../x"):
+            with self.subTest(identity=identity), self.assertRaises(ValueError):
+                hosts.validate(dict(key_host, identity_file=identity))
+        with self.assertRaises(ValueError):
+            hosts.validate(dict(key_host, password="both"))
+
     def test_bundle_paths_and_timeout_validation(self):
         for path in (
             "../escape",

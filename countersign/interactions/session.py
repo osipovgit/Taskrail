@@ -4,6 +4,7 @@ from countersign.application import budgets
 from countersign.application.artifacts import save_run
 from countersign.core import control
 from countersign.core.files import atomic_json, changed
+from countersign.infrastructure import opencode_api
 from countersign.infrastructure.runner import run_agent
 from countersign.interactions.actions import Actions
 from countersign.interactions.clock import StageClock
@@ -23,9 +24,18 @@ class StageSession:
             self.environment["allowed"] = []
         self.launch = dict(launch)
         self.clock = StageClock(active[1]["budget"]["timeout"])
-        self.context = dict(session_id=None, turns=0, tokens={})
+        self.context = dict(session_id=None, turns=0, tokens={}, attachment={})
 
     def run(self):
+        """One stage server serves every turn and stops with the stage."""
+        launch = self.launch
+        allow = launch.get("runtime", {}).get("env_allow", ())
+        command = launch.get("command", ())
+        with opencode_api.stage_server(command, launch.get("workspace"), allow) as server:
+            self.context["attachment"] = server.attachment() if server else {}
+            return self.turns()
+
+    def turns(self):
         """Only intermediate responses continue; final validation stays independent."""
         while self.clock.remaining() > 0:
             outcome = self.turn()
@@ -47,7 +57,11 @@ class StageSession:
         options = dict(
             self.launch,
             timeout=self.clock.remaining(),
-            runtime=dict(self.launch.get("runtime", {}), session_id=self.context[SESSION_ID]),
+            runtime=dict(
+                self.launch.get("runtime", {}),
+                session_id=self.context[SESSION_ID],
+                attachment=self.context["attachment"],
+            ),
         )
         outcome = run_agent(**options)
         self.context["turns"] += 1

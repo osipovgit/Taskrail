@@ -42,7 +42,7 @@ next stage and requested write effects. The engine keeps the single-writer lock,
 source checks, checkpoints and file operations; `execute_task` is still one large
 function and remains the main refactoring target. The browser has no runtime
 dependencies; Node packages are only linting and formatting tools. The runtime needs
-Python 3.8+, development tools need Python 3.10+ and Node 24.19+.
+Python 3.10+ for both the runtime and development tools, and Node 24.19+ for UI linting.
 
 The response contract lives in `core/result-schemas.json` (`schema_version` 1).
 Application helpers compose prompts, bind source evidence, freeze instructions and
