@@ -48,11 +48,6 @@ def execution_report(state):
     return lines
 
 
-def fingerprints(state, expected, git_before):
-    """Adopt only the scope-checked executor result on the next attempt."""
-    return state.pop("git_effect", (expected, git_before))
-
-
 def git_directory(run):
     """Expose readable executor evidence without granting edit permission."""
     return requests.output_directory(run)

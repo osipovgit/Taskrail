@@ -48,3 +48,28 @@ jobs:
           python-version: ${{ matrix.python }}
       - name: Run the standard-library test suite with a private HOME
         run: HOME="$(mktemp -d)" python -m unittest discover -s tests
+
+  opencode:
+    name: permission check on opencode ${{ matrix.opencode }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        opencode: ["1.19.3"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - name: Install the pinned opencode CLI
+        run: npm install --prefix "$RUNNER_TEMP/opencode" "opencode-ai@${{ matrix.opencode }}"
+      - name: Initialize settings and verify real permission enforcement (no model call)
+        run: |
+          export HOME="$RUNNER_TEMP/home" PATH="$RUNNER_TEMP/opencode/node_modules/.bin:$PATH"
+          mkdir -p "$HOME"
+          python -m countersign init --opencode "$(command -v opencode)" --format-repair-tools none
+          python -m countersign check

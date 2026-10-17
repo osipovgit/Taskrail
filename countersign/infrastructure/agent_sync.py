@@ -109,7 +109,7 @@ def repair_setting(setting):
 def verify_permissions(command, cwd, name, expected, log, timeout=60):
     env = opencode_cli.environment()
     with log.open("wb") as output:
-        from countersign.infrastructure.runner import stop_group
+        from countersign.infrastructure.process_group import stop_group
 
         proc = subprocess.Popen(
             list(command) + ["agent", "list"],

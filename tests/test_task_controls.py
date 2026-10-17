@@ -9,9 +9,11 @@ from pathlib import Path
 from unittest.mock import patch
 
 from countersign.application.live import execute_task
+from countersign.web import requests
 from countersign.web.history import HISTORY, conversation, previous_messages, task_draft
 from countersign.web.lifecycle import trash_run
-from countersign.web.server import list_runs, run_view
+from countersign.web.run_list import list_runs
+from countersign.web.run_view import run_view
 from countersign.web.submissions import TaskLauncher, build_task
 
 BASE = Path(__file__).resolve().parents[1]
@@ -69,7 +71,7 @@ class TaskControlTests(unittest.TestCase):
                         "--mode",
                         mode,
                     ],
-                    agent_source=str(BASE / "agents"),
+                    agent_source=str(BASE / "countersign/agents"),
                     agent_directory=str(self.base / "profiles"),
                     timeout_seconds=30,
                     max_read_retries=0,
@@ -129,6 +131,37 @@ class TaskControlTests(unittest.TestCase):
         self.assertEqual(previous_messages(child)[0]["goal"], "Return 2")
         self.assertEqual(task_draft(child)["goal"], "Explain the result")
         self.assertNotIn("Answer only", task_draft(child)["constraints"])
+
+    def test_worktree_flag_is_a_boolean_task_header_option(self):
+        with patch.object(self.launcher, "launch", return_value={"id": "next"}) as launch:
+            self.launcher.submit(dict(self.payload, worktree=True, read_only=True))
+            text = launch.call_args.args[0]
+        meta = json.loads(text.split("```countersign-task\n")[1].split("```")[0])
+        self.assertEqual(meta["isolation"], "worktree")
+        self.assertTrue(meta["read_only"])
+        with self.assertRaisesRegex(ValueError, "boolean"):
+            self.launcher.submit(dict(self.payload, worktree="yes"))
+        child = self.runs / "isolated"
+        (child / "00-input").mkdir(parents=True)
+        (child / "00-input/task.md").write_text(text)
+        index = json.loads((self.run / "run.json").read_text())
+        source = index["roots"]["project"]
+        index["roots"]["project"] = "/worktrees/isolated/project"
+        index["worktrees"] = {"project": {"source": source}}
+        (child / "run.json").write_text(json.dumps(index))
+        draft = task_draft(child)
+        self.assertTrue(draft["worktree"])
+        self.assertEqual(draft["roots"], [{"alias": "project", "path": source}])
+        followup = requests.Submission(
+            dict(draft, parent_run="isolated", submission_mode="followup"), self.runs
+        )
+        self.assertFalse(followup.worktree)
+        self.assertEqual(followup.fields["roots"][0]["path"], "/worktrees/isolated/project")
+        restart = requests.Submission(
+            dict(draft, parent_run="isolated", submission_mode="restart"), self.runs
+        )
+        self.assertTrue(restart.worktree)
+        self.assertEqual(restart.fields["roots"][0]["path"], source)
 
     def test_delete_moves_all_launcher_history_but_preserves_sources(self):
         for name in ("original-launch", "resume-launch"):

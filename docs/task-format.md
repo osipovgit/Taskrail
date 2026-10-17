@@ -31,7 +31,8 @@ task files.
 {
   "roots": {"project": "~/src/my-project"},
   "verification": ["Run the scenario twice in the target environment and verify the expected result"],
-  "read_only": false
+  "read_only": false,
+  "isolation": "in_place"
 }
 ```
 
@@ -40,6 +41,7 @@ task files.
 | `roots` | Alias to directory. Roots must not coincide or contain one another; relative paths resolve from the task file's directory |
 | `verification` | Deferred runtime checks to report, not commands to execute |
 | `read_only` | `true` for an answer-only task (the browser's **Answer only**) |
+| `isolation` | `in_place` (default) edits the roots; `worktree` edits new linked Git worktrees (the browser's **Isolated Git worktree**), see below |
 
 Without `roots`, the CLI uses the repository that contains the task file (found
 through `.git` without running Git); a task outside a repository needs explicit
@@ -48,13 +50,28 @@ the run store, duplicate aliases and unknown request fields. Aliases use Latin
 letters, digits, underscores and hyphens. The CLI does not apply the browser's form
 validation to arbitrary Markdown, so fill in or remove all template placeholders.
 
+## Worktree isolation
+
+With `"isolation": "worktree"` every root must be the top level of a Git repository.
+Before planning, the run creates one linked worktree per root from its current
+`HEAD` on a new branch `countersign/<run>`, under `worktree_base` (default: a
+`worktrees` folder beside the run store). Uncommitted changes in the source checkout
+are not included. The whole run, including Continue, works in the worktrees; the
+source checkout and its other branches may change meanwhile without stopping the
+run. Changes stay uncommitted in the worktrees: the report lists each worktree and
+branch, and you review, commit, merge and finally `git worktree remove` it yourself.
+A browser follow-up continues in the same worktrees; Restart starts again from the
+source checkouts in new worktrees.
+
 ## Execution boundaries
 
 Models and timeouts belong in server-side settings. The workflow edits original
 sources, preserves existing work, allows controlled Git operations and never rolls
-back automatically. It runs built-in syntax checks and static review. Project tests,
-containers, deployments and CI run only when an agent requests them through
-`LOCAL_REQUEST` or an SSH action and you approve; otherwise they remain deferred. A
+back automatically. It runs built-in syntax checks, the operator's
+[verification commands](deployment.md#verification-commands) and static review.
+Other project tests, containers, deployments and CI run only when an agent requests
+them through `LOCAL_REQUEST` or an SSH action and you approve; otherwise they remain
+deferred. A
 no-change result requires independent plan review and sufficient evidence.
 
 An answer-only task rejects any implementation plan and never reaches the

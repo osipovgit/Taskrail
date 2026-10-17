@@ -24,7 +24,7 @@ version=$(PYTHONPATH="$source_dir" "$python_bin" -c 'from countersign import __v
 release=$(mktemp -d "$app_dir/releases/$version-XXXXXXXX")
 # Copy the application only; project source roots and task history are never copied.
 tar -C "$source_dir" --exclude='__pycache__' --exclude='*.pyc' -cf - \
-    countersign agents deploy docs settings.json pyproject.toml README.md |
+    countersign deploy docs pyproject.toml README.md LICENSE |
     tar -C "$release" -xf -
 "$python_bin" -m venv --without-pip "$release/venv"
 PYTHONPATH="$release" "$release/venv/bin/python" -c 'from countersign.web.service import ApplicationService'
@@ -41,7 +41,7 @@ source, config, supplied, app, agent_mode = sys.argv[1:]
 source, config, app = Path(source), Path(config), Path(app)
 target = config / "settings.json"
 if not target.exists():
-    initial = Path(supplied).expanduser().resolve() if supplied else source / "settings.json"
+    initial = Path(supplied).expanduser().resolve() if supplied else source / "countersign/settings.json"
     settings = json.loads(initial.read_text())
     settings["timeout_seconds"] = 3600
     command = settings.get("command", ["opencode"])
@@ -62,7 +62,7 @@ if not target.exists():
                 folder = Path(settings[key]).expanduser()
                 settings[key] = str(folder if folder.is_absolute() else initial.parent / folder)
     else:
-        settings["agent_source"] = str(app / "current/agents")
+        settings["agent_source"] = str(app / "current/countersign/agents")
     target.write_text(json.dumps(settings, indent=2) + "\n")
     target.chmod(0o600)
 else:
@@ -70,7 +70,7 @@ else:
 if agent_mode == "bundled":
     previous = target.read_bytes()
     settings = json.loads(previous)
-    settings["agent_source"] = str(app / "current/agents")
+    settings["agent_source"] = str(app / "current/countersign/agents")
     backup = config / ("settings.json.backup-" + hashlib.sha256(previous).hexdigest()[:16])
     if not backup.exists():
         backup.write_bytes(previous)

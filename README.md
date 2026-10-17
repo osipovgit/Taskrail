@@ -16,6 +16,15 @@ bash deploy/install.sh
 # bash deploy/install.sh /absolute/path/settings.json
 ```
 
+Without the managed service, install the package and run the UI in the foreground:
+
+```sh
+pipx install .            # from a checkout or an extracted release
+countersign init          # writes ~/.config/countersign/settings.json
+countersign check         # verifies opencode, settings and permission enforcement
+countersign serve
+```
+
 The bundled settings launch `opencode` with its configured default model; set role
 `models` or a wrapper `command` as described in [opencode settings](docs/deployment.md#opencode).
 
@@ -36,13 +45,16 @@ See [deployment](docs/deployment.md) before changing existing installations.
 ## Workflow
 
 Planning → independent plan review → scoped implementation → built-in syntax checks
-→ independent result review. A reviewed no-change plan ends without implementation.
+and your [verification commands](docs/deployment.md#verification-commands) →
+independent result review. A reviewed no-change plan ends without implementation.
 Failed checks/review may request bounded repairs. Interrupted writers are never
-replayed automatically. Partial changes remain available for inspection.
+replayed automatically. Partial changes remain available for inspection. A task can
+also run in [isolated Git worktrees](docs/task-format.md#worktree-isolation) on a new
+branch, leaving the source checkout untouched.
 
-Success means **Ready for your review** or **No changes required**. Project tests,
-Docker, CI and deployment never run automatically; agents may request local commands
-that you approve one by one. The optional
+Success means **Ready for your review** or **No changes required**. Other project
+tests, Docker, CI and deployment never run automatically; agents may request local
+commands that you approve one by one. The optional
 [isolated SSH executor](docs/ssh-executor.md) runs exact remote scripts after personal
 root approval, with results returned to the same task. Deferred runtime checks
 remain visible. Every model result follows a strict JSON contract; source quotations
@@ -55,7 +67,7 @@ countersign /absolute/path/task.md
 countersign status /absolute/path/run
 countersign resume /absolute/path/run
 # Foreground development UI:
-python3 -m countersign serve --settings settings.json
+python3 -m countersign serve --settings countersign/settings.json
 ```
 
 ## Guides

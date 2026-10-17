@@ -147,6 +147,7 @@ async function main() {
       'task-form',
       'project-roots',
       'task-read-only',
+      'task-worktree',
       'composer',
       'chat',
       'followup-panel',
@@ -158,6 +159,7 @@ async function main() {
   nodes['task-form'].reset = () => {
     for (const field of Object.values(fields)) field.value = '';
     nodes['task-read-only'].checked = false;
+    nodes['task-worktree'].checked = false;
   };
   nodes['task-goal'].focus = () => {};
   globalThis.document.getElementById = (name) => nodes[name];
@@ -168,12 +170,15 @@ async function main() {
       criteria: 'Check existing work',
       roots: [{ alias: 'qa', path: '/projects/qa' }],
       read_only: true,
+      worktree: true,
     },
     { parent_run: 'prior', submission_mode: 'restart' },
   );
   assert.equal(fields.goal.value, 'Original goal');
   assert.equal(fields.criteria.value, 'Check existing work');
   assert.equal(nodes['task-read-only'].checked, true);
+  assert.equal(nodes['task-worktree'].checked, true);
+  assert.equal(fields.worktree, undefined);
   assert.equal(nodes.composer.hidden, false);
   assert.equal(nodes.chat.hidden, true);
   assert.equal(nodes['project-roots'].children[0].children[1].value, '/projects/qa');
@@ -182,6 +187,7 @@ async function main() {
   app.openComposer();
   assert.equal(fields.goal.value, '');
   assert.equal(nodes['task-read-only'].checked, false);
+  assert.equal(nodes['task-worktree'].checked, false);
   assert.equal(nodes['project-roots'].children.length, 1);
   console.log('Restart prefill and clean new-task form passed without launching a worker.');
 

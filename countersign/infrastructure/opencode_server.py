@@ -66,6 +66,8 @@ class Server:
             self.process.wait(CLOSE_SECONDS)
         except subprocess.TimeoutExpired:
             self.process.kill()
+            self.process.wait()
+        self.process.stdout.close()
 
     def agents(self, name=None):
         """Agent configuration loads after the server reports readiness."""

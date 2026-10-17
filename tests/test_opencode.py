@@ -9,6 +9,7 @@ from unittest import mock
 from countersign.core.source_claims import supports
 from countersign.infrastructure import environment, opencode_api, opencode_cli
 from countersign.infrastructure.agent_sync import launch_settings, make_profile, verify_permissions
+from countersign.infrastructure.event_summary import parse_events
 from countersign.infrastructure.opencode_events import EventTranslator
 from countersign.infrastructure.profile_rules import permissions
 from countersign.infrastructure.runner import run_agent
@@ -327,6 +328,37 @@ class QuoteTests(unittest.TestCase):
         legacy = dict(record, output="00001| def f():\n00002|     return 1")
         self.assertTrue(supports(legacy, claim))
         self.assertFalse(supports(dict(record, output="1: def f():\n2:  return 1"), claim))
+
+
+FIXTURES = Path(__file__).with_name("fixtures")
+
+
+class RealStreamTests(unittest.TestCase):
+    """Recorded opencode streams keep the parsers honest about real event shapes."""
+
+    def test_opencode_1_plan_stream_parses_without_translation(self):
+        result = parse_events(FIXTURES / "opencode-1.19.3-plan.jsonl")
+        self.assertTrue(result["completed"])
+        self.assertEqual((result["tool_calls"], result["errors"]), (2, []))
+        self.assertGreater(result["tokens"]["total"], 0)
+        self.assertIn('"status"', result["final_text"])
+
+    def test_opencode_2_two_turn_stream_matches_the_opencode_1_shape(self):
+        translator = EventTranslator("/fixture/notes")
+        raw = (FIXTURES / "opencode-2.0.30-answer-plan.jsonl").read_text().splitlines()
+        lines = [translator.translate(line) for line in raw]
+        lines.append(translator.finish(0))
+        with tempfile.TemporaryDirectory() as temp:
+            events = Path(temp) / "events.jsonl"
+            events.write_text("\n".join(lines) + "\n")
+            result = parse_events(events)
+            reads = [json.loads(line)["part"] for line in lines if '"tool": "read"' in line]
+        self.assertTrue(result["completed"])
+        self.assertEqual((result["tool_calls"], result["errors"]), (5, []))
+        self.assertGreater(result["tokens"]["total"], 0)
+        self.assertIn("PLAN_READY", result["final_text"])
+        self.assertTrue(all(part["state"]["input"]["filePath"].startswith("/") for part in reads))
+        self.assertTrue(any("(End of file - total" in part["state"]["output"] for part in reads))
 
 
 class SelectionTests(unittest.TestCase):

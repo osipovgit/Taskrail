@@ -63,6 +63,7 @@ Cumulative usage has no warning threshold. Counters are for comparison, not cont
 | `evidence.json`, `recovery.md` | Source-versioned recovery data; clipping stays explicit |
 | `budgets.json` | Durable reservations, consumption and allowance changes |
 | `changes.diff`, `report.md` | Actual edits and human review report |
+| `NN-check/verify-NN.log` | Output of a settings verification command |
 
 Numbering reflects attempts in execution order, not fixed role numbers. Recovery
 keeps bounded source reads (up to 60 records / 240,000 characters); clipped data is

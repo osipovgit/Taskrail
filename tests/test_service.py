@@ -15,7 +15,7 @@ from pathlib import Path
 from unittest.mock import patch
 from urllib.request import ProxyHandler, Request, build_opener
 
-from countersign.application.live import configuration
+from countersign.application.task_config import configuration
 from countersign.core.runtime import run_storage, settings_path
 from countersign.web.config_watch import ConfigurationWatch
 from countersign.web.health import ready
@@ -69,7 +69,7 @@ class ServiceTests(unittest.TestCase):
                         "--mode",
                         "planner-timeout",
                     ],
-                    agent_source=str(BASE / "agents"),
+                    agent_source=str(BASE / "countersign/agents"),
                     agent_directory=str(self.home / "profiles"),
                     timeout_seconds=3600,
                 )
@@ -234,7 +234,9 @@ class ServiceTests(unittest.TestCase):
         self.assertEqual(command.returncode, 0, command.stderr)
         switched = self.installer("--agents=bundled", "--autostart=keep")
         self.assertEqual(switched.returncode, 0, switched.stderr)
-        self.assertEqual(json.loads(config.read_text())["agent_source"], str(current / "agents"))
+        self.assertEqual(
+            json.loads(config.read_text())["agent_source"], str(current / "countersign/agents")
+        )
         self.assertEqual((agents / "planner.md").read_text(), "User-owned instructions")
         self.assertIn(
             before, [path.read_bytes() for path in config.parent.glob("settings.json.backup-*")]
