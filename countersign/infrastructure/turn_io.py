@@ -13,12 +13,14 @@ def event_lines(path, start):
 
 
 class TurnIO:
-    """Session identity and token limits are runtime options, not model arguments."""
+    """Session identity, token limits and allowed secrets are runtime options, not arguments."""
 
     def __init__(self, attempt, runtime):
         options = runtime or {}
         self.session_id = options.get("session_id")
         self.token_budget = options.get("token_budget")
+        self._allow = options.get("env_allow", ())
+        self._attachment = options.get("attachment", {})
         self.request = attempt / "request.md"
         self.path = attempt / "events.jsonl"
         self.previous = self.path.read_bytes() if self.session_id else b""
@@ -34,7 +36,7 @@ class TurnIO:
             argv += ["--model", model]
         if self.session_id:
             argv += ["--session", self.session_id]
-        environment = opencode_cli.environment()
+        environment = dict(opencode_cli.environment(self._allow), **self._attachment)
         environment[opencode_cli.RAW_EVENTS] = str(self.path.with_name("events.raw.jsonl"))
         return argv, environment
 

@@ -7,7 +7,12 @@ from pathlib import Path
 from countersign.core.schema import require
 from countersign.executor import protocol
 
-HOST_FIELDS = frozenset(("hostname", "port", "username", "password"))
+IDENTITY = "identity_file"
+PASSWORD = "password"
+CONNECTION_FIELDS = frozenset(("hostname", "port", "username"))
+# Exactly one authentication field per host; key files stay in the executor's root-owned config.
+AUTH_FIELDS = (PASSWORD, IDENTITY)
+KEY_DIRECTORY = "/etc/countersign-executor/"
 MAX_PORT = 65535
 PORT = "port"
 
@@ -27,8 +32,12 @@ def load(path=CONFIG):
 
 def validate(host):
     """Keep all SSH option and destination fields server-owned."""
-    if not isinstance(host, dict) or set(host) != HOST_FIELDS:
-        raise ValueError("Each host requires hostname, port, username and password")
+    if not isinstance(host, dict) or set(host) not in [
+        CONNECTION_FIELDS | {auth} for auth in AUTH_FIELDS
+    ]:
+        raise ValueError(
+            "Each host requires hostname, port, username and password or identity_file"
+        )
     if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9.:-]*", host["hostname"]):
         raise ValueError("Invalid hostname")
     protocol.label(host["username"])
@@ -36,7 +45,19 @@ def validate(host):
     if isinstance(port, bool) or not isinstance(port, int):
         raise ValueError("SSH port must be an integer")
     require(1 <= port <= MAX_PORT, "Invalid SSH port")
-    protocol.text(host["password"])
+    password = host.get(PASSWORD)
+    if password is None:
+        validate_identity(host[IDENTITY])
+    else:
+        protocol.text(password)
+
+
+def validate_identity(path):
+    """A private key path is absolute, normalized and inside the executor configuration."""
+    require(isinstance(path, str) and Path(path).is_absolute(), "identity_file must be absolute")
+    candidate = Path(path)
+    require(str(candidate) == path and ".." not in candidate.parts, "Invalid identity_file")
+    require(path.startswith(KEY_DIRECTORY), f"identity_file must be under {KEY_DIRECTORY}")
 
 
 def public(inventory):
@@ -49,6 +70,7 @@ def public(inventory):
 
 def redact(output, inventory):
     """Remove configured passwords from captured server output."""
-    for host in inventory.values():
-        output = output.replace(host["password"], "[REDACTED]")
+    passwords = [host.get(PASSWORD) for host in inventory.values()]
+    for password in filter(None, passwords):
+        output = output.replace(password, "[REDACTED]")
     return output

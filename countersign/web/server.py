@@ -14,6 +14,12 @@ from countersign.observability.telemetry import inspect_events
 from countersign.web import history, lifecycle
 from countersign.web.submissions import BusyError, TaskLauncher, workflow_busy
 
+# Browser scripts served from static/; dashboard modules are fixed, never path-derived.
+SCRIPTS = frozenset(
+    ("/dashboard.js", "/theme.js")
+    + tuple(f"/modules/{name}.js" for name in ("app", "dom", "monitor", "stages", "state"))
+)
+
 
 def contained(base, relative):
     base = Path(base).resolve()
@@ -308,7 +314,7 @@ def make_server(base, port, settings=None, launcher=None):
                         (Path(__file__).parent / "static/dashboard.css").read_text(),
                         "text/css; charset=utf-8",
                     )
-                if target.path in ("/dashboard.js", "/theme.js"):
+                if target.path in SCRIPTS:
                     return self.send(
                         200,
                         (Path(__file__).parent / "static" / target.path[1:]).read_text(),

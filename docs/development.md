@@ -1,6 +1,6 @@
 # Development
 
-Runtime: Python 3.8+, standard library only. Tooling: Python 3.10+ and Node 24.19+.
+Runtime: Python 3.10+, standard library only. Tooling: the same Python and Node 24.19+.
 Install pinned dependencies and run the complete gate:
 
 ```sh
@@ -20,13 +20,15 @@ reviewed relocation keeps the rule and never increases its count or complexity.
 Tests use fake opencode 1.x and 2.x subprocesses, temporary source trees and real
 local HTTP workers. They exercise contracts, permissions, workflow and recovery,
 checkpoints, budgets, telemetry, UI DOM behavior and deployment; systemd uses stubs.
-Workflow tests take the global lock in `~/.local/state/countersign`, so run the gate
-while no real task is active. Passing tests does not establish model quality,
-provider behavior, visual rendering or runtime acceptance in the target environment.
+GitHub Actions (`.github/workflows/ci.yml`) runs `make check` on Python 3.12 and the
+test suite on Python 3.10 to 3.14. `make test` runs the Python tests with a temporary
+`HOME`, so a running task's global lock and installed settings cannot affect them.
+Passing tests does not establish model quality, provider behavior, visual rendering
+or runtime acceptance in the target environment.
 
 ```sh
 .venv/bin/python -m ruff format countersign tests tools
-npx prettier --write 'countersign/web/static/*' 'tests/*.cjs' eslint.config.mjs
+npx prettier --write 'countersign/web/static/**/*' 'tests/*.cjs' eslint.config.mjs
 .venv/bin/python tools/lint_python.py
 ```
 

@@ -59,7 +59,7 @@ class PlanningRegressions(unittest.TestCase):
             json.dumps(self.payload()), "bad criteria", "planner", 1, requirements
         )
         self.assertIn('"id": "R7"', request)
-        self.assertIn("No tools are available", request)
+        self.assertIn("Do not research", request)
         self.assertIn("Missing evidence requires gap/BLOCKED", request)
         self.assertNotIn("source research", request)
         self.assertNotIn("at most 60", prompts.INSTRUCTIONS["planner"])

@@ -24,16 +24,23 @@ RENAMED = MappingProxyType({"shell": "bash", "subagent": "task"})
 PRINT_LOGS = "--print-logs"
 DIRECTORY = "--dir"
 LOG_LEVEL = "--log-level"
+# A stage-owned server shared by every turn of that stage.
+SHARED_SERVER = "COUNTERSIGN_OPENCODE_SERVER"
+PASSWORD = "OPENCODE_PASSWORD"
 
 
 class Server:
-    """A private 2.x server; closing its stdin ends the ownership lease."""
+    """A private 2.x server, or the stage's shared one; closing stdin ends the lease."""
 
-    def __init__(self, command, directory, logs=False):
+    def __init__(self, command, directory, logs=False, env=None):
         self.command = command
         self.directory = directory
-        password = secrets.token_urlsafe(PASSWORD_BYTES)
-        self.env = dict(os.environ, OPENCODE_PASSWORD=password, PWD=directory)
+        self.env = dict(os.environ if env is None else env, PWD=directory)
+        self.url = self.env.get(SHARED_SERVER)
+        self.process = None
+        if self.url:
+            return
+        self.env[PASSWORD] = secrets.token_urlsafe(PASSWORD_BYTES)
         self.process = subprocess.Popen(
             [*command, "serve", "--stdio", "--port", "0"],
             cwd=directory,
@@ -42,15 +49,17 @@ class Server:
             stdout=subprocess.PIPE,
             stderr=None if logs else subprocess.DEVNULL,
         )
-        self.url = None
 
     def __enter__(self):
-        ready = json.loads(self.process.stdout.readline() or b"{}")
-        threading.Thread(target=self.process.stdout.read, daemon=True).start()
-        self.url = ready.get("url")
+        if self.process is not None:
+            ready = json.loads(self.process.stdout.readline() or b"{}")
+            threading.Thread(target=self.process.stdout.read, daemon=True).start()
+            self.url = ready.get("url")
         return self
 
     def __exit__(self, *failure):
+        if self.process is None:
+            return
         self.process.stdin.close()
         self.process.terminate()
         try:
@@ -83,6 +92,10 @@ class Server:
             title = "{0} ({1})\n".format(agent.get("id"), agent.get("mode", "all"))
             sys.stdout.write(title)
             sys.stdout.write("  {0}\n".format(json.dumps(rules, indent=2)))
+
+    def attachment(self):
+        """Environment that lets later turns use this server instead of starting one."""
+        return {SHARED_SERVER: self.url or "", PASSWORD: self.env[PASSWORD]}
 
     def request(self, operation):
         completed = subprocess.run(
@@ -143,7 +156,7 @@ def forward(line):
 
 
 def run(command, arguments):
-    """One private server per turn; continued sessions are reloaded from opencode storage."""
+    """Use the stage server when one is shared, else a private one for this turn."""
     directory = os.path.abspath(option(arguments, DIRECTORY) or os.getcwd())
     with Server(command, directory, logs=PRINT_LOGS in arguments) as server:
         server.agents(option(arguments, "--agent"))
