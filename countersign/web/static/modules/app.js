@@ -68,6 +68,9 @@ export function approvalCard(pending) {
   card.append(
     el('h3', 'Your decision required'),
     el('p', 'The stage timer is paused. Waiting has no time limit.'),
+  );
+  if (pending.request?.notice) card.append(el('p', pending.request.notice, 'approval-notice'));
+  card.append(
     el('pre', JSON.stringify(pending.request, null, 2)),
     el(
       'p',
@@ -177,6 +180,16 @@ const ACTION_TITLES = {
 
 function actionButtons(data) {
   const actions = el('div', undefined, 'run-actions');
+  if (data.actions?.resume) {
+    const note = el('textarea', undefined, 'resume-note');
+    note.id = 'resume-note';
+    note.maxLength = 4000;
+    note.placeholder =
+      'Optional note for the agents when continuing, e.g. "python3 is installed now"';
+    note.value = state.resumeNote || '';
+    note.oninput = () => (state.resumeNote = note.value);
+    actions.append(note);
+  }
   for (const [action, label] of ACTIONS) {
     const button = el('button', label);
     button.disabled = state.actionPending || !data.actions?.[action];
@@ -314,7 +327,10 @@ export async function runAction(action) {
   state.actionPending = true;
   document.querySelectorAll('.run-actions button').forEach((button) => (button.disabled = true));
   try {
-    const result = await post('/api/actions', { id: state.selected, action }, 'Action failed');
+    const payload = { id: state.selected, action };
+    if (action.startsWith('resume') && state.resumeNote?.trim()) payload.note = state.resumeNote;
+    const result = await post('/api/actions', payload, 'Action failed');
+    if (action.startsWith('resume')) state.resumeNote = '';
     if (action === 'delete') {
       state.currentRun = null;
       document.getElementById('chat').replaceChildren(el('p', 'Task removed from history.'));

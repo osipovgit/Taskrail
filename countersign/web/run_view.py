@@ -6,6 +6,7 @@ from pathlib import Path
 from countersign.core.paths import tool_paths
 from countersign.observability.progress import clock
 from countersign.web import history, lifecycle
+from countersign.web.run_activity import run_busy
 from countersign.web.run_files import contained, optional_json, stage_telemetry, text_tail
 from countersign.web.run_messages import public_messages
 from countersign.web.run_sources import (
@@ -14,7 +15,6 @@ from countersign.web.run_sources import (
     run_state,
     valid_record,
 )
-from countersign.web.submissions import workflow_busy
 
 RUN_ID = re.compile(r"[A-Za-z0-9_.-]+")
 CONSOLE_LIMIT = 30000
@@ -90,7 +90,7 @@ def context_view(run, submission, state):
     return dict(
         conversation=history.previous_messages(run) if started else [],
         draft=history.task_draft(run) if run.joinpath("run.json").exists() else None,
-        actions=lifecycle.actions(run, state, workflow_busy()),
+        actions=lifecycle.actions(run, state, run_busy(run)),
         pending_approval=lifecycle.pending_approval(run),
         task=text_tail(task),
         console=text_tail(contained(submission, "console.log"), CONSOLE_LIMIT),

@@ -11,6 +11,7 @@ from countersign.core.files import atomic_json, digest
 from countersign.observability.progress import clock
 
 INPUTS = "00-input"
+OPERATOR_NOTE = "The operator wrote operator_note when continuing this run, for example after installing a missing tool. Use it to choose another way to finish; the task, approved scope and policy still apply."
 INTERRUPTED_WRITER = (
     "An earlier implementation was interrupted. Inspect current files and preimages, "
     + "preserve applied changes, and finish only missing approved work. "
@@ -58,12 +59,9 @@ def restore(workflow, checkpoint, mode):
     flow = workflow.flow
     flow.update((key, checkpoint[key]) for key in FLOW_KEYS)
     stage = flow[STAGE]
-    if stage == "implementer":
-        flow["feedback"] = dict(
-            previous_feedback=checkpoint["feedback"],
-            interrupted=True,
-            instruction=INTERRUPTED_WRITER,
-        )
+    note = workflow.runtime["note"]
+    if stage == "implementer" or note:
+        flow["feedback"] = continuation_feedback(checkpoint["feedback"], stage, note)
     workflow.runtime["recovery"] = resume_inputs.observations(
         workflow.run, workflow.state, stage, workflow.config["roots"]
     )
@@ -72,11 +70,24 @@ def restore(workflow, checkpoint, mode):
     reopen(workflow)
 
 
+def continuation_feedback(previous, stage, note):
+    """An interrupted writer inspects before editing; an operator note is passed verbatim."""
+    feedback = dict(previous_feedback=previous)
+    if stage == "implementer":
+        feedback.update(interrupted=True, instruction=INTERRUPTED_WRITER)
+    if note:
+        feedback["operator_note"] = note
+        feedback["note_rule"] = OPERATOR_NOTE
+    return feedback
+
+
 def reopen(workflow):
     """Close abandoned records and mark the run as running again."""
     state = workflow.state
     resume_inputs.interrupt_open_records(workflow.run, state)
     continuation = dict(started_at=clock(), stage=workflow.flow[STAGE])
+    if workflow.runtime["note"]:
+        continuation["operator_note"] = workflow.runtime["note"]
     state.setdefault("continuations", []).append(continuation)
     state.update(
         status="RUNNING",

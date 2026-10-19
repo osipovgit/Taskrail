@@ -15,7 +15,7 @@ dependencies = []
 countersign = "countersign.__main__:main"
 
 [tool.setuptools.dynamic]
-version = {attr = "countersign.__version__"}
+version = {attr = "countersign.core.version.VERSION"}
 
 [tool.setuptools.packages.find]
 include = ["countersign*"]

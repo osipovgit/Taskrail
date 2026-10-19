@@ -6,18 +6,22 @@ from countersign.core.schema import contract_version
 
 STATUS = "status"
 
-RESUMABLE = {
-    "TIMEOUT",
-    "INCOMPLETE",
-    "PROCESS_ERROR",
-    "INTERRUPTED",
-    "LAUNCH_ERROR",
-    "SESSION_ERROR",
-    "RUNNING",
-    "TOKEN_BUDGET_EXCEEDED",
-    "STAGE_BUDGET_EXCEEDED",
-    "BLOCKED_PERMISSION",
-}
+RESUMABLE = frozenset(
+    (
+        "TIMEOUT",
+        "INCOMPLETE",
+        "PROCESS_ERROR",
+        "INTERRUPTED",
+        "LAUNCH_ERROR",
+        "SESSION_ERROR",
+        "RUNNING",
+        "TOKEN_BUDGET_EXCEEDED",
+        "STAGE_BUDGET_EXCEEDED",
+        "BLOCKED_PERMISSION",
+        "INVALID_RESULT",
+        "TOOL_ERROR",
+    )
+)
 
 
 def load_checkpoint(run, state):
@@ -36,13 +40,14 @@ def load_checkpoint(run, state):
 
 
 def resume_available(run, state):
+    """Whether Continue is offered, with the reason shown to the operator."""
     if state.get(STATUS) not in RESUMABLE and not budget_paused(state):
         return False, "This status does not support continuation."
     try:
         load_checkpoint(run, state)
-        return True, "Source and Git integrity will be checked before continuing."
     except (OSError, ValueError, KeyError) as error:
         return False, str(error)
+    return True, "Source and Git integrity will be checked before continuing."
 
 
 def budget_paused(state):

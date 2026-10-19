@@ -2,11 +2,13 @@
 
 from countersign.application.artifacts import finish_stage
 from countersign.application.source_guard import SourceGuard
+from countersign.core import control
 from countersign.core.files import atomic_json, digest
 
 STAGE = "stage"
 ALLOWED = "allowed"
 ACTIVE = "active"
+PROFILE_SUFFIX = 8
 FLOW_KEYS = (STAGE, "plan", "feedback", ALLOWED, "plan_repairs", "repair_count")
 
 
@@ -27,6 +29,8 @@ class Workflow:
             active=None,
             profiles=set(),
             recovery=None,
+            note=control.check_note(request.get("note")),
+            profile_suffix=digest(str(run).encode())[:PROFILE_SUFFIX],
         )
 
     def checkpoint(self, expected=None):
@@ -54,6 +58,7 @@ class Workflow:
 
     def finish_active(self, status, verdict=None, diagnostics=None):
         """Finish the open stage record exactly once."""
-        folder, record = self.runtime[ACTIVE]
+        active = self.runtime[ACTIVE]
         self.runtime[ACTIVE] = None
-        finish_stage(self.run, self.state, folder, record, status, verdict, diagnostics)
+        outcome = dict(status=status, result=verdict, diagnostics=diagnostics)
+        finish_stage(self.run, self.state, active, outcome)

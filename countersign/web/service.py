@@ -20,7 +20,7 @@ CONFIG_POLL_SECONDS = 2
 
 
 class ApplicationService:
-    """Stop accepting tasks before requesting a checkpoint from the active worker."""
+    """Stop accepting tasks before requesting checkpoints from the active workers."""
 
     def __init__(self, base, port=DEFAULT_PORT, settings=None):
         base = run_storage(settings, base)
@@ -33,16 +33,15 @@ class ApplicationService:
         self.stopping.set()
 
     def drain(self):
-        """Let the worker use normal process cleanup and checkpoint validation."""
-        child = self.launcher.process
-        while child is not None and child.poll() is None:
-            run = self.launcher.active_run
-            if run is not None and run.is_dir():
-                atomic_json(run / "stop.request", {"requested": True})
+        """Ask every owned worker for a checkpoint and wait for their normal cleanup."""
+        while self.launcher.live():
+            for run in self.launcher.live():
+                if run.is_dir():
+                    atomic_json(run / "stop.request", {"requested": True})
             time.sleep(POLL_SECONDS)
 
     def run(self):
-        """Keep the main process alive until its owned worker finishes cleanup."""
+        """Keep the main process alive until its owned workers finish cleanup."""
         thread = threading.Thread(target=self.server.serve_forever, daemon=True)
         thread.start()
         logging.info("Countersign application: http://127.0.0.1:%s", self.server.server_port)

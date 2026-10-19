@@ -1,9 +1,8 @@
 """Cooperative stop requests and reversible history removal."""
 
-import fcntl
 import json
-from pathlib import Path
 
+from countersign.application import run_locks
 from countersign.application.checkpoints import budget_paused, resume_available
 from countersign.core.files import atomic_json
 from countersign.interactions import approvals
@@ -24,11 +23,10 @@ def request_stop(run):
 
 
 def trash_run(base, run):
-    """Move artifacts while excluding active workers through the workflow lock."""
-    lock_path = Path.home() / ".local/state/countersign/live.lock"
-    lock_path.parent.mkdir(parents=True, exist_ok=True)
-    with lock_path.open("a") as lock:
-        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    """Move artifacts while holding the run's lock, so its worker cannot start meanwhile."""
+    with run_locks.lock_file(run_locks.lock_path(run_locks.RUN, run)) as stream:
+        if not run_locks.locked(stream, run_locks.EXCLUSIVE):
+            raise ValueError("Only stopped task histories can be deleted")
         HistoryRemoval(base, run).move()
     return dict(id="", status="DELETED")
 

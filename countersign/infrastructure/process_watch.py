@@ -9,7 +9,8 @@ from countersign.core.files import atomic_json
 from countersign.infrastructure import opencode_cli, usage_limits
 from countersign.infrastructure.event_summary import decoded
 from countersign.infrastructure.process_group import stop_group
-from countersign.observability.progress import Progress, say
+from countersign.observability.activity import Progress
+from countersign.observability.progress import say
 
 SUCCESS = "OK"
 POLL_SECONDS = 0.2
