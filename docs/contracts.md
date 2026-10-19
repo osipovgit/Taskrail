@@ -49,7 +49,8 @@ errors keep their safeguards.
 
 Format repair receives the saved response, the validation error, the schema and the
 server-assigned requirements. Each stage gets at most one. It has no tools (or
-read-only tools with `format_repair_tools: read`), never edits, even for the
+read-only tools with `format_repair_tools: read`, which may also re-read the
+`recovery.md` evidence of earlier attempts of the same stage), never edits, even for the
 implementer, cannot invent requirement IDs or quotations, and must not research. An
 implementer repair reports only edits already present; changed files are still
 checked against the observed source. If the repair reports BLOCKED because it
