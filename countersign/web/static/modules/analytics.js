@@ -1,6 +1,6 @@
 // Totals across all runs, shown in place of a run.
 import { get } from './app.js';
-import { el, showError } from './dom.js';
+import { durationLabel, el, showError, statuses } from './dom.js';
 import { state } from './state.js';
 
 const COLUMNS = [
@@ -28,18 +28,29 @@ function table(title, groups) {
   return section;
 }
 
+function stat(value, label) {
+  const tile = el('div', undefined, 'stat');
+  tile.append(el('strong', String(value)), el('span', label));
+  return tile;
+}
+
 function overview(runs) {
   const section = el('section');
   section.append(el('h3', 'Runs'));
   const rate = runs.success_rate === null ? 'n/a' : Math.round(runs.success_rate * 100) + '%';
-  for (const line of [
-    `${runs.count} runs, ${runs.succeeded} ready for review or needing no changes (${rate})`,
-    `${runs.elapsed_seconds} s recorded model time, ${runs.tokens} reported tokens`,
-    `${runs.continuations} continuations`,
-  ])
-    section.append(el('p', line, 'text'));
-  const statuses = Object.entries(runs.statuses).map(([status, count]) => `${status}: ${count}`);
-  section.append(el('p', statuses.join(' · '), 'text muted'));
+  const tiles = el('div', undefined, 'stats');
+  tiles.append(
+    stat(runs.count, 'runs'),
+    stat(rate, 'ready or no changes'),
+    stat(durationLabel(runs.elapsed_seconds), 'recorded model time'),
+    stat(runs.tokens.toLocaleString('en-GB'), 'reported tokens'),
+    stat(runs.continuations, 'continuations'),
+  );
+  section.append(tiles);
+  const counts = Object.entries(runs.statuses).map(
+    ([status, count]) => `${statuses[status] || status}: ${count}`,
+  );
+  section.append(el('p', counts.join(' · '), 'muted'));
   return section;
 }
 
@@ -51,7 +62,12 @@ export async function showAnalytics() {
     location.hash = '';
     document.getElementById('composer').hidden = true;
     document.getElementById('followup-panel').hidden = true;
-    document.getElementById('monitor').replaceChildren();
+    document
+      .getElementById('monitor')
+      .replaceChildren(
+        el('h2', 'Monitoring'),
+        el('p', 'Select a task to see live usage.', 'muted'),
+      );
     const chat = document.getElementById('chat');
     chat.hidden = false;
     chat.replaceChildren(
