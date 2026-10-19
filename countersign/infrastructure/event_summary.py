@@ -49,9 +49,10 @@ class EventSummary:
         """Empty usage, messages and failures."""
         self.tokens = dict.fromkeys((*TOKEN_FIELDS, "cache_read", "cache_write"), 0)
         self.texts = defaultdict(list)
-        self.identity = dict(final=None, sessions=set(), seen=set())
+        self.identity = dict(final=None, final_line=None, sessions=set())
+        self.identity["seen"] = set()
         self.counts = dict(tool_calls=0, steps=0)
-        self.failures = dict(errors=[], tool_errors=[], permission=False)
+        self.failures = dict(errors=[], tool_errors=[], session=[], permission=False)
         self.full_reads = []
 
     def observe(self, event_line, event):
@@ -66,9 +67,11 @@ class EventSummary:
         elif kind == "tool_use":
             self.tool(event_line, part)
         elif kind == ERROR:
-            self.fail(str(event.get(ERROR, event)))
+            error = str(event.get(ERROR, event))
+            self.fail(error)
+            self.failures["session"].append(dict(error=error, event_line=event_line))
         elif kind == "step_finish":
-            self.step(part)
+            self.step(event_line, part)
 
     def fresh(self, event):
         """Skip repeated parts; remember the sessions that produced events."""
@@ -102,7 +105,7 @@ class EventSummary:
         self.failures["errors"].append(error)
         self.failures["permission"] |= opencode_cli.permission_error(error)
 
-    def step(self, part):
+    def step(self, event_line, part):
         """Add reported usage; a stopping step marks the final message."""
         self.counts["steps"] += 1
         tokens = part.get("tokens", {})
@@ -113,13 +116,13 @@ class EventSummary:
         for field, amount in reported.items():
             self.tokens[field] += amount if isinstance(amount, (int, float)) else 0
         if part.get("reason") == "stop":
-            self.identity["final"] = part.get("messageID")
+            self.identity.update(final=part.get("messageID"), final_line=event_line)
 
     def outcome(self):
-        """The turn summary; offset errors later fixed by a full read become warnings."""
+        """The turn summary; recovered errors and later-fixed offset errors become warnings."""
         final = self.identity["final"]
         text = "\n".join(self.texts[final]) if final else ""
-        return dict(
+        summary = dict(
             tokens=self.tokens,
             steps=self.counts["steps"],
             tool_calls=self.counts["tool_calls"],
@@ -131,6 +134,9 @@ class EventSummary:
             completed=final is not None,
             final_text=text,
         )
+        session = self.failures["session"]
+        read_warnings.recover_session_errors(summary, session, self.identity["final_line"])
+        return summary
 
 
 def full_read(state):

@@ -906,6 +906,13 @@ class LiveTests(unittest.TestCase):
         frozen = json.loads((run / "00-input/settings.json").read_text())
         self.assertIn("max_change_lines", frozen)
 
+    def test_failed_read_does_not_fail_the_stage(self):
+        run, status, state = self.run_mode("failed-read")
+        self.assertEqual(status, "READY_FOR_REVIEW", state.get("summary"))
+        planner = state["stages"][0]
+        self.assertEqual(planner["status"], "RESULT_VALID")
+        self.assertIn("changed nothing", planner["warnings"][0]["resolution"])
+
     def test_unsafe_permissions_no_model(self):
         _, status, state = self.run_mode("unsafe")
         self.assertEqual(status, "BLOCKED")

@@ -41,11 +41,13 @@ matching quote proves provenance, not the model's interpretation, so independent
 review remains necessary. Only server records prove executed checks. The exact
 schema is supplied in each request; do not copy it into custom roles.
 
-An explicit `File not found` or out-of-range line offset from an exploratory read,
-and any tool call rejected for invalid arguments before it ran, is kept as a
-warning, not a transport failure. The failed read is not evidence and
-does not waive required evidence. Permission denials, failed writes and other tool
-errors keep their safeguards.
+A failed `read`, `glob`, `grep` or `list` call (a missing file, an out-of-range
+offset, a directory, an aborted read), any tool call rejected for invalid arguments
+before it ran, and an opencode or provider error after which the model still
+reached its final answer are kept as warnings, not stage failures, so a final result
+or executor request in the same turn is still handled. A failed read is not evidence
+and does not waive required evidence. Permission denials, failed writes, and errors
+after or without a final answer keep their safeguards.
 
 Format repair receives the saved response, the validation error, the schema and the
 server-assigned requirements. Each stage gets at most one. It has no tools (or

@@ -458,6 +458,11 @@ if writer_prose and role == "implementer":
 if mode == "prose-block" and role == "planner":
     value["blocking_gaps"] = ["Mandatory local commands unavailable"]
     response = "Research complete [note].\n" + json.dumps(value)
+if mode == "failed-read" and role == "planner":
+    failed = dict(
+        status="error", input=dict(filePath=str(root)), error=f"Error: {root} is a directory"
+    )
+    print(json.dumps(dict(type="tool_use", part=dict(id="failed-read", tool="read", state=failed))))
 for event, part in [
     ("text", dict(text=response)),
     ("step_finish", dict(reason="stop", tokens={"input": 10, "output": 2})),
