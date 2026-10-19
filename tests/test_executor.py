@@ -7,12 +7,13 @@ import struct
 import subprocess
 import tempfile
 import threading
+import time
 import unittest
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 from countersign.application import execution_requests, execution_wait
-from countersign.executor import action_schema, client, hosts, protocol, transport, worker
+from countersign.executor import action_schema, client, hosts, protocol, streams, transport, worker
 from countersign.executor.service import ExecutorServer
 from countersign.executor.store import TicketStore
 
@@ -71,7 +72,7 @@ class ExecutorTest(unittest.TestCase):
     def server(self):
         server = object.__new__(ExecutorServer)
         server.client_uid = 1000
-        server.inventory = INVENTORY
+        server.configs = {"ssh": INVENTORY, "jenkins": {}}
         server.store = self.store
         return server
 
@@ -231,6 +232,24 @@ class ExecutorTest(unittest.TestCase):
             self.assertIn("Linux", execution_wait.resume(run, state))
             request.assert_not_called()
 
+    def test_repeated_check_is_a_new_ticket_and_outages_are_retried(self):
+        run = self.root / "run"
+        folder = run / "01-plan"
+        folder.mkdir(parents=True)
+        execution_wait.submit(run, folder, ACTION)
+        execution_wait.submit(run, folder, ACTION)
+        first, second = execution_wait.read(run)
+        self.assertNotEqual(first["request"]["key"], second["request"]["key"])
+        outcome = dict(id="ticket", status="SUCCEEDED", results=[dict(output="Linux")])
+        responses = [ConnectionRefusedError(), outcome]
+        with (
+            patch.object(client, "request", side_effect=responses) as request,
+            patch.object(execution_wait.time, "sleep") as pause,
+        ):
+            self.assertIn("Linux", execution_wait.resume(run, {"attempts": []}))
+        self.assertEqual(request.call_args_list[0], request.call_args_list[1])
+        self.assertEqual(pause.call_count, 1)
+
     def test_unknown_action_cannot_be_blindly_resumed(self):
         run = self.root / "run"
         folder = run / "01-plan"
@@ -258,17 +277,28 @@ class ExecutorTest(unittest.TestCase):
             self.assertEqual(start.call_count, 1)
 
     def test_timeout_and_disconnect_are_unknown(self):
-        with patch.object(
-            transport.subprocess, "run", side_effect=subprocess.TimeoutExpired("ssh", 30)
-        ):
-            self.assertEqual(transport.execute(INVENTORY["server-a"], ACTION)["status"], "UNKNOWN")
+        local = patch.object(transport, "command", return_value=["/bin/sh", "-s"])
+        slow = dict(ACTION, script="sleep 30\n", timeout_seconds=1)
+        with local:
+            started = time.monotonic()
+            outcome = transport.execute(INVENTORY["server-a"], slow)
+        self.assertEqual((outcome["status"], outcome["exit_code"]), ("UNKNOWN", None))
+        self.assertLess(time.monotonic() - started, 10)
+        tail = streams.OutputTail()
         for code, expected in ((255, "UNKNOWN"), (-25, "UNKNOWN"), (0, "SUCCEEDED"), (1, "FAILED")):
-            with patch.object(
-                transport.subprocess, "run", return_value=subprocess.CompletedProcess("ssh", code)
-            ):
-                outcome = transport.execute(INVENTORY["server-a"], ACTION)
-                self.assertEqual(outcome["status"], expected)
-                self.assertEqual(outcome["exit_code"], code)
+            outcome = transport.captured(tail, code)
+            self.assertEqual(outcome["status"], expected)
+            self.assertEqual(outcome["exit_code"], code)
+
+    def test_large_output_keeps_a_bounded_tail(self):
+        # Output far beyond the service file-size limit is streamed, never spooled to disk.
+        script = "head -c 9000000 /dev/zero | tr '\\0' x\necho END\nexit 3\n"
+        with patch.object(transport, "command", return_value=["/bin/sh", "-s"]):
+            outcome = transport.execute(INVENTORY["server-a"], dict(ACTION, script=script))
+        self.assertEqual((outcome["status"], outcome["exit_code"]), ("FAILED", 3))
+        self.assertTrue(outcome["truncated"])
+        self.assertEqual(len(outcome["output"]), streams.OUTPUT_LIMIT)
+        self.assertTrue(outcome["output"].endswith("xEND\n"))
 
     def test_complete_bundle_executes_only_in_temporary_directory(self):
         # Local execution here tests the generated transport fixture, never real SSH.

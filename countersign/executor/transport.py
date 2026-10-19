@@ -1,15 +1,13 @@
 """Fixed SSH transport; only the approved payload runs remotely."""
 
 import base64
-import os
 import shlex
-import subprocess
-import tempfile
 from pathlib import PurePosixPath
+
+from countersign.executor import streams
 
 KNOWN_HOSTS = "/etc/countersign-executor/known_hosts"
 ASKPASS = "/opt/countersign-executor/deploy/ssh-askpass"
-OUTPUT_LIMIT = 32000
 SSH_TRANSPORT_ERROR = 255
 SSH_OPTION = "-o"
 
@@ -111,33 +109,23 @@ def environment(host):
 
 def execute(host, action):
     """Bound runtime and captured output; a timeout has uncertain remote effects."""
-    with tempfile.TemporaryFile() as output:
-        try:
-            outcome = subprocess.run(
-                command(host),
-                input=remote_script(action).encode("utf-8"),
-                stdout=output,
-                stderr=subprocess.STDOUT,
-                env=environment(host),
-                timeout=action["timeout_seconds"],
-                start_new_session=True,
-                check=False,
-            )
-        except subprocess.TimeoutExpired:
-            return captured(output, None)
-        return captured(output, outcome.returncode)
+    exit_code, tail = streams.run_bounded(
+        command(host),
+        remote_script(action).encode("utf-8"),
+        environment(host),
+        action["timeout_seconds"],
+    )
+    return captured(tail, exit_code)
 
 
-def captured(output, exit_code):
+def captured(tail, exit_code):
     """Transport loss cannot establish whether remote side effects completed."""
     status = "SUCCEEDED" if exit_code == 0 else "FAILED"
     if exit_code is None or exit_code == SSH_TRANSPORT_ERROR or exit_code < 0:
         status = "UNKNOWN"
-    size = output.tell()
-    output.seek(max(0, size - OUTPUT_LIMIT), os.SEEK_SET)
     return dict(
         status=status,
         exit_code=exit_code,
-        output=output.read().decode("utf-8", "replace"),
-        truncated=size > OUTPUT_LIMIT,
+        output=tail.text(),
+        truncated=tail.size > streams.OUTPUT_LIMIT,
     )

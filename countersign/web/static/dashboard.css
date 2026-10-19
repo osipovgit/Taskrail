@@ -80,6 +80,10 @@ header {
   border-bottom: 1px solid var(--border);
 }
 
+.logo {
+  align-self: center;
+}
+
 header > div:first-child {
   display: flex;
   align-items: baseline;
@@ -366,10 +370,15 @@ label {
 
 label:has(> input[type='checkbox']) {
   display: flex;
+  flex-wrap: wrap;
   align-items: flex-start;
   gap: 8px;
   margin: 10px 0;
   font-weight: 450;
+}
+
+.form-options {
+  margin: 4px 0 16px;
 }
 
 input[type='checkbox'] {
@@ -407,6 +416,12 @@ legend {
   color: var(--muted);
   font-size: 13px;
   line-height: 1.5;
+}
+
+label:has(> input[type='checkbox']) .hint {
+  flex-basis: 100%;
+  margin-left: 22px;
+  font-size: 12.5px;
 }
 
 #form-error,

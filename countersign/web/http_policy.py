@@ -12,6 +12,7 @@ PAGES = MappingProxyType(
     {
         "/": ("dashboard.html", "text/html; charset=utf-8"),
         "/dashboard.css": ("dashboard.css", "text/css; charset=utf-8"),
+        "/favicon.svg": ("favicon.svg", "image/svg+xml"),
     }
 )
 # Browser scripts served from static/; dashboard modules are fixed, never path-derived.

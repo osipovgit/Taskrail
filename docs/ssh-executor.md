@@ -1,4 +1,4 @@
-# Isolated SSH executor
+# Isolated SSH and Jenkins executor
 
 The optional executor runs as the dedicated Linux account `countersign-executor`.
 Countersign can submit an exact action and observe its result. Only root can approve it.
@@ -91,6 +91,62 @@ Continuation turns remain inside one stage and session; waiting itself does
 not consume model tokens. This executor adds controlled **remote** execution; local
 commands use the separate `LOCAL_REQUEST` approval in the UI.
 
+## Jenkins
+
+The same executor can read Jenkins builds and start builds of configured jobs. Its
+API token stays in the executor configuration; the application and models see only
+server and job aliases, URLs, the account name and allowed parameter names.
+
+```sh
+sudo cp /etc/countersign-executor/jenkins.json.example /etc/countersign-executor/jenkins.json
+sudoedit /etc/countersign-executor/jenkins.json
+sudo systemctl restart countersign-executor.service
+```
+
+```json
+{
+  "ci": {
+    "url": "https://jenkins.example.com",
+    "username": "countersign-bot",
+    "token": "REPLACE_WITH_JENKINS_API_TOKEN",
+    "jobs": {
+      "shop-tests": {"path": "shop/tests", "parameters": ["BRANCH", "SUITE"]}
+    }
+  }
+}
+```
+
+- `url`: the Jenkins base URL, `http` or `https`, without credentials.
+- `username` and `token`: a Jenkins account and its API token (user menu, Security,
+  API Token). Give that account only the permissions the listed jobs need.
+- `jobs`: aliases agents use. `path` is the job's folder path as shown in its URL
+  (`/job/shop/job/tests` is `shop/tests`). `parameters` lists the build parameters
+  agents may set; an empty list means none.
+- `ca_file` (optional): an absolute path under `/etc/countersign-executor/` to the CA
+  certificate of an internal Jenkins.
+
+Keep the file `root:countersign-executor`, mode `0640`; the installer enforces this.
+Without `jenkins.json` Jenkins is not offered. If you use only Jenkins, set
+`hosts.json` to `{}`.
+
+Agents return `JENKINS_REQUEST` ([contract](contracts.md#executor-requests)):
+
+| Operation | What it returns | Approval |
+|---|---|---|
+| `status` | Number, result, running state and timing of `"last"` or a numbered build | UI (covered by Allow all actions) |
+| `console` | The last 32,000 bytes of the console log | UI (covered by Allow all actions) |
+| `tests` | Pass, fail and skip counts with up to 100 failed cases | UI (covered by Allow all actions) |
+| `build` | Starts one build, waits up to `timeout_seconds` for its result and console tail | Root, like SSH |
+
+Approve a build in a terminal with the command the UI shows:
+`sudo -k /usr/local/bin/countersign-executor-approve TICKET_ID`. The helper shows
+the server, job path, account and parameters. Requests never follow HTTP redirects
+or use proxies, so the token is sent only to the configured URL. The application
+account can ask the executor for reads directly; reads change nothing in Jenkins.
+A build that is still queued at its timeout is `UNKNOWN` (Jenkins may still run it);
+one still running is reported as failed with its current state. Builds are never
+retried automatically.
+
 ## Scripts and Ansible
 
 The action's `files` object snapshots UTF-8 files, including playbooks, roles,
@@ -142,6 +198,10 @@ python3 -m countersign.executor status TICKET_ID
 Run these from the installed release (as shown) or a source checkout so Python
 finds the package. For a manual request use
 `python3 -m countersign.executor submit ACTION.json --key=UNIQUE_KEY`. Repeating the
-same key and payload returns the same job without replay. Limits: 16 targets, 200
-text files, 512 KiB request, 3600 seconds per target, and the last 32,000 bytes of
-output per target. Binary bundles are not supported.
+same key and payload returns the same job without replay. Within a task, each
+request gets its own key, so repeating an identical check after a change runs it
+again (after a new approval) instead of returning the earlier result. If the executor
+is briefly unreachable while a task waits, the task keeps asking about the same
+ticket. Limits: 16 targets, 200 text files, 512 KiB request, 3600 seconds per target,
+and the last 32,000 bytes of output per target; output is streamed, so a larger log
+is truncated rather than failing the transport. Binary bundles are not supported.

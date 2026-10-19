@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 from types import MappingProxyType
 
+from countersign.application import jenkins_requests
 from countersign.core import schema
 from countersign.executor import action_schema, client, protocol
 
@@ -23,13 +24,22 @@ CONTRACT = MappingProxyType(
 
 
 def instructions():
-    """Advertise only an installed executor; expose no credentials."""
+    """Advertise only an installed executor and what it offers; expose no credentials."""
     if not Path(protocol.SOCKET).exists():
         return "\nSSH executor unavailable. Do not claim remote execution.\n"
     try:
         catalog = client.request({"operation": "catalog"})
     except (OSError, ValueError):
         return "\nSSH executor unreachable. Continue local analysis; report required remote checks as blocked.\n"
+    return ssh_instructions(catalog.get("hosts")) + jenkins_requests.instructions(
+        catalog.get("jenkins")
+    )
+
+
+def ssh_instructions(targets):
+    """The ACTION_REQUEST contract and the configured targets, or nothing without targets."""
+    if not targets:
+        return ""
     return (
         "\nAn isolated SSH executor is available. Never invoke shell tools directly. "
         "To request remote execution, return the following intermediate JSON instead "
@@ -44,7 +54,7 @@ def instructions():
         "Remote execution does not authorize local commands or source changes.\n"
         + json.dumps(dict(CONTRACT))
         + "\nAvailable targets: "
-        + json.dumps(catalog)
+        + json.dumps(targets)
     )
 
 
