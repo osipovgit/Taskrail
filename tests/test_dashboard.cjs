@@ -438,7 +438,8 @@ async function main() {
     }),
   });
   await analytics.showAnalytics();
-  assert.ok(all(nodes.chat).some((n) => n.textContent.includes('2 runs, 1 ready for review')));
+  assert.ok(all(nodes.chat).some((n) => n.textContent === '50%'));
+  assert.ok(all(nodes.chat).some((n) => n.textContent === 'Timed out: 1'));
   assert.ok(all(nodes.chat).some((n) => n.textContent === 'p/m'));
   console.log('Analytics view passed.');
 }

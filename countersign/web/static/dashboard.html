@@ -108,9 +108,9 @@
               <p class="hint">These checks are listed in the report, not executed automatically.</p>
             </details>
             <p class="hint">
-              This task edits original project files. Unrelated changes must be preserved. No Git
-              commands, deployment or automatic rollback. Models and timeouts come from the server
-              settings.
+              Without an isolated worktree, the task edits the original project files; unrelated
+              changes are preserved. Git runs only through the controlled executor, with no
+              deployment or automatic rollback. Models and timeouts come from the server settings.
             </p>
             <p id="form-error" role="alert"></p>
             <div class="form-actions">
@@ -145,7 +145,7 @@
               partial edits are preserved.
             </p>
             <p id="reply-error" role="alert"></p>
-            <button id="send-reply" type="submit">Send and start planning</button>
+            <button id="send-reply" type="submit" class="primary">Send and start planning</button>
           </form>
         </section>
       </article>

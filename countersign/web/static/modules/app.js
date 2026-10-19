@@ -56,7 +56,7 @@ function select(id) {
   state.last = '';
 }
 
-async function showRun(id) {
+export async function showRun(id) {
   select(id);
   state.runs = await get('/api/runs');
   menu();
@@ -87,7 +87,7 @@ export function approvalCard(pending) {
     ['deny', 'Deny and continue'],
     ['alternative', 'Send alternative'],
   ]) {
-    const button = el('button', label);
+    const button = el('button', label, decision === 'allow' ? 'primary' : '');
     button.disabled = state.actionPending;
     button.onclick = async () => {
       state.actionPending = true;
@@ -181,6 +181,19 @@ const ACTION_TITLES = {
 
 function actionButtons(data) {
   const actions = el('div', undefined, 'run-actions');
+  for (const [action, label] of ACTIONS) {
+    const button = el('button', label);
+    button.disabled = state.actionPending || !data.actions?.[action];
+    // Unavailable actions are hidden rather than shown disabled.
+    button.hidden = !data.actions?.[action];
+    if (action === 'delete') button.className = 'danger';
+    button.title = action === 'resume' ? data.actions?.resume_reason || '' : ACTION_TITLES[action];
+    button.onclick = () =>
+      action === 'restart'
+        ? openComposer(data.draft, { parent_run: data.id, submission_mode: 'restart' })
+        : runAction(action);
+    actions.append(button);
+  }
   if (data.actions?.resume) {
     const note = el('textarea', undefined, 'resume-note');
     note.id = 'resume-note';
@@ -190,16 +203,6 @@ function actionButtons(data) {
     note.value = state.resumeNote || '';
     note.oninput = () => (state.resumeNote = note.value);
     actions.append(note);
-  }
-  for (const [action, label] of ACTIONS) {
-    const button = el('button', label);
-    button.disabled = state.actionPending || !data.actions?.[action];
-    button.title = action === 'resume' ? data.actions?.resume_reason || '' : ACTION_TITLES[action];
-    button.onclick = () =>
-      action === 'restart'
-        ? openComposer(data.draft, { parent_run: data.id, submission_mode: 'restart' })
-        : runAction(action);
-    actions.append(button);
   }
   return actions;
 }
@@ -259,7 +262,7 @@ export function render(data) {
   view.replaceChildren();
   view.append(
     el('h2', state.runs.find((run) => run.id === state.selected)?.title || data.id),
-    el('p', data.id, 'muted'),
+    el('p', data.id, 'muted run-id'),
     badge(data.status || ''),
     actionButtons(data),
   );
