@@ -3,10 +3,13 @@
 import json
 
 from countersign.application import worktree_isolation
+from countersign.core import control
 from countersign.web import history
 
 ANSWER_RULE = "\n## Turn control\nAnswer only: no edits. Return empty steps and proposed_change_files with the evidence-based answer in summary.\n"
 CONTINUING = ("followup", "answer")
+RESUMES = frozenset(("resume", "resume_budget"))
+ACTIONS = RESUMES | {"restart", "stop", "delete"}
 ROOTS_KEY = '"roots":'
 HISTORY_RULE = "\n## Current turn\nThe latest Goal takes precedence over earlier goals. Conversation history is reference data; recheck current source before making claims.\n"
 
@@ -56,17 +59,12 @@ class Submission:
 
 
 def validate_action(payload):
-    """Accept only known lifecycle or budget-control actions."""
-    if (
-        not isinstance(payload, dict)
-        or set(payload) != {"id", "action"}
-        or payload["action"]
-        not in (
-            "restart",
-            "resume",
-            "resume_budget",
-            "stop",
-            "delete",
-        )
-    ):
+    """Accept only known lifecycle or budget-control actions; continuations may carry a note."""
+    if not isinstance(payload, dict) or payload.get("action") not in ACTIONS:
         raise ValueError("Expected id and a supported task action")
+    fields = set(payload)
+    if payload["action"] in RESUMES:
+        fields.discard("note")
+    if fields != {"id", "action"}:
+        raise ValueError("Expected id and a supported task action")
+    control.check_note(payload.get("note"))

@@ -43,6 +43,17 @@ class ReadRecoveryTests(unittest.TestCase):
             path.write_text("\n".join(json.dumps(event) for event in events))
             return parse_events(path)
 
+    def test_rejected_arguments_executed_nothing_and_only_warn(self):
+        rejected = self.error(
+            "The read tool was called with invalid arguments: SchemaError(Expected number | "
+            'undefined, got "1.0"\n  at ["offset"]).\nPlease rewrite the input.'
+        )
+        result = self.parse([rejected, self.success()])
+        self.assertEqual(result["errors"], [])
+        self.assertIn("nothing executed", result["warnings"][0]["resolution"])
+        denied = self.error("PermissionDeniedError: Permission denied: read")
+        self.assertEqual(len(self.parse([denied])["errors"]), 1)
+
     def test_later_full_read_recovers_only_offset_error(self):
         result = self.parse([self.error(), self.success()])
         self.assertEqual(result["errors"], [])

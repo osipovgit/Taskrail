@@ -239,7 +239,10 @@ if role == "plan-reviewer":
     for name in context["plan"]["files_read"]:
         assert Path(name).is_absolute(), name
         Path(name).read_bytes()
-if role == "implementer":
+if role == "implementer" and "FORMAT REPAIR ONLY" in prompt:
+    header = json.loads((profiles / (agent + ".md")).read_text().split("---")[1])
+    assert header["permission"]["edit"] == "deny", header["permission"]["edit"]
+elif role == "implementer":
     assert all(Path(name).is_absolute() for name in context["allowed_files"])
     header = json.loads((profiles / (agent + ".md")).read_text().split("---")[1])
     for name in context["allowed_files"]:
@@ -442,6 +445,11 @@ if (
 ):
     value.pop("proposed_change_files", None)
 response = json.dumps(value)
+writer_prose = mode == "writer-prose-always" or (
+    mode == "writer-prose" and "FORMAT REPAIR ONLY" not in prompt
+)
+if writer_prose and role == "implementer":
+    response = "I changed hello.py; the work is done."
 if mode == "prose-block" and role == "planner":
     value["blocking_gaps"] = ["Mandatory local commands unavailable"]
     response = "Research complete [note].\n" + json.dumps(value)

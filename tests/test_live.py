@@ -1,3 +1,4 @@
+import hashlib
 import json
 import subprocess
 import sys
@@ -155,13 +156,14 @@ class LiveTests(unittest.TestCase):
             [a["stage"] for a in state["attempts"]],
             ["planner", "plan-reviewer", "implementer", "reviewer"],
         )
+        suffix = hashlib.sha256(str(run).encode()).hexdigest()[:8]
         self.assertEqual(
             [a["agent"] for a in state["attempts"]],
             [
-                "countersign-planner",
-                "countersign-reviewer",
-                "countersign-implementer",
-                "countersign-reviewer",
+                f"countersign-planner-{suffix}",
+                f"countersign-reviewer-{suffix}",
+                f"countersign-implementer-{suffix}",
+                f"countersign-reviewer-{suffix}",
             ],
         )
         self.assertEqual(len(list((run / "00-input/agents").glob("*.md"))), 3)
@@ -239,7 +241,8 @@ class LiveTests(unittest.TestCase):
         run2, status2 = execute_task(self.task, self.settings, run_dir=self.base / "next-run")
         self.assertEqual(status2, "READY_FOR_REVIEW")
         self.assertIn("NEW_INSTRUCTIONS_NEXT_RUN", (run2 / "05-review/agent.md").read_text())
-        self.assertEqual(
+        # Profile names are unique per run, so parallel runs never share permissions.
+        self.assertNotEqual(
             state["attempts"][0]["agent"],
             json.loads((run2 / "run.json").read_text())["attempts"][0]["agent"],
         )
@@ -815,6 +818,35 @@ class LiveTests(unittest.TestCase):
         (linked / "hello.py").write_text("changed\n")
         process.checked(linked, ["commit", "-am", "Worktree commit"])
         self.assertNotEqual(git_metadata({"linked": linked}), before)
+
+    def test_implementer_prose_gets_one_format_repair_without_edits(self):
+        run, status, state = self.run_mode("writer-prose")
+        self.assertEqual(status, "READY_FOR_REVIEW", state.get("summary"))
+        modes = [(stage["stage"], stage["mode"]) for stage in state["stages"]]
+        self.assertIn(("implementer", "format-repair"), modes)
+        repair = next(stage for stage in state["stages"] if stage["mode"] == "format-repair")
+        request = (run / repair["directory"] / "request.md").read_text()
+        self.assertIn("This pass cannot edit files", request)
+
+    def test_failed_writer_response_can_continue_with_an_operator_note(self):
+        run, status, state = self.run_mode("writer-prose-always")
+        self.assertEqual(status, "INVALID_RESULT")
+        self.assertIn("return 2", (self.root / "hello.py").read_text())
+        settings = json.loads(self.settings.read_text())
+        settings["command"][-1] = "ok"
+        self.settings.write_text(json.dumps(settings))
+        note = "python3 is installed now; run the unit tests through LOCAL_REQUEST."
+        _, status = execute_task(
+            run / "00-input/task.md", self.settings, run_dir=run, resume=True, note=note
+        )
+        self.assertEqual(status, "READY_FOR_REVIEW")
+        state = json.loads((run / "run.json").read_text())
+        self.assertEqual(state["continuations"][-1]["operator_note"], note)
+        resumed = state["stages"][len(state["stages"]) - 3]
+        self.assertEqual(resumed["stage"], "implementer")
+        request = (run / resumed["directory"] / "request.md").read_text()
+        self.assertIn(note, request)
+        self.assertIn("Do not blindly replay edits", request)
 
     def test_unsafe_permissions_no_model(self):
         _, status, state = self.run_mode("unsafe")

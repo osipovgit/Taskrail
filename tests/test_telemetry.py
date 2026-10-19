@@ -73,14 +73,16 @@ class TelemetryTests(unittest.TestCase):
             prompt = root / "task.md"
             prompt.write_text("Test")
             value = run_agent(
-                [sys.executable, str(script)],
-                root,
-                "a",
-                "m",
-                prompt,
-                root / "attempt",
-                20,
-                runtime=dict(token_budget=50),
+                dict(
+                    command=[sys.executable, str(script)],
+                    workspace=root,
+                    agent="a",
+                    model="m",
+                    prompt=prompt,
+                    attempt=root / "attempt",
+                    timeout=20,
+                    runtime=dict(token_budget=50),
+                )
             )
             self.assertEqual(value["status"], "TOKEN_BUDGET_EXCEEDED")
             self.assertEqual(value["tokens"]["total"], 100)

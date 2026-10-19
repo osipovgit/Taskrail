@@ -34,22 +34,42 @@ SETTINGS_SNAPSHOT = (
 )
 
 
-def open_run(request):
-    """Return the configuration, run directory and state of a new or resumed run."""
+def configure(request):
+    """The configuration and run directory; nothing is created yet."""
     restored = None
     if request["resume"]:
-        index = Path(request["run_dir"]).expanduser().resolve() / RUN_INDEX
-        restored = json.loads(index.read_text())[ROOTS]
+        restored = stored_index(request["run_dir"])[ROOTS]
     config = configuration(request["task"], request["settings"], roots_override=restored)
-    run = run_directory(request["run_dir"], config)
+    return config, run_directory(request["run_dir"], config)
+
+
+def source_roots(config, request):
+    """The project roots to lock; an isolated run locks the sources of its worktrees."""
+    if not request["resume"]:
+        return list(config[ROOTS].values())
+    index = stored_index(request["run_dir"])
+    worktrees = index.get(WORKTREES) or {}
+    if worktrees:
+        return [entry["source"] for entry in worktrees.values()]
+    return list(index[ROOTS].values())
+
+
+def open_state(config, run, request, ready):
+    """Create or reopen the run index; worktrees are created only once the locks are held."""
     if request["resume"]:
         state = resumed_state(run, config, request)
         if state.get(WORKTREES):
             adopt(config, state[WORKTREES])
-        return config, run, state
-    if config["isolation"]:
+        return state
+    if ready and config["isolation"]:
         isolate(config, run.name)
-    return config, run, new_state(run, config, request)
+    return new_state(run, config, request)
+
+
+def stored_index(location):
+    """The run index of an existing run directory."""
+    index = Path(location).expanduser().resolve() / RUN_INDEX
+    return json.loads(index.read_text())
 
 
 def run_directory(location, config):

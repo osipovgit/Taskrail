@@ -1,6 +1,8 @@
 """Workflow controls shared by the CLI worker and local dashboard."""
 
 STOP_FILE = "stop.request"
+NOTE_LIMIT = 4000
+NOTE_RULE = f"A continuation note is text of at most {NOTE_LIMIT} characters"
 
 
 def check_stop(run):
@@ -38,3 +40,14 @@ def check_reads(reads, evidence):
     """History-only results can cite executor evidence without reading project files."""
     if not isinstance(reads, list) or not (reads or evidence):
         raise ValueError("Plan needs source reads or observed Git evidence")
+
+
+def check_note(note):
+    """An operator note for a continuation: bounded text, or None."""
+    if note is None:
+        return None
+    if not isinstance(note, str) or "\x00" in note:
+        raise ValueError(NOTE_RULE)
+    if len(note) > NOTE_LIMIT:
+        raise ValueError(NOTE_RULE)
+    return note.strip() or None

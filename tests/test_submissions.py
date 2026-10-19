@@ -10,7 +10,8 @@ from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
 from countersign.web.server import make_server
-from countersign.web.submissions import BusyError, TaskLauncher, build_task
+from countersign.web.submissions import BusyError, TaskLauncher
+from countersign.web.task_form import build_task
 
 BASE = Path(__file__).resolve().parents[1]
 

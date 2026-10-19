@@ -4,13 +4,13 @@
 
 | Action | Required state | Result |
 |---|---|---|
-| Restart from scratch | No active workflow | Open the prefilled task form; submit explicitly to create a new run |
+| Restart from scratch | No active run on its projects | Open the prefilled task form; submit explicitly to create a new run |
 | Stop task | Running | Write a stop request; the worker cleans up opencode and saves an interruption checkpoint |
 | Continue with extra budget | Eligible checkpoint; explicit confirmation | Add two attempts and one attempt timeout to the interrupted stage; retain consumption |
 | Continue interrupted run | Eligible checkpoint and unchanged source | Append new attempts to the same run, starting at the interrupted stage |
-| Send a follow-up Goal | Previous run stopped, no active workflow | Snapshot prior public evidence and start a new run from planning |
+| Send a follow-up Goal | Previous run stopped, no active run on its projects | Snapshot prior public evidence and start a new run from planning |
 | Answer only | New or follow-up submission | Research and independent review, no implementation |
-| Delete from history | Stopped/completed run, no active workflow | Move run and launcher artifacts to local trash; leave source files untouched |
+| Delete from history | Stopped/completed run | Move run and launcher artifacts to local trash; leave source files untouched |
 
 Stop is cooperative. The worker checks requests at stage boundaries and while
 waiting for opencode. Permission preflight, filesystem scans and short built-in checks
@@ -19,6 +19,17 @@ No stored PID is signalled, so a reused PID cannot affect another process. The
 existing process-group cleanup handles the opencode process and its children. Closing
 the web page does not stop the worker. Stopping the managed application service
 also requests this checkpoint-preserving interruption for its owned worker.
+
+Continue is also offered after `INVALID_RESULT` and `TOOL_ERROR`, for example when
+a writer finished its edits but returned an unusable response, or a required program
+was missing. The optional note under the actions (CLI: `countersign resume RUN
+--note TEXT`) is passed verbatim to the continued stage as `operator_note`, for
+example "python3 is installed now". The task, approved scope and policy still apply;
+an interrupted or failed writer inspects current files before editing again.
+
+When an agent requests a local program that is not installed, the approval card says
+so instead of rejecting the request. Install the program, then **Allow** the same
+command, or **Deny**.
 
 Resume retains frozen task/agent snapshots, approved scope and original preimages.
 If source or Git metadata changed after the checkpoint, continuation refuses to
@@ -53,7 +64,7 @@ roots are never moved or edited. There is no automatic trash purge. To restore,
 stop all workflows and manually move `run/` back to `<runs>/<run-id>` and the
 launcher folders back under `.submissions/`, without replacing existing paths.
 
-Deletion holds the same global workflow lock as execution. Active runs, path
+Deletion holds the run's lock, so its worker cannot start meanwhile. Active runs, path
 traversal, symlinked runs and symlinked trash/submission storage are rejected.
 A child turn retains its snapshotted context even if its ancestor is removed.
 
@@ -99,7 +110,7 @@ settings before continuing. Ordinary Continue grants no additional allowance.
 
 A genuine blocked task or unsafe checkpoint is not converted into an automatic retry.
 A terminal task can be deleted even if an old launcher record still says RUNNING;
-the execution lock and current worker checks continue to protect active tasks.
+the run and project locks and current worker checks continue to protect active tasks.
 Deleting history moves artifacts to local trash and never changes project files.
 
 CLI equivalent:

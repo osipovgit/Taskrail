@@ -7,9 +7,9 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
 
 from countersign.web.http_policy import error_json, post_problem, static_file
+from countersign.web.run_activity import BusyError
 from countersign.web.run_list import list_runs
 from countersign.web.run_view import run_view
-from countersign.web.submissions import BusyError
 
 STATIC = Path(__file__).parent / "static"
 JSON_TYPE = "application/json; charset=utf-8"

@@ -36,10 +36,13 @@ entry points must call the existing workflow instead of adding an execution path
 
 Run artifacts: `00-input/`, numbered stage directories, `run.json`, `checkpoint.json`,
 the report and the diff. Declared roots, allowed writes, Git metadata checks and the
-global execution lock enforce task boundaries.
+run locks enforce task boundaries. Each run locks its source projects (an isolated
+run locks the sources of its worktrees) and its run directory, so one project runs
+one task at a time while different projects run in parallel. Managed opencode
+profiles carry a per-run suffix, so parallel runs never share permissions.
 
 Stage transitions live in `application/transitions.py`: pure decisions select the
-next stage and requested write effects. The engine keeps the single-writer lock,
+next stage and requested write effects. The engine keeps the project locks,
 source checks, checkpoints and file operations:
 
 | Module (`application/`) | Responsibility |

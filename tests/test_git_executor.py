@@ -190,6 +190,10 @@ class GitExecutorTests(unittest.TestCase):
         )
         with self.assertRaises(ValueError):
             result_validation.approved_path(str(transcript), self.roots)
+        with self.assertRaisesRegex(ValueError, "not run artifacts such as changes.diff"):
+            result_validation.approved_path(
+                str(self.run / "changes.diff"), self.roots, result_validation.EVIDENCE_FILES
+            )
         with self.assertRaisesRegex(ValueError, "cite executor snapshots only in evidence"):
             result_validation.approved_path(
                 str(transcript), self.roots, result_validation.PLAN_FILES
@@ -274,7 +278,7 @@ class GitExecutorTests(unittest.TestCase):
             {"final": True},
         ]
 
-        def backend(**kwargs):
+        def backend(kwargs):
             requests_seen.append(
                 (
                     kwargs.get("runtime"),

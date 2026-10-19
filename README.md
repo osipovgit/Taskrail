@@ -50,7 +50,8 @@ independent result review. A reviewed no-change plan ends without implementation
 Failed checks/review may request bounded repairs. Interrupted writers are never
 replayed automatically. Partial changes remain available for inspection. A task can
 also run in [isolated Git worktrees](docs/task-format.md#worktree-isolation) on a new
-branch, leaving the source checkout untouched.
+branch, leaving the source checkout untouched. Tasks on different projects run in
+parallel; one project runs one task at a time.
 
 Success means **Ready for your review** or **No changes required**. Other project
 tests, Docker, CI and deployment never run automatically; agents may request local

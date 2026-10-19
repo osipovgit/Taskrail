@@ -10,7 +10,9 @@ from types import MappingProxyType
 
 from countersign.core.runtime import run_storage, settings_path
 from countersign.infrastructure import opencode_cli
-from countersign.infrastructure.agent_sync import launch_settings, make_profile, verify_permissions
+from countersign.infrastructure.agent_profile import make_profile
+from countersign.infrastructure.agent_sync import launch_settings
+from countersign.infrastructure.permission_check import verify_permissions
 
 ROLES = ("planner", "implementer", "reviewer")
 PROBE = "countersign-check"
@@ -66,9 +68,8 @@ def permission_result(launch):
     with tempfile.TemporaryDirectory() as directory:
         workspace = Path(directory)
         (workspace / "role.md").write_text("Health check profile; never used for a model run.\n")
-        profile, rules = make_profile(
-            workspace / "role.md", launch["destination"], PROBE, [workspace], [], []
-        )
+        access = dict(roots=[workspace], readable=[], writable=[])
+        profile, rules = make_profile(workspace / "role.md", launch["destination"], PROBE, access)
         try:
             verify_permissions(launch[COMMAND], workspace, PROBE, rules, workspace / "log")
         except (OSError, ValueError) as error:

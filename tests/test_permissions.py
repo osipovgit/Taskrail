@@ -4,7 +4,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from countersign.infrastructure.agent_sync import make_profile
+from countersign.infrastructure.agent_profile import make_profile
 from countersign.infrastructure.artifact_access import manifest, model_inputs, result_inputs
 from countersign.infrastructure.process_watch import permission_denied_event
 from countersign.infrastructure.profile_rules import permission_worktree
@@ -32,14 +32,10 @@ class PermissionTests(unittest.TestCase):
             self.assertEqual(result_inputs(run), [result])
             source = base / "role.md"
             source.write_text("role")
-            profile, _ = make_profile(
-                source,
-                base / "profiles",
-                "test",
-                [base / "repo"],
-                [run / "run.json", *result_inputs(run)],
-                [],
+            access = dict(
+                roots=[base / "repo"], readable=[run / "run.json", *result_inputs(run)], writable=[]
             )
+            profile, _ = make_profile(source, base / "profiles", "test", access)
             policy = json.loads(profile.read_text().split("---")[1])["permission"]
             self.assertEqual(policy["external_directory"][str(run) + "/*"], "allow")
             self.assertEqual(policy["read"][str(result)], "allow")
@@ -61,7 +57,8 @@ class PermissionTests(unittest.TestCase):
             for path in files:
                 path.parent.mkdir(parents=True, exist_ok=True)
                 path.write_text("data")
-            target, _ = make_profile(source, base / "profiles", "test", [base / "repo"], files, [])
+            access = dict(roots=[base / "repo"], readable=files, writable=[])
+            target, _ = make_profile(source, base / "profiles", "test", access)
             policy = json.loads(target.read_text().split("---")[1])["permission"]
             for path in files:
                 self.assertEqual(policy["external_directory"][str(path.parent) + "/*"], "allow")
@@ -80,9 +77,8 @@ class PermissionTests(unittest.TestCase):
             source = base / "source.md"
             source.write_text("role")
             one, two = root / "build.sh", base / "jenkins" / "pipeline.groovy"
-            _, rules = make_profile(
-                source, base / "profiles", "test", [root, two.parent], [], [one, two]
-            )
+            access = dict(roots=[root, two.parent], readable=[], writable=[one, two])
+            _, rules = make_profile(source, base / "profiles", "test", access)
             allowed = {
                 r["pattern"] for r in rules if r["permission"] == "edit" and r["action"] == "allow"
             }
@@ -133,7 +129,15 @@ class PermissionTests(unittest.TestCase):
                 + ').write_text("retry")\n'
             )
             result = run_agent(
-                [sys.executable, str(script)], root, "agent", "model", prompt, root / "attempt", 10
+                dict(
+                    command=[sys.executable, str(script)],
+                    workspace=root,
+                    agent="agent",
+                    model="model",
+                    prompt=prompt,
+                    attempt=root / "attempt",
+                    timeout=10,
+                )
             )
             self.assertEqual(result["status"], "BLOCKED_PERMISSION")
             self.assertFalse(marker.exists())
@@ -157,12 +161,13 @@ class AccessManifestTests(unittest.TestCase):
             paths = model_inputs(run, stage)
             exposed = manifest(run, stage, {"project": str(root / "repo")})
             self.assertEqual(exposed["readable_artifacts"], list(map(str, paths)))
-            profile, _ = make_profile(role, root / "profiles", "test", [], paths, [])
+            access = dict(roots=[], readable=paths, writable=[])
+            profile, _ = make_profile(role, root / "profiles", "test", access)
             permissions = json.loads(profile.read_text().split("---")[1])["permission"]
             for path in paths:
                 self.assertEqual(permissions["read"][str(path)], "allow")
             converted, _ = make_profile(
-                role, root / "profiles", "convert", [], paths, [], format_only=True
+                role, root / "profiles", "convert", access, format_only=True
             )
             self.assertNotIn("GIT_REQUEST", converted.read_text())
             converter = json.loads(converted.read_text().split("---")[1])["permission"]

@@ -74,9 +74,9 @@ def consume(outcome, active, state, format_only):
     action = execution_requests.extract(outcome["final_text"])
     if action is None:
         return False
-    folder, record = active
+    folder = active[0]
     submit(folder.parent, folder, action)
-    finish_stage(folder.parent, state, folder, record, "ACTION_REQUEST", diagnostics=outcome)
+    finish_stage(folder.parent, state, active, dict(status="ACTION_REQUEST", diagnostics=outcome))
     resume(folder.parent, state)
     return True
 

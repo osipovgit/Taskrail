@@ -5,7 +5,7 @@ Task files, models and imported drafts cannot add commands.
 
 from pathlib import Path
 
-from countersign.interactions import local, local_policy
+from countersign.interactions import local_policy, local_request
 
 DEFAULT_SECONDS = 600
 MAX_SECONDS = 3600
@@ -50,7 +50,7 @@ def arguments(argv):
     """Explicit nonempty strings, passed to exec without a shell."""
     if not isinstance(argv, list) or not argv:
         raise ValueError(SHAPE)
-    if not all(local.valid_argument(argument) for argument in argv):
+    if not all(local_request.valid_argument(argument) for argument in argv):
         raise ValueError(SHAPE)
     local_policy.validate(argv)
     return argv

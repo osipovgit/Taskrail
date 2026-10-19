@@ -4,9 +4,9 @@ import json
 import os
 from pathlib import Path
 
-import countersign
+from countersign.core.version import VERSION
 
-SOFTWARE_VERSION = countersign.__version__
+SOFTWARE_VERSION = VERSION
 
 DEFAULT_TIMEOUT = 3600
 

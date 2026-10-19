@@ -12,10 +12,9 @@ make check PYTHON=.venv/bin/python
 
 Wemake/Flake8 checks Python design and style; Ruff checks imports/basic correctness
 and formatting. ESLint, Stylelint and Prettier cover the UI. No new findings are
-allowed. `quality/wemake-baseline.json` records remaining existing debt by source
-fingerprint; it is not a suppression budget for new code. Fix nearby simple debt,
-remove resolved entries, and never refresh the baseline to conceal regressions. A
-reviewed relocation keeps the rule and never increases its count or complexity.
+allowed. The code has no Wemake findings, so `quality/wemake-baseline.json` is empty;
+it is not a suppression budget. Never refresh the baseline to conceal a finding:
+fix it.
 
 Tests use fake opencode 1.x and 2.x subprocesses, temporary source trees and real
 local HTTP workers. They exercise contracts, permissions, workflow and recovery,
@@ -26,7 +25,7 @@ against a pinned opencode 1.x without calling a model. CodeQL and Dependabot wat
 the code and pinned dependencies. `tests/fixtures/` holds recorded opencode 1.19.3
 and 2.0.30 event streams; when opencode changes its events, record a new stream with
 paths replaced by `/fixture` and keep both. `make test` runs the Python tests with a temporary
-`HOME`, so a running task's global lock and installed settings cannot affect them.
+`HOME`, so the locks of running tasks and installed settings cannot affect them.
 Passing tests does not establish model quality, provider behavior, visual rendering
 or runtime acceptance in the target environment.
 

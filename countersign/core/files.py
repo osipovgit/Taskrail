@@ -9,19 +9,22 @@ from pathlib import Path
 CHUNK_BYTES = 1024 * 1024
 
 
-def atomic_json(path, value):
+def atomic_json(path, document):
+    """Replace a JSON file atomically."""
     path = Path(path)
-    temp = path.with_suffix(path.suffix + ".tmp")
-    with temp.open("w", encoding="utf-8") as stream:
-        json.dump(value, stream, ensure_ascii=False, indent=2)
+    pending = path.with_suffix(f"{path.suffix}.tmp")
+    with pending.open("w", encoding="utf-8") as stream:
+        json.dump(document, stream, ensure_ascii=False, indent=2)
         stream.write("\n")
         stream.flush()
         os.fsync(stream.fileno())
-    temp.replace(path)
+    pending.replace(path)
 
 
 def changed(before, after):
-    return sorted(k for k in before.keys() | after.keys() if before.get(k) != after.get(k))
+    """Sorted names whose fingerprint (a string) differs or exists on one side only."""
+    differences = before.items() ^ after.items()
+    return sorted({entry[0] for entry in differences})
 
 
 def digest(source_bytes):

@@ -42,7 +42,7 @@ def complete(entry, entries, active, state, environment):
     if environment.get("inline"):
         save_run(run, state)
     else:
-        finish_stage(run, state, active[0], active[1], requests.STATUS, entry)
+        finish_stage(run, state, active, dict(status=requests.STATUS, result=entry))
     return after, metadata
 
 

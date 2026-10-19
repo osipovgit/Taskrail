@@ -14,7 +14,8 @@ from countersign.web.history import HISTORY, conversation, previous_messages, ta
 from countersign.web.lifecycle import trash_run
 from countersign.web.run_list import list_runs
 from countersign.web.run_view import run_view
-from countersign.web.submissions import TaskLauncher, build_task
+from countersign.web.submissions import TaskLauncher
+from countersign.web.task_form import build_task
 
 BASE = Path(__file__).resolve().parents[1]
 
@@ -102,7 +103,7 @@ class TaskControlTests(unittest.TestCase):
                     submission_mode="restart",
                 )
             )
-            text = launch.call_args.args[0]
+            text = launch.call_args.args[0]["text"]
             self.assertIn("## Goal\nReturn 3", text)
             self.assertNotIn(HISTORY, text)
         self.assertEqual(task_draft(self.run)["goal"], "Return 2")
@@ -117,7 +118,7 @@ class TaskControlTests(unittest.TestCase):
                     submission_mode="answer",
                 )
             )
-            text = launch.call_args.args[0]
+            text = launch.call_args.args[0]["text"]
         meta = json.loads(text.split("```countersign-task\n")[1].split("```")[0])
         self.assertTrue(meta["read_only"])
         self.assertIn("Previous conclusion", text)
@@ -135,7 +136,7 @@ class TaskControlTests(unittest.TestCase):
     def test_worktree_flag_is_a_boolean_task_header_option(self):
         with patch.object(self.launcher, "launch", return_value={"id": "next"}) as launch:
             self.launcher.submit(dict(self.payload, worktree=True, read_only=True))
-            text = launch.call_args.args[0]
+            text = launch.call_args.args[0]["text"]
         meta = json.loads(text.split("```countersign-task\n")[1].split("```")[0])
         self.assertEqual(meta["isolation"], "worktree")
         self.assertTrue(meta["read_only"])
@@ -212,7 +213,7 @@ class TaskControlTests(unittest.TestCase):
         self.wait_for(lambda: (run / "01-plan/stderr.log").exists())
         stopped = self.launcher.action(dict(id=run.name, action="stop"))
         self.assertEqual(stopped["status"], "STOP_REQUESTED")
-        self.launcher.process.wait(timeout=10)
+        self.launcher.workers[run][0].wait(timeout=10)
         self.assertEqual(json.loads((run / "run.json").read_text())["status"], "INTERRUPTED")
         self.assertTrue((run / "checkpoint.json").is_file())
         self.assertEqual((self.repo / "hello.py").read_text(), "def hello():\n    return 1\n")
@@ -220,7 +221,7 @@ class TaskControlTests(unittest.TestCase):
         self.configure("ok")
         continued = self.launcher.action(dict(id=run.name, action="resume"))
         self.assertEqual(continued["id"], run.name)
-        self.launcher.process.wait(timeout=15)
+        self.launcher.workers[run][0].wait(timeout=15)
         self.assertEqual(
             json.loads((run / "run.json").read_text())["status"],
             "READY_FOR_REVIEW",
@@ -235,7 +236,7 @@ class TaskControlTests(unittest.TestCase):
         with patch.object(self.launcher, "launch") as launch:
             self.launcher.submit(dict(self.payload, read_only=True))
         task = self.base / "answer.md"
-        task.write_text(launch.call_args.args[0])
+        task.write_text(launch.call_args.args[0]["text"])
         run, status = execute_task(task, self.settings, run_dir=self.runs / "answer")
         self.assertEqual(status, "INVALID_RESULT")
         stages = json.loads((run / "run.json").read_text())["stages"]
@@ -247,7 +248,7 @@ class TaskControlTests(unittest.TestCase):
         with patch.object(self.launcher, "launch") as launch:
             self.launcher.submit(dict(self.payload, read_only=True))
         task = self.base / "answer.md"
-        task.write_text(launch.call_args.args[0])
+        task.write_text(launch.call_args.args[0]["text"])
         run, status = execute_task(task, self.settings, run_dir=self.runs / "answer")
         self.assertEqual(status, "NO_CHANGES_REQUIRED")
         stages = json.loads((run / "run.json").read_text())["stages"]

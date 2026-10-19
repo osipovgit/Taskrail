@@ -1,6 +1,7 @@
 """Launch inputs of one attempt and validation of its final response."""
 
 from countersign.application import result_context
+from countersign.application.attempt_launch import agent_name
 from countersign.application.git_state import git_metadata
 from countersign.application.plan_validation import canonical_plan, validate_plan
 from countersign.observability.progress import clock, say
@@ -53,7 +54,7 @@ def launch_options(workflow, active, allowance, format_only):
     return dict(
         command=config["command"],
         workspace=next(iter(config[ROOTS].values())),
-        agent="countersign-{0}".format(record["role"]),
+        agent=agent_name(workflow, record),
         model=config["models"].get(record["role"]),
         prompt=folder / "request.md",
         attempt=folder,

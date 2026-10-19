@@ -9,7 +9,7 @@ from countersign.core import control, json_response, schema
 from countersign.git import transport
 from countersign.infrastructure import environment as host_environment
 from countersign.infrastructure.process_group import stop_group
-from countersign.interactions import local_policy
+from countersign.interactions import local_request
 
 MAX_TIMEOUT = 3600
 POLL_SECONDS = 0.1
@@ -32,18 +32,8 @@ def extract(text):
 
 
 def validate(payload, roots):
-    """Require an exact declared cwd and explicit nonempty argument strings."""
-    schema.require(
-        payload["cwd"] in list(map(str, roots.values())), "Use an exact declared root as cwd"
-    )
-    argv = payload["argv"]
-    schema.require(isinstance(argv, list) and bool(argv), "argv must be a nonempty list")
-    schema.require(all(valid_argument(arg) for arg in argv), "Invalid argv")
-    schema.require(
-        isinstance(payload["reason"], str) and bool(payload["reason"].strip()),
-        "Explain command purpose and effects",
-    )
-    local_policy.validate(argv)
+    """A valid request whose executable is installed; returns argv with its absolute path."""
+    argv = local_request.checked_request(payload, roots)
     executable = shutil.which(argv[0])
     schema.require(bool(executable), "Executable not installed on the orchestrator host")
     return [executable, *argv[1:]]
@@ -104,11 +94,6 @@ def instructions():
         "User denial is feedback: skip that action, consider the alternative and continue feasible work. "
         "Mandatory unresolved criteria still need honest gaps. Do not resubmit a denied action unchanged.\n"
     )
-
-
-def valid_argument(argument):
-    """Explicit nonempty strings are passed unchanged to exec."""
-    return isinstance(argument, str) and bool(argument) and "\x00" not in argument
 
 
 def reap(process):

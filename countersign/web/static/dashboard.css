@@ -476,3 +476,12 @@ input[type='checkbox'] {
   width: 100%;
   min-height: 6rem;
 }
+
+.approval-notice {
+  font-weight: 600;
+}
+
+.resume-note {
+  width: 100%;
+  min-height: 3rem;
+}

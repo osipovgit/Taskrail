@@ -40,8 +40,8 @@ class Retries:
         return status in TRANSPORT and self.transport_retry()
 
     def format_repair(self, outcome):
-        """One tool-less repair of a read-only stage's response format."""
-        if self.stage == IMPLEMENTER or self.counts[FORMAT_KEY] >= 1:
+        """One repair of the response format; edits stay denied, even for the implementer."""
+        if self.counts[FORMAT_KEY] >= 1:
             return False
         self.counts[FORMAT_KEY] += 1
         state = self.attempts.workflow.state

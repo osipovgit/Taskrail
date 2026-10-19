@@ -5,12 +5,9 @@ from countersign.application.artifacts import new_stage
 from countersign.application.planned_paths import safe_file
 from countersign.application.recovery import write_evidence
 from countersign.infrastructure import artifact_access, opencode_api
-from countersign.infrastructure.agent_sync import (
-    atomic_write,
-    make_profile,
-    repair_mode,
-    verify_permissions,
-)
+from countersign.infrastructure.agent_profile import make_profile
+from countersign.infrastructure.agent_sync import atomic_write, repair_mode
+from countersign.infrastructure.permission_check import verify_permissions
 
 RECOVERY_NOTE = "\nRECOVERY: the preceding read-only attempt ended before a valid result. First read this recorded evidence file: {0}. It contains successful tool outputs, not conclusions. The source tree was checked unchanged. Do not restart broad discovery: reuse applicable evidence, read only missing ranges, and produce the final result. Truncated or omitted output is NOT complete evidence. Do not invent access failures without a tool error.\n"
 ROLE = "role"
@@ -26,8 +23,9 @@ def open_record(workflow, mode):
     """Create the numbered stage record and reserve its durable budget."""
     stage = workflow.flow["stage"]
     role = role_of(stage)
-    model = workflow.config["models"].get(role)
-    active = new_stage(workflow.run, workflow.state, stage, role, mode, model=model)
+    details = dict(role=role, mode=mode)
+    details["model"] = workflow.config["models"].get(role)
+    active = new_stage(workflow.run, workflow.state, stage, details)
     workflow.open_record(active)
     attempt_context.prepare(workflow.run, active[1], workflow.config, workflow.state)
     return active
@@ -54,37 +52,38 @@ def attempt_prompt(workflow, active, request, recovery):
 def install_profile(workflow, active, files, format_only):
     """Write the closed opencode profile and verify that opencode enforces it."""
     folder, record = active
-    base = permission_base(workflow.config, record, files)
+    access = profile_access(workflow, active, files)
     profile, permissions = make_profile(
         workflow.run / "00-input/agents" / f"{record[ROLE]}.md",
         workflow.config["destination"],
-        agent_name(record),
-        workflow.config[ROOTS].values(),
-        artifact_access.model_inputs(workflow.run, folder),
-        files,
+        agent_name(workflow, record),
+        access,
         format_only=repair_mode(workflow.config, format_only),
-        worktree=base,
     )
     workflow.runtime["profiles"].add(profile)
     atomic_write(folder / "agent.md", profile.read_bytes())
     verify_permissions(
         workflow.config["command"],
         next(iter(workflow.config[ROOTS].values())),
-        agent_name(record),
+        agent_name(workflow, record),
         permissions,
         folder / "permissions.log",
     )
     return profile
 
 
-def permission_base(config, record, files):
-    """The base that relative permission patterns are written against."""
+def profile_access(workflow, active, files):
+    """Readable run artifacts, writable files and the base of relative permission names."""
+    folder, record = active
+    config = workflow.config
     base = opencode_api.relative_base(config, config[ROOTS], files)
     if base is not None:
         record["permission_worktree"] = str(base)
-    return base
+    access = dict(roots=config[ROOTS].values(), writable=files, worktree=base)
+    access["readable"] = artifact_access.model_inputs(workflow.run, folder)
+    return access
 
 
-def agent_name(record):
-    """Managed opencode profiles use stable role names."""
-    return "countersign-{0}".format(record[ROLE])
+def agent_name(workflow, record):
+    """Profile names are unique per run, so parallel runs never share permissions."""
+    return "countersign-{0}-{1}".format(record[ROLE], workflow.runtime["profile_suffix"])

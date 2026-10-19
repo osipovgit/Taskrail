@@ -20,7 +20,7 @@ exec 9>"$state_dir/live.lock"
 echo "Waiting up to $wait_seconds seconds for the active workflow to finish..."
 flock -w "$wait_seconds" 9 || { echo 'Stop the active task in the UI and wait before updating' >&2; exit 1; }
 source "$source_dir/deploy/fresh.sh"
-version=$(PYTHONPATH="$source_dir" "$python_bin" -c 'from countersign import __version__; print(__version__)')
+version=$(PYTHONPATH="$source_dir" "$python_bin" -c 'from countersign.core.version import VERSION; print(VERSION)')
 release=$(mktemp -d "$app_dir/releases/$version-XXXXXXXX")
 # Copy the application only; project source roots and task history are never copied.
 tar -C "$source_dir" --exclude='__pycache__' --exclude='*.pyc' -cf - \

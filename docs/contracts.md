@@ -41,15 +41,18 @@ matching quote proves provenance, not the model's interpretation, so independent
 review remains necessary. Only server records prove executed checks. The exact
 schema is supplied in each request; do not copy it into custom roles.
 
-An explicit `File not found` or out-of-range line offset from an exploratory read
-is kept as a warning, not a transport failure. The failed read is not evidence and
+An explicit `File not found` or out-of-range line offset from an exploratory read,
+and any tool call rejected for invalid arguments before it ran, is kept as a
+warning, not a transport failure. The failed read is not evidence and
 does not waive required evidence. Permission denials, failed writes and other tool
 errors keep their safeguards.
 
 Format repair receives the saved response, the validation error, the schema and the
-server-assigned requirements. It has no tools (or read-only tools with
-`format_repair_tools: read`), cannot invent requirement IDs or quotations, and must
-not research. Research recovery receives bounded observed source
+server-assigned requirements. Each stage gets at most one. It has no tools (or
+read-only tools with `format_repair_tools: read`), never edits, even for the
+implementer, cannot invent requirement IDs or quotations, and must not research. An
+implementer repair reports only edits already present; changed files are still
+checked against the observed source. Research recovery receives bounded observed source
 material and keeps unresolved requirements explicit. A no-change completion still
 needs independent review of all requirements. Text imported with `--plan-response`
 is only an untrusted draft for fresh planning.
@@ -68,7 +71,7 @@ never overwrite installed custom roles. Each role must contain the exact line
 `Instruction contract: 1.` after its frontmatter; a missing declaration fails
 before any model runs. Review a custom role against `countersign/agents/` before adding the
 declaration, or select the maintained roles with `deploy/install.sh --agents=bundled`.
-Managed opencode profiles use stable role names, and their permissions come from the
+Managed opencode profiles are named `countersign-<role>-<run suffix>`, and their permissions come from the
 engine, not from role frontmatter. Each stage records the source path, role hash,
 contract hash and request hash; the UI shows this provenance. Editing a managed
 profile is not a supported configuration method.
