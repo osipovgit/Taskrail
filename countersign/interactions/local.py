@@ -84,7 +84,7 @@ def instructions():
     """Diagnostics run as the service user only after explicit personal approval."""
     return (
         "\nLocal commands are available to ALL roles through LOCAL_REQUEST: "
-        '{"schema_version":1,"status":"LOCAL_REQUEST","cwd":"/exact/declared/root",'
+        '{"schema_version":1,"status":"LOCAL_REQUEST","cwd":"/declared/root/or/a/directory/inside",'
         '"argv":["ansible-lint","ansible-playbooks"],"reason":"Purpose, effects and expected result"}. '
         "End the turn; the operator reviews exact argv and may allow, deny or suggest an alternative. "
         "The same session resumes with command output. Do not declare shell unavailable. "

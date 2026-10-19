@@ -44,11 +44,16 @@ class StageAttempts:
             if outcome is None:
                 return None
             verdict = self.conclude(active[1], outcome)
-            if verdict is not None:
+            if verdict is None:
+                self.retry(active[1], outcome)
+            elif not self.retries.rebuild(verdict):
                 return verdict, active[1]
-            if not self.retries.allowed(outcome):
-                fail(self.workflow.state, active[1], outcome)
         return None
+
+    def retry(self, record, outcome):
+        """Prepare the next attempt, or record why the stage stops."""
+        if not self.retries.allowed(outcome):
+            fail(self.workflow.state, record, outcome)
 
     def prepare(self):
         """Open the record and store exactly what the model receives."""

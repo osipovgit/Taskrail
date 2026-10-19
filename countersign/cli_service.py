@@ -82,3 +82,19 @@ def status_command(argv):
     )
     sys.stdout.write(f"{summary}\n")
     return 0
+
+
+def analytics_command(argv):
+    """Print totals across all runs as JSON."""
+    parser = argparse.ArgumentParser(description="Totals across all runs")
+    parser.add_argument(COMMAND_ARGUMENT)
+    parser.add_argument(SETTINGS_OPTION)
+    parser.add_argument("--runs-dir", type=Path)
+    args = parser.parse_args(argv)
+    from countersign.core.runtime import run_storage
+    from countersign.web.analytics import analytics
+
+    totals = analytics(run_storage(args.settings, args.runs_dir))
+    report = json.dumps(totals, ensure_ascii=False, indent=2)
+    sys.stdout.write(f"{report}\n")
+    return 0

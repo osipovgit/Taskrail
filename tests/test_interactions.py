@@ -266,6 +266,56 @@ class InteractionTests(unittest.TestCase):
                 result = (folder / "tool-result.md").read_text()
                 self.assertIn("SUCCEEDED" if installed else "still not installed", result)
 
+    def test_incomplete_local_request_returns_to_the_same_session(self):
+        folder = self.run / "incomplete"
+        folder.mkdir()
+        (folder / "events.jsonl").touch()
+        record = dict(role="planner", directory=folder.name, budget=dict(timeout=60))
+        environment = dict(
+            self.context,
+            format_only=False,
+            expected={},
+            git_before={},
+            allowed=[],
+            scan=lambda: {},
+            git_metadata=lambda roots: {},
+        )
+        near_miss = dict(cwd=str(self.root), argv=["ansible-lint", "."], reason="Lint")
+        responses = [f"LOCAL_REQUEST\n{json.dumps(near_miss)}"] * 3 + ["{}"]
+        prompts = []
+
+        def invoke(options):
+            prompt = options.get("prompt")
+            prompts.append(prompt.read_text() if prompt else "initial")
+            return dict(status="OK", sessions=["same"], tokens={}, final_text=responses.pop(0))
+
+        with ExitStack() as stack:
+            stack.enter_context(patch("countersign.interactions.clock.save_run"))
+            stack.enter_context(patch("countersign.interactions.session.save_run"))
+            stack.enter_context(
+                patch("countersign.interactions.session.run_agent", side_effect=invoke)
+            )
+            execute = stack.enter_context(patch("countersign.interactions.local.execute"))
+            outcome = StageSession((folder, record), dict(stages=[record]), environment, {}).run()
+        self.assertEqual(execute.call_count, 0)
+        self.assertEqual(len(prompts), 3)
+        self.assertIn('"status": "LOCAL_REQUEST"', prompts[1])
+        self.assertIn("nothing was executed", prompts[2])
+        self.assertIn("ansible-lint", outcome["final_text"])
+
+    def test_local_cwd_may_be_a_directory_inside_a_declared_root(self):
+        from countersign.interactions import local_request
+
+        inner = self.root / "ansible-playbooks"
+        inner.mkdir()
+        roots = {"project": self.root}
+        request = dict(cwd=str(inner), argv=["true"], reason="Run inside a subdirectory")
+        self.assertEqual(local_request.checked_request(request, roots), ["true"])
+        (self.root / "escape").symlink_to(self.run, target_is_directory=True)
+        for cwd in (str(self.run), str(self.root / "escape"), "relative", str(self.root / "none")):
+            with self.subTest(cwd=cwd), self.assertRaises(ValueError):
+                local_request.checked_request(dict(request, cwd=cwd), roots)
+
     def test_expired_git_stage_never_starts_a_process(self):
         with deadline.Deadline(0, self.run):
             with patch("countersign.git.transport.subprocess.Popen") as launch:

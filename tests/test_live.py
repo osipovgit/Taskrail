@@ -848,6 +848,56 @@ class LiveTests(unittest.TestCase):
         self.assertIn(note, request)
         self.assertIn("Do not blindly replay edits", request)
 
+    def test_blocked_format_repair_gets_one_full_attempt(self):
+        run, status, state = self.run_mode("repair-blocked")
+        self.assertEqual(status, "READY_FOR_REVIEW", state.get("summary"))
+        planner = [stage for stage in state["stages"] if stage["stage"] == "planner"]
+        self.assertEqual(
+            [stage["mode"] for stage in planner], ["model", "format-repair", "research-recovery"]
+        )
+        request = (run / planner[-1]["directory"] / "request.md").read_text()
+        self.assertIn("PREVIOUS FINAL RESPONSE WAS INVALID: Missing fields", request)
+
+    def test_large_change_waits_for_the_operator(self):
+        run, status, state = self.run_mode("ok", max_change_lines=1)
+        self.assertEqual(status, "CHANGE_LIMIT_EXCEEDED", state.get("summary"))
+        self.assertIn("return 2", (self.root / "hello.py").read_text())
+        self.assertNotIn("checks", state["results"])
+        decisions = [
+            dict(decision="alternative", alternative="Keep the edit to one line"),
+            dict(decision="allow", alternative=""),
+        ]
+        requests = []
+
+        def decide(_run, request):
+            requests.append(request)
+            return decisions.pop(0)
+
+        (self.root / "hello.py").write_text("# user comment\ndef hello():\n    return 1\n")
+        with patch("countersign.interactions.approvals.wait", side_effect=decide):
+            run, status = execute_task(self.task, self.settings, run_dir=self.base / "second")
+        state = json.loads((run / "run.json").read_text())
+        self.assertEqual(status, "READY_FOR_REVIEW", state.get("summary"))
+        self.assertEqual(requests[0]["status"], "CHANGE_LIMIT")
+        self.assertEqual(requests[0]["lines"], 2)
+        self.assertEqual(state["approved_change"], dict(lines=2, files=1))
+        stages = [stage["stage"] for stage in state["stages"]]
+        self.assertEqual(stages.count("implementer"), 2)
+        second = [stage for stage in state["stages"] if stage["stage"] == "implementer"][1]
+        self.assertIn(
+            "Keep the edit to one line", (run / second["directory"] / "request.md").read_text()
+        )
+
+    def test_design_discussion_leaves_a_reviewed_design_document(self):
+        header = {"roots": {"project": str(self.root)}, "design": True}
+        self.task.write_text(f"```countersign-task\n{json.dumps(header)}\n```\nDesign caching")
+        run, status, state = self.run_mode("no-change")
+        self.assertEqual(status, "NO_CHANGES_REQUIRED", state.get("summary"))
+        self.assertEqual((run / "design.md").read_text(), "Current source already returns 2\n")
+        self.assertIn("[Design document](design.md)", (run / "report.md").read_text())
+        frozen = json.loads((run / "00-input/settings.json").read_text())
+        self.assertIn("max_change_lines", frozen)
+
     def test_unsafe_permissions_no_model(self):
         _, status, state = self.run_mode("unsafe")
         self.assertEqual(status, "BLOCKED")

@@ -46,7 +46,9 @@ See [deployment](docs/deployment.md) before changing existing installations.
 
 Planning → independent plan review → scoped implementation → built-in syntax checks
 and your [verification commands](docs/deployment.md#verification-commands) →
-independent result review. A reviewed no-change plan ends without implementation.
+independent result review. A change larger than the configured limit waits for your
+decision first. A reviewed no-change plan ends without implementation; **Design
+discussion** turns produce a reviewed design document instead of code.
 Failed checks/review may request bounded repairs. Interrupted writers are never
 replayed automatically. Partial changes remain available for inspection. A task can
 also run in [isolated Git worktrees](docs/task-format.md#worktree-isolation) on a new
@@ -66,7 +68,8 @@ and per-requirement outcomes are checked before each transition.
 ```sh
 countersign /absolute/path/task.md
 countersign status /absolute/path/run
-countersign resume /absolute/path/run
+countersign resume /absolute/path/run --note "python3 is installed now"
+countersign analytics
 # Foreground development UI:
 python3 -m countersign serve --settings countersign/settings.json
 ```

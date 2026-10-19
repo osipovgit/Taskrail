@@ -87,6 +87,7 @@ def task_draft(run):
     draft["title"] = parsed.title(run.name)
     draft["read_only"] = parsed.metadata.get("read_only") is True
     draft["worktree"] = parsed.metadata.get("isolation") == "worktree"
+    draft["design"] = parsed.metadata.get("design") is True
     draft["verification"] = "\n".join(parsed.metadata.get("verification", []))
     index = json.loads(read_artifact(run, "run.json"))
     draft["roots"] = worktree_isolation.source_roots(index)

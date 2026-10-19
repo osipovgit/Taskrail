@@ -26,6 +26,7 @@ def main():
         resume=resume_command,
         check=cli_service.check_command,
         init=cli_service.init_command,
+        analytics=cli_service.analytics_command,
     )
     return commands.get(argv[0], run_command)(argv)
 

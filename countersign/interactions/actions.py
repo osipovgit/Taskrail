@@ -17,6 +17,7 @@ from countersign.interactions import (
 )
 from countersign.interactions.clock import ApprovalPause
 
+MAX_CORRECTIONS = 2
 MISSING_PROGRAM = "{0} is not installed on the orchestrator host. Install it, then Allow to run this exact command; or Deny."
 
 
@@ -37,13 +38,14 @@ class Actions:
         if outcome["status"] != "OK":
             return None
         response = run_git(self, outcome)
+        text = outcome["final_text"]
         if response is None:
-            payload = local.extract(outcome["final_text"])
+            payload = local.extract(text)
             response = (
-                remote.consume(self.session, outcome["final_text"])
-                if payload is None
-                else run_local(self, payload)
+                remote.consume(self.session, text) if payload is None else run_local(self, payload)
             )
+        if response is None:
+            response = incomplete_request(self, text)
         return response
 
     def git_action(self, outcome):
@@ -101,6 +103,17 @@ class Actions:
     def local_result(self, payload, answer):
         """Keep command results in the public transcript and evidence ledger."""
         return transcripts.local_snapshot(self.run, self.folder, payload, answer)
+
+
+def incomplete_request(actions, text):
+    """Return a near-miss LOCAL_REQUEST to the same session, at most twice per stage."""
+    context = actions.session.context
+    if context["corrections"] >= MAX_CORRECTIONS or not local_request.incomplete(text):
+        return None
+    context["corrections"] += 1
+    feedback = local_request.correction(text)
+    events.append(actions.folder, "correction", dict(response=text), feedback)
+    return feedback
 
 
 def install_notice(payload):

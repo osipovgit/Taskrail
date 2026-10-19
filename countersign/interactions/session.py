@@ -25,6 +25,7 @@ class StageSession:
         self.launch = dict(launch)
         self.clock = StageClock(active[1]["budget"]["timeout"])
         self.context = dict(session_id=None, turns=0, tokens={}, attachment={})
+        self.context["corrections"] = 0
 
     def run(self):
         """One stage server serves every turn and stops with the stage."""
