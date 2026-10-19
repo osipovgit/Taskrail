@@ -149,6 +149,7 @@ async function main() {
       'task-read-only',
       'task-worktree',
       'task-design',
+      'task-auto-approve',
       'composer',
       'chat',
       'followup-panel',
@@ -162,6 +163,7 @@ async function main() {
     nodes['task-read-only'].checked = false;
     nodes['task-worktree'].checked = false;
     nodes['task-design'].checked = false;
+    nodes['task-auto-approve'].checked = false;
   };
   nodes['task-goal'].focus = () => {};
   globalThis.document.getElementById = (name) => nodes[name];
@@ -174,6 +176,7 @@ async function main() {
       read_only: true,
       worktree: true,
       design: true,
+      auto_approve: true,
     },
     { parent_run: 'prior', submission_mode: 'restart' },
   );
@@ -182,6 +185,7 @@ async function main() {
   assert.equal(nodes['task-read-only'].checked, true);
   assert.equal(nodes['task-worktree'].checked, true);
   assert.equal(nodes['task-design'].checked, true);
+  assert.equal(nodes['task-auto-approve'].checked, true);
   assert.equal(fields.worktree, undefined);
   assert.equal(nodes.composer.hidden, false);
   assert.equal(nodes.chat.hidden, true);
@@ -192,6 +196,7 @@ async function main() {
   assert.equal(fields.goal.value, '');
   assert.equal(nodes['task-read-only'].checked, false);
   assert.equal(nodes['task-worktree'].checked, false);
+  assert.equal(nodes['task-auto-approve'].checked, false);
   assert.equal(nodes['project-roots'].children.length, 1);
   console.log('Restart prefill and clean new-task form passed without launching a worker.');
 
@@ -245,6 +250,7 @@ async function main() {
   app.render({
     id: 'paused',
     status: 'STAGE_BUDGET_EXCEEDED',
+    auto_approve: true,
     actions: { resume: true, resume_budget: true, delete: true },
     task: { text: 'Task' },
     roots: {},
@@ -262,6 +268,7 @@ async function main() {
   }
   assert.equal(buttons.find((node) => node.textContent === 'Stop task').disabled, true);
   assert.ok(all(nodes.chat).some((node) => node.className === 'resume-note'));
+  assert.ok(all(nodes.chat).some((node) => node.textContent === 'All actions allowed'));
   console.log('Budget continuation and deletion controls passed.');
 
   const toolToggle = all(nodes.chat).find((node) => node.type === 'checkbox');
@@ -382,6 +389,24 @@ async function main() {
     ['Allow', 'Deny and continue', 'Send alternative'],
   );
   assert.ok(all(decisionCard).some((n) => n.textContent.includes('"bash"')));
+  const decisions = [];
+  const savedFetch = globalThis.fetch;
+  globalThis.fetch = async (url, options) => {
+    if (options?.body) decisions.push(JSON.parse(options.body));
+    return { ok: true, json: async () => ({ token: 'token' }) };
+  };
+  nodes.connection = new Node('div');
+  state.composing = true;
+  all(decisionCard).find((n) => n.type === 'checkbox').checked = true;
+  all(decisionCard).find((n) => n.className === 'approval-alternative').blur = () => {};
+  await all(decisionCard)
+    .find((n) => n.textContent === 'Allow')
+    .onclick();
+  state.composing = false;
+  globalThis.fetch = savedFetch;
+  assert.equal(nodes.connection.textContent, '');
+  assert.equal(decisions[0].allow_all, true);
+  assert.equal(decisions[0].decision, 'allow');
   const installCard = app.approvalCard({
     ticket: 'install-ticket',
     request: { argv: ['missing-tool'], notice: 'missing-tool is not installed' },

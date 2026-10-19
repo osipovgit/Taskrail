@@ -12,7 +12,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from countersign.git import deadline, process
-from countersign.interactions import access, approvals, local, transcripts
+from countersign.interactions import access, approval_policy, approvals, local, transcripts
 from countersign.interactions.clock import StageClock
 from countersign.interactions.session import StageSession
 
@@ -60,6 +60,30 @@ class InteractionTests(unittest.TestCase):
         thread.join(3)
         self.assertEqual(received[0]["decision"], "alternative")
         self.assertIsNone(approvals.load(self.run))
+
+    def test_allow_all_on_a_card_approves_later_requests_with_a_ledger(self):
+        state = {}
+        card = dict(decision="allow", alternative="", allow_all=True)
+        with patch("countersign.interactions.approvals.wait", return_value=card) as wait:
+            first = approval_policy.decision(self.run, self.request(["echo", "1"]), state)
+            second = approval_policy.decision(self.run, self.request(["echo", "2"]), state)
+        self.assertEqual(wait.call_count, 1)
+        self.assertEqual(first["decision"], "allow")
+        self.assertTrue(second["automatic"])
+        self.assertTrue(state["auto_approve"])
+        ledger = [json.loads(path.read_text()) for path in self.run.glob("approval-*.json")]
+        self.assertEqual(ledger[0]["request"]["request"]["argv"], ["echo", "2"])
+        self.assertIsNone(approvals.load(self.run))
+
+    def test_allow_all_needs_an_allow_decision_and_a_boolean(self):
+        payload = dict(id="run", ticket="t", decision="deny", alternative="", allow_all=True)
+        state = {}
+        with patch("countersign.interactions.approvals.wait", return_value=payload):
+            approval_policy.decision(self.run, self.request(["echo", "1"]), state)
+        self.assertNotIn("auto_approve", state)
+        approvals.validate_decision(payload)
+        with self.assertRaisesRegex(ValueError, "boolean"):
+            approvals.validate_decision(dict(payload, allow_all="yes"))
 
     def test_wait_can_be_stopped_without_execution(self):
         (self.run / "stop.request").touch()

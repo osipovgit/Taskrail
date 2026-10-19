@@ -14,6 +14,7 @@ PENDING = "pending-approval.json"
 DECISION = "approval-decision.json"
 TICKET = "ticket"
 ALTERNATIVE = "alternative"
+ALLOW_ALL = "allow_all"
 TEXT_LIMIT = 16000
 POLL_SECONDS = 0.2
 
@@ -76,8 +77,10 @@ def receive(run, ticket):
 def validate_decision(payload):
     """Reject unrecognized or incomplete operator responses."""
     require(isinstance(payload, dict), "Decision must be an object")
-    require(set(payload) == {"id", TICKET, "decision", ALTERNATIVE}, "Invalid decision fields")
+    fields = set(payload) - {ALLOW_ALL}
+    require(fields == {"id", TICKET, "decision", ALTERNATIVE}, "Invalid decision fields")
     require(payload["decision"] in {"allow", "deny", ALTERNATIVE}, "Invalid decision")
+    require(isinstance(payload.get(ALLOW_ALL, False), bool), "allow_all must be boolean")
     text = payload[ALTERNATIVE]
     require(isinstance(text, str) and len(text) <= TEXT_LIMIT, "Invalid alternative")
     if payload["decision"] == ALTERNATIVE:

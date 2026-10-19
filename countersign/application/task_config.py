@@ -34,6 +34,7 @@ def configuration(task, settings=None, roots_override=None):
         **isolation_settings(meta, options, run_storage(source)),
         read_only=meta.get("read_only") is True or meta.get(DESIGN) is True,
         design=meta.get(DESIGN) is True,
+        auto_approve=meta.get("auto_approve") is True,
         task=path,
         task_text=text,
         roots=declared_roots(meta, path),
