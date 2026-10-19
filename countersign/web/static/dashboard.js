@@ -6,6 +6,7 @@ import {
   openComposer,
   refresh,
   refreshRun,
+  showRun,
   submitFollowup,
   submitTask,
 } from './modules/app.js';
@@ -24,6 +25,20 @@ document.getElementById('add-root').onclick = () => addRoot();
 document.getElementById('task-form').onsubmit = submitTask;
 document.getElementById('followup-form').onsubmit = submitFollowup;
 document.getElementById('filter').oninput = menu;
+// Back/forward and edited addresses change only the hash; follow them to the named run.
+function hashRun() {
+  try {
+    return decodeURIComponent(location.hash.slice(1));
+  } catch {
+    return '';
+  }
+}
+window.addEventListener('hashchange', () => {
+  const id = hashRun();
+  if (!id || id === state.selected) return;
+  closeComposer();
+  showRun(id).catch(showError);
+});
 addRoot('project');
 refresh();
 
