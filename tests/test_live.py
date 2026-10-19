@@ -403,13 +403,21 @@ class LiveTests(unittest.TestCase):
         self.assertIn("original_chars", evidence)
 
     def test_timeout_does_not_consume_format_repair(self):
-        run, status, state = self.run_mode("timeout-then-invalid")
+        run, status, state = self.run_mode("timeout-then-invalid", format_repair_tools="read")
         self.assertEqual(status, "READY_FOR_REVIEW")
         self.assertEqual(
             [a["status"] for a in state["attempts"][:3]], ["TIMEOUT", "INVALID_RESULT", "OK"]
         )
         self.assertEqual(len(state["attempts"]), 6)
         self.assertIn("FORMAT REPAIR ONLY", (run / "03-plan/request.md").read_text())
+        # The repair may re-read the recovery evidence its saved response cites.
+        recovery = run / "02-plan/recovery.md"
+        self.assertTrue(recovery.is_file())
+        repair = json.loads((run / "03-plan/agent.md").read_text().split("---")[1])["permission"]
+        first = json.loads((run / "02-plan/agent.md").read_text().split("---")[1])["permission"]
+        self.assertEqual(repair["read"].get(str(recovery)), "allow")
+        self.assertEqual(first["read"].get(str(recovery)), "allow")
+        self.assertNotIn(str(run / "03-plan/recovery.md"), repair["read"])
 
     def test_imported_plan_is_revalidated_under_current_contract(self):
         self.run_mode()
