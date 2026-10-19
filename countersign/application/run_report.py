@@ -107,4 +107,6 @@ def result_links(run, state):
             links.append(f"- [{key}]({reference})")
     if run.joinpath("changes.diff").exists():
         links.append("- [Changes](changes.diff)")
+    if run.joinpath("design.md").exists():
+        links.append("- [Design document](design.md)")
     return links

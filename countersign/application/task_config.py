@@ -15,6 +15,9 @@ HEADER = re.compile(r"(?ms)^```countersign-task\s*\n(.*?)^```\s*$")
 ROLES = ("planner", "implementer", "reviewer")
 BUNDLED_AGENTS = Path(__file__).resolve().parents[1] / "agents"
 VERIFICATION = "verification"
+DESIGN = "design"
+CHANGE_LINES = 400
+CHANGE_FILES = 15
 CHECK_LIST = "verification must list runtime acceptance checks as strings"
 
 
@@ -29,7 +32,8 @@ def configuration(task, settings=None, roots_override=None):
         launch_settings(options, source.parent),
         **limits(options),
         **isolation_settings(meta, options, run_storage(source)),
-        read_only=meta.get("read_only") is True,
+        read_only=meta.get("read_only") is True or meta.get(DESIGN) is True,
+        design=meta.get(DESIGN) is True,
         task=path,
         task_text=text,
         roots=declared_roots(meta, path),
@@ -97,4 +101,6 @@ def limits(options):
         timeout=max(1, int(options.get("timeout_seconds", DEFAULT_TIMEOUT))),
         max_repairs=max(0, min(5, int(options.get("max_repairs", 3)))),
         read_retries=max(0, min(3, int(options.get("read_retries", 3)))),
+        max_change_lines=max(0, int(options.get("max_change_lines", CHANGE_LINES))),
+        max_change_files=max(0, int(options.get("max_change_files", CHANGE_FILES))),
     )

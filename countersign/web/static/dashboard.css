@@ -485,3 +485,20 @@ input[type='checkbox'] {
   width: 100%;
   min-height: 3rem;
 }
+
+.analytics {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+.analytics th,
+.analytics td {
+  border-bottom: 1px solid var(--border);
+  padding: 0.25rem 0.5rem;
+  text-align: right;
+}
+
+.analytics th:first-child,
+.analytics td:first-child {
+  text-align: left;
+}

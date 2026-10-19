@@ -63,6 +63,10 @@ class DashboardTests(unittest.TestCase):
         self.assertIn(".stage-meta", self.get("/dashboard.css"))
         self.assertIn("./modules/app.js", self.get("/dashboard.js"))
         self.assertIn("textContent", self.get("/modules/dom.js"))
+        self.assertIn("showAnalytics", self.get("/modules/analytics.js"))
+        totals = json.loads(self.get("/api/analytics"))
+        self.assertEqual(totals["runs"]["count"], 1)
+        self.assertEqual(totals["stages"]["planner"]["attempts"], 1)
 
     def test_messages_ignore_reasoning_tools_and_incomplete_lines(self):
         events = [

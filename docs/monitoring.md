@@ -50,6 +50,14 @@ An interrupted writer is never automatically replayed. A source-compatible
 checkpoint can be continued explicitly after reviewing the reason and allowances.
 Cumulative usage has no warning threshold. Counters are for comparison, not context occupancy.
 
+## Analytics
+
+**Analytics** in the task list (CLI: `countersign analytics`) sums every run in the
+run store: outcomes and success rate, recorded model time, reported tokens and
+continuations, and per model and per stage the attempts, failed attempts, format
+repairs, recoveries, tokens and time. Runs in the trash are not counted. Missing
+usage is reported as zero tokens, so compare models only on runs with telemetry.
+
 ## Artifacts
 
 | File | Purpose |

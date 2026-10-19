@@ -41,6 +41,7 @@ task files.
 | `roots` | Alias to directory. Roots must not coincide or contain one another; relative paths resolve from the task file's directory |
 | `verification` | Deferred runtime checks to report, not commands to execute |
 | `read_only` | `true` for an answer-only task (the browser's **Answer only**) |
+| `design` | `true` for a design discussion (the browser's **Design discussion**); implies `read_only` |
 | `isolation` | `in_place` (default) edits the roots; `worktree` edits new linked Git worktrees (the browser's **Isolated Git worktree**), see below |
 
 Without `roots`, the CLI uses the repository that contains the task file (found

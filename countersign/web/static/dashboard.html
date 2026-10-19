@@ -23,6 +23,7 @@
     <main>
       <nav aria-label="Tasks">
         <button id="new-task" type="button" class="primary">+ New task</button
+        ><button id="show-analytics" type="button">Analytics</button
         ><input id="filter" placeholder="Search tasks" aria-label="Search tasks" />
         <div id="runs"></div>
       </nav>
@@ -62,6 +63,10 @@
             <label
               ><input type="checkbox" name="read_only" id="task-read-only" /> Answer only (no source
               changes)</label
+            >
+            <label
+              ><input type="checkbox" name="design" id="task-design" /> Design discussion (no code
+              changes; agents write a reviewed design document)</label
             >
             <label
               ><input type="checkbox" name="worktree" id="task-worktree" /> Isolated Git worktree (a
@@ -133,6 +138,7 @@
             <select id="reply-intent">
               <option value="followup">Change code</option>
               <option value="answer">Answer only</option>
+              <option value="design">Design discussion</option>
             </select>
             <p class="hint">
               A new planning pass uses current sources and saved task conclusions. Previous runs and

@@ -39,8 +39,9 @@ def validate(payload, specification):
 def validate_object(payload, specification):
     """Require all declared keys; reject unknown keys instead of ignoring them."""
     fields = specification["properties"]
-    difference = set(payload) ^ set(fields)
-    require(not difference, f"Required/unknown fields: {difference}")
+    missing = sorted(set(fields) - set(payload))
+    unknown = sorted(set(payload) - set(fields))
+    require(not missing and not unknown, f"Missing fields: {missing}; unknown fields: {unknown}")
     for name, entry in payload.items():
         validate(entry, fields[name])
 

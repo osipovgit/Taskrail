@@ -17,7 +17,9 @@ PAGES = MappingProxyType(
 # Browser scripts served from static/; dashboard modules are fixed, never path-derived.
 SCRIPTS = frozenset(
     ("/dashboard.js", "/theme.js")
-    + tuple(f"/modules/{name}.js" for name in ("app", "dom", "monitor", "stages", "state"))
+    + tuple(
+        f"/modules/{name}.js" for name in ("analytics", "app", "dom", "monitor", "stages", "state")
+    )
 )
 JAVASCRIPT = "text/javascript; charset=utf-8"
 

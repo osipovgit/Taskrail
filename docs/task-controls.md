@@ -10,6 +10,7 @@
 | Continue interrupted run | Eligible checkpoint and unchanged source | Append new attempts to the same run, starting at the interrupted stage |
 | Send a follow-up Goal | Previous run stopped, no active run on its projects | Snapshot prior public evidence and start a new run from planning |
 | Answer only | New or follow-up submission | Research and independent review, no implementation |
+| Design discussion | New or follow-up submission | Like Answer only, but the reviewed summary is a design document, saved as `design.md`; follow-ups refine it, a **Change code** follow-up implements it |
 | Delete from history | Stopped/completed run | Move run and launcher artifacts to local trash; leave source files untouched |
 
 Stop is cooperative. The worker checks requests at stage boundaries and while
@@ -72,13 +73,14 @@ A child turn retains its snapshotted context even if its ancestor is removed.
 
 Same-origin and CSRF-token checks apply to every mutation (`POST /api/tasks`,
 `/api/actions`, `/api/decision`). `/api/actions` accepts
-`{"id":"run-id","action":"restart|resume|resume_budget|stop|delete"}`; `resume_budget`
+`{"id":"run-id","action":"restart|resume|resume_budget|stop|delete"}`, and a
+continuation may add `"note"`; `resume_budget`
 is **Continue with extra budget**, and restart returns a `draft` without launching
-anything. `/api/tasks` accepts the task fields plus `read_only`, and optionally
-`parent_run` with `submission_mode` `restart`, `followup` or `answer`; without a
-parent the mode is `new`. `/api/decision` answers one pending approval ticket with
+anything. `/api/tasks` accepts the task fields plus the booleans `read_only`,
+`worktree` and `design`, and optionally `parent_run` with `submission_mode`
+`restart`, `followup`, `answer` or `design`; without a parent the mode is `new`. `/api/decision` answers one pending approval ticket with
 `allow`, `deny` or `alternative`. Commands and settings stay server-owned. Reads use
-`GET /api/session`, `/api/runs` and `/api/run`.
+`GET /api/session`, `/api/runs`, `/api/run` and `/api/analytics`.
 
 ## Decisions and continuation
 

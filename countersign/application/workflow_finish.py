@@ -1,11 +1,14 @@
 """Interruption checkpoints and the final report; nothing is rolled back."""
 
+import json
+
 from countersign.application.changes import write_diff
 from countersign.application.run_report import report
 from countersign.core.files import changed
 from countersign.observability.progress import clock, say
 
 PREIMAGES = "preimages"
+DESIGN_FILE = "design.md"
 STATUS = "status"
 
 
@@ -32,6 +35,7 @@ def close(workflow):
     except (ValueError, OSError) as error:
         state["report_error"] = str(error)
     state["finished_at"] = clock()
+    design_document(workflow)
     report(workflow.run, state)
     for profile in workflow.runtime["profiles"]:
         profile.unlink(missing_ok=True)
@@ -45,3 +49,14 @@ def refresh_changes(workflow):
         state["changed_files"] = changed(workflow.guard.before, workflow.guard.scan())
     if state[PREIMAGES]:
         write_diff(workflow.run, workflow.config["roots"], state[PREIMAGES])
+
+
+def design_document(workflow):
+    """A finished design discussion leaves its reviewed document as design.md."""
+    plan = workflow.state["results"].get("plan")
+    finished = workflow.state[STATUS] == "NO_CHANGES_REQUIRED"
+    if not workflow.config.get("design") or not finished or not plan:
+        return
+    plan_json = workflow.run.joinpath(plan).read_text(encoding="utf-8")
+    summary = json.loads(plan_json)["summary"]
+    workflow.run.joinpath(DESIGN_FILE).write_text(f"{summary}\n", encoding="utf-8")

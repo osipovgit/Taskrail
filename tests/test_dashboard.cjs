@@ -148,6 +148,7 @@ async function main() {
       'project-roots',
       'task-read-only',
       'task-worktree',
+      'task-design',
       'composer',
       'chat',
       'followup-panel',
@@ -160,6 +161,7 @@ async function main() {
     for (const field of Object.values(fields)) field.value = '';
     nodes['task-read-only'].checked = false;
     nodes['task-worktree'].checked = false;
+    nodes['task-design'].checked = false;
   };
   nodes['task-goal'].focus = () => {};
   globalThis.document.getElementById = (name) => nodes[name];
@@ -171,6 +173,7 @@ async function main() {
       roots: [{ alias: 'qa', path: '/projects/qa' }],
       read_only: true,
       worktree: true,
+      design: true,
     },
     { parent_run: 'prior', submission_mode: 'restart' },
   );
@@ -178,6 +181,7 @@ async function main() {
   assert.equal(fields.criteria.value, 'Check existing work');
   assert.equal(nodes['task-read-only'].checked, true);
   assert.equal(nodes['task-worktree'].checked, true);
+  assert.equal(nodes['task-design'].checked, true);
   assert.equal(fields.worktree, undefined);
   assert.equal(nodes.composer.hidden, false);
   assert.equal(nodes.chat.hidden, true);
@@ -404,6 +408,39 @@ async function main() {
   );
   assert.ok(!script.includes('High cumulative token usage'));
   console.log('Approval controls and paused stage timer passed.');
+
+  const analytics = await load('analytics');
+  nodes.chat = new Node('div');
+  for (const name of ['composer', 'followup-panel', 'monitor']) nodes[name] = new Node('div');
+  globalThis.fetch = async () => ({
+    ok: true,
+    json: async () => ({
+      runs: {
+        count: 2,
+        succeeded: 1,
+        success_rate: 0.5,
+        statuses: { TIMEOUT: 1 },
+        elapsed_seconds: 3,
+        tokens: 9,
+        continuations: 0,
+      },
+      models: {
+        'p/m': {
+          attempts: 2,
+          failed: 1,
+          format_repairs: 1,
+          recoveries: 0,
+          tokens: 9,
+          elapsed_seconds: 3,
+        },
+      },
+      stages: {},
+    }),
+  });
+  await analytics.showAnalytics();
+  assert.ok(all(nodes.chat).some((n) => n.textContent.includes('2 runs, 1 ready for review')));
+  assert.ok(all(nodes.chat).some((n) => n.textContent === 'p/m'));
+  console.log('Analytics view passed.');
 }
 
 main().catch((error) => {

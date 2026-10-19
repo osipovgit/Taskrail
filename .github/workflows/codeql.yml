@@ -11,8 +11,26 @@ permissions:
   contents: read
 
 jobs:
+  visibility:
+    # Code scanning needs a public repository (or GitHub Code Security for a private one).
+    name: Check repository visibility
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      public: ${{ steps.repository.outputs.public }}
+    steps:
+      - id: repository
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          private=$(gh api "repos/${GITHUB_REPOSITORY}" --jq .private)
+          if [ "$private" = "false" ]; then echo "public=true" >> "$GITHUB_OUTPUT"; else echo "public=false" >> "$GITHUB_OUTPUT"; fi
+          echo "Repository private: $private"
+
   analyze:
     name: Analyze ${{ matrix.language }}
+    needs: visibility
+    if: needs.visibility.outputs.public == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:

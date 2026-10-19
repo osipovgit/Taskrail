@@ -164,6 +164,28 @@ class TaskControlTests(unittest.TestCase):
         self.assertTrue(restart.worktree)
         self.assertEqual(restart.fields["roots"][0]["path"], source)
 
+    def test_design_discussion_is_read_only_and_asks_for_a_document(self):
+        with patch.object(self.launcher, "launch", return_value={"id": "next"}) as launch:
+            self.launcher.submit(dict(self.payload, design=True))
+            text = launch.call_args.args[0]["text"]
+        meta = json.loads(text.split("```countersign-task\n")[1].split("```")[0])
+        self.assertTrue(meta["design"])
+        self.assertTrue(meta["read_only"])
+        self.assertIn("Design discussion: no edits", text)
+        self.assertNotIn("Answer only", text)
+        with patch.object(self.launcher, "launch", return_value={"id": "next"}) as launch:
+            self.launcher.submit(
+                dict(
+                    self.payload,
+                    goal="Compare caching options",
+                    parent_run="original",
+                    submission_mode="design",
+                )
+            )
+            followup = launch.call_args.args[0]["text"]
+        self.assertIn('"design": true', followup)
+        self.assertIn("Conversation history", followup)
+
     def test_delete_moves_all_launcher_history_but_preserves_sources(self):
         for name in ("original-launch", "resume-launch"):
             folder = self.runs / ".submissions" / name

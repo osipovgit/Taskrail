@@ -8,6 +8,8 @@ IMPLEMENTER = "implementer"
 TRANSPORT = frozenset(("TIMEOUT", "INCOMPLETE", "PROCESS_ERROR"))
 TRANSPORT_KEY = "transport"
 FORMAT_KEY = "format"
+REBUILD_KEY = "rebuild"
+REBUILD_NOTE = "\nPREVIOUS FINAL RESPONSE WAS INVALID: {0}. A format repair without tools could not rebuild it. Re-read only what you need and return one complete, valid final result or one complete executor request.\n"
 
 
 class Retries:
@@ -18,7 +20,8 @@ class Retries:
         self.attempts = attempts
         self.stage = attempts.workflow.flow["stage"]
         self.access = access_recovery.restore(attempts.workflow.state, self.stage)
-        self.counts = {TRANSPORT_KEY: 0, FORMAT_KEY: 0}
+        self.counts = {TRANSPORT_KEY: 0, FORMAT_KEY: 0, REBUILD_KEY: 0}
+        self.repair = {}
 
     def mode(self):
         """The record mode of the next attempt."""
@@ -45,6 +48,7 @@ class Retries:
             return False
         self.counts[FORMAT_KEY] += 1
         state = self.attempts.workflow.state
+        self.repair = dict(request=self.attempts.request, error=outcome["contract_error"])
         self.attempts.format_only = True
         self.attempts.request = prompts.repair(
             outcome["final_text"],
@@ -53,6 +57,20 @@ class Retries:
             state.get("contract_version"),
             state["requirements"],
         )
+        return True
+
+    def rebuild(self, verdict):
+        """A format repair that reports BLOCKED gets one full attempt with tools instead."""
+        if not self.attempts.format_only or verdict["status"] != "BLOCKED":
+            return False
+        if self.counts[REBUILD_KEY]:
+            return False
+        self.counts[REBUILD_KEY] += 1
+        self.attempts.format_only = False
+        note = REBUILD_NOTE.format(self.repair["error"])
+        self.attempts.request = "{0}{1}".format(self.repair["request"], note)
+        self.attempts.recovery = evidence.load_index(self.attempts.workflow.run)
+        say("  Format repair could not rebuild the result; one full attempt follows")
         return True
 
     def access_recovery(self, outcome):

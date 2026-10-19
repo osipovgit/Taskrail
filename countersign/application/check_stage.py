@@ -1,6 +1,6 @@
 """The check stage between implementation and independent review."""
 
-from countersign.application import transitions
+from countersign.application import change_limit, transitions
 from countersign.application.artifacts import new_stage
 from countersign.application.builtin_checks import syntax_checks
 from countersign.application.verify_commands import run_commands
@@ -10,6 +10,8 @@ CHECKS = "checks"
 
 def run_checks(workflow):
     """Record syntax checks, then settings commands, and route failures to repair."""
+    if not change_limit.approved(workflow):
+        return
     state = workflow.state
     active = new_stage(workflow.run, state, "check", dict(mode="builtin"))
     workflow.open_record(active)
