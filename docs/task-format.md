@@ -42,6 +42,7 @@ task files.
 | `verification` | Deferred runtime checks to report, not commands to execute |
 | `read_only` | `true` for an answer-only task (the browser's **Answer only**) |
 | `design` | `true` for a design discussion (the browser's **Design discussion**); implies `read_only` |
+| `auto_approve` | `true` approves local commands, read access and the change limit of this run without asking (the browser's **Allow all actions**); SSH keeps its root-only approval |
 | `isolation` | `in_place` (default) edits the roots; `worktree` edits new linked Git worktrees (the browser's **Isolated Git worktree**), see below |
 
 Without `roots`, the CLI uses the repository that contains the task file (found

@@ -73,6 +73,7 @@ def index_view(state, stages):
         execution_jobs=state.get("execution_jobs", []),
         requirements=state.get("requirements", []),
         status=state.get("status"),
+        auto_approve=state.get("auto_approve") is True,
         summary=tool_paths(state.get("summary", ""), roots),
         roots=roots,
         changed_files=tool_paths(state.get("changed_files", []), roots),

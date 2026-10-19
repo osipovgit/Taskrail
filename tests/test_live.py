@@ -896,6 +896,17 @@ class LiveTests(unittest.TestCase):
             "Keep the edit to one line", (run / second["directory"] / "request.md").read_text()
         )
 
+    def test_allow_all_actions_approves_the_change_limit_with_a_ledger(self):
+        header = {"roots": {"project": str(self.root)}, "auto_approve": True}
+        self.task.write_text(f"```countersign-task\n{json.dumps(header)}\n```\nReturn 2")
+        run, status, state = self.run_mode("ok", max_change_lines=1)
+        self.assertEqual(status, "READY_FOR_REVIEW", state.get("summary"))
+        self.assertEqual(state["approved_change"], dict(lines=2, files=1))
+        self.assertTrue(state["auto_approve"])
+        ledger = [json.loads(path.read_text()) for path in run.glob("approval-*.json")]
+        self.assertEqual(ledger[0]["request"]["request"]["status"], "CHANGE_LIMIT")
+        self.assertTrue(ledger[0]["response"]["automatic"])
+
     def test_design_discussion_leaves_a_reviewed_design_document(self):
         header = {"roots": {"project": str(self.root)}, "design": True}
         self.task.write_text(f"```countersign-task\n{json.dumps(header)}\n```\nDesign caching")

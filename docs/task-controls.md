@@ -77,9 +77,9 @@ Same-origin and CSRF-token checks apply to every mutation (`POST /api/tasks`,
 continuation may add `"note"`; `resume_budget`
 is **Continue with extra budget**, and restart returns a `draft` without launching
 anything. `/api/tasks` accepts the task fields plus the booleans `read_only`,
-`worktree` and `design`, and optionally `parent_run` with `submission_mode`
+`worktree`, `design` and `auto_approve`, and optionally `parent_run` with `submission_mode`
 `restart`, `followup`, `answer` or `design`; without a parent the mode is `new`. `/api/decision` answers one pending approval ticket with
-`allow`, `deny` or `alternative`. Commands and settings stay server-owned. Reads use
+`allow`, `deny` or `alternative`; an `allow` may add `"allow_all": true`. Commands and settings stay server-owned. Reads use
 `GET /api/session`, `/api/runs`, `/api/run` and `/api/analytics`.
 
 ## Decisions and continuation
@@ -95,6 +95,14 @@ does not consume the stage timeout. The timer resumes after the decision; comman
 execution does consume time. SSH tickets retain root-only approval and their own
 execution timeout. Stop interrupts waiting. A stale browser decision cannot approve
 a different request.
+
+**Allow all actions** skips these cards for one run. Tick it in the task form to
+apply it from the start (restarts and follow-ups keep the choice), or tick **Allow all
+further actions in this run** on a card and choose Allow. Local commands, read access
+and the change limit are then approved without asking, and each automatic approval is
+recorded in the same ledger with `"automatic": true`. The run shows an **All actions
+allowed** badge. A choice made on a card lasts until the worker exits; Continue asks
+again unless the task form enabled it. SSH tickets always keep root-only approval.
 
 Git and approved local actions resume the same opencode session inside one stage. A
 missing/changed session ID stops continuation rather than starting fresh research.

@@ -8,7 +8,7 @@ from countersign.git import dispatch, requests
 from countersign.git.deadline import Deadline
 from countersign.interactions import (
     access,
-    approvals,
+    approval_policy,
     events,
     local,
     local_request,
@@ -98,7 +98,7 @@ class Actions:
         """Pause only approval time, with no deadline for the operator."""
         request = dict(stage=self.folder.name, **payload)
         with ApprovalPause(self.session):
-            return approvals.wait(self.run, request)
+            return approval_policy.decision(self.run, request, self.session.state)
 
     def local_result(self, payload, answer):
         """Keep command results in the public transcript and evidence ledger."""
