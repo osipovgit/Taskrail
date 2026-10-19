@@ -81,7 +81,11 @@ export function approvalCard(pending) {
   input.placeholder = 'Suggest an alternative action';
   input.value = approvalDrafts.get(pending.ticket) || '';
   input.oninput = () => approvalDrafts.set(pending.ticket, input.value);
-  card.append(input);
+  const allowAll = el('input');
+  allowAll.type = 'checkbox';
+  const allowAllLabel = el('label', undefined, 'approval-allow-all');
+  allowAllLabel.append(allowAll, el('span', ' Allow all further actions in this run'));
+  card.append(input, allowAllLabel);
   for (const [decision, label] of [
     ['allow', 'Allow'],
     ['deny', 'Deny and continue'],
@@ -94,6 +98,7 @@ export function approvalCard(pending) {
       try {
         const payload = { id: state.selected, ticket: pending.ticket, decision };
         payload.alternative = input.value;
+        if (decision === 'allow' && allowAll.checked) payload.allow_all = true;
         await post('/api/decision', payload, 'Decision failed');
         approvalDrafts.delete(pending.ticket);
         input.blur();
@@ -110,7 +115,7 @@ export function approvalCard(pending) {
   return card;
 }
 
-const CHECKBOXES = new Set(['read_only', 'worktree', 'design']);
+const CHECKBOXES = new Set(['read_only', 'worktree', 'design', 'auto_approve']);
 
 export function openComposer(draft = null, context = {}) {
   state.composerContext = context;
@@ -125,6 +130,7 @@ export function openComposer(draft = null, context = {}) {
     document.getElementById('task-read-only').checked = !!draft.read_only;
     document.getElementById('task-worktree').checked = !!draft.worktree;
     document.getElementById('task-design').checked = !!draft.design;
+    document.getElementById('task-auto-approve').checked = !!draft.auto_approve;
     draft.roots.forEach((root) => addRoot(root.alias, root.path));
   } else addRoot('project');
   state.composing = true;
@@ -264,8 +270,9 @@ export function render(data) {
     el('h2', state.runs.find((run) => run.id === state.selected)?.title || data.id),
     el('p', data.id, 'muted run-id'),
     badge(data.status || ''),
-    actionButtons(data),
   );
+  if (data.auto_approve) view.append(el('span', 'All actions allowed', 'badge auto-approve'));
+  view.append(actionButtons(data));
   if (data.pending_approval) view.append(approvalCard(data.pending_approval));
   for (const job of data.execution_jobs || []) view.append(executionCard(job));
   if (data.actions?.stop_requested)
@@ -367,6 +374,7 @@ export async function submitTask(event) {
     payload.read_only = document.getElementById('task-read-only').checked;
     payload.worktree = document.getElementById('task-worktree').checked;
     payload.design = document.getElementById('task-design').checked;
+    payload.auto_approve = document.getElementById('task-auto-approve').checked;
     Object.assign(payload, state.composerContext);
     payload.roots = [...document.querySelectorAll('.root-row')].map((row) => ({
       alias: row.querySelector('.root-alias').value.trim(),

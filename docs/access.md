@@ -58,7 +58,10 @@ All roles can request installed linters, tests and diagnostic commands. The exac
 working directory, argv and reason appear in the UI before execution. Allow is
 single-use; Deny skips execution; Alternative sends your text back to the agent.
 Waiting has no expiry and is excluded from active stage time. Stop remains available.
-Each decision is bound to a random ticket and retained for audit.
+Each decision is bound to a random ticket and retained for audit. **Allow all
+actions** ([task controls](task-controls.md)) approves this run's local commands, read
+access and change limit automatically; it trusts every command the agents choose, so
+use it only where you would allow them anyway.
 
 Local commands use exec without implicit shell expansion and a host environment
 without secret-shaped variables, provider keys included. Explicit Bash and project

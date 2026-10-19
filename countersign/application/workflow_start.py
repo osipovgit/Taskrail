@@ -8,6 +8,7 @@ from countersign.application.checkpoints import load_checkpoint
 from countersign.application.workflow_state import FLOW_KEYS, STAGE
 from countersign.core import control
 from countersign.core.files import atomic_json, digest
+from countersign.interactions.approval_policy import AUTO_APPROVE
 from countersign.observability.progress import clock
 
 INPUTS = "00-input"
@@ -20,11 +21,16 @@ INTERRUPTED_WRITER = (
 
 
 def start(workflow, resume):
-    """Prepare the guard and flow; a stop request is cleared only after validation."""
+    """Prepare the guard and flow; a stop request is cleared only after validation.
+
+    Allowing all actions comes from the task header; a choice made on an approval card
+    lasts until the worker exits.
+    """
     if resume:
         restore(workflow, validated_checkpoint(workflow), resume)
     else:
         begin(workflow)
+    workflow.state[AUTO_APPROVE] = workflow.config.get(AUTO_APPROVE) is True
     control.clear_stop(workflow.run, resume)
 
 

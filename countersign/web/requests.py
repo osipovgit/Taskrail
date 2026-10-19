@@ -14,12 +14,14 @@ CONTINUING = ("followup", "answer", DESIGN)
 MODES = ("new", "restart", *CONTINUING)
 READ_ONLY = "read_only"
 WORKTREE = "worktree"
-FLAGS = (READ_ONLY, WORKTREE, DESIGN)
+AUTO_APPROVE = "auto_approve"
+FLAGS = (READ_ONLY, WORKTREE, DESIGN, AUTO_APPROVE)
 HEADER_OPTIONS = MappingProxyType(
     {
         READ_ONLY: '"read_only": true',
         WORKTREE: '"isolation": "worktree"',
         DESIGN: '"design": true',
+        AUTO_APPROVE: '"auto_approve": true',
     }
 )
 RESUMES = frozenset(("resume", "resume_budget"))
@@ -52,7 +54,7 @@ class Submission:
     def validate(self):
         """Reject ambiguous intent and unexpected metadata types."""
         if not all(isinstance(flag, bool) for flag in self.flags.values()):
-            raise ValueError("read_only, worktree and design must be boolean")
+            raise ValueError("read_only, worktree, design and auto_approve must be boolean")
         if self.mode not in MODES:
             raise ValueError("Invalid submission mode")
         if (self.mode == "new") == bool(self.parent):

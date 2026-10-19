@@ -164,6 +164,17 @@ class TaskControlTests(unittest.TestCase):
         self.assertTrue(restart.worktree)
         self.assertEqual(restart.fields["roots"][0]["path"], source)
 
+    def test_allow_all_actions_is_a_header_option_kept_in_the_draft(self):
+        with patch.object(self.launcher, "launch", return_value={"id": "next"}) as launch:
+            self.launcher.submit(dict(self.payload, auto_approve=True))
+            text = launch.call_args.args[0]["text"]
+        meta = json.loads(text.split("```countersign-task\n")[1].split("```")[0])
+        self.assertIs(meta["auto_approve"], True)
+        (self.run / "00-input/task.md").write_text(text)
+        self.assertTrue(task_draft(self.run)["auto_approve"])
+        with self.assertRaisesRegex(ValueError, "boolean"):
+            self.launcher.submit(dict(self.payload, auto_approve="yes"))
+
     def test_design_discussion_is_read_only_and_asks_for_a_document(self):
         with patch.object(self.launcher, "launch", return_value={"id": "next"}) as launch:
             self.launcher.submit(dict(self.payload, design=True))

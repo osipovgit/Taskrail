@@ -1,6 +1,6 @@
 """A change larger than the configured limit waits for the operator before checks."""
 
-from countersign.interactions import approvals
+from countersign.interactions import approval_policy
 
 IMPLEMENTER = "implementer"
 SIZE_KEYS = ("lines", "files")
@@ -20,7 +20,7 @@ def approved(workflow):
     request["limits"] = dict(
         lines=workflow.config["max_change_lines"], files=workflow.config["max_change_files"]
     )
-    decision = approvals.wait(workflow.run, request)
+    decision = approval_policy.decision(workflow.run, request, workflow.state)
     if decision["decision"] == "allow":
         workflow.state["approved_change"] = size
         return True
