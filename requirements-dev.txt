@@ -4,5 +4,5 @@ mccabe==0.7.0
 pycodestyle==2.15.0
 pyflakes==4.0.3
 Pygments==2.21.0
-ruff==0.14.0
+ruff==0.17.1
 wemake-python-styleguide==1.8.1
