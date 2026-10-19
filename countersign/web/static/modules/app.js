@@ -110,7 +110,7 @@ export function approvalCard(pending) {
   return card;
 }
 
-const CHECKBOXES = new Set(['read_only', 'worktree']);
+const CHECKBOXES = new Set(['read_only', 'worktree', 'design']);
 
 export function openComposer(draft = null, context = {}) {
   state.composerContext = context;
@@ -124,6 +124,7 @@ export function openComposer(draft = null, context = {}) {
     }
     document.getElementById('task-read-only').checked = !!draft.read_only;
     document.getElementById('task-worktree').checked = !!draft.worktree;
+    document.getElementById('task-design').checked = !!draft.design;
     draft.roots.forEach((root) => addRoot(root.alias, root.path));
   } else addRoot('project');
   state.composing = true;
@@ -226,6 +227,7 @@ function materialsSection(data) {
   materials.append(el('h3', 'Artifacts'));
   list(materials, 'Changed files', data.changed_files);
   list(materials, 'Deferred checks', data.unverified);
+  if (data.design?.text) detail(materials, 'Design document', data.design.text);
   detail(materials, 'Diff' + (data.diff.truncated ? ' (last part)' : ''), data.diff.text);
   if (data.console)
     detail(
@@ -361,6 +363,7 @@ export async function submitTask(event) {
     const payload = Object.fromEntries(new FormData(event.target).entries());
     payload.read_only = document.getElementById('task-read-only').checked;
     payload.worktree = document.getElementById('task-worktree').checked;
+    payload.design = document.getElementById('task-design').checked;
     Object.assign(payload, state.composerContext);
     payload.roots = [...document.querySelectorAll('.root-row')].map((row) => ({
       alias: row.querySelector('.root-alias').value.trim(),
@@ -396,6 +399,7 @@ export async function submitFollowup(event) {
       submission_mode: document.getElementById('reply-intent').value,
     };
     payload.read_only = payload.submission_mode === 'answer';
+    payload.design = payload.submission_mode === 'design';
     const result = await post('/api/tasks', payload, 'Unable to continue conversation');
     await showRun(result.id);
   } catch (error) {

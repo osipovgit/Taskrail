@@ -6,6 +6,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
 
+from countersign.web.analytics import analytics
 from countersign.web.http_policy import error_json, post_problem, static_file
 from countersign.web.run_activity import BusyError
 from countersign.web.run_list import list_runs
@@ -108,6 +109,8 @@ def api_value(context, target):
         return dict(token=context["token"])
     if target.path == "/api/runs":
         return list_runs(context["base"])
+    if target.path == "/api/analytics":
+        return analytics(context["base"])
     if target.path == "/api/run":
         names = parse_qs(target.query).get("id", [""])
         return run_view(context["base"], names[0])

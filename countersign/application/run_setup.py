@@ -31,6 +31,8 @@ SETTINGS_SNAPSHOT = (
     TOKENS,
     "verify_commands",
     "isolation",
+    "max_change_lines",
+    "max_change_files",
 )
 
 

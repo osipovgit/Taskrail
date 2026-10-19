@@ -52,7 +52,9 @@ server-assigned requirements. Each stage gets at most one. It has no tools (or
 read-only tools with `format_repair_tools: read`), never edits, even for the
 implementer, cannot invent requirement IDs or quotations, and must not research. An
 implementer repair reports only edits already present; changed files are still
-checked against the observed source. Research recovery receives bounded observed source
+checked against the observed source. If the repair reports BLOCKED because it
+cannot rebuild the result without tools, the stage gets one full attempt with tools
+and the original validation error. Research recovery receives bounded observed source
 material and keeps unresolved requirements explicit. A no-change completion still
 needs independent review of all requirements. Text imported with `--plan-response`
 is only an untrusted draft for fresh planning.
@@ -91,7 +93,10 @@ unchanged. See [access](access.md) and [Git access](git-access.md).
 
 A LOCAL_REQUEST may be surrounded by prose or a Markdown fence; no field or
 argument is changed. Multiple objects, duplicate keys, arrays and malformed JSON
-are rejected. Denial means the command is skipped; consider the operator's
+are rejected. `cwd` is a declared root or an existing directory inside one. A
+response with `cwd` and `argv` but without `"status": "LOCAL_REQUEST"` or
+`schema_version` executes nothing; the same session is told what is missing, at most
+twice per stage. Denial means the command is skipped; consider the operator's
 alternative. Format repair cannot request execution.
 
 ```json

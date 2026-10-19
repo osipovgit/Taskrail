@@ -96,4 +96,5 @@ def context_view(run, submission, state):
         console=text_tail(contained(submission, "console.log"), CONSOLE_LIMIT),
         report=text_tail(contained(run, "report.md")),
         diff=text_tail(contained(run, "changes.diff")),
+        design=text_tail(contained(run, "design.md")),
     )

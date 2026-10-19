@@ -444,6 +444,11 @@ if (
     and "FORMAT REPAIR ONLY" not in prompt
 ):
     value.pop("proposed_change_files", None)
+if mode == "repair-blocked" and role == "planner" and "PREVIOUS FINAL RESPONSE" not in prompt:
+    if "FORMAT REPAIR ONLY" in prompt:
+        value["blocking_gaps"] = ["The saved response omits sources; a repair cannot rebuild it"]
+    else:
+        value.pop("proposed_change_files", None)
 response = json.dumps(value)
 writer_prose = mode == "writer-prose-always" or (
     mode == "writer-prose" and "FORMAT REPAIR ONLY" not in prompt

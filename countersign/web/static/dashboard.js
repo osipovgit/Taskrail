@@ -9,11 +9,13 @@ import {
   submitFollowup,
   submitTask,
 } from './modules/app.js';
+import { showAnalytics } from './modules/analytics.js';
 import { showError } from './modules/dom.js';
 import { tickStageTimers } from './modules/stages.js';
 import { state } from './modules/state.js';
 
 document.getElementById('new-task').onclick = () => openComposer();
+document.getElementById('show-analytics').onclick = showAnalytics;
 document.getElementById('cancel-task').onclick = () => {
   closeComposer();
   refreshRun().catch(showError);
