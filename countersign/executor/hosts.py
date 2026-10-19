@@ -22,8 +22,8 @@ CONFIG = Path("/etc/countersign-executor/hosts.json")
 def load(path=CONFIG):
     """Validate the root-managed target inventory."""
     inventory = json.loads(path.read_text(encoding="utf-8"))
-    if not isinstance(inventory, dict) or not inventory:
-        raise ValueError("Configure at least one executor host")
+    if not isinstance(inventory, dict):
+        raise ValueError("The host inventory must be an object; use {} for none")
     for alias, host in inventory.items():
         protocol.label(alias)
         validate(host)

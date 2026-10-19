@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from countersign.core.files import atomic_json
-from countersign.executor import action_schema, hosts, protocol
+from countersign.executor import protocol, tickets
 
 PRIVATE_DIRECTORY_MODE = 0o700
 
@@ -39,10 +39,10 @@ class TicketStore:
     def submit(self, payload, inventory):
         """The client key makes transport retries idempotent, not re-executions."""
         protocol.label(payload["key"])
-        action = action_schema.validate(payload["action"])
-        identity = {target: hosts.public(inventory)[target] for target in action["targets"]}
+        kind, action, identity = tickets.described(payload, inventory)
         ticket = dict(
             id=protocol.fingerprint(payload),
+            kind=kind,
             action=action,
             targets=identity,
             status="PENDING_APPROVAL",
@@ -61,10 +61,7 @@ class TicketStore:
             ticket = self.get(identifier)
             if ticket["status"] != "PENDING_APPROVAL" or ticket["digest"] != digest:
                 raise ValueError("Ticket changed or approval was already consumed")
-            identity = {
-                target: hosts.public(inventory)[target] for target in ticket["action"]["targets"]
-            }
-            if identity != ticket["targets"]:
+            if tickets.identity(ticket, inventory) != ticket["targets"]:
                 raise ValueError("Target identity changed; submit and review a new ticket")
             ticket.update(status="RUNNING", approved_at=datetime.now(timezone.utc).isoformat())
             return self.save(ticket)

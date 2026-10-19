@@ -2,13 +2,18 @@
 
 from datetime import datetime, timezone
 
-from countersign.executor import hosts, transport
+from countersign.executor import hosts, jenkins_build, tickets, transport
 
 STATUS = "status"
 
 
 def perform(store, ticket, inventory):
     """Stop after the first failed target and preserve previous outcomes."""
+    if tickets.kind_of(ticket) == tickets.JENKINS:
+        outcome = jenkins_build.perform(inventory, ticket["action"])
+        ticket["results"].append(outcome)
+        ticket[STATUS] = outcome[STATUS]
+        return finish(store, ticket)
     try:
         for alias in ticket["action"]["targets"]:
             outcome = transport.execute(inventory[alias], ticket["action"])
@@ -24,5 +29,10 @@ def perform(store, ticket, inventory):
         ticket.update(
             status="UNKNOWN", detail="Transport failed; inspect remote state before retrying"
         )
+    return finish(store, ticket)
+
+
+def finish(store, ticket):
+    """Record the end time and the final ticket."""
     ticket["finished_at"] = datetime.now(timezone.utc).isoformat()
-    store.save(ticket)
+    return store.save(ticket)

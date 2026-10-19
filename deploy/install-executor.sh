@@ -57,10 +57,13 @@ install -d -m 0700 -o countersign-executor -g countersign-executor /var/lib/coun
 if [[ ! -f /etc/countersign-executor/hosts.json ]]; then
   install -m 0640 -o root -g countersign-executor "$source_root/deploy/executor-hosts.example.json" /etc/countersign-executor/hosts.json
 fi
+install -m 0640 -o root -g countersign-executor "$source_root/deploy/executor-jenkins.example.json" /etc/countersign-executor/jenkins.json.example
 if [[ ! -f /etc/countersign-executor/known_hosts ]]; then
   install -m 0640 -o root -g countersign-executor /dev/null /etc/countersign-executor/known_hosts
 fi
-for private_file in /etc/countersign-executor/hosts.json /etc/countersign-executor/known_hosts; do
+private_files=(/etc/countersign-executor/hosts.json /etc/countersign-executor/known_hosts)
+[[ -e /etc/countersign-executor/jenkins.json || -L /etc/countersign-executor/jenkins.json ]] && private_files+=(/etc/countersign-executor/jenkins.json)
+for private_file in "${private_files[@]}"; do
   if [[ -L $private_file || ! -f $private_file ]]; then
     printf 'Executor configuration must use regular files, not symlinks.\n' >&2
     exit 2
@@ -78,6 +81,7 @@ esac
 printf '%s\n' \
   'Executor installed. Existing credentials and host keys were preserved.' \
   'Use sudoedit /etc/countersign-executor/hosts.json and /etc/countersign-executor/known_hosts.' \
+  'For Jenkins, copy jenkins.json.example to jenkins.json in the same directory and edit it.' \
   'Verify host keys through a trusted channel; unknown keys fail closed.' \
   'Then run: sudo systemctl start countersign-executor.service' \
   'Log out and back in before restarting Countersign so its process gets the client group.' \

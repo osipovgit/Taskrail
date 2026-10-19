@@ -84,7 +84,7 @@ profile is not a supported configuration method.
 ## Executor requests
 
 Executor requests replace the final result for one turn: return one complete
-GIT_REQUEST, LOCAL_REQUEST or (when advertised) ACTION_REQUEST object as the entire
+GIT_REQUEST, LOCAL_REQUEST or (when advertised) ACTION_REQUEST or JENKINS_REQUEST object as the entire
 response and end the turn. They are not model function tools. The server validates
 the request, waits for any required approval, records the result and resumes the
 same opencode session in the same stage. Final schemas and evidence checks are
@@ -110,7 +110,16 @@ An ACTION_REQUEST is available only when the SSH executor is installed. It is
 recorded in `execution.json` after root approval. `UNKNOWN` and rejected tickets are
 never retried silently.
 
-Runtime requirements may be marked satisfied only with quoted, observed local or
-SSH output snapshots that match successful executor results in the server ledger;
+```json
+{"schema_version":1,"status":"JENKINS_REQUEST","jenkins":{"server":"ci","job":"shop-tests","operation":"tests","build":"last","parameters":{},"reason":"Read the latest test results","timeout_seconds":60}}
+```
+
+A JENKINS_REQUEST is available only when the executor has a Jenkins configuration.
+`status`, `console` and `tests` read `"last"` or a numbered build after UI approval;
+their results are snapshots under `00-input/local`. `build` uses `"build": "new"`,
+only configured parameter names, and a root-approved ticket in `execution.json`.
+
+Runtime requirements may be marked satisfied only with quoted, observed local,
+SSH or Jenkins output snapshots that match successful executor results in the server ledger;
 otherwise they stay deferred. Review must confirm that the recorded command and
 output establish the requirement; exit code zero alone is insufficient.

@@ -37,6 +37,28 @@ project edits. They never execute Git, rewrite run artifacts or roll back source
 or application changes. If startup fails, inspect the journal. The update
 script uses a trusted local release, not an automatic Internet download feed.
 
+## Run on a remote server
+
+Countersign can run on a Linux server while you use the browser on your workstation:
+
+1. Install on the server as the account that owns the projects, with opencode (or a
+   compatible wrapper) and its model credentials configured for that account.
+   Use `--autostart=yes --boot=yes` so the service runs without an open login session.
+2. Keep the UI on the server's loopback address and reach it through SSH:
+
+   ```sh
+   ssh -N -L 8787:127.0.0.1:8787 user@server
+   ```
+
+   Then open `http://localhost:8787`. Another local port also works, for example
+   `-L 9000:127.0.0.1:8787` with `http://localhost:9000`.
+3. Project paths in the task form are paths on the server.
+
+Do not publish the port through `0.0.0.0`, a reverse proxy or a firewall rule: the UI
+has no user accounts, and its session token only protects against other websites
+open in your browser. Closing the tunnel or the browser does not stop running tasks.
+Root approval of SSH actions happens in a terminal on the server.
+
 ## File locations
 
 | Content | Default path |

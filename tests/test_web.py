@@ -61,6 +61,8 @@ class DashboardTests(unittest.TestCase):
         self.assertIn("/dashboard.js", self.get("/"))
         self.assertIn("/dashboard.css", self.get("/"))
         self.assertIn(".stage-meta", self.get("/dashboard.css"))
+        self.assertIn('rel="icon" href="/favicon.svg"', self.get("/"))
+        self.assertIn("<svg", self.get("/favicon.svg"))
         self.assertIn("./modules/app.js", self.get("/dashboard.js"))
         self.assertIn("textContent", self.get("/modules/dom.js"))
         self.assertIn("showAnalytics", self.get("/modules/analytics.js"))
@@ -123,12 +125,19 @@ class DashboardTests(unittest.TestCase):
         for kwargs, expected in [
             ({"method": "POST", "data": b"{}"}, 403),
             ({"headers": {"Host": "attacker.example"}}, 403),
+            ({"headers": {"Host": "attacker.example:9000"}}, 403),
+            ({"headers": {"Host": "localhost"}}, 403),
+            ({"headers": {"Host": "localhost:9000", "Origin": "http://localhost:8787"}}, 403),
             ({"headers": {"Origin": "https://attacker.example"}}, 403),
         ]:
             with self.assertRaises(HTTPError) as error:
                 self.get("/api/run?id=example", **kwargs)
             self.assertEqual(error.exception.code, expected)
         self.assertEqual(self.index.read_bytes(), original)
+
+    def test_ssh_tunnel_on_another_local_port_is_trusted(self):
+        page = self.get("/api/runs", headers={"Host": "localhost:9000"})
+        self.assertEqual(json.loads(page)[0]["title"], "Example task")
 
     def test_corrupt_index_does_not_break_run_list(self):
         self.index.write_text("{")

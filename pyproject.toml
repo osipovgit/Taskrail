@@ -24,7 +24,7 @@ include = ["countersign*"]
 "countersign" = ["settings.json", "agents/*.md"]
 "countersign.core" = ["*.json"]
 "countersign.application" = ["*.md", "*.json"]
-"countersign.web" = ["static/*.html", "static/*.js", "static/*.css", "static/modules/*.js"]
+"countersign.web" = ["static/*.html", "static/*.js", "static/*.css", "static/*.svg", "static/modules/*.js"]
 
 [tool.ruff]
 target-version = "py310"
