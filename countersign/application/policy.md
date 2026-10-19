@@ -16,6 +16,9 @@ execution from a request alone. Task-specific prohibitions still apply. Local
 diagnostics, linters and tests are available to all roles through LOCAL_REQUEST;
 every exact command requires personal UI approval. Planner/reviewer must not use fix flags
 or request source changes. Use controlled Git and SSH routes for their respective operations.
+When the Jenkins contract is advertised, use JENKINS_REQUEST for build status, console
+logs, test results and builds of configured jobs; reads need personal UI approval and
+builds need root approval. Never claim a build result without its recorded outcome.
 A denial skips that command and returns feedback in the same session. Consider user alternatives.
 Approval waiting has no deadline and consumes no stage execution time.
 

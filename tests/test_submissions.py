@@ -45,11 +45,33 @@ class SubmissionTests(unittest.TestCase):
         self.assertIn("## Acceptance criteria", text)
         self.assertEqual(title, "Return two")
 
+    def test_title_criteria_and_alias_have_defaults(self):
+        other = self.base / "other repo"
+        other.mkdir()
+        payload = dict(
+            roots=[dict(alias="", path=str(self.repo)), dict(path=str(other))],
+            goal="Return 2 from hello.\nKeep the docstring.",
+        )
+        text, title = build_task(payload, self.runs)
+        meta = json.loads(text.split("```countersign-task\n")[1].split("```")[0])
+        self.assertEqual(meta["roots"], {"repo": str(self.repo), "other-repo": str(other)})
+        self.assertEqual(title, "Return 2 from hello.")
+        self.assertIn("## Acceptance criteria\nThe Goal is achieved", text)
+        long_goal = "word " * 40
+        self.assertEqual(build_task(dict(payload, goal=long_goal), self.runs)[1][-3:], "...")
+        clash = [dict(path=str(self.repo)), dict(alias="repo", path=str(other))]
+        with self.assertRaisesRegex(ValueError, "unique"):
+            build_task(dict(payload, roots=clash), self.runs)
+        renamed = [dict(alias="repo", path=str(other)), dict(path=str(self.repo))]
+        meta = json.loads(
+            build_task(dict(payload, roots=renamed), self.runs)[0].split("```")[1][17:]
+        )
+        self.assertEqual(meta["roots"]["repo-2"], str(self.repo))
+
     def test_invalid_tasks_never_create_files(self):
         cases = [
-            dict(title=""),
             dict(goal=""),
-            dict(criteria=""),
+            dict(roots=[dict(alias="bad alias", path=str(self.base / "repo"))]),
             dict(command=["sh"]),
             dict(roots=[dict(alias="project", path="/")]),
             dict(roots=[]),

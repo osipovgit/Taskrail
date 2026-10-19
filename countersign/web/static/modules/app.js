@@ -70,11 +70,14 @@ export function approvalCard(pending) {
     el('p', 'The stage timer is paused. Waiting has no time limit.'),
   );
   if (pending.request?.notice) card.append(el('p', pending.request.notice, 'approval-notice'));
+  const jenkins = pending.request?.status === 'JENKINS_REQUEST';
   card.append(
     el('pre', JSON.stringify(pending.request, null, 2)),
     el(
       'p',
-      'Local programs run as the application user and may execute project code. Review the exact command and its effects. This is not a sandbox.',
+      jenkins
+        ? 'A read-only Jenkins request: build status, console log or test results. Starting a build always needs root approval in a terminal.'
+        : 'Local programs run as the application user and may execute project code. Review the exact command and its effects. This is not a sandbox.',
     ),
   );
   const input = el('textarea', undefined, 'approval-alternative');
@@ -115,7 +118,12 @@ export function approvalCard(pending) {
   return card;
 }
 
-const CHECKBOXES = new Set(['read_only', 'worktree', 'design', 'auto_approve']);
+const CHECKBOXES = new Set(['worktree', 'auto_approve']);
+
+function draftMode(draft) {
+  if (draft.design) return 'design';
+  return draft.read_only ? 'answer' : 'change';
+}
 
 export function openComposer(draft = null, context = {}) {
   state.composerContext = context;
@@ -127,12 +135,11 @@ export function openComposer(draft = null, context = {}) {
       const input = form.elements.namedItem(key);
       if (input && !CHECKBOXES.has(key)) input.value = value;
     }
-    document.getElementById('task-read-only').checked = !!draft.read_only;
+    document.getElementById('task-mode').value = draftMode(draft);
     document.getElementById('task-worktree').checked = !!draft.worktree;
-    document.getElementById('task-design').checked = !!draft.design;
     document.getElementById('task-auto-approve').checked = !!draft.auto_approve;
     draft.roots.forEach((root) => addRoot(root.alias, root.path));
-  } else addRoot('project');
+  } else addRoot();
   state.composing = true;
   document.getElementById('composer').hidden = false;
   document.getElementById('chat').hidden = true;
@@ -153,8 +160,7 @@ export function addRoot(alias = '', path = '') {
   const row = el('div', undefined, 'root-row');
   const name = el('input');
   name.value = alias;
-  name.placeholder = 'project';
-  name.required = true;
+  name.placeholder = 'name (auto)';
   name.pattern = '[A-Za-z0-9_-]+';
   name.setAttribute('aria-label', 'Project alias');
   name.className = 'root-alias';
@@ -371,9 +377,10 @@ export async function submitTask(event) {
   error.textContent = '';
   try {
     const payload = Object.fromEntries(new FormData(event.target).entries());
-    payload.read_only = document.getElementById('task-read-only').checked;
+    const mode = document.getElementById('task-mode').value;
+    payload.read_only = mode === 'answer';
+    payload.design = mode === 'design';
     payload.worktree = document.getElementById('task-worktree').checked;
-    payload.design = document.getElementById('task-design').checked;
     payload.auto_approve = document.getElementById('task-auto-approve').checked;
     Object.assign(payload, state.composerContext);
     payload.roots = [...document.querySelectorAll('.root-row')].map((row) => ({
@@ -384,7 +391,7 @@ export async function submitTask(event) {
     closeComposer();
     event.target.reset();
     document.getElementById('project-roots').replaceChildren();
-    addRoot('project');
+    addRoot();
     await showRun(result.id);
   } catch (failure) {
     error.textContent = failure.message;

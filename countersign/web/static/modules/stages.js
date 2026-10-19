@@ -204,8 +204,10 @@ export function stageCard(stage) {
 
 export function executionCard(job) {
   const card = el('section', undefined, 'card');
-  card.append(el('h3', 'SSH action · ' + job.status));
-  card.append(el('p', job.action?.reason || job.request?.action?.reason || 'Submitting request'));
+  const build = job.request?.jenkins;
+  card.append(el('h3', (build ? 'Jenkins build · ' : 'SSH action · ') + job.status));
+  const reason = (job.action || job.request?.action || build)?.reason;
+  card.append(el('p', reason || 'Submitting request'));
   if (job.id) {
     card.append(el('p', 'Ticket: ' + job.id, 'muted'));
     if (job.status === 'PENDING_APPROVAL') {
@@ -215,7 +217,11 @@ export function executionCard(job) {
       card.append(el('pre', 'sudo -k /usr/local/bin/countersign-executor-approve ' + job.id));
     }
   }
-  const action = job.action || job.request?.action;
+  if (build) {
+    card.append(el('p', 'Jenkins job: ' + build.server + ' / ' + build.job));
+    card.append(el('pre', JSON.stringify(build.parameters, null, 2)));
+  }
+  const action = build ? null : job.action || job.request?.action;
   if (action) {
     card.append(el('p', 'SSH targets: ' + action.targets.join(', ')));
     card.append(el('pre', action.script));

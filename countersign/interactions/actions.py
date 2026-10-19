@@ -10,6 +10,7 @@ from countersign.interactions import (
     access,
     approval_policy,
     events,
+    jenkins,
     local,
     local_request,
     remote,
@@ -44,6 +45,8 @@ class Actions:
             response = (
                 remote.consume(self.session, text) if payload is None else run_local(self, payload)
             )
+        if response is None:
+            response = jenkins.consume(self, text)
         if response is None:
             response = incomplete_request(self, text)
         return response

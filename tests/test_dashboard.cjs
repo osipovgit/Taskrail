@@ -146,9 +146,8 @@ async function main() {
     [
       'task-form',
       'project-roots',
-      'task-read-only',
+      'task-mode',
       'task-worktree',
-      'task-design',
       'task-auto-approve',
       'composer',
       'chat',
@@ -160,9 +159,8 @@ async function main() {
   nodes['task-form'].elements = { namedItem: (name) => fields[name] };
   nodes['task-form'].reset = () => {
     for (const field of Object.values(fields)) field.value = '';
-    nodes['task-read-only'].checked = false;
+    nodes['task-mode'].value = 'change';
     nodes['task-worktree'].checked = false;
-    nodes['task-design'].checked = false;
     nodes['task-auto-approve'].checked = false;
   };
   nodes['task-goal'].focus = () => {};
@@ -182,9 +180,8 @@ async function main() {
   );
   assert.equal(fields.goal.value, 'Original goal');
   assert.equal(fields.criteria.value, 'Check existing work');
-  assert.equal(nodes['task-read-only'].checked, true);
+  assert.equal(nodes['task-mode'].value, 'design');
   assert.equal(nodes['task-worktree'].checked, true);
-  assert.equal(nodes['task-design'].checked, true);
   assert.equal(nodes['task-auto-approve'].checked, true);
   assert.equal(fields.worktree, undefined);
   assert.equal(nodes.composer.hidden, false);
@@ -194,10 +191,13 @@ async function main() {
   assert.equal(fields.goal.value, 'Edited before launch');
   app.openComposer();
   assert.equal(fields.goal.value, '');
-  assert.equal(nodes['task-read-only'].checked, false);
+  assert.equal(nodes['task-mode'].value, 'change');
   assert.equal(nodes['task-worktree'].checked, false);
   assert.equal(nodes['task-auto-approve'].checked, false);
   assert.equal(nodes['project-roots'].children.length, 1);
+  assert.equal(nodes['project-roots'].children[0].children[0].value, '');
+  app.openComposer({ goal: 'Explain', roots: [], read_only: true });
+  assert.equal(nodes['task-mode'].value, 'answer');
   console.log('Restart prefill and clean new-task form passed without launching a worker.');
 
   const structured = stages.stageCard({

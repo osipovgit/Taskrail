@@ -39,7 +39,7 @@ window.addEventListener('hashchange', () => {
   closeComposer();
   showRun(id).catch(showError);
 });
-addRoot('project');
+addRoot();
 refresh();
 
 // Keep DOM nodes stable throughout a drag and while copied text remains selected.

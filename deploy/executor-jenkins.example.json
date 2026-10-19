@@ -1,0 +1,17 @@
+{
+  "ci": {
+    "url": "https://jenkins.example.com",
+    "username": "countersign-bot",
+    "token": "REPLACE_WITH_JENKINS_API_TOKEN",
+    "jobs": {
+      "shop-tests": {
+        "path": "shop/tests",
+        "parameters": ["BRANCH", "SUITE"]
+      },
+      "shop-deploy-staging": {
+        "path": "shop/deploy-staging",
+        "parameters": ["VERSION"]
+      }
+    }
+  }
+}

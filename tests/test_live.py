@@ -115,7 +115,7 @@ class LiveTests(unittest.TestCase):
         self.assertEqual(state["stages"][0]["status"], "RESULT_VALID")
         self.assertIn("Linux", (run / "01-plan/tool-result.md").read_text())
         self.assertEqual(state["execution_jobs"][0]["status"], "SUCCEEDED")
-        self.assertIn("SSH execution", (run / "report.md").read_text())
+        self.assertIn("SSH and Jenkins execution", (run / "report.md").read_text())
 
     def test_ssh_wait_stop_resume_observes_same_ticket(self):
         def pending_request(payload):

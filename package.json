@@ -5,7 +5,7 @@
   "scripts": {
     "lint": "eslint . && stylelint 'countersign/web/static/*.css'",
     "test": "node tests/test_dashboard.cjs",
-    "format:check": "prettier --check 'countersign/web/static/**/*' 'tests/*.cjs' eslint.config.mjs"
+    "format:check": "prettier --check 'countersign/web/static/**/*.{html,css,js}' 'tests/*.cjs' eslint.config.mjs"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",

@@ -18,6 +18,7 @@ READ_SECONDS = 5
 SECURITY_POLICY = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'"
 UNAVAILABLE = error_json("Data is unavailable; the stage may still be writing.")
 NOT_FOUND = "{}"
+LOOPBACK_NAMES = frozenset(("127.0.0.1", "localhost", "[::1]"))
 
 
 class DashboardServer(ThreadingHTTPServer):
@@ -48,10 +49,14 @@ class DashboardHandler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def trusted(self, require_origin=False):
-        """The Host is this loopback server; an Origin, when present or required, matches."""
+        """The Host is a loopback name; an Origin, when present or required, matches it.
+
+        Any port is accepted so that an SSH tunnel may use another local port; a
+        rebinding attack cannot present a loopback host name.
+        """
         host = self.headers.get("Host", "")
-        port = self.server.server_port
-        if host not in {f"127.0.0.1:{port}", f"localhost:{port}"}:
+        name, _, port = host.rpartition(":")
+        if name not in LOOPBACK_NAMES or not port.isdigit():
             return False
         origin = self.headers.get("Origin")
         if origin or require_origin:

@@ -51,7 +51,7 @@ produces a visible error asking for a new task with selected context. No history
 silently discarded. Usage monitoring applies to the selected run; each new turn
 starts a fresh configured budget, unlike checkpoint continuation.
 
-For a question, select **Answer only**. This sets server-generated `read_only`
+For a question, choose the **Answer only** mode. This sets server-generated `read_only`
 metadata as well as instructions. Nonempty steps or proposed change paths are
 rejected by plan validation, and a separate transition guard blocks implementation.
 A successful reviewed answer finishes as `NO_CHANGES_REQUIRED` with its conclusion.

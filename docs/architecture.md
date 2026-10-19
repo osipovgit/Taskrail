@@ -15,7 +15,7 @@ UI updates read the ordered stage index and public event stream.
 | `core/` | Result contract, schema validation, file/path utilities and stop/read-only guards |
 | `infrastructure/` | opencode launch (1.x direct, 2.x through an adapter), process watch, JSONL event summary, permission profiles |
 | `observability/` | Public progress, usage and compaction telemetry |
-| `executor/` | Separate system service: peer-authenticated socket, immutable tickets, root-only approval, SSH transport |
+| `executor/` | Separate system service: peer-authenticated socket, immutable tickets, root-only approval, SSH transport, Jenkins client |
 | `web/server.py`, `http_handler.py`, `http_policy.py` | Loopback HTTP API, request checks and static resources |
 | `web/run_view.py`, `run_list.py`, `run_files.py`, `run_messages.py`, `run_sources.py` | Bounded, contained run views for the dashboard |
 | `web/service.py`, `health.py` | Managed process lifecycle and bounded readiness check |
@@ -90,5 +90,6 @@ current files before it continues.
 
 The optional SSH executor owns its private credentials and queue under a separate
 OS user. The application submits requests through a Unix socket; only a root peer
-can approve the exact digest. The executor runs nothing locally. See
-[SSH executor](ssh-executor.md).
+can approve the exact digest. The executor runs nothing locally. It also holds the
+Jenkins API token: Jenkins reads run on request, builds are root-approved tickets. See
+[SSH and Jenkins executor](ssh-executor.md).

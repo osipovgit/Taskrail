@@ -9,24 +9,29 @@ from countersign.web import history
 from countersign.web.form_roots import checked_roots
 
 TITLE = "title"
+GOAL = "goal"
+CRITERIA = "criteria"
 FIELDS = (
     TITLE,
-    "goal",
-    "criteria",
+    GOAL,
+    CRITERIA,
     "current_behavior",
     "entry_points",
     "constraints",
     "verification",
 )
-REQUIRED = (TITLE, "goal", "criteria")
+DEFAULT_CRITERIA = (
+    "The Goal is achieved; the report states what was verified and what remains unverified."
+)
+TITLE_WORDS = 80
 FIELD_LIMIT = 16000
 TITLE_LIMIT = 160
 FENCE = re.compile(r"^```countersign-task\s*$", re.MULTILINE)
 SECTIONS = MappingProxyType(
     {
-        "goal": "Goal",
+        GOAL: "Goal",
         "current_behavior": "Current behavior",
-        "criteria": "Acceptance criteria",
+        CRITERIA: "Acceptance criteria",
         "entry_points": "Known entry points",
         "constraints": "Additional constraints",
     }
@@ -57,14 +62,23 @@ def build_task(payload, runs):
 
 
 def form_text(payload):
-    """Stripped text fields; required ones must be present."""
+    """Stripped text fields; only the goal is required, title and criteria have defaults."""
     form = {key: field_text(payload, key) for key in FIELDS}
-    missing = [key for key in REQUIRED if not form[key]]
-    if missing:
-        raise ValueError(f"Required field: {missing[0]}")
+    if not form[GOAL]:
+        raise ValueError("Required field: goal")
+    form[TITLE] = form[TITLE] or default_title(form[GOAL])
+    form[CRITERIA] = form[CRITERIA] or DEFAULT_CRITERIA
     check_title(form[TITLE])
     check_reserved(form.values())
     return form
+
+
+def default_title(goal):
+    """The goal's first line, shortened at a word boundary."""
+    line = goal.splitlines()[0].strip()
+    if len(line) <= TITLE_WORDS:
+        return line
+    return "{0}...".format(line[:TITLE_WORDS].rsplit(" ", 1)[0])
 
 
 def check_title(title):

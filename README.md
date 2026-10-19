@@ -57,8 +57,8 @@ parallel; one project runs one task at a time.
 
 Success means **Ready for your review** or **No changes required**. Other project
 tests, Docker, CI and deployment never run automatically; agents may request local
-commands that you approve one by one. The optional
-[isolated SSH executor](docs/ssh-executor.md) runs exact remote scripts after personal
+commands that you approve one by one or once per run. The optional
+[isolated SSH executor](docs/ssh-executor.md) runs exact remote scripts and Jenkins builds after personal
 root approval, with results returned to the same task. Deferred runtime checks
 remain visible. Every model result follows a strict JSON contract; source quotations
 and per-requirement outcomes are checked before each transition.
@@ -76,7 +76,7 @@ python3 -m countersign serve --settings countersign/settings.json
 
 ## Guides
 
-- [Isolated SSH executor and approvals](docs/ssh-executor.md)
+- [Isolated SSH and Jenkins executor and approvals](docs/ssh-executor.md)
 - [Task format and example](docs/task-format.md)
 - [Controls, continuation and history](docs/task-controls.md)
 - [Configuration, deployment and file locations](docs/deployment.md)

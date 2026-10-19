@@ -13,6 +13,7 @@ scope, not OS privileges; Unix permissions, network routing and authentication s
 | Git history | `GIT_REQUEST` final response | Controlled executor; read-only for planning/review |
 | Git mutation | `GIT_REQUEST` final response | Implementer, approved scope, bounded command grammar |
 | Remote inspection/change | `ACTION_REQUEST` final response | Configured SSH targets; exact script personally approved |
+| Jenkins | `JENKINS_REQUEST` final response | Configured jobs; reads approved in the UI, builds root-approved |
 | Local checks | Built-in syntax checks (`.py`, `.json`, `.sh`); `LOCAL_REQUEST` for tests, linters or explicit Bash | Exact argv personally approved; runs as the application user |
 | HTTP/API/database tools | No direct connector | Approved SSH scripts may use installed remote clients |
 

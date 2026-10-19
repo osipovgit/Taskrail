@@ -8,14 +8,14 @@ generates this file; users do not need to write JSON.
 
 | Field | Content |
 |---|---|
-| Title | One line, up to 160 characters |
-| Project roots | One to eight unique aliases with existing absolute directory paths; `~` is supported |
-| Goal | Expected behavior and its purpose |
-| Acceptance criteria | Observable conditions for a satisfactory result |
+| Projects | Required. One to eight existing absolute directories; `~` is supported. An empty name becomes the directory name (numbered on a clash) |
+| Goal | Required. Expected behavior and its purpose |
+| Acceptance criteria | Observable conditions for a satisfactory result; empty means the Goal itself, with verification limits reported |
+| Mode | **Change code**, **Answer only** or **Design discussion** |
+| Title | Under **More details**; one line, up to 160 characters, default the Goal's first line |
 
-These fields are required. Optional fields: current behavior and errors, known
-entry points, additional constraints, and deferred verification (one check per
-line). Write task content in English; generated instructions and section labels
+**More details** also holds current behavior and errors, known entry points,
+additional constraints, and deferred verification (one check per line). Write task content in English; generated instructions and section labels
 are English. The planner normally discovers related files and exact edits; no
 implementation plan or exhaustive file list is needed.
 
@@ -48,7 +48,7 @@ task files.
 Without `roots`, the CLI uses the repository that contains the task file (found
 through `.git` without running Git); a task outside a repository needs explicit
 roots. The browser always requires roots and rejects filesystem roots, overlap with
-the run store, duplicate aliases and unknown request fields. Aliases use Latin
+the run store, duplicate names and unknown request fields. Names use Latin
 letters, digits, underscores and hyphens. The CLI does not apply the browser's form
 validation to arbitrary Markdown, so fill in or remove all template placeholders.
 

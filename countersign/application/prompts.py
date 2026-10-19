@@ -59,6 +59,7 @@ def make_request(config, execution, state, run):
                 executor_contracts.git_schema(),
                 executor_contracts.ssh_schema(),
                 executor_contracts.local_schema(),
+                executor_contracts.jenkins_schema(),
             ]
         },
         indent=2,
@@ -74,8 +75,8 @@ def make_request(config, execution, state, run):
         + git_requests.instructions()
         + local.instructions()
         + "\nRESPONSE ROUTING: return exactly one JSON object, no prose or fences. "
-        "For an executor operation use the advertised GIT_REQUEST, LOCAL_REQUEST or ACTION_REQUEST object INSTEAD of "
-        "the stage-result schema and end your turn. Otherwise use the stage-result alternative below. ACTION_REQUEST is only available when advertised. "
+        "For an executor operation use the advertised GIT_REQUEST, LOCAL_REQUEST, ACTION_REQUEST or JENKINS_REQUEST object INSTEAD of "
+        "the stage-result schema and end your turn. Otherwise use the stage-result alternative below. ACTION_REQUEST and JENKINS_REQUEST are only available when advertised. "
         "An intermediate request is not a tool call and not a final task verdict.\nResponse schema:\n"
         + output_schema
         + "\nContext:\n"

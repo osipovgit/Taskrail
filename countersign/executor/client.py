@@ -7,10 +7,10 @@ from countersign.executor import protocol
 CONNECTION_TIMEOUT = 15
 
 
-def request(payload, address=protocol.SOCKET):
+def request(payload, address=protocol.SOCKET, timeout=CONNECTION_TIMEOUT):
     """Contact the local executor; the server checks the kernel peer UID."""
     with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as connection:
-        connection.settimeout(CONNECTION_TIMEOUT)
+        connection.settimeout(timeout)
         connection.connect(address)
         connection.sendall(protocol.encode(payload))
         with connection.makefile("rb") as stream:
