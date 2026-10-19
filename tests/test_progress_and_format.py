@@ -95,6 +95,52 @@ class FormatTests(unittest.TestCase):
                     self.assertEqual(json.loads(result["final_text"])["status"], "BLOCKED")
 
 
+class ToolFailureTests(unittest.TestCase):
+    def test_failed_read_before_an_executor_request_keeps_the_turn_ok(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            script = root / "fake.py"
+            request = '{"schema_version": 1, "status": "GIT_REQUEST", "root": "/repo", "argv": ["status"], "reason": "State"}'
+            events = [
+                dict(
+                    type="tool_use",
+                    part=dict(
+                        id="r1",
+                        tool="read",
+                        state=dict(
+                            status="error",
+                            input=dict(filePath="/repo/roles"),
+                            error="Error: /repo/roles is a directory",
+                        ),
+                    ),
+                ),
+                dict(
+                    type="text",
+                    part=dict(id="t1", messageID="m", text="Let me check Git.\n" + request),
+                ),
+                dict(type="step_finish", part=dict(id="s1", messageID="m", reason="stop")),
+            ]
+            script.write_text(
+                "print(" + repr("\n".join(json.dumps(event) for event in events)) + ")"
+            )
+            prompt = root / "request.md"
+            prompt.write_text("Plan the change")
+            result = run_agent(
+                dict(
+                    command=[sys.executable, str(script)],
+                    workspace=root,
+                    agent="planner",
+                    model="fake",
+                    prompt=prompt,
+                    attempt=root / "attempt",
+                    timeout=5,
+                )
+            )
+        self.assertEqual(result["status"], "OK", result["errors"])
+        self.assertIn("GIT_REQUEST", result["final_text"])
+        self.assertEqual(len(result["warnings"]), 1)
+
+
 class ActivityTests(unittest.TestCase):
     def test_progress_shows_public_operation_current_time_and_silence(self):
         with tempfile.TemporaryDirectory() as directory:
