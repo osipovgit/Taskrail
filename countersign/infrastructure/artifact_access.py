@@ -38,6 +38,16 @@ def model_inputs(run, folder):
     return paths
 
 
+def stage_recoveries(run, state, current):
+    """recovery.md files written by earlier attempts of the current record's stage."""
+    stage = current["stage"]
+    earlier = [record for record in state["stages"] if record.get("stage") == stage]
+    references = [record.get("inputs", {}).get("recovery") for record in earlier]
+    return [
+        run / reference for reference in references if reference and (run / reference).is_file()
+    ]
+
+
 def manifest(run, folder, roots, writable=()):
     """Describe rights without disclosing internal state or widening permissions."""
     return {

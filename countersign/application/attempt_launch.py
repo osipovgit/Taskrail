@@ -52,7 +52,7 @@ def attempt_prompt(workflow, active, request, recovery):
 def install_profile(workflow, active, files, format_only):
     """Write the closed opencode profile and verify that opencode enforces it."""
     folder, record = active
-    access = profile_access(workflow, active, files)
+    access = profile_access(workflow, active, files, format_only)
     profile, permissions = make_profile(
         workflow.run / "00-input/agents" / f"{record[ROLE]}.md",
         workflow.config["destination"],
@@ -72,15 +72,22 @@ def install_profile(workflow, active, files, format_only):
     return profile
 
 
-def profile_access(workflow, active, files):
-    """Readable run artifacts, writable files and the base of relative permission names."""
+def profile_access(workflow, active, files, format_only):
+    """Readable run artifacts, writable files and the base of relative permission names.
+
+    A format repair may also re-read the recovery evidence of earlier attempts of its
+    stage, which the saved response may cite.
+    """
     folder, record = active
-    config = workflow.config
-    base = opencode_api.relative_base(config, config[ROOTS], files)
+    base = opencode_api.relative_base(workflow.config, workflow.config[ROOTS], files)
     if base is not None:
         record["permission_worktree"] = str(base)
-    access = dict(roots=config[ROOTS].values(), writable=files, worktree=base)
+    access = dict(writable=files, worktree=base)
+    access[ROOTS] = workflow.config[ROOTS].values()
     access["readable"] = artifact_access.model_inputs(workflow.run, folder)
+    if format_only:
+        earlier = artifact_access.stage_recoveries(workflow.run, workflow.state, record)
+        access["readable"].extend(earlier)
     return access
 
 
