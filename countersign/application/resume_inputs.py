@@ -30,14 +30,9 @@ def interrupt_open_records(run, state):
     """Finish abandoned records while keeping their raw events and diagnostics."""
     for record in state["stages"]:
         if record["status"] == "RUNNING":
-            finish_stage(
-                run,
-                state,
-                run / record["directory"],
-                record,
-                "INTERRUPTED",
-                diagnostics={"errors": ["Previous process stopped before finishing this stage."]},
-            )
+            errors = ["Previous process stopped before finishing this stage."]
+            outcome = dict(status="INTERRUPTED", diagnostics={"errors": errors})
+            finish_stage(run, state, (run / record["directory"], record), outcome)
 
 
 def extend_budget(run, stage, config):

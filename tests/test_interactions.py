@@ -155,7 +155,7 @@ class InteractionTests(unittest.TestCase):
                     now = [100.0]
                     calls = []
 
-                    def invoke(**options):
+                    def invoke(options):
                         calls.append(options)
                         now[0] += 2
                         text = json.dumps(self.request([sys.executable, "--version"]))
@@ -207,6 +207,64 @@ class InteractionTests(unittest.TestCase):
                         "SUCCEEDED" if decision == "allow" else "DECLINED",
                         (folder / "tool-result.md").read_text(),
                     )
+
+    def test_missing_program_waits_for_installation_instead_of_rejecting(self):
+        for installed in (False, True):
+            with self.subTest(installed=installed):
+                folder = self.run / f"missing-{installed}"
+                folder.mkdir()
+                (folder / "events.jsonl").touch()
+                record = dict(role="implementer", directory=folder.name, budget=dict(timeout=60))
+                environment = dict(
+                    self.context,
+                    format_only=False,
+                    expected={},
+                    git_before={},
+                    allowed=[],
+                    scan=lambda: {},
+                    git_metadata=lambda roots: {},
+                )
+                responses = [
+                    json.dumps(self.request(["countersign-missing-tool", "--check"])),
+                    "{}",
+                ]
+                requests = []
+
+                def invoke(_options):
+                    text = responses.pop(0)
+                    return dict(status="OK", sessions=["same"], tokens={}, final_text=text)
+
+                def decide(_run, request):
+                    requests.append(request)
+                    return dict(decision="allow", alternative="")
+
+                found = [None, "/usr/bin/countersign-missing-tool" if installed else None]
+                with ExitStack() as stack:
+                    stack.enter_context(patch("countersign.interactions.clock.save_run"))
+                    stack.enter_context(patch("countersign.interactions.session.save_run"))
+                    stack.enter_context(
+                        patch("countersign.interactions.session.run_agent", side_effect=invoke)
+                    )
+                    stack.enter_context(
+                        patch("countersign.interactions.approvals.wait", side_effect=decide)
+                    )
+                    stack.enter_context(
+                        patch(
+                            "countersign.interactions.local_request.shutil.which",
+                            side_effect=found,
+                        )
+                    )
+                    execute = stack.enter_context(
+                        patch(
+                            "countersign.interactions.local.execute",
+                            return_value=dict(status="SUCCEEDED", stdout="ok", exit_code=0),
+                        )
+                    )
+                    StageSession((folder, record), dict(stages=[record]), environment, {}).run()
+                self.assertIn("not installed on the orchestrator host", requests[0]["notice"])
+                self.assertEqual(execute.call_count, int(installed))
+                result = (folder / "tool-result.md").read_text()
+                self.assertIn("SUCCEEDED" if installed else "still not installed", result)
 
     def test_expired_git_stage_never_starts_a_process(self):
         with deadline.Deadline(0, self.run):

@@ -63,7 +63,7 @@ class StageSession:
                 attachment=self.context["attachment"],
             ),
         )
-        outcome = run_agent(**options)
+        outcome = run_agent(options)
         self.context["turns"] += 1
         totals = self.context[TOKENS]
         for key, count in outcome.get(TOKENS, {}).items():

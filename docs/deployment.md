@@ -31,7 +31,7 @@ loginctl show-user "$USER" -p Linger
 administrator; a denial is reported without sudo or a workaround. `--boot=no`
 leaves lingering unchanged and does not disable other user services.
 
-Updates acquire installation/execution locks, validate an offline venv, switch
+Updates wait for every active run (runs share the installation lock), validate an offline venv, switch
 `current` and restart. They preserve history, settings, custom roles and original
 project edits. They never execute Git, rewrite run artifacts or roll back source
 or application changes. If startup fails, inspect the journal. The update
@@ -48,7 +48,8 @@ script uses a trusted local release, not an automatic Internet download feed.
 | Systemd unit | `~/.config/systemd/user/countersign.service` |
 | CLI | `~/.local/bin/countersign` |
 | History and trash | `~/.local/state/countersign/runs/` |
-| Global workflow lock | `~/.local/state/countersign/live.lock` |
+| Installation lock (shared by runs) | `~/.local/state/countersign/live.lock` |
+| Project and run locks | `~/.local/state/countersign/locks/` |
 
 Sources remain in their declared roots. The application does not copy entire
 projects. `run_base` may override history storage; relative paths resolve from the

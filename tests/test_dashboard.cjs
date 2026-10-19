@@ -257,6 +257,7 @@ async function main() {
     assert.equal(buttons.find((node) => node.textContent === label).disabled, false);
   }
   assert.equal(buttons.find((node) => node.textContent === 'Stop task').disabled, true);
+  assert.ok(all(nodes.chat).some((node) => node.className === 'resume-note'));
   console.log('Budget continuation and deletion controls passed.');
 
   const toolToggle = all(nodes.chat).find((node) => node.type === 'checkbox');
@@ -377,6 +378,15 @@ async function main() {
     ['Allow', 'Deny and continue', 'Send alternative'],
   );
   assert.ok(all(decisionCard).some((n) => n.textContent.includes('"bash"')));
+  const installCard = app.approvalCard({
+    ticket: 'install-ticket',
+    request: { argv: ['missing-tool'], notice: 'missing-tool is not installed' },
+  });
+  assert.ok(
+    all(installCard).some(
+      (n) => n.className === 'approval-notice' && n.textContent === 'missing-tool is not installed',
+    ),
+  );
   const waitingStage = {
     ...stage,
     status: 'WAITING_APPROVAL',

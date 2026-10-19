@@ -6,7 +6,7 @@ import unittest
 from pathlib import Path
 
 from countersign.infrastructure.runner import recover_unavailable_format_tools, run_agent
-from countersign.observability.progress import Progress, event_activity
+from countersign.observability.activity import Progress, event_activity
 
 
 class FormatTests(unittest.TestCase):
@@ -78,14 +78,16 @@ class FormatTests(unittest.TestCase):
             request.write_text("Convert the supplied text only")
             for flag, expected in ((False, "TOOL_ERROR"), (True, "OK")):
                 result = run_agent(
-                    [sys.executable, str(script)],
-                    root,
-                    "converter",
-                    "fake",
-                    request,
-                    root / str(flag),
-                    5,
-                    format_only=flag,
+                    dict(
+                        command=[sys.executable, str(script)],
+                        workspace=root,
+                        agent="converter",
+                        model="fake",
+                        prompt=request,
+                        attempt=root / str(flag),
+                        timeout=5,
+                        format_only=flag,
+                    )
                 )
                 self.assertEqual(result["status"], expected)
                 self.assertTrue(result["tool_errors"])

@@ -1,9 +1,6 @@
-"""Validated local task submissions; no client-controlled commands or settings."""
+"""Detached task workers launched from the browser; different projects run in parallel."""
 
-import fcntl
-import json
 import os
-import re
 import subprocess
 import sys
 import threading
@@ -13,124 +10,26 @@ from pathlib import Path
 from countersign.core.files import atomic_json
 from countersign.core.runtime import settings_path
 from countersign.web import history, lifecycle, requests
+from countersign.web.run_activity import BusyError, require_idle, run_sources
+from countersign.web.task_form import build_task
 
-
-def build_task(payload, runs):
-    if not isinstance(payload, dict):
-        raise ValueError("The request must be a JSON object")
-    fields = (
-        "title",
-        "goal",
-        "criteria",
-        "current_behavior",
-        "entry_points",
-        "constraints",
-        "verification",
-    )
-    if set(payload) - set(fields) - {"roots"}:
-        raise ValueError("Unknown task fields; commands and settings cannot be submitted")
-    values = {}
-    for key in fields:
-        value = payload.get(key, "")
-        if not isinstance(value, str) or len(value) > 16000 or "\x00" in value:
-            raise ValueError("Invalid or oversized field: " + key)
-        values[key] = value.strip()
-    for key in ("title", "goal", "criteria"):
-        if not values[key]:
-            raise ValueError("Required field: " + key)
-    if len(values["title"]) > 160 or "\n" in values["title"] or "\r" in values["title"]:
-        raise ValueError("Title must be one line, at most 160 characters")
-    if any(re.search(r"^```countersign-task\s*$", value, re.M) for value in values.values()):
-        raise ValueError("The form generates the countersign-task header; do not embed another one")
-    if any(history.HISTORY.strip() in field for field in values.values()):
-        raise ValueError("Conversation history is reserved for server-generated context")
-    entries = payload.get("roots")
-    if not isinstance(entries, list) or not 1 <= len(entries) <= 8:
-        raise ValueError("Provide between one and eight project roots")
-    roots = {}
-    resolved_roots = []
-    runs = Path(runs).resolve()
-    for entry in entries:
-        if not isinstance(entry, dict) or set(entry) != {"alias", "path"}:
-            raise ValueError("Each project needs an alias and path")
-        alias, raw = entry["alias"], entry["path"]
-        if (
-            not isinstance(alias, str)
-            or not re.fullmatch(r"[A-Za-z0-9_-]+", alias)
-            or alias in roots
-        ):
-            raise ValueError(
-                "Project aliases must be unique letters, digits, underscores or hyphens"
-            )
-        if not isinstance(raw, str) or any(char in raw for char in "*?\r\n\x00"):
-            raise ValueError("Invalid project path")
-        root = Path(raw).expanduser()
-        if not root.is_absolute():
-            raise ValueError("Use absolute project paths or ~/...")
-        root = root.resolve(strict=True)
-        if not root.is_dir() or root == Path(root.anchor):
-            raise ValueError("Project must be an existing directory, not a filesystem root")
-        if root == runs or root in runs.parents or runs in root.parents:
-            raise ValueError("Project roots and the run storage must not overlap")
-        if any(root == old or root in old.parents or old in root.parents for old in resolved_roots):
-            raise ValueError("Project roots must not overlap")
-        roots[alias] = str(root)
-        resolved_roots.append(root)
-    meta = dict(
-        roots=roots,
-        verification=[line.strip() for line in values["verification"].splitlines() if line.strip()],
-    )
-    sections = [
-        "```countersign-task",
-        json.dumps(meta, ensure_ascii=False, indent=2),
-        "```",
-        "",
-        "# " + values["title"],
-    ]
-    for field, title in (
-        ("goal", "Goal"),
-        ("current_behavior", "Current behavior"),
-        ("criteria", "Acceptance criteria"),
-        ("entry_points", "Known entry points"),
-        ("constraints", "Additional constraints"),
-    ):
-        if values[field]:
-            sections.extend(["", "## " + title, values[field]])
-    sections.extend(
-        [
-            "",
-            "## Workflow rules",
-            "Discover related files and the minimal change scope within the declared roots.",
-            "Preserve unrelated changes. Use controlled Git access; never hard-reset, clean, rewrite history or force-push. Do not edit Git metadata directly.",
-            "Use English for generated explanations, comments, documentation and reports.",
-            "The server runs syntax checks and configured verification commands. Report all unexecuted checks as unverified.",
-            "Remote actions require the isolated SSH executor and personal approval of exact scripts and targets.",
-        ]
-    )
-    return "\n".join(sections) + "\n", values["title"]
-
-
-class BusyError(ValueError):
-    pass
+PACKAGE_ROOT = Path(__file__).resolve().parents[2]
+TASK_FILE = "task.md"
+ID = "id"
 
 
 class TaskLauncher:
+    """Owns the worker processes it started; the run locks guard every project."""
+
     def __init__(self, base, settings=None):
+        """Workers write runs under base and use the given settings file."""
         self.base = Path(base).resolve()
         self.settings = settings_path(settings)
         if settings and not self.settings.is_file():
             raise ValueError("Settings file does not exist")
         self.lock = threading.RLock()
-        self.process = None
-        self.active_run = None
+        self.workers = {}
         self.stopping = False
-
-    def submit(self, payload):
-        submission = requests.Submission(payload, self.base)
-        if workflow_busy():
-            raise BusyError("Wait until the running task stops")
-        text, title = build_task(submission.fields, self.base)
-        return self.launch(submission.decorate(text), title, restart_from=submission.parent)
 
     def route(self, path, payload):
         """Keep authenticated task and approval routing in the application boundary."""
@@ -142,100 +41,123 @@ class TaskLauncher:
             return self.submit(payload)
         return self.action(payload)
 
+    def submit(self, payload):
+        """Start a new run unless one of its projects is busy."""
+        submission = requests.Submission(payload, self.base)
+        text, title = build_task(submission.fields, self.base)
+        sources = [
+            Path(entry["path"]).expanduser().resolve() for entry in submission.fields["roots"]
+        ]
+        launch = dict(text=submission.decorate(text), title=title, restart_from=submission.parent)
+        return self.launch(launch, sources)
+
     def action(self, payload):
+        """Restart drafts, stop, delete or continue an existing run."""
         requests.validate_action(payload)
-        name = payload["id"]
+        run = history.checked_run(self.base, payload[ID])
         action = payload["action"]
-        run = history.checked_run(self.base, name)
         if action == "restart":
-            return dict(id=name, draft=history.task_draft(run))
+            return dict(id=run.name, draft=history.task_draft(run))
         if action == "stop":
             return lifecycle.request_stop(run)
         if action == "delete":
-            with self.lock:
-                if self.process is not None and self.process.poll() is None:
-                    raise BusyError("Wait for the active worker to finish")
-                return lifecycle.trash_run(self.base, run)
-        if workflow_busy():
-            raise BusyError("A workflow is running. Wait until it stops.")
-        text = (run / "00-input/task.md").read_text(encoding="utf-8")
-        title = next(
-            (line[2:].strip() for line in text.splitlines() if line.startswith("# ")), name
-        )
+            return self.delete(run)
         lifecycle.require_resumable(run)
-        return self.launch(text, title, resume_run=run, extend_budget=action == "resume_budget")
+        launch = continuation(run, action == "resume_budget", payload.get("note"))
+        return self.launch(launch, run_sources(run))
 
-    def busy(self):
-        """Keep service shutdown and worker admission mutually exclusive."""
-        if self.stopping:
-            return True
-        return self.process is not None and self.process.poll() is None
-
-    def launch(self, text, title, resume_run=None, restart_from=None, extend_budget=False):
+    def delete(self, run):
+        """Move a stopped run to the trash."""
         with self.lock:
-            if self.busy():
-                raise BusyError("Application is stopping or a task is still running. Try later.")
-            if workflow_busy():
-                raise BusyError("Another workflow holds the execution lock.")
-            name = datetime.now().strftime("%Y%m%d-%H%M%S") + "-" + os.urandom(4).hex()
-            run_name = resume_run.name if resume_run else name
-            self.active_run = self.base / run_name
-            if (self.base / ".submissions").is_symlink():
-                raise ValueError("Submission storage must not be a symlink")
-            folder = self.base / ".submissions" / name
-            folder.mkdir(parents=True, exist_ok=False)
-            (folder / "task.md").write_text(text, encoding="utf-8")
-            state = dict(
-                id=run_name,
-                launch_id=name,
-                restart_from=restart_from,
-                resume=bool(resume_run),
-                title=title,
-                status="STARTING",
-                summary="Starting the task worker.",
-                created_at=datetime.now(timezone.utc).isoformat(),
-            )
-            atomic_json(folder / "launch.json", state)
-            argv = worker_command(
-                folder,
-                resume_run or self.base / name,
-                self.settings,
-                bool(resume_run),
-                extend_budget,
-            )
-            environment = dict(os.environ)
-            package_root = str(Path(__file__).resolve().parents[2])
-            environment["PYTHONPATH"] = package_root + (
-                os.pathsep + environment["PYTHONPATH"] if environment.get("PYTHONPATH") else ""
-            )
-            try:
-                with (folder / "console.log").open("wb") as output:
-                    self.process = subprocess.Popen(
-                        argv,
-                        cwd=package_root,
-                        env=environment,
-                        stdin=subprocess.DEVNULL,
-                        stdout=output,
-                        stderr=subprocess.STDOUT,
-                        start_new_session=True,
-                    )
-                threading.Thread(target=self.process.wait, daemon=True).start()
-            except OSError as error:
-                state.update(status="LAUNCH_ERROR", summary=str(error))
-                atomic_json(folder / "launch.json", state)
-            return dict(id=run_name, status=state["status"])
+            if run in self.live():
+                raise BusyError("Wait for the active worker to finish")
+            return lifecycle.trash_run(self.base, run)
+
+    def live(self):
+        """Run directory -> sources of the workers that are still running."""
+        running = {}
+        for run, (process, sources) in self.workers.items():
+            if process.poll() is None:
+                running[run] = sources
+        return running
+
+    def launch(self, launch, sources):
+        """Record the launch and start a detached worker process."""
+        with self.lock:
+            if self.stopping:
+                raise BusyError("The application is stopping. Try again later.")
+            require_idle(self.live(), launch.get("resume_run"), sources)
+            folder, manifest = create_submission(self.base, launch)
+            run = self.base / manifest[ID]
+            extended = bool(launch.get("extend_budget"))
+            process = start_worker(folder, manifest, run, (self.settings, extended))
+            if process is not None:
+                self.workers[run] = (process, [str(source) for source in sources])
+            return dict(id=manifest[ID], status=manifest["status"])
 
 
-def workflow_busy():
-    path = Path.home() / ".local/state/countersign/live.lock"
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("a") as lock:
-        try:
-            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except BlockingIOError:
-            return True
-        fcntl.flock(lock, fcntl.LOCK_UN)
-    return False
+def continuation(run, extended, note):
+    """A launch that continues an existing run from its checkpoint."""
+    text = (run / "00-input/task.md").read_text(encoding="utf-8")
+    title = history.TaskDraft(text).title(run.name)
+    return dict(text=text, title=title, resume_run=run, extend_budget=extended, note=note)
+
+
+def create_submission(base, launch):
+    """A launcher folder with the task, an optional note and the launch record."""
+    if (base / ".submissions").is_symlink():
+        raise ValueError("Submission storage must not be a symlink")
+    stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    name = "{0}-{1}".format(stamp, os.urandom(4).hex())
+    folder = base / ".submissions" / name
+    folder.mkdir(parents=True, exist_ok=False)
+    folder.joinpath(TASK_FILE).write_text(launch["text"], encoding="utf-8")
+    if launch.get("note"):
+        folder.joinpath("note.md").write_text(launch["note"], encoding="utf-8")
+    resumed = launch.get("resume_run")
+    manifest = dict(
+        id=resumed.name if resumed else name,
+        launch_id=name,
+        restart_from=launch.get("restart_from"),
+        resume=bool(resumed),
+        title=launch["title"],
+        status="STARTING",
+        summary="Starting the task worker.",
+        created_at=datetime.now(timezone.utc).isoformat(),
+    )
+    atomic_json(folder / "launch.json", manifest)
+    return folder, manifest
+
+
+def start_worker(folder, manifest, run, options):
+    """The worker process, or None after recording a launch error."""
+    settings, extended = options
+    argv = worker_command(folder, run, settings, manifest["resume"], extended)
+    try:
+        with folder.joinpath("console.log").open("wb") as output:
+            process = subprocess.Popen(
+                argv,
+                cwd=PACKAGE_ROOT,
+                env=worker_environment(),
+                stdin=subprocess.DEVNULL,
+                stdout=output,
+                stderr=subprocess.STDOUT,
+                start_new_session=True,
+            )
+    except OSError as error:
+        manifest.update(status="LAUNCH_ERROR", summary=str(error))
+        atomic_json(folder / "launch.json", manifest)
+        return None
+    threading.Thread(target=process.wait, daemon=True).start()
+    return process
+
+
+def worker_environment():
+    """The service environment with this package importable first."""
+    environment = dict(os.environ)
+    paths = [str(PACKAGE_ROOT), environment.get("PYTHONPATH", "")]
+    environment["PYTHONPATH"] = os.pathsep.join(filter(None, paths))
+    return environment
 
 
 def worker_command(folder, run, settings, resumed, extended):
@@ -245,6 +167,8 @@ def worker_command(folder, run, settings, resumed, extended):
         argv.append("--resume")
     if extended:
         argv.append("--extend-budget")
+    if (folder / "note.md").is_file():
+        argv.extend(["--note-file", str(folder / "note.md")])
     if settings.exists():
         argv.extend(["--settings", str(settings)])
     return argv

@@ -7,6 +7,7 @@ from countersign.core import coverage, plan_contract, schema, source_claims
 from countersign.core.files import atomic_json
 from countersign.git.requests import output_directory
 
+EVIDENCE_FILES = "declared roots or executor snapshots (cite the source file itself, not run artifacts such as changes.diff or recovery.md)"
 PLAN_FILES = "declared roots (files_read and proposed_change_files name project files; cite executor snapshots only in evidence)"
 
 
@@ -34,6 +35,7 @@ def validate(response, context):
                 ssh_evidence=run / "00-input/ssh",
                 local_evidence=run / "00-input/local",
             ),
+            EVIDENCE_FILES,
         )
         proofs.append(source_claims.validate_claim(claim, records))
     validate_role(payload, context)

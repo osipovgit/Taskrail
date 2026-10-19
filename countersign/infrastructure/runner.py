@@ -2,6 +2,7 @@
 
 import re
 import time
+from types import MappingProxyType
 
 from countersign.infrastructure import turn_io, usage_limits
 from countersign.infrastructure.event_summary import parse_events
@@ -9,39 +10,40 @@ from countersign.infrastructure.process_watch import SUCCESS, TurnWatch
 
 AUTO_REJECT = "auto-rejecting"
 PROMPT_ARGUMENT = "Execute_the_task_in_the_attached_file"
+OPTIONAL = MappingProxyType(dict(debug=False, progress=False, format_only=False, runtime=None))
 UNAVAILABLE_TOOL = re.compile(
     r"Model tried to call unavailable tool '[^']+'. Available tools:\s*\.?"
 )
 UNAVAILABLE_RESOLUTION = "Rejected unavailable tool in a tool-free format pass; nothing executed. Final JSON still requires validation."
 
 
-def run_agent(
-    command,
-    workspace,
-    agent,
-    model,
-    prompt,
-    attempt,
-    timeout,
-    debug=False,
-    progress=False,
-    format_only=False,
-    runtime=None,
-):
-    """Launch, watch and classify one turn; the raw response is saved unchanged."""
+def run_agent(launch):
+    """Launch, watch and classify one turn; the raw response is saved unchanged.
+
+    launch: command, workspace, agent, model, prompt, attempt and timeout, plus the
+    optional debug, progress, format_only and runtime.
+    """
+    options = dict(OPTIONAL, **launch)
+    attempt = options["attempt"]
     attempt.mkdir(exist_ok=True)
-    watch = TurnWatch(turn_io.TurnIO(attempt, runtime), attempt, progress)
-    watch.turn.prepare(prompt)
-    argv, env = watch.turn.launch(command, model)
-    argv += arguments((workspace, agent, prompt), debug)
-    process = watch.launch(argv, env, workspace, timeout)
-    outcome = summarize(watch, process, format_only)
-    outcome.update(model=model, agent=agent)
-    (attempt / "response.raw.txt").write_text(outcome["final_text"], encoding="utf-8")
+    turn = turn_io.TurnIO(attempt, options["runtime"])
+    watch = TurnWatch(turn, attempt, options["progress"])
+    outcome = summarize(watch, start(watch, options), options)
+    outcome.update(model=options["model"], agent=options["agent"])
+    attempt.joinpath("response.raw.txt").write_text(outcome["final_text"], encoding="utf-8")
     return outcome
 
 
-def summarize(watch, process, format_only):
+def start(watch, options):
+    """Freeze the request and run opencode under the watch."""
+    watch.turn.prepare(options["prompt"])
+    argv, env = watch.turn.launch(options["command"], options["model"])
+    target = (options["workspace"], options["agent"], options["prompt"])
+    argv += arguments(target, options["debug"])
+    return watch.launch(argv, env, options["workspace"], options["timeout"])
+
+
+def summarize(watch, process, options):
     """Parse the turn's events and decide its status."""
     status, code = process
     watch.drain()
@@ -50,7 +52,7 @@ def summarize(watch, process, format_only):
         status = usage_limits.exceeded(watch.telemetry, turn.token_budget)
     outcome = parse_events(turn.path, len(turn.previous.splitlines()))
     stderr = turn.error_text()
-    if format_only and status == SUCCESS and code == 0 and AUTO_REJECT not in stderr:
+    if options["format_only"] and status == SUCCESS and code == 0 and AUTO_REJECT not in stderr:
         recover_unavailable_format_tools(outcome)
     status = final_status(status, code, outcome, stderr)
     outcome.update(

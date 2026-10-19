@@ -11,7 +11,7 @@ CHECKS = "checks"
 def run_checks(workflow):
     """Record syntax checks, then settings commands, and route failures to repair."""
     state = workflow.state
-    active = new_stage(workflow.run, state, "check", mode="builtin")
+    active = new_stage(workflow.run, state, "check", dict(mode="builtin"))
     workflow.open_record(active)
     checks = collect(workflow, active[0])
     state[CHECKS] = checks

@@ -6,8 +6,18 @@ from pathlib import Path
 
 from countersign.git import dispatch, requests
 from countersign.git.deadline import Deadline
-from countersign.interactions import access, approvals, events, local, remote, transcripts
+from countersign.interactions import (
+    access,
+    approvals,
+    events,
+    local,
+    local_request,
+    remote,
+    transcripts,
+)
 from countersign.interactions.clock import ApprovalPause
+
+MISSING_PROGRAM = "{0} is not installed on the orchestrator host. Install it, then Allow to run this exact command; or Deny."
 
 
 class Actions:
@@ -63,12 +73,15 @@ class Actions:
     def local_action(self, payload):
         """Review exact argv and recheck sources immediately before execution."""
         try:
-            local.validate(payload, self.session.environment["roots"])
+            local_request.checked_request(payload, self.session.environment["roots"])
         except ValueError as error:
             return self.local_result(payload, dict(status="REJECTED", reason=str(error)))
-        decision = self.approve(payload)
+        decision = self.approve(dict(payload, **install_notice(payload)))
         if decision["decision"] != "allow":
             return self.local_result(payload, dict(status="DECLINED", decision=decision))
+        if local_request.missing_executable(payload["argv"]):
+            reason = "Executable is still not installed on the orchestrator host"
+            return self.local_result(payload, dict(status="REJECTED", reason=reason))
         self.session.check_sources()
         context = dict(self.session.environment, timeout=self.session.clock.remaining())
         try:
@@ -88,6 +101,14 @@ class Actions:
     def local_result(self, payload, answer):
         """Keep command results in the public transcript and evidence ledger."""
         return transcripts.local_snapshot(self.run, self.folder, payload, answer)
+
+
+def install_notice(payload):
+    """Let the operator install a missing program and allow the same command."""
+    program = local_request.missing_executable(payload["argv"])
+    if program is None:
+        return {}
+    return dict(notice=MISSING_PROGRAM.format(program))
 
 
 def run_local(actions, payload):

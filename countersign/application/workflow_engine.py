@@ -1,20 +1,17 @@
 """The single execution path of CLI and web runs."""
 
-import contextlib
-import fcntl
 import subprocess
-from pathlib import Path
 
 from countersign.application import attempt_context, run_setup, transitions, workflow_start
 from countersign.application.changes import capture_preimages, write_diff
 from countersign.application.check_stage import run_checks
+from countersign.application.run_locks import run_locks
 from countersign.application.run_report import report
 from countersign.application.stage_attempts import StageAttempts
 from countersign.application.workflow_finish import close, interrupted
 from countersign.application.workflow_state import STAGE, Workflow
 from countersign.core import control
 
-LOCK = Path(".local/state/countersign/live.lock")
 FAILURES = (ValueError, OSError, KeyError, subprocess.TimeoutExpired)
 RUNNING = "RUNNING"
 STATUS = "status"
@@ -22,35 +19,19 @@ PREIMAGES = "preimages"
 
 
 def execute(request):
-    """Run or continue one task under the global single-writer lock."""
-    config, run, state = run_setup.open_run(request)
-    with execution_lock() as acquired:
-        if acquired:
+    """Run or continue one task while its project roots and run directory are locked."""
+    config, run = run_setup.configure(request)
+    sources = run_setup.source_roots(config, request)
+    with run_locks(sources, run) as reason:
+        if reason and request["resume"]:
+            raise ValueError(f"{reason}; continuation was not started")
+        state = run_setup.open_state(config, run, request, ready=reason is None)
+        if reason is None:
             supervise(Workflow(config, run, state, request), request["resume"])
-        elif request["resume"]:
-            raise ValueError("Another live run holds the lock; continuation was not started")
         else:
-            state.update(status="BLOCKED", summary="Another live run holds the lock")
+            state.update(status="BLOCKED", summary=reason)
             report(run, state)
     return run, state[STATUS]
-
-
-@contextlib.contextmanager
-def execution_lock():
-    """Yield whether this process holds the lock; it is released on exit."""
-    path = Path.home() / LOCK
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("a") as lock:
-        yield locked(lock)
-
-
-def locked(lock):
-    """Try the exclusive lock without waiting."""
-    try:
-        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-    except BlockingIOError:
-        return False
-    return True
 
 
 def supervise(workflow, resume):

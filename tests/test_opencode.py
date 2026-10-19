@@ -8,9 +8,11 @@ from unittest import mock
 
 from countersign.core.source_claims import supports
 from countersign.infrastructure import environment, opencode_api, opencode_cli
-from countersign.infrastructure.agent_sync import launch_settings, make_profile, verify_permissions
+from countersign.infrastructure.agent_profile import make_profile
+from countersign.infrastructure.agent_sync import launch_settings
 from countersign.infrastructure.event_summary import parse_events
 from countersign.infrastructure.opencode_events import EventTranslator
+from countersign.infrastructure.permission_check import verify_permissions
 from countersign.infrastructure.profile_rules import permissions
 from countersign.infrastructure.runner import run_agent
 
@@ -72,7 +74,7 @@ for event in events:
 
 class SettingsTests(unittest.TestCase):
     def test_defaults_launch_opencode_with_its_configured_model(self):
-        with tempfile.TemporaryDirectory() as temp:
+        with tempfile.TemporaryDirectory() as temp, mock.patch.dict(os.environ, {"PATH": temp}):
             base = Path(temp)
             launch = launch_settings({"agent_directory": "profiles"}, base)
             self.assertEqual(launch["command"], ["opencode"])
@@ -102,9 +104,8 @@ class RepairToolTests(unittest.TestCase):
             target = root / "a.py"
             target.write_text("x")
             for mode, read in (("none", "deny"), ("read", "allow")):
-                profile, _ = make_profile(
-                    role, root / "profiles", mode, [root], [], [target], format_only=mode
-                )
+                access = dict(roots=[root], readable=[], writable=[target])
+                profile, _ = make_profile(role, root / "profiles", mode, access, format_only=mode)
                 rules = json.loads(profile.read_text().split("---")[1])["permission"]
                 self.assertEqual(rules["edit"], "deny")
                 self.assertEqual(rules["glob"], read)
@@ -136,7 +137,15 @@ class LaunchTests(unittest.TestCase):
         prompt.write_text("task")
         with mock.patch.dict(os.environ, {"RECORD": str(record)}):
             result = run_agent(
-                [sys.executable, str(script)], root, "agent", model, prompt, root / "attempt", 10
+                dict(
+                    command=[sys.executable, str(script)],
+                    workspace=root,
+                    agent="agent",
+                    model=model,
+                    prompt=prompt,
+                    attempt=root / "attempt",
+                    timeout=10,
+                )
             )
         self.assertEqual(result["status"], "OK")
         return json.loads(record.read_text())
@@ -193,7 +202,18 @@ class EnvironmentTests(unittest.TestCase):
             runtime = dict(env_allow=environment.agent_allowlist([]))
             with mock.patch.dict(os.environ, values):
                 command = [sys.executable, str(script)]
-                run_agent(command, root, "a", None, prompt, root / "t", 10, runtime=runtime)
+                run_agent(
+                    dict(
+                        command=command,
+                        workspace=root,
+                        agent="a",
+                        model=None,
+                        prompt=prompt,
+                        attempt=root / "t",
+                        timeout=10,
+                        runtime=runtime,
+                    )
+                )
             seen = json.loads(record.read_text())
             self.assertNotIn("HOST_SECRET_TOKEN", seen)
             self.assertEqual(seen["OPENAI_API_KEY"], "k")
@@ -214,7 +234,15 @@ class DenialTests(unittest.TestCase):
             prompt = root / "request.md"
             prompt.write_text("task")
             result = run_agent(
-                [sys.executable, str(script)], root, "a", None, prompt, root / "t", 10
+                dict(
+                    command=[sys.executable, str(script)],
+                    workspace=root,
+                    agent="a",
+                    model=None,
+                    prompt=prompt,
+                    attempt=root / "t",
+                    timeout=10,
+                )
             )
         self.assertEqual(result["status"], "BLOCKED_PERMISSION")
         self.assertTrue(
@@ -442,7 +470,15 @@ class AdapterTests(unittest.TestCase):
         prompt = self.root / "request.md"
         prompt.write_text("task")
         result = run_agent(
-            self.command, self.workspace, "managed", "p/m", prompt, self.root / "attempt", 30
+            dict(
+                command=self.command,
+                workspace=self.workspace,
+                agent="managed",
+                model="p/m",
+                prompt=prompt,
+                attempt=self.root / "attempt",
+                timeout=30,
+            )
         )
         self.assertEqual(result["status"], "OK", result)
         self.assertEqual(result["final_text"], "done")
@@ -462,14 +498,16 @@ class AdapterTests(unittest.TestCase):
         attachment = {"COUNTERSIGN_OPENCODE_SERVER": "http://127.0.0.1:9", "OPENCODE_PASSWORD": "p"}
         runtime = dict(attachment=attachment)
         result = run_agent(
-            self.command,
-            self.workspace,
-            "managed",
-            None,
-            prompt,
-            self.root / "a3",
-            30,
-            runtime=runtime,
+            dict(
+                command=self.command,
+                workspace=self.workspace,
+                agent="managed",
+                model=None,
+                prompt=prompt,
+                attempt=self.root / "a3",
+                timeout=30,
+                runtime=runtime,
+            )
         )
         self.assertEqual(result["status"], "OK", result)
         self.assertFalse((self.root / "serve-started").exists())
@@ -486,7 +524,15 @@ class AdapterTests(unittest.TestCase):
         prompt.write_text("task")
         with mock.patch.dict(os.environ, {"FAKE_DENY": "1"}):
             result = run_agent(
-                self.command, self.workspace, "managed", None, prompt, self.root / "a2", 30
+                dict(
+                    command=self.command,
+                    workspace=self.workspace,
+                    agent="managed",
+                    model=None,
+                    prompt=prompt,
+                    attempt=self.root / "a2",
+                    timeout=30,
+                )
             )
         self.assertEqual(result["status"], "BLOCKED_PERMISSION")
         self.assertEqual(result["tool_errors"][0]["input"]["filePath"], "/etc/hostname")

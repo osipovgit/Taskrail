@@ -10,6 +10,7 @@ export const state = {
   currentRun: null,
   serverClockOffset: 0,
   composerContext: {},
+  resumeNote: '',
 };
 
 try {
@@ -22,7 +23,7 @@ try {
 export function preserveSelection() {
   return (
     state.pointerSelecting ||
-    document.activeElement?.className === 'approval-alternative' ||
+    ['approval-alternative', 'resume-note'].includes(document.activeElement?.className) ||
     Boolean(document.getSelection?.()?.isCollapsed === false)
   );
 }
