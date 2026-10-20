@@ -1,6 +1,7 @@
 """The run list: started runs and launches that have not created a run yet."""
 
 from operator import itemgetter
+from types import MappingProxyType
 
 from countersign.web import epic_progress, history, lifecycle, run_groups
 from countersign.web.run_files import contained, read_json
@@ -8,6 +9,10 @@ from countersign.web.run_files import contained, read_json
 SUMMARY_LIMIT = 500
 TITLE_PREFIX = "# "
 REQUIRED_LAUNCH_FIELDS = frozenset(("title", "status"))
+# Header flags in precedence order: a design discussion is also read-only.
+MODES = MappingProxyType(
+    {history.DECOMPOSE: history.DECOMPOSE, history.DESIGN: history.DESIGN, "read_only": "answer"}
+)
 
 
 def list_runs(base):
@@ -39,11 +44,21 @@ def run_summary(path):
         id=path.name,
         title=task_title(request, path.name),
         status=status,
+        mode=task_mode(request),
         group=run_groups.group(path, state, status),
         summary=state.get("summary", "")[:SUMMARY_LIMIT],
     )
     summary.update(epic_progress.list_fields(path, state, summary["group"]))
     return summary
+
+
+def task_mode(task):
+    """change, answer, design or decompose, from the server-generated task header."""
+    metadata = history.TaskDraft(task).metadata
+    for flag, mode in MODES.items():
+        if metadata.get(flag) is True:
+            return mode
+    return "change"
 
 
 def task_title(task, fallback):

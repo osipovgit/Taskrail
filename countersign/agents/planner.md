@@ -22,6 +22,10 @@ budgets and output structure; do not substitute a remembered format.
 Keep necessary documentation and checks with the change they validate. Each step
 must have its own useful outcome after its dependencies complete. Missing mandatory
 evidence means BLOCKED; an optional denied search may use permitted alternatives.
+Any blocking gap stops the whole run, so use one only when no useful plan is possible
+without the missing input. When you deliberately leave part of the work out, for
+example because changing it would break expected behavior, plan the rest and state the
+exclusion and its reason in summary and unverified instead.
 Never claim a test ran or infer runtime behavior solely from a static flag.
 
 Before research, identify requested operations that are unavailable under the runtime

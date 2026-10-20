@@ -19,6 +19,8 @@ HISTORY = "\n## Conversation history\n"
 TASK_FILE = "00-input/task.md"
 GOAL = "goal"
 MAX_HISTORY_BYTES = 256000
+DESIGN = "design"
+DECOMPOSE = "decompose"
 
 
 def checked_run(base, name):
@@ -87,8 +89,8 @@ def task_draft(run):
     draft["title"] = parsed.title(run.name)
     draft["read_only"] = parsed.metadata.get("read_only") is True
     draft["worktree"] = parsed.metadata.get("isolation") == "worktree"
-    draft["design"] = parsed.metadata.get("design") is True
-    draft["decompose"] = parsed.metadata.get("decompose") is True
+    draft[DESIGN] = parsed.metadata.get(DESIGN) is True
+    draft[DECOMPOSE] = parsed.metadata.get(DECOMPOSE) is True
     draft["auto_approve"] = parsed.metadata.get("auto_approve") is True
     draft["verification"] = "\n".join(parsed.metadata.get("verification", []))
     index = json.loads(read_artifact(run, "run.json"))

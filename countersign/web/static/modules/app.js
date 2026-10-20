@@ -76,6 +76,7 @@ function runButton(run) {
   ];
   const button = el('button', undefined, classes.join(' ').trim());
   button.append(el('strong', run.title), el('small', run.id), badge(run.status || ''));
+  if (run.mode && run.mode !== 'change') button.append(el('span', MODE_LABELS[run.mode], 'badge'));
   if (run.progress) button.append(el('span', 'Tasks ' + run.progress, 'badge'));
   button.onclick = () => {
     closeComposer();
@@ -155,6 +156,13 @@ export function approvalCard(pending) {
 }
 
 const CHECKBOXES = new Set(['worktree', 'auto_approve']);
+
+const MODE_LABELS = {
+  change: 'Change code',
+  answer: 'Answer only',
+  design: 'Design discussion',
+  decompose: 'Split into tasks',
+};
 
 function draftMode(draft) {
   if (draft.decompose) return 'decompose';
@@ -321,6 +329,7 @@ export function render(data) {
     el('p', data.id, 'muted run-id'),
     badge(data.status || ''),
   );
+  if (data.draft) view.append(el('span', 'Mode: ' + MODE_LABELS[draftMode(data.draft)], 'badge'));
   if (data.auto_approve) view.append(el('span', 'All actions allowed', 'badge auto-approve'));
   view.append(actionButtons(data));
   if (data.pending_approval) view.append(approvalCard(data.pending_approval));
