@@ -4,6 +4,7 @@ export const state = {
   actionPending: false,
   selected: '',
   runs: [],
+  doneOpen: false,
   last: '',
   composing: false,
   sessionToken: null,

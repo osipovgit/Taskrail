@@ -197,6 +197,32 @@ class TaskControlTests(unittest.TestCase):
         self.assertIn('"design": true', followup)
         self.assertIn("Conversation history", followup)
 
+    def test_runs_are_grouped_by_what_they_need_and_can_be_marked_done(self):
+        def group():
+            return list_runs(self.runs)[0]["group"]
+
+        index = self.run / "run.json"
+        state = json.loads(index.read_text())
+        self.assertEqual(group(), "review")
+        self.launcher.action(dict(id="original", action="done"))
+        self.assertEqual(group(), "done")
+        self.assertTrue(run_view(self.runs, "original")["actions"]["reopen"])
+        self.launcher.action(dict(id="original", action="reopen"))
+        self.assertEqual(group(), "review")
+        self.launcher.action(dict(id="original", action="done"))
+        index.write_text(json.dumps(dict(state, status="TOOL_ERROR", finished_at="later")))
+        self.assertEqual(group(), "attention")
+        index.write_text(json.dumps(dict(state, status="NO_CHANGES_REQUIRED")))
+        self.assertEqual(group(), "done")
+        running = dict(state, status="RUNNING", execution_jobs=[dict(status="PENDING_APPROVAL")])
+        index.write_text(json.dumps(running))
+        self.assertEqual(list_runs(self.runs)[0]["status"], "WAITING_APPROVAL")
+        self.assertEqual(group(), "attention")
+        index.write_text(json.dumps(dict(running, execution_jobs=[])))
+        self.assertEqual(group(), "running")
+        with self.assertRaisesRegex(ValueError, "stopped"):
+            self.launcher.action(dict(id="original", action="done"))
+
     def test_delete_moves_all_launcher_history_but_preserves_sources(self):
         for name in ("original-launch", "resume-launch"):
             folder = self.runs / ".submissions" / name
