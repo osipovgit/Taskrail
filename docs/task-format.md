@@ -11,7 +11,7 @@ generates this file; users do not need to write JSON.
 | Projects | Required. One to eight existing absolute directories; `~` is supported. An empty name becomes the directory name (numbered on a clash) |
 | Goal | Required. Expected behavior and its purpose |
 | Acceptance criteria | Observable conditions for a satisfactory result; empty means the Goal itself, with verification limits reported |
-| Mode | **Change code**, **Answer only** or **Design discussion** |
+| Mode | **Change code**, **Answer only**, **Design discussion** or **Split into tasks** |
 | Title | Under **More details**; one line, up to 160 characters, default the Goal's first line |
 
 **More details** also holds current behavior and errors, known entry points,
@@ -41,6 +41,7 @@ task files.
 | `roots` | Alias to directory. Roots must not coincide or contain one another; relative paths resolve from the task file's directory |
 | `verification` | Deferred runtime checks to report, not commands to execute |
 | `read_only` | `true` for an answer-only task (the browser's **Answer only**) |
+| `decompose` | `true` splits the Goal into reviewed tasks without editing (the browser's **Split into tasks**); see [task controls](task-controls.md#split-into-tasks) |
 | `design` | `true` for a design discussion (the browser's **Design discussion**); implies `read_only` |
 | `auto_approve` | `true` approves local commands, read access and the change limit of this run without asking (the browser's **Allow all actions**); SSH keeps its root-only approval |
 | `isolation` | `in_place` (default) edits the roots; `worktree` edits new linked Git worktrees (the browser's **Isolated Git worktree**), see below |

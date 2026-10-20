@@ -21,6 +21,8 @@ def check_stage(stage, config):
     """Never enter a writer for an answer-only task, including imported plans."""
     if config.get("read_only") and stage == "implementer":
         raise ValueError("Answer-only tasks cannot enter implementation")
+    if config.get("decompose") and stage == "implementer":
+        raise ValueError("A task split is implemented by its separate task runs")
 
 
 def check_plan(plan, config):

@@ -65,6 +65,8 @@ def check_lines(state):
         return checks
     if state[STATUS] == "NO_CHANGES_REQUIRED":
         return ["Built-in checks were skipped: no changes are required."]
+    if state[STATUS] == "TASKS_READY":
+        return ["Built-in checks run in each task's own run."]
     return ["Checks have not run yet."]
 
 

@@ -589,6 +589,30 @@ label:has(> input[type='checkbox']) .hint {
   min-height: 2.6rem;
 }
 
+/* Task splits */
+.epic-tasks {
+  margin: 8px 0 12px;
+  padding-left: 22px;
+}
+
+.epic-tasks li {
+  margin: 8px 0;
+}
+
+.epic-tasks strong {
+  margin-right: 8px;
+}
+
+.epic-tasks button {
+  margin-left: 6px;
+  padding: 2px 10px;
+  font-size: 12.5px;
+}
+
+.epic-auto {
+  font-weight: 450;
+}
+
 /* Follow-up */
 #followup-panel {
   margin-top: 20px;

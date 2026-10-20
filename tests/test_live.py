@@ -916,6 +916,18 @@ class LiveTests(unittest.TestCase):
         self.assertEqual(ledger[0]["request"]["request"]["status"], "CHANGE_LIMIT")
         self.assertTrue(ledger[0]["response"]["automatic"])
 
+    def test_split_into_tasks_stops_after_the_reviewed_plan(self):
+        header = {"roots": {"project": str(self.root)}, "decompose": True}
+        self.task.write_text(f"```countersign-task\n{json.dumps(header)}\n```\nReturn 2")
+        run, status, state = self.run_mode("ok")
+        self.assertEqual(status, "TASKS_READY", state.get("summary"))
+        self.assertEqual(
+            [stage["stage"] for stage in state["stages"]], ["planner", "plan-reviewer"]
+        )
+        self.assertIn("return 1", (self.root / "hello.py").read_text())
+        plan = json.loads((run / state["results"]["plan"]).read_text())
+        self.assertTrue(plan["steps"])
+
     def test_design_discussion_leaves_a_reviewed_design_document(self):
         header = {"roots": {"project": str(self.root)}, "design": True}
         self.task.write_text(f"```countersign-task\n{json.dumps(header)}\n```\nDesign caching")

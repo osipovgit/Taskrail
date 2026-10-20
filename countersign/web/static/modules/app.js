@@ -1,6 +1,7 @@
 import { badge, detail, el, list, showError } from './dom.js';
 import { renderMonitor } from './monitor.js';
 import { executionCard, stageCard, tickStageTimers } from './stages.js';
+import { epicSection } from './epic.js';
 import { preserveSelection, state } from './state.js';
 
 const approvalDrafts = new Map();
@@ -75,6 +76,7 @@ function runButton(run) {
   ];
   const button = el('button', undefined, classes.join(' ').trim());
   button.append(el('strong', run.title), el('small', run.id), badge(run.status || ''));
+  if (run.progress) button.append(el('span', 'Tasks ' + run.progress, 'badge'));
   button.onclick = () => {
     closeComposer();
     select(run.id);
@@ -155,6 +157,7 @@ export function approvalCard(pending) {
 const CHECKBOXES = new Set(['worktree', 'auto_approve']);
 
 function draftMode(draft) {
+  if (draft.decompose) return 'decompose';
   if (draft.design) return 'design';
   return draft.read_only ? 'answer' : 'change';
 }
@@ -321,6 +324,7 @@ export function render(data) {
   if (data.auto_approve) view.append(el('span', 'All actions allowed', 'badge auto-approve'));
   view.append(actionButtons(data));
   if (data.pending_approval) view.append(approvalCard(data.pending_approval));
+  if (data.epic) view.append(epicSection(data.epic, { act: runAction, open: showRun }));
   for (const job of data.execution_jobs || []) view.append(executionCard(job));
   if (data.actions?.stop_requested)
     view.append(el('p', 'Stop requested. Waiting for process cleanup and checkpoint.', 'muted'));
@@ -421,6 +425,7 @@ export async function submitTask(event) {
     const mode = document.getElementById('task-mode').value;
     payload.read_only = mode === 'answer';
     payload.design = mode === 'design';
+    payload.decompose = mode === 'decompose';
     payload.worktree = document.getElementById('task-worktree').checked;
     payload.auto_approve = document.getElementById('task-auto-approve').checked;
     Object.assign(payload, state.composerContext);

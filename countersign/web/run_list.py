@@ -2,7 +2,7 @@
 
 from operator import itemgetter
 
-from countersign.web import history, lifecycle, run_groups
+from countersign.web import epic_progress, history, lifecycle, run_groups
 from countersign.web.run_files import contained, read_json
 
 SUMMARY_LIMIT = 500
@@ -35,13 +35,15 @@ def run_summary(path):
     task = history.read_artifact(path, history.TASK_FILE)
     request = task.split(history.HISTORY, 1)[0]
     status = lifecycle.display_status(path, state)
-    return dict(
+    summary = dict(
         id=path.name,
         title=task_title(request, path.name),
         status=status,
         group=run_groups.group(path, state, status),
         summary=state.get("summary", "")[:SUMMARY_LIMIT],
     )
+    summary.update(epic_progress.list_fields(path, state, summary["group"]))
+    return summary
 
 
 def task_title(task, fallback):
