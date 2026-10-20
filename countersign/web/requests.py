@@ -27,10 +27,22 @@ HEADER_OPTIONS = MappingProxyType(
 )
 RESUMES = frozenset(("resume", "resume_budget"))
 ACTION = "action"
+PHASE = "phase"
+# A split's task run, Jenkins validation and the server checks after confirmation.
+PHASES = frozenset(("", "task", "validation", "server"))
+CHECK_PHASES = frozenset(("validation", "server"))
 TASK_ACTIONS = frozenset(("epic_pause", "epic_unpause"))
 RECORDED = (
     frozenset(
-        ("done", "reopen", "revoke_auto_approve", "epic_next", "epic_auto_on", "epic_auto_off")
+        (
+            "done",
+            "reopen",
+            "revoke_auto_approve",
+            "epic_next",
+            "epic_auto_on",
+            "epic_auto_off",
+            "confirm",
+        )
     )
     | TASK_ACTIONS
 )
@@ -51,7 +63,8 @@ class Submission:
         self.flags = {flag: self.fields.pop(flag, False) for flag in FLAGS}
         self.parent = self.fields.pop("parent_run", None)
         self.mode = self.fields.pop("submission_mode", "new")
-        self.context = split_context(self.fields.pop("split_context", ""))
+        context = split_context(self.fields.pop("split_context", ""))
+        self.delivery = {"context": context, PHASE: self.fields.pop(PHASE, "")}
         self.validate()
         self.previous = history.checked_run(base, self.parent) if self.parent else None
         if self.previous:
@@ -74,7 +87,15 @@ class Submission:
             raise ValueError("Only a restart or follow-up requires a previous run")
         self.flags[DESIGN] = self.flags[DESIGN] or self.mode == DESIGN
         self.flags[READ_ONLY] = self.flags[READ_ONLY] or self.mode == "answer"
+        self.check_phase()
         self.check_decompose()
+
+    def check_phase(self):
+        """A server-set delivery phase; checks after a change never edit files."""
+        phase = self.delivery[PHASE]
+        if phase not in PHASES:
+            raise ValueError("Unknown delivery phase")
+        self.flags[READ_ONLY] = self.flags[READ_ONLY] or phase in CHECK_PHASES
 
     def check_decompose(self):
         """Splitting into tasks plans later code changes, so it starts a new conversation."""
@@ -97,10 +118,12 @@ class Submission:
         options = [HEADER_OPTIONS[flag] for flag in FLAGS if self.flags[flag]]
         if self.flags[DESIGN] and not self.flags[READ_ONLY]:
             options.append(HEADER_OPTIONS[READ_ONLY])
+        if self.delivery[PHASE]:
+            options.append('"phase": "{0}"'.format(self.delivery[PHASE]))
         header = ", ".join([*options, ROOTS_KEY])
         sections = [text.replace(ROOTS_KEY, header, 1)]
-        if self.context:
-            sections.append(f"\n## Task split context\n{self.context}\n")
+        if self.delivery["context"]:
+            sections.append("\n## Task split context\n{0}\n".format(self.delivery["context"]))
         if self.mode in CONTINUING:
             sections.extend([HISTORY_RULE, history.conversation(self.previous)])
         return "".join(sections)

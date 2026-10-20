@@ -1,8 +1,11 @@
 """Workflow controls shared by the CLI worker and local dashboard."""
 
+from countersign.core.plan_contract import splits
+
 STOP_FILE = "stop.request"
 NOTE_LIMIT = 4000
 MAX_SPLIT_TASKS = 8
+DEFAULT_SPLIT_FILES = 15
 NOTE_RULE = f"A continuation note is text of at most {NOTE_LIMIT} characters"
 
 
@@ -30,7 +33,9 @@ def check_plan(plan, config):
     """Reject changes suggested for a read-only request and oversized task splits."""
     if config.get("read_only") and (plan["proposed_change_files"] or plan["steps"]):
         raise ValueError("Answer-only tasks require empty steps and proposed_change_files")
-    if config.get("decompose") and len(plan["steps"]) > MAX_SPLIT_TASKS:
+    threshold = config.get("max_change_files") or DEFAULT_SPLIT_FILES
+    split = splits(plan, config.get("decompose"), threshold)
+    if split and len(plan["steps"]) > MAX_SPLIT_TASKS:
         raise ValueError(f"Split the goal into at most {MAX_SPLIT_TASKS} tasks")
 
 

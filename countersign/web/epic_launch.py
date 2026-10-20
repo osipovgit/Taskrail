@@ -50,6 +50,7 @@ def payload(run, state, entries, task):
         split_context=brief(run.name, draft, entries, task),
         roots=worktree_isolation.root_entries(state["roots"]),
         auto_approve=approval_policy.at_start(run, draft),
+        phase="task",
     )
 
 
@@ -72,13 +73,6 @@ def task_line(task, current):
     state = "marked done" if task["done"] else task["status"]
     changed = ", ".join(task["changed_files"]) or "none"
     return f"- {label} ({state}): {task['summary']} Changed files: {changed}"
-
-
-def advance(launcher):
-    """Start the next task of every epic that continues automatically after successes."""
-    for run in launcher.base.iterdir():
-        if (run / epic_tasks.EPIC).is_file():
-            continue_quietly(launcher, run)
 
 
 def continue_quietly(launcher, run):

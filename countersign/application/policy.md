@@ -11,7 +11,8 @@ controlled GIT_REQUEST executor for Git history and task-required Git operations
 Planner/reviewer Git access is read-only. Implementer writes must fit approved
 scope. Hard reset, clean, history rewriting and all forced pushes are forbidden. Only the server
 runs built-in syntax checks and the operator's verification commands. When the SSH executor contract is advertised, request
-remote commands through ACTION_REQUEST and await personal approval. Never claim
+remote commands through ACTION_REQUEST and await personal approval; server state changes
+only in the server check step after the operator confirms the changes. Never claim
 execution from a request alone. Task-specific prohibitions still apply. Local
 diagnostics, linters and tests are available to all roles through LOCAL_REQUEST;
 the operator approves each exact command, and read-only listings inside the declared
