@@ -16,14 +16,22 @@ def unique(entries, label):
 def validate_coverage(payload, requirements, stage, executed_evidence=()):
     """Every supplied requirement must have a justified, stage-appropriate outcome."""
     outcomes = unique(payload["coverage"], "coverage ID")
-    require(
-        set(outcomes) == {entry["id"] for entry in requirements}, "Incomplete requirement coverage"
-    )
+    check_ids(set(outcomes), {entry["id"] for entry in requirements})
     evidence = unique(payload["evidence"], "evidence ID")
     for entry in requirements:
         validate_outcome(outcomes[entry["id"]], entry, evidence, executed_evidence)
     validate_findings(payload.get("findings", []), outcomes)
     verdicts(payload, stage)
+
+
+def check_ids(covered, expected):
+    """Coverage names exactly the assigned requirement IDs."""
+    missing = sorted(expected - covered)
+    unknown = sorted(covered - expected)
+    require(
+        not missing and not unknown,
+        f"Incomplete requirement coverage: missing {missing}, unknown {unknown}",
+    )
 
 
 def validate_outcome(outcome, requirement, evidence, executed_evidence=()):

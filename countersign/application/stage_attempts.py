@@ -1,6 +1,14 @@
 """Attempts of one model stage until a valid verdict or a recorded stop."""
 
-from countersign.application import access_recovery, attempt_context, evidence, prompts
+from functools import partial
+
+from countersign.application import (
+    access_recovery,
+    attempt_context,
+    evidence,
+    prompts,
+    result_preview,
+)
 from countersign.application.attempt_launch import (
     attempt_prompt,
     install_profile,
@@ -82,7 +90,9 @@ class StageAttempts:
         outcome = run_stage(
             active,
             workflow.state,
-            session_environment(workflow, profile, files, self.format_only),
+            session_environment(
+                workflow, profile, files, self.format_only, checker(workflow, active)
+            ),
             launch_options(workflow, active, allowance, self.format_only),
         )
         self.settle(active, outcome)
@@ -112,6 +122,11 @@ class StageAttempts:
             return None
         workflow.finish_active("RESULT_VALID", verdict, outcome)
         return verdict
+
+
+def checker(workflow, active):
+    """Validate a final response inside the session, before the stage ends."""
+    return partial(result_preview.preview, workflow, active, evidence_roots(workflow))
 
 
 def first_request(workflow):

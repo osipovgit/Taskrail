@@ -11,7 +11,16 @@ TRANSPORT_KEY = "transport"
 FORMAT_KEY = "format"
 REBUILD_KEY = "rebuild"
 CONTEXT_NOTE = "\nTHE PREVIOUS SESSION EXCEEDED THE MODEL CONTEXT WINDOW. This is a new session: use the recorded evidence file instead of repeating research, read only the lines you need (targeted reads of large outputs, never whole logs), and return the next request or the final result as soon as the evidence allows.\n"
-REBUILD_NOTE = "\nPREVIOUS FINAL RESPONSE WAS INVALID: {0}. A format repair without tools could not rebuild it. Re-read only what you need and return one complete, valid final result or one complete executor request.\n"
+REBUILD_NOTE = "\nPREVIOUS FINAL RESPONSE WAS INVALID: {0}. Fixing it needs source reads that a repair without tools cannot make. Re-read only what you need and return one complete, valid final result or one complete executor request.\n"
+# Errors only a pass that can read sources again can fix.
+EVIDENCE_ERRORS = (
+    "Quotation differs from source",
+    "matching observed read",
+    "range outside source",
+    "reversed line range",
+    "Unknown evidence ID",
+    "Source claim needs observed evidence",
+)
 
 
 class Retries:
@@ -53,6 +62,8 @@ class Retries:
         self.counts[FORMAT_KEY] += 1
         state = self.attempts.workflow.state
         self.repair = dict(request=self.attempts.request, error=outcome["contract_error"])
+        if needs_sources(outcome["contract_error"], self.attempts.workflow.config):
+            return full_attempt(self)
         self.attempts.format_only = True
         self.attempts.request = prompts.repair(
             outcome["final_text"],
@@ -69,13 +80,8 @@ class Retries:
             return False
         if self.counts[REBUILD_KEY]:
             return False
-        self.counts[REBUILD_KEY] += 1
-        self.attempts.format_only = False
-        note = REBUILD_NOTE.format(self.repair["error"])
-        self.attempts.request = "{0}{1}".format(self.repair["request"], note)
-        self.attempts.recovery = evidence.load_index(self.attempts.workflow.run)
         say("  Format repair could not rebuild the result; one full attempt follows")
-        return True
+        return full_attempt(self)
 
     def access_recovery(self, outcome):
         """Continue a read-only stage with allowed sources after a new denial."""
@@ -103,3 +109,20 @@ class Retries:
         if not self.attempts.format_only:
             self.attempts.recovery = evidence.load_index(workflow.run)
         return True
+
+
+def needs_sources(error, config):
+    """An evidence error that a repair without read tools cannot fix."""
+    readable = config.get("format_repair_tools") == "read"
+    return not readable and any(marker in error for marker in EVIDENCE_ERRORS)
+
+
+def full_attempt(retries):
+    """One attempt with tools and the recorded evidence, given the invalid result's error."""
+    attempts = retries.attempts
+    retries.counts[REBUILD_KEY] += 1
+    attempts.format_only = False
+    note = REBUILD_NOTE.format(retries.repair["error"])
+    attempts.request = "{0}{1}".format(retries.repair["request"], note)
+    attempts.recovery = evidence.load_index(attempts.workflow.run)
+    return True

@@ -355,7 +355,21 @@ class QuoteTests(unittest.TestCase):
         self.assertTrue(supports(record, claim))
         legacy = dict(record, output="00001| def f():\n00002|     return 1")
         self.assertTrue(supports(legacy, claim))
-        self.assertFalse(supports(dict(record, output="1: def f():\n2:  return 1"), claim))
+        # Whitespace is not significant; every word still has to match.
+        self.assertTrue(supports(dict(record, output="1: def f():\n2:  return 1"), claim))
+        self.assertFalse(supports(dict(record, output="1: def f():\n2:     return 2"), claim))
+
+    def test_shortened_quote_needs_exact_fragments_in_source_order(self):
+        record = dict(
+            input=dict(filePath="/a.py"),
+            output="1: def f():\n2:     x = 1\n3:     return x",
+        )
+        claim = dict(path="/a.py", line_start=1, line_end=3, quote="def f(): ... return x")
+        self.assertTrue(supports(record, claim))
+        self.assertTrue(supports(record, dict(claim, quote="def f():… return x")))
+        self.assertFalse(supports(record, dict(claim, quote="return x ... def f():")))
+        self.assertFalse(supports(record, dict(claim, quote="def f(): ... return y")))
+        self.assertFalse(supports(record, dict(claim, quote=" ... ")))
 
 
 FIXTURES = Path(__file__).with_name("fixtures")

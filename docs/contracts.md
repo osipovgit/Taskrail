@@ -38,7 +38,9 @@ reviewers accept that recorded choice.
   required gaps.
 
 Evidence supplies an ID, absolute path, source line range and exact quote. The
-engine binds it to a successful read event and the current source hash.
+engine binds it to a successful read event and the current source hash. Whitespace
+in a quote is not significant, and a long quote may be shortened with `...` between
+exact fragments that appear in source order within the cited lines.
 `observations.json` keeps the complete validation ledger; `evidence.json` is a
 bounded recovery subset of at most 60 records that never removes observations
 needed for validation. Changed or unseen content cannot justify approval. A
@@ -54,6 +56,11 @@ or executor request in the same turn is still handled. A failed read is not evid
 and does not waive required evidence. Permission denials, failed writes, and errors
 after or without a final answer keep their safeguards.
 
+A final result that fails validation first goes back to the same session, at most
+twice per stage, with the error: the evidence ID and the actual text of the cited
+lines for a quote, the missing or unknown IDs for coverage. The session still has its
+context and tools, so it can re-read and correct the result.
+
 Format repair receives the saved response, the validation error, the schema and the
 server-assigned requirements. Each stage gets at most one. It has no tools (or
 read-only tools with `format_repair_tools: read`, which may also re-read the
@@ -62,7 +69,9 @@ implementer, cannot invent requirement IDs or quotations, and must not research.
 implementer repair reports only edits already present; changed files are still
 checked against the observed source. If the repair reports BLOCKED because it
 cannot rebuild the result without tools, the stage gets one full attempt with tools
-and the original validation error. Research recovery receives bounded observed source
+and the original validation error. An evidence error (a wrong quote, range or
+evidence ID) goes to that full attempt directly, because a repair without read tools
+cannot fix it. Research recovery receives bounded observed source
 material and keeps unresolved requirements explicit. A no-change completion still
 needs independent review of all requirements. Text imported with `--plan-response`
 is only an untrusted draft for fresh planning.
