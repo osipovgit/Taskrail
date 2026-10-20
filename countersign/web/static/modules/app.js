@@ -30,24 +30,58 @@ export async function post(url, payload, failure) {
   return result;
 }
 
+// Groups are computed by the server; Done is collapsed unless opened or searched.
+const GROUPS = [
+  ['running', 'Running'],
+  ['attention', 'Needs you'],
+  ['review', 'Ready for review'],
+  ['done', 'Done'],
+];
+
 export function menu() {
   if (preserveSelection()) return;
   const nav = document.getElementById('runs');
   nav.replaceChildren();
   const query = document.getElementById('filter').value.toLowerCase();
-  for (const run of state.runs) {
-    if (!(run.title + ' ' + run.id).toLowerCase().includes(query)) continue;
-    const button = el('button', undefined, run.id === state.selected ? 'active' : '');
-    button.append(el('strong', run.title), el('small', run.id), badge(run.status || ''));
-    button.onclick = () => {
-      closeComposer();
-      select(run.id);
-      menu();
-      refreshRun().catch(showError);
-    };
-    nav.append(button);
+  const visible = state.runs.filter((run) =>
+    (run.title + ' ' + run.id).toLowerCase().includes(query),
+  );
+  for (const [group, label] of GROUPS) {
+    const runs = visible.filter((run) => (run.group || 'attention') === group);
+    if (!runs.length) continue;
+    const heading = label + ' · ' + runs.length;
+    const holder = group === 'done' ? doneGroup(heading, Boolean(query)) : nav;
+    if (holder === nav) nav.append(el('h4', heading, 'run-group'));
+    else nav.append(holder);
+    for (const run of runs) holder.append(runButton(run));
   }
   if (!state.runs.length) nav.append(el('p', 'No runs yet.'));
+}
+
+function doneGroup(heading, searching) {
+  const group = el('details', undefined, 'run-group-done');
+  group.open = searching || state.doneOpen;
+  group.ontoggle = () => {
+    if (!searching) state.doneOpen = group.open;
+  };
+  group.append(el('summary', heading, 'run-group'));
+  return group;
+}
+
+function runButton(run) {
+  const classes = [
+    run.id === state.selected ? 'active' : '',
+    run.group === 'attention' ? 'needs-you' : '',
+  ];
+  const button = el('button', undefined, classes.join(' ').trim());
+  button.append(el('strong', run.title), el('small', run.id), badge(run.status || ''));
+  button.onclick = () => {
+    closeComposer();
+    select(run.id);
+    menu();
+    refreshRun().catch(showError);
+  };
+  return button;
 }
 
 function select(id) {
@@ -182,12 +216,16 @@ const ACTIONS = [
   ['resume', 'Continue from checkpoint'],
   ['resume_budget', 'Continue with extra budget'],
   ['stop', 'Stop task'],
+  ['done', 'Mark as done'],
+  ['reopen', 'Move back from Done'],
   ['delete', 'Delete from history'],
 ];
 const ACTION_TITLES = {
   resume_budget: 'Adds two attempts and one attempt timeout. Existing usage is retained.',
   restart: 'Edit the task before starting a new run. No rollback.',
   stop: 'Stop the worker and save a checkpoint. Partial edits are preserved.',
+  done: 'Move this run to Done. Nothing in the project changes.',
+  reopen: 'Return this run to its computed group.',
   delete: 'Move run history to local trash. Project files are preserved.',
 };
 

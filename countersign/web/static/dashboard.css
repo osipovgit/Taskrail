@@ -710,6 +710,28 @@ summary:focus-visible {
   box-shadow: inset 2px 0 var(--accent);
 }
 
+#runs button.needs-you {
+  background: var(--warn-bg);
+  box-shadow: inset 3px 0 var(--warn);
+}
+
+#runs button.active.needs-you {
+  background: var(--accent-soft);
+}
+
+.run-group {
+  margin: 14px 10px 4px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+summary.run-group {
+  cursor: pointer;
+}
+
 #runs strong {
   display: block;
   overflow: hidden;

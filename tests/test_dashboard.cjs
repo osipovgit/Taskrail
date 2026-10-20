@@ -243,6 +243,33 @@ async function main() {
   assert.ok(all(structured).some((n) => n.textContent.includes('/ 1 h')));
   assert.ok(!all(structured).some((n) => n.textContent.includes('Remaining launches:')));
 
+  // The run list groups runs and marks the ones that need the operator.
+  nodes.runs = new Node('div');
+  nodes.filter = Object.assign(new Node('input'), { value: '' });
+  state.runs = [
+    { id: 'r1', title: 'Building', status: 'RUNNING', group: 'running' },
+    { id: 'r2', title: 'Approve me', status: 'WAITING_APPROVAL', group: 'attention' },
+    { id: 'r3', title: 'Changed', status: 'READY_FOR_REVIEW', group: 'review' },
+    { id: 'r4', title: 'Answered', status: 'NO_CHANGES_REQUIRED', group: 'done' },
+  ];
+  app.menu();
+  const headings = all(nodes.runs)
+    .filter((n) => n.className === 'run-group')
+    .map((n) => n.textContent);
+  assert.deepEqual(headings, ['Running · 1', 'Needs you · 1', 'Ready for review · 1', 'Done · 1']);
+  const waiting = all(nodes.runs).find(
+    (n) => n.tagName === 'button' && n.className === 'needs-you',
+  );
+  assert.equal(waiting.children[0].textContent, 'Approve me');
+  const done = all(nodes.runs).find((n) => n.tagName === 'details');
+  assert.equal(done.open, false);
+  nodes.filter.value = 'answered';
+  app.menu();
+  assert.equal(all(nodes.runs).find((n) => n.tagName === 'details').open, true);
+  nodes.filter.value = '';
+  state.runs = [];
+  console.log('Run groups and the Needs you highlight passed.');
+
   // A budget-paused run exposes both continuation choices and reversible deletion.
   for (const name of ['reply-goal', 'send-reply', 'monitor']) nodes[name] = new Node('div');
   globalThis.scrollY = 0;

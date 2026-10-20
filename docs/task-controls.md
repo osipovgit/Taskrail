@@ -11,7 +11,20 @@
 | Send a follow-up Goal | Previous run stopped, no active run on its projects | Snapshot prior public evidence and start a new run from planning |
 | Answer only | New or follow-up submission | Research and independent review, no implementation |
 | Design discussion | New or follow-up submission | Like Answer only, but the reviewed summary is a design document, saved as `design.md`; follow-ups refine it, a **Change code** follow-up implements it |
+| Mark as done / Move back from Done | Stopped run | Move the run to the Done group, or return it to its computed group; nothing else changes |
 | Delete from history | Stopped/completed run | Move run and launcher artifacts to local trash; leave source files untouched |
+
+The run list groups runs by what they need:
+
+| Group | Runs |
+|---|---|
+| Running | Starting or running, not waiting for you |
+| Needs you | A pending UI decision, an SSH or Jenkins ticket waiting for root approval, or a stop without a successful result (errors, budgets, interruptions); highlighted in yellow |
+| Ready for review | Finished with changes to review |
+| Done | Finished without changes, or marked done; collapsed until opened or searched |
+
+A done mark belongs to the outcome it was given for: if a continuation ends with a
+different result, the run leaves Done again.
 
 Stop is cooperative. The worker checks requests at stage boundaries and while
 waiting for opencode. Permission preflight, filesystem scans and short built-in checks

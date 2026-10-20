@@ -6,6 +6,7 @@ from countersign.application import run_locks
 from countersign.application.checkpoints import budget_paused, resume_available
 from countersign.core.files import atomic_json
 from countersign.interactions import approvals
+from countersign.web import run_groups
 from countersign.web.history import read_artifact
 
 RUN_INDEX = "run.json"
@@ -107,6 +108,8 @@ def actions(run, state, busy):
         resume=can_resume and idle,
         resume_budget=can_resume and idle,
         budget_paused=budget_paused(state),
+        done=not running and idle and not run_groups.marked(run, state),
+        reopen=run_groups.marked(run, state),
         resume_reason=reason,
     )
 
@@ -117,5 +120,6 @@ def pending_approval(run):
 
 
 def display_status(run, state):
-    """Highlight tasks that need a decision, independently of worker liveness."""
-    return "WAITING_APPROVAL" if pending_approval(run) else state.get(STATUS)
+    """Highlight tasks that need a decision in the UI or a root approval in a terminal."""
+    waiting = run_groups.awaiting_ticket(state) or pending_approval(run)
+    return "WAITING_APPROVAL" if waiting else state.get(STATUS)

@@ -2,7 +2,7 @@
 
 from operator import itemgetter
 
-from countersign.web import history, lifecycle
+from countersign.web import history, lifecycle, run_groups
 from countersign.web.run_files import contained, read_json
 
 SUMMARY_LIMIT = 500
@@ -34,10 +34,12 @@ def run_summary(path):
     state = read_json(contained(path, "run.json"))
     task = history.read_artifact(path, history.TASK_FILE)
     request = task.split(history.HISTORY, 1)[0]
+    status = lifecycle.display_status(path, state)
     return dict(
         id=path.name,
         title=task_title(request, path.name),
-        status=lifecycle.display_status(path, state),
+        status=status,
+        group=run_groups.group(path, state, status),
         summary=state.get("summary", "")[:SUMMARY_LIMIT],
     )
 
@@ -73,4 +75,5 @@ def pending_entry(folder):
         return None
     entry = dict(id=folder.name, summary=launch.get("summary", ""))
     entry.update(title=launch["title"], status=launch["status"])
+    entry["group"] = run_groups.group(folder, {}, launch["status"])
     return entry
