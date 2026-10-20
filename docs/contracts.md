@@ -99,8 +99,15 @@ argument is changed. Multiple objects, duplicate keys, arrays and malformed JSON
 are rejected. `cwd` is a declared root or an existing directory inside one. A
 response with `cwd` and `argv` but without `"status": "LOCAL_REQUEST"` or
 `schema_version` executes nothing; the same session is told what is missing, at most
-twice per stage. Denial means the command is skipped; consider the operator's
-alternative. Format repair cannot request execution.
+twice per stage. A turn that ends with plain text and no JSON object at all (for
+example, only announcing its next step) gets the same reminder in the same session,
+within the same limit, before a format repair is tried. Denial means the command is
+skipped; consider the operator's alternative. Format repair cannot request execution.
+
+Delivered output is cut at 24,000 characters. A stdout, stderr or Jenkins console
+longer than 2,000 characters is also saved as plain text beside its snapshot
+(`00-input/local/<stage>-<n>.stdout.txt`), named in the clipping notice, readable line
+by line and citable as evidence while it matches the recorded output.
 
 ```json
 {"schema_version":1,"status":"ACTION_REQUEST","action":{"targets":["qa-node-1"],"script":"uname -a\n","files":{},"reason":"Inspect kernel version","timeout_seconds":30}}

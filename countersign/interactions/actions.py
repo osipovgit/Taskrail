@@ -19,6 +19,7 @@ from countersign.interactions import (
 from countersign.interactions.clock import ApprovalPause
 
 MAX_CORRECTIONS = 2
+NARRATION = "Your last message is neither an executor request nor a final result, so nothing was executed and the stage cannot finish. If it describes your next step, return that request now as the entire response; otherwise return the final result JSON."
 MISSING_PROGRAM = "{0} is not installed on the orchestrator host. Install it, then Allow to run this exact command; or Deny."
 
 
@@ -109,14 +110,28 @@ class Actions:
 
 
 def incomplete_request(actions, text):
-    """Return a near-miss LOCAL_REQUEST to the same session, at most twice per stage."""
+    """Return a near-miss request or bare narration to the same session, twice per stage.
+
+    A turn that only describes its next step would otherwise go to a format repair
+    without tools or context, which cannot rebuild a result from narration.
+    """
     context = actions.session.context
-    if context["corrections"] >= MAX_CORRECTIONS or not local_request.incomplete(text):
+    if context["corrections"] >= MAX_CORRECTIONS:
+        return None
+    if local_request.incomplete(text):
+        feedback = local_request.correction(text)
+    elif narration(text):
+        feedback = NARRATION
+    else:
         return None
     context["corrections"] += 1
-    feedback = local_request.correction(text)
     events.append(actions.folder, "correction", dict(response=text), feedback)
     return feedback
+
+
+def narration(text):
+    """Plain text without any JSON object: the turn ended while describing a next step."""
+    return bool(text.strip()) and "{" not in text
 
 
 def install_notice(payload):
