@@ -23,10 +23,8 @@ Keep necessary documentation and checks with the change they validate. Each step
 must have its own useful outcome after its dependencies complete. An optional denied
 search may use permitted alternatives. Return BLOCKED only when evidence required to
 plan is missing and no permitted source can supply it; a blocking gap stops the whole
-run. Deliberately leaving part of the work out, for example because changing it would
-break expected behavior, is a decision, not a gap: plan the rest, give the requirement
-the outcome of the part you plan, and state the exclusion and its reason in summary
-and unverified.
+run. Leaving part of the work out deliberately, including to resolve conflicting
+requirements, follows the shared policy and is not a gap.
 Never claim a test ran or infer runtime behavior solely from a static flag.
 
 Before research, identify requested operations that are unavailable under the runtime

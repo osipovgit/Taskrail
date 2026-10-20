@@ -16,11 +16,16 @@ RECORDS = MappingProxyType(
     }
 )
 EPIC_NEXT = "epic_next"
-ACTIONS = frozenset((*RECORDS, EPIC_NEXT))
+PAUSES = MappingProxyType({"epic_pause": True, "epic_unpause": False})
+ACTIONS = frozenset((*RECORDS, *PAUSES, EPIC_NEXT))
 
 
-def record(launcher, run, action):
-    """Apply one action and return its response; the next epic task needs the launcher."""
+def record(launcher, run, payload):
+    """Apply one action; the next epic task needs the launcher, a pause names its task."""
+    action = payload["action"]
     if action == EPIC_NEXT:
         return epic_launch.start_next(launcher, run)
+    paused = PAUSES.get(action)
+    if paused is not None:
+        return epic_tasks.set_pause(run, payload["task"], paused)
     return RECORDS[action](run)
