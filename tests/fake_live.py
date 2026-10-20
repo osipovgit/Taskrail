@@ -406,6 +406,23 @@ if mode == "format-unavailable" and role == "planner" and "FORMAT REPAIR ONLY" i
         )
 
 value = enrich(value, context, target, prompt)
+if mode == "two-tasks" and role == "planner" and value["proposed_change_files"]:
+    first, second = value["proposed_change_files"][0], str(root / "new.py")
+    value["proposed_change_files"] = [first, second]
+    value["steps"] = [
+        dict(value["steps"][0], id="S1", action="Return two: change hello", files=[first]),
+        dict(
+            value["steps"][0],
+            id="S2",
+            action="Add module: new file",
+            files=[second],
+            depends_on=["S1"],
+        ),
+    ]
+    value["unverified"] = [
+        "Jenkins check: ci/shop-tests: passes",
+        "Server check: health returns 200",
+    ]
 if mode == "git-actions":
     for index, job in enumerate(git_jobs):
         output_path = Path(job["output_file"])

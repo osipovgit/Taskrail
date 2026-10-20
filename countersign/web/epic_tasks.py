@@ -28,11 +28,16 @@ STEP_FIELDS = MappingProxyType(
 
 
 def record(run):
-    """Task links and the auto-continue choice; empty before the first task starts."""
+    """Task links, phases and choices; before the first change, auto-continue follows the run.
+
+    Runs started since automatic splitting continue on their own; older splits do not.
+    """
     path = run / EPIC
     if path.is_file() and not path.is_symlink():
         return json.loads(path.read_text())
-    return dict(tasks={}, auto_continue=False, pause_before=[])
+    index = run / "run.json"
+    state = json.loads(index.read_text()) if index.is_file() else {}
+    return dict(tasks={}, auto_continue=state.get("auto_continue") is True, pause_before=[])
 
 
 def set_auto(run, enabled):

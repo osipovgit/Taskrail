@@ -54,16 +54,6 @@ def view(run, state):
     )
 
 
-def list_fields(run, state, current):
-    """Progress and group of an epic in the run list; a done mark still wins."""
-    epic = view(run, state)
-    if epic is None:
-        return {}
-    if current != "done":
-        current = group(epic["tasks"], epic["auto_continue"])
-    return dict(group=current, progress=epic["progress"])
-
-
 def progress(entries):
     """Finished tasks out of all tasks, as shown in the run list."""
     count = sum(finished(task) for task in entries)

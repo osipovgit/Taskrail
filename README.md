@@ -44,10 +44,12 @@ See [deployment](docs/deployment.md) before changing existing installations.
 
 ## Workflow
 
-Planning → independent plan review → scoped implementation → built-in syntax checks
-and your [verification commands](docs/deployment.md#verification-commands) →
-independent result review. A change larger than the configured limit waits for your
-decision first. A reviewed no-change plan ends without implementation; **Design
+Planning as decomposition → independent plan review → scoped implementation →
+built-in syntax checks and your [verification commands](docs/deployment.md#verification-commands)
+→ independent result review → Jenkins validation, when the plan names Jenkins checks →
+your confirmation → server checks, only after it. A plan larger than one review becomes
+one run per task, started one after another ([delivery](docs/task-controls.md#delivery-of-a-code-change)).
+A change larger than the configured limit waits for your decision first. A reviewed no-change plan ends without implementation; **Design
 discussion** turns produce a reviewed design document instead of code.
 Failed checks/review may request bounded repairs. Interrupted writers are never
 replayed automatically. Partial changes remain available for inspection. A task can
@@ -55,8 +57,8 @@ also run in [isolated Git worktrees](docs/task-format.md#worktree-isolation) on 
 branch, leaving the source checkout untouched. Tasks on different projects run in
 parallel; one project runs one task at a time.
 
-Success means **Ready for your review**, **No changes required** or, for a goal split
-into tasks, **Tasks ready**. Other project tests, Docker, CI and deployment never run
+A finished change waits as **Ready for your review** until you confirm it; **No
+changes required** ends a run that needed no edits. Other project tests, Docker, CI and deployment never run
 automatically; agents may request local commands that you approve one by one or once
 per run, while read-only listings inside the projects run without asking. The optional
 [isolated SSH executor](docs/ssh-executor.md) runs exact remote scripts and Jenkins builds after personal

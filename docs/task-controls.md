@@ -11,12 +11,13 @@
 | Send a follow-up Goal | Previous run stopped, no active run on its projects | Snapshot prior public evidence and start a new run from planning |
 | Answer only | New or follow-up submission | Research and independent review, no implementation |
 | Design discussion | New or follow-up submission | Like Answer only, but the reviewed summary is a design document, saved as `design.md`; follow-ups refine it, a **Change code** follow-up implements it |
-| Split into tasks | New or restarted submission | Plan the Goal as 2 to 8 reviewed tasks without editing; the run ends as **Tasks ready** and its page tracks the tasks |
+| Confirm changes | A finished code change, after any Jenkins validation | Accept the change; server checks, if any, start only now |
 | Mark as done / Move back from Done | Stopped run | Move the run to the Done group, or return it to its computed group; nothing else changes |
 | Delete from history | Stopped/completed run | Move run and launcher artifacts to local trash; leave source files untouched |
 
-Each run page shows its mode (**Change code**, **Answer only**, **Design discussion** or
-**Split into tasks**); the run list shows the mode when it is not Change code.
+Each run page shows its mode (**Change code**, **Answer only** or **Design discussion**;
+older forced splits show **Split into tasks**); the run list shows the mode when it is
+not Change code.
 
 The run list groups runs by what they need:
 
@@ -24,31 +25,50 @@ The run list groups runs by what they need:
 |---|---|
 | Running | Starting or running, not waiting for you |
 | Needs you | A pending UI decision, an SSH or Jenkins ticket waiting for root approval, or a stop without a successful result (errors, budgets, interruptions); highlighted in yellow |
-| Ready for review | Finished with changes to review |
-| Done | Finished without changes, or marked done; collapsed until opened or searched |
+| Ready for review | A finished change waiting for your confirmation |
+| Done | Confirmed with its server checks finished, finished without changes, or marked done; collapsed until opened or searched |
 
-## Split into tasks
+## Delivery of a code change
 
-Choose the **Split into tasks** mode for a goal too large for one review. The planner
-writes each task as a plan step (title, files, covered requirements, dependencies and
-acceptance checks), at most 8 tasks; plan review checks the split, and the run stops
-as **Tasks ready** without editing anything.
+Every **Change code** task goes through the same steps:
 
-The run page lists the tasks with the status of each task's run. **Start S-n** starts
-the next task whose dependencies finished, as a new run in the same projects (the same
-worktrees if the split was isolated). That run gets the overall goal and acceptance criteria, every task with
-its outcome so far and its own step in a **Task split context** section, instead of
-the whole conversation, so it stays within the model context. It is planned,
-implemented and reviewed like any task. A task whose run failed can be started again
-with **Start S-n again**; marking a task's run done counts it as finished. A stopped
-**Allow all actions** on the split also applies to the tasks started after it.
-**Start the next task automatically after each successful one** continues on its own
-and stops at the first task that does not finish successfully, or before a task marked
-**Pause before this task**, for example when you want to review the code before a task
-that checks it on a server; that task, and the
-split, then appear under Needs you. The list shows the split's progress (`Tasks 1/3`)
-and puts it under Running while a task runs, Needs you when the next task waits for
-you, and Ready for review when all tasks finished.
+1. **Planning is decomposition.** The planner plans the Goal as tasks: a small goal is
+   one task, larger work several (at most 8), each with its files, covered requirements,
+   dependencies and acceptance checks. Plan review checks the plan.
+2. **Implementation and review.** When all tasks together change at most as many
+   files as one review allows (`max_change_files`, 15 by default), this run implements
+   and reviews them. Otherwise the run stops as **Tasks ready** and each task runs as
+   its own run with its own planning, implementation and review rounds, one after
+   another in the same projects (the same worktrees if the task was isolated).
+3. **Jenkins validation.** When the plan names Jenkins checks (`Jenkins check:` entries)
+   and the executor offers Jenkins, a validation run starts once the code is done. It
+   starts the listed builds (each needs root approval) and reports their results.
+4. **Your confirmation.** **Confirm changes** accepts the finished change.
+5. **Server checks.** Only after confirmation, and only when the plan named them
+   (`Server check:` entries) or the task lists deferred runtime checks, a server-check
+   run executes them through the SSH executor; every action still needs root approval.
+   Before confirmation, SSH actions may only inspect servers during planning and review;
+   the implementer cannot use them.
+
+The run page shows these steps in a **Delivery** panel. A split lists its tasks with the
+status of each task's run. The next task starts automatically after each successful
+one (**Start the next task automatically after each successful one** is on); it stops
+at the first task that does not finish successfully, and before a task marked **Pause
+before this task**, for example when you want to review the code before a task that
+checks it on a server. **Start S-n** starts the next task by hand; a task whose run
+failed can be started again with **Start S-n again**, and marking a task's run done
+counts it as finished. A task run gets the overall goal and acceptance criteria, every
+task with its outcome so far and its own step in a **Task split context** section,
+instead of the whole conversation, so it stays within the model context. A stopped
+**Allow all actions** on the parent also applies to the tasks and checks started after it.
+A step that cannot run because the executor lacks Jenkins or SSH targets is shown as
+skipped.
+
+The run list puts a delivery under Running while code, validation or server checks run,
+Needs you when a task, a check or an approval waits for you or failed, Ready for review
+while it waits for your confirmation, and Done when it is confirmed and its server
+checks finished. A split shows its progress (`Tasks 1/3`). A task header with
+`"decompose": true` always splits, even a small plan.
 
 A done mark belongs to the outcome it was given for: if a continuation ends with a
 different result, the run leaves Done again.

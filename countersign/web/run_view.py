@@ -6,7 +6,7 @@ from pathlib import Path
 from countersign.core.paths import tool_paths
 from countersign.interactions import approval_policy
 from countersign.observability.progress import clock
-from countersign.web import epic_progress, history, lifecycle
+from countersign.web import delivery_state, history, lifecycle
 from countersign.web.run_activity import run_busy
 from countersign.web.run_files import contained, optional_json, stage_telemetry, text_tail
 from countersign.web.run_messages import public_messages
@@ -93,7 +93,7 @@ def context_view(run, submission, state):
         draft=history.task_draft(run) if run.joinpath("run.json").exists() else None,
         actions=lifecycle.actions(run, state, run_busy(run)),
         auto_approve=approval_policy.active(run, state),
-        epic=epic_progress.view(run, state),
+        delivery=delivery_state.view(run, state),
         pending_approval=lifecycle.pending_approval(run),
         task=text_tail(task),
         console=text_tail(contained(submission, "console.log"), CONSOLE_LIMIT),

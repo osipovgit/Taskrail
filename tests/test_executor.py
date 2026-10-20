@@ -10,12 +10,14 @@ import threading
 import time
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 from countersign.application import execution_requests, execution_wait
 from countersign.executor import action_schema, client, hosts, protocol, streams, transport, worker
 from countersign.executor.service import ExecutorServer
 from countersign.executor.store import TicketStore
+from countersign.interactions import remote
 
 INVENTORY = {
     "server-a": dict(
@@ -201,6 +203,29 @@ class ExecutorTest(unittest.TestCase):
         for name in ("../escape", "", "-option", "x/y"):
             with self.assertRaises(ValueError):
                 self.store.get(name)
+
+    def test_server_actions_inspect_before_confirmation_and_never_implement(self):
+        targets = {"web": {"hostname": "192.0.2.10"}}
+        self.assertEqual(
+            execution_requests.server_scope({}, "planner"), execution_requests.INSPECT_ONLY
+        )
+        self.assertIsNone(execution_requests.server_scope({}, "implementer"))
+        server = execution_requests.server_scope({"phase": "server"}, "planner")
+        self.assertEqual(server, execution_requests.SERVER_STEP)
+        planning = execution_requests.ssh_instructions(targets, execution_requests.INSPECT_ONLY)
+        self.assertIn("only inspect server state", planning)
+        self.assertIn("ACTION_REQUEST", planning)
+        implementing = execution_requests.ssh_instructions(targets, None)
+        self.assertNotIn("ACTION_REQUEST", implementing)
+        run = self.root / "run"
+        folder = run / "03-implement"
+        folder.mkdir(parents=True)
+        session = SimpleNamespace(
+            active=(folder, {"role": "implementer"}), environment=dict(run=run)
+        )
+        request = json.dumps(dict(schema_version=1, status="ACTION_REQUEST", action=ACTION))
+        self.assertEqual(remote.consume(session, request), remote.REFUSED)
+        self.assertEqual(execution_wait.read(run), [])
 
     def test_action_contract_is_distinct_from_final_results(self):
         self.assertIsNone(execution_requests.extract('{"status":"PLAN_READY"}'))
