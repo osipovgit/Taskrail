@@ -10,6 +10,7 @@ from countersign.application import (
     executor_contracts,
     instruction_modules,
     instruction_sources,
+    mode_rules,
 )
 from countersign.core import schema
 from countersign.core.paths import tool_paths
@@ -70,6 +71,7 @@ def make_request(config, execution, state, run):
         + "\n\n# Orchestrator instructions\n"
         + frozen["policy"]
         + frozen["instructions"][stage]
+        + mode_rules.render(config)
         + instruction_modules.render(run, execution, state)
         + execution_requests.instructions()
         + git_requests.instructions()
@@ -94,7 +96,7 @@ def request_context(config, execution, state, run):
     return dict(
         schema_version=state.get("contract_version"),
         requirements=state.get("requirements", []),
-        unresolved_requirement_ids=[entry["id"] for entry in state.get("requirements", [])],
+        requirement_ids=[entry["id"] for entry in state.get("requirements", [])],
         stage=execution[0],
         roots=state["roots"],
         task_file=str(run / "00-input/task.md"),
