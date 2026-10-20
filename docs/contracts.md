@@ -101,11 +101,15 @@ response with `cwd` and `argv` but without `"status": "LOCAL_REQUEST"` or
 `schema_version` executes nothing; the same session is told what is missing, at most
 twice per stage. A turn that ends with plain text and no JSON object at all (for
 example, only announcing its next step) gets the same reminder in the same session,
-within the same limit, before a format repair is tried. Denial means the command is
+within the same limit, before a format repair is tried. When the provider rejects a
+turn because the session exceeded the model context window, the stage status is
+`CONTEXT_EXCEEDED` and a read-only stage continues in a new session from its recorded
+evidence (within `read_retries`); the implementer stops so Continue can inspect its edits. Denial means the command is
 skipped; consider the operator's alternative. Format repair cannot request execution.
 
 Delivered output is cut at 24,000 characters. A stdout, stderr or Jenkins console
-longer than 2,000 characters is also saved as plain text beside its snapshot
+longer than 2,000 characters is also saved as plain text beside its snapshot, and then
+only the first 8,000 characters are delivered inline
 (`00-input/local/<stage>-<n>.stdout.txt`), named in the clipping notice, readable line
 by line and citable as evidence while it matches the recorded output.
 
