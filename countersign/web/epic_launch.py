@@ -10,11 +10,12 @@ import json
 
 from countersign.application import worktree_isolation
 from countersign.core.files import atomic_json
+from countersign.interactions import approval_policy
 from countersign.web import epic_progress, epic_tasks, history
 
 TITLE_LIMIT = 160
 IDENTIFIER = "id"
-SCOPE = "\n\nThis is one task of a larger goal that was split into tasks. Do only this task; the other tasks have their own runs."
+SCOPE = "This run is one task of a larger goal that was split into tasks. Do only the current task below; every other task has its own run. Finished tasks are already in the source."
 
 
 def start_next(launcher, run):
@@ -42,22 +43,20 @@ def payload(run, state, entries, task):
     title = "{0} · {1}: {2}".format(draft["title"], task[IDENTIFIER], task["title"])
     return dict(
         title=title[:TITLE_LIMIT],
-        goal=task["goal"] + SCOPE,
+        goal=task["goal"],
         criteria="\n".join(task["checks"]),
         entry_points="\n".join(task["files"]),
-        constraints=brief(run.name, draft, entries, task),
+        constraints=draft["constraints"],
+        split_context=brief(run.name, draft, entries, task),
         roots=worktree_isolation.root_entries(state["roots"]),
-        auto_approve=draft["auto_approve"],
+        auto_approve=approval_policy.at_start(run, draft),
     )
 
 
 def brief(epic, draft, entries, current):
-    """The overall goal, every task with its outcome so far and the original constraints."""
-    lines = [f"Overall goal (task split run {epic}):", draft["goal"], "", "Tasks:"]
-    for task in entries:
-        lines.append(task_line(task, current))
-    if draft["constraints"]:
-        lines.extend(["", draft["constraints"]])
+    """The scope rule, the overall goal and every task with its outcome so far."""
+    lines = [SCOPE, "", f"Overall goal (task split run {epic}):", draft["goal"], "", "Tasks:"]
+    lines.extend(task_line(task, current) for task in entries)
     return "\n".join(lines)
 
 
@@ -68,8 +67,9 @@ def task_line(task, current):
         return f"- {label} (current task)"
     if task["status"] is None:
         return f"- {label} (later; not part of this run)"
+    state = "marked done" if task["done"] else task["status"]
     changed = ", ".join(task["changed_files"]) or "none"
-    return f"- {label} ({task['status']}): {task['summary']} Changed files: {changed}"
+    return f"- {label} ({state}): {task['summary']} Changed files: {changed}"
 
 
 def advance(launcher):

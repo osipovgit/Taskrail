@@ -11,13 +11,14 @@ from countersign.web.form_roots import checked_roots
 TITLE = "title"
 GOAL = "goal"
 CRITERIA = "criteria"
+CONSTRAINTS = "constraints"
 FIELDS = (
     TITLE,
     GOAL,
     CRITERIA,
     "current_behavior",
     "entry_points",
-    "constraints",
+    CONSTRAINTS,
     "verification",
 )
 DEFAULT_CRITERIA = (
@@ -33,7 +34,7 @@ SECTIONS = MappingProxyType(
         "current_behavior": "Current behavior",
         CRITERIA: "Acceptance criteria",
         "entry_points": "Known entry points",
-        "constraints": "Additional constraints",
+        CONSTRAINTS: "Additional constraints",
     }
 )
 WORKFLOW_RULES = (
@@ -45,6 +46,9 @@ WORKFLOW_RULES = (
     "The server runs syntax checks and configured verification commands. Report all unexecuted checks as unverified.",
     "Remote actions require the isolated SSH executor and personal approval of exact scripts and targets.",
 )
+
+# Drafts of earlier runs copied the server rules into constraints; they are added once below.
+COPIED_RULES = "\n".join(("### Workflow rules", *WORKFLOW_RULES[2:]))
 
 
 def build_task(payload, runs):
@@ -68,6 +72,7 @@ def form_text(payload):
         raise ValueError("Required field: goal")
     form[TITLE] = form[TITLE] or default_title(form[GOAL])
     form[CRITERIA] = form[CRITERIA] or DEFAULT_CRITERIA
+    form[CONSTRAINTS] = form[CONSTRAINTS].replace(COPIED_RULES, "").strip()
     check_title(form[TITLE])
     check_reserved(form.values())
     return form

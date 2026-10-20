@@ -58,6 +58,6 @@ def manifest(run, folder, roots, writable=()):
         "internal_not_inputs": ["evidence.json", "observations.json", "00-input/git-metadata.json"],
         "git": "Return GIT_REQUEST as the entire final message. It is not a tool call.",
         "remote": "Use ACTION_REQUEST only when advertised; personal approval is required.",
-        "local_commands": "Use LOCAL_REQUEST; exact commands need personal approval in the UI.",
+        "local_commands": "Use LOCAL_REQUEST; the operator approves exact commands.",
         "search": "Search source roots only; never search run directories or protected files.",
     }

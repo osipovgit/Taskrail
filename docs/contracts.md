@@ -5,6 +5,7 @@
 | `countersign/agents/*.md` | Role-specific method; no duplicate schema or budget |
 | `application/policy.md` | Shared trust, paths, recovery and execution boundaries |
 | `application/stage-instructions.json` | Stage-specific objective |
+| `application/mode_rules.py` | Mode rule (Answer only, Design discussion, Split into tasks) from the task header, for browser and CLI tasks |
 | `core/result-schemas.json` | Exact machine-readable response shape |
 | `00-input/` | Frozen task, role sources and effective contract for this run |
 
@@ -18,7 +19,8 @@ metadata are labels; the engine resolves them.
 
 Every final result contains status, summary, coverage, evidence, unverified and
 blocking_gaps. Requirement IDs belong to verbatim task blocks and are assigned by
-the server. Each ID needs one outcome: satisfied, planned, contradicted, gap,
+the server. The server-generated sections Workflow rules, Current turn, Task split
+context and, in older tasks, Turn control are instructions without IDs. Each ID needs one outcome: satisfied, planned, contradicted, gap,
 deferred or not_evaluated. `not_evaluated` is allowed only in BLOCKED results, when
 a shared blocker prevented validation. Only runtime requirements may be deferred.
 Required missing evidence means BLOCKED, even when the JSON is valid.

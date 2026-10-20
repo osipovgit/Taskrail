@@ -8,8 +8,10 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+from countersign.application import mode_rules
 from countersign.application.live import execute_task
-from countersign.web import epic_launch, requests
+from countersign.core.requirements import task_requirements
+from countersign.web import epic_launch, requests, task_form
 from countersign.web.history import HISTORY, conversation, previous_messages, task_draft
 from countersign.web.lifecycle import trash_run
 from countersign.web.run_list import list_runs
@@ -182,8 +184,12 @@ class TaskControlTests(unittest.TestCase):
         meta = json.loads(text.split("```countersign-task\n")[1].split("```")[0])
         self.assertTrue(meta["design"])
         self.assertTrue(meta["read_only"])
-        self.assertIn("Design discussion: no edits", text)
-        self.assertNotIn("Answer only", text)
+        self.assertNotIn("Turn control", text)
+        rule = mode_rules.render(dict(design=True, read_only=True))
+        self.assertIn("Design discussion: no edits", rule)
+        self.assertNotIn("Answer only", rule)
+        self.assertIn("Split into tasks", mode_rules.render(dict(decompose=True)))
+        self.assertEqual(mode_rules.render({}), "")
         with patch.object(self.launcher, "launch", return_value={"id": "next"}) as launch:
             self.launcher.submit(
                 dict(
@@ -196,6 +202,15 @@ class TaskControlTests(unittest.TestCase):
             followup = launch.call_args.args[0]["text"]
         self.assertIn('"design": true', followup)
         self.assertIn("Conversation history", followup)
+
+    def test_restart_drafts_keep_server_sections_out_of_constraints(self):
+        draft = task_draft(self.run)
+        self.assertNotIn("Workflow rules", draft["constraints"])
+        legacy = dict(draft, constraints="Keep X\n\n" + task_form.COPIED_RULES)
+        fields = {key: legacy[key] for key in task_form.FIELDS}
+        text, _ = build_task(dict(fields, roots=legacy["roots"]), self.runs)
+        self.assertEqual(text.count("Workflow rules"), 1)
+        self.assertIn("## Additional constraints\nKeep X\n", text)
 
     def make_epic(self):
         epic = self.runs / "epic"
@@ -254,20 +269,35 @@ class TaskControlTests(unittest.TestCase):
         self.assertIn('"auto_approve": true', text)
         self.assertNotIn('"decompose"', text)
         self.assertNotIn("Conversation history", text)
+        ids = [entry["text"] for entry in task_requirements(text, [])]
+        self.assertFalse(any("S-2" in entry or "Workflow rules" in entry for entry in ids))
+        self.assertIn("## Task split context", text)
         self.assertEqual(json.loads((epic / "epic.json").read_text())["tasks"], {"S-1": "child-1"})
         with self.assertRaisesRegex(ValueError, "No task is ready"):
             self.launcher.action(dict(id="epic", action="epic_next"))
         self.finish("child-1", "TOOL_ERROR")
-        self.assertEqual(run_view(self.runs, "epic")["epic"]["next"], None)
+        self.assertEqual(run_view(self.runs, "epic")["epic"]["next"], "S-1")
+        epic_entry = next(run for run in list_runs(self.runs) if run["id"] == "epic")
+        self.assertEqual(epic_entry["group"], "attention")
         self.launcher.action(dict(id="epic", action="epic_auto_on"))
         with patch.object(self.launcher, "launch") as launch:
             epic_launch.advance(self.launcher)
         launch.assert_not_called()
-        self.finish("child-1", "READY_FOR_REVIEW")
+        self.launcher.action(dict(id="child-1", action="done"))
+        self.assertEqual(run_view(self.runs, "epic")["epic"]["next"], "S-2")
+        self.launcher.action(dict(id="child-1", action="reopen"))
+        self.launcher.action(dict(id="epic", action="revoke_auto_approve"))
+        with patch.object(self.launcher, "launch", return_value={"id": "child-1b"}) as launch:
+            self.launcher.action(dict(id="epic", action="epic_next"))
+            text = launch.call_args.args[0]["text"]
+        self.assertNotIn('"auto_approve"', text)
+        self.assertEqual(json.loads((epic / "epic.json").read_text())["tasks"]["S-1"], "child-1b")
+        self.finish("child-1b", "TOOL_ERROR")
+        self.finish("child-1b", "READY_FOR_REVIEW")
         with patch.object(self.launcher, "launch", return_value={"id": "child-2"}) as launch:
             epic_launch.advance(self.launcher)
             text = launch.call_args.args[0]["text"]
-        self.assertIn("S-1: Change hello (READY_FOR_REVIEW): child-1 summary", text)
+        self.assertIn("S-1: Change hello (READY_FOR_REVIEW): child-1b summary", text)
         self.finish("child-2", "READY_FOR_REVIEW")
         epic_entry = next(run for run in list_runs(self.runs) if run["id"] == "epic")
         self.assertEqual((epic_entry["group"], epic_entry["progress"]), ("review", "2/2"))

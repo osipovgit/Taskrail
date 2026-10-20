@@ -2,6 +2,7 @@
 
 STOP_FILE = "stop.request"
 NOTE_LIMIT = 4000
+MAX_SPLIT_TASKS = 8
 NOTE_RULE = f"A continuation note is text of at most {NOTE_LIMIT} characters"
 
 
@@ -26,9 +27,11 @@ def check_stage(stage, config):
 
 
 def check_plan(plan, config):
-    """Reject changes suggested by a model for a read-only request."""
+    """Reject changes suggested for a read-only request and oversized task splits."""
     if config.get("read_only") and (plan["proposed_change_files"] or plan["steps"]):
         raise ValueError("Answer-only tasks require empty steps and proposed_change_files")
+    if config.get("decompose") and len(plan["steps"]) > MAX_SPLIT_TASKS:
+        raise ValueError(f"Split the goal into at most {MAX_SPLIT_TASKS} tasks")
 
 
 def check_delta(delta, allowed, git_unchanged):
