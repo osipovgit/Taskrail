@@ -294,6 +294,16 @@ class TaskControlTests(unittest.TestCase):
         self.assertEqual(json.loads((epic / "epic.json").read_text())["tasks"]["S-1"], "child-1b")
         self.finish("child-1b", "TOOL_ERROR")
         self.finish("child-1b", "READY_FOR_REVIEW")
+        self.launcher.action(dict(id="epic", action="epic_pause", task="S-2"))
+        self.assertTrue(run_view(self.runs, "epic")["epic"]["tasks"][1]["pause_before"])
+        with patch.object(self.launcher, "launch") as launch:
+            epic_launch.advance(self.launcher)
+        launch.assert_not_called()
+        epic_entry = next(run for run in list_runs(self.runs) if run["id"] == "epic")
+        self.assertEqual(epic_entry["group"], "attention")
+        with self.assertRaisesRegex(ValueError, "task of the split"):
+            self.launcher.action(dict(id="epic", action="epic_pause", task="../x"))
+        self.launcher.action(dict(id="epic", action="epic_unpause", task="S-2"))
         with patch.object(self.launcher, "launch", return_value={"id": "child-2"}) as launch:
             epic_launch.advance(self.launcher)
             text = launch.call_args.args[0]["text"]

@@ -393,13 +393,13 @@ const CONFIRMATIONS = {
     'Grant two extra attempts and one attempt timeout, then continue? Token caps and permissions are unchanged.',
 };
 
-export async function runAction(action) {
+export async function runAction(action, extra = {}) {
   if (state.actionPending) return;
   if (CONFIRMATIONS[action] && !confirm(CONFIRMATIONS[action])) return;
   state.actionPending = true;
   document.querySelectorAll('.run-actions button').forEach((button) => (button.disabled = true));
   try {
-    const payload = { id: state.selected, action };
+    const payload = { id: state.selected, action, ...extra };
     if (action.startsWith('resume') && state.resumeNote?.trim()) payload.note = state.resumeNote;
     const result = await post('/api/actions', payload, 'Action failed');
     if (action.startsWith('resume')) state.resumeNote = '';

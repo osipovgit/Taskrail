@@ -34,9 +34,10 @@ def group(entries, auto_continue):
         return "running"
     if any(task[STATUS] and not finished(task) for task in entries):
         return "attention"
-    if next_task(entries) is not None:
-        return "running" if auto_continue else "attention"
-    return "review"
+    ready = next_task(entries)
+    if ready is None:
+        return "review"
+    return "running" if auto_continue and not ready["pause_before"] else "attention"
 
 
 def view(run, state):

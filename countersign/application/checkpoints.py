@@ -5,7 +5,7 @@ import json
 from countersign.core.schema import contract_version
 
 STATUS = "status"
-# A blocked read-only stage may continue with the operator's note; a blocked writer may not.
+# A denied write cannot be granted by a note; any other block may continue with one.
 READ_ONLY_STAGES = frozenset(("planner", "plan-reviewer", "reviewer"))
 
 RESUMABLE = frozenset(
@@ -34,9 +34,9 @@ def load_checkpoint(run, state):
     path = run / "checkpoint.json"
     if path.is_file():
         checkpoint = json.loads(path.read_text())
-        blocked = state.get(STATUS) in {"BLOCKED_PERMISSION", "BLOCKED"}
-        if blocked and checkpoint.get("stage") not in READ_ONLY_STAGES:
-            raise ValueError("A blocked writer cannot be continued; restart after inspecting edits")
+        denied = state.get(STATUS) == "BLOCKED_PERMISSION"
+        if denied and checkpoint.get("stage") not in READ_ONLY_STAGES:
+            raise ValueError("Permission-denied writes cannot be automatically continued")
         return checkpoint
     raise ValueError("No safe checkpoint. Restart creates a fresh run against current source.")
 

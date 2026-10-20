@@ -23,7 +23,10 @@ the server. The server-generated sections Workflow rules, Current turn, Task spl
 context and, in older tasks, Turn control are instructions without IDs. Each ID needs one outcome: satisfied, planned, contradicted, gap,
 deferred or not_evaluated. `not_evaluated` is allowed only in BLOCKED results, when
 a shared blocker prevented validation. Only runtime requirements may be deferred.
-Required missing evidence means BLOCKED, even when the JSON is valid.
+Required missing evidence means BLOCKED, even when the JSON is valid. Requirements
+that cannot all be met literally are not a gap: the agent keeps behavior and safety
+constraints, does the rest, records the choice in summary and unverified, and
+reviewers accept that recorded choice.
 
 - Planner: structured steps (id, action, files, criteria, depends_on, checks),
   files_read and proposed_change_files. Every planned criterion needs an owning
