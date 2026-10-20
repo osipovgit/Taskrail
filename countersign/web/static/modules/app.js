@@ -218,6 +218,7 @@ const ACTIONS = [
   ['stop', 'Stop task'],
   ['done', 'Mark as done'],
   ['reopen', 'Move back from Done'],
+  ['revoke_auto_approve', 'Stop allowing all actions'],
   ['delete', 'Delete from history'],
 ];
 const ACTION_TITLES = {
@@ -226,6 +227,8 @@ const ACTION_TITLES = {
   stop: 'Stop the worker and save a checkpoint. Partial edits are preserved.',
   done: 'Move this run to Done. Nothing in the project changes.',
   reopen: 'Return this run to its computed group.',
+  revoke_auto_approve:
+    'Ask before local commands and the change limit again; applies before the next decision and on Continue.',
   delete: 'Move run history to local trash. Project files are preserved.',
 };
 

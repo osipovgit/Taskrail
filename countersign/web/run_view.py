@@ -4,6 +4,7 @@ import re
 from pathlib import Path
 
 from countersign.core.paths import tool_paths
+from countersign.interactions import approval_policy
 from countersign.observability.progress import clock
 from countersign.web import history, lifecycle
 from countersign.web.run_activity import run_busy
@@ -73,7 +74,6 @@ def index_view(state, stages):
         execution_jobs=state.get("execution_jobs", []),
         requirements=state.get("requirements", []),
         status=state.get("status"),
-        auto_approve=state.get("auto_approve") is True,
         summary=tool_paths(state.get("summary", ""), roots),
         roots=roots,
         changed_files=tool_paths(state.get("changed_files", []), roots),
@@ -92,6 +92,7 @@ def context_view(run, submission, state):
         conversation=history.previous_messages(run) if started else [],
         draft=history.task_draft(run) if run.joinpath("run.json").exists() else None,
         actions=lifecycle.actions(run, state, run_busy(run)),
+        auto_approve=approval_policy.active(run, state),
         pending_approval=lifecycle.pending_approval(run),
         task=text_tail(task),
         console=text_tail(contained(submission, "console.log"), CONSOLE_LIMIT),

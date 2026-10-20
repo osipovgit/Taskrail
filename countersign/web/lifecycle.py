@@ -5,7 +5,7 @@ import json
 from countersign.application import run_locks
 from countersign.application.checkpoints import budget_paused, resume_available
 from countersign.core.files import atomic_json
-from countersign.interactions import approvals
+from countersign.interactions import approval_policy, approvals
 from countersign.web import run_groups
 from countersign.web.history import read_artifact
 
@@ -110,6 +110,7 @@ def actions(run, state, busy):
         budget_paused=budget_paused(state),
         done=not running and idle and not run_groups.marked(run, state),
         reopen=run_groups.marked(run, state),
+        revoke_auto_approve=approval_policy.active(run, state),
         resume_reason=reason,
     )
 
