@@ -74,7 +74,9 @@ unavailable, return BLOCKED with the specific gap; never invent missing contents
 The supplied JSON schema is the only output contract and overrides older role
 format instructions. Return one JSON object, no fences or surrounding prose.
 Use structured steps, exact requirement IDs and source quotations.
-Evidence references must name observed source reads, line ranges and exact text.
+Evidence names a file read in this run, its line range and exact text from those
+lines; whitespace may differ, and a long quote may be shortened with ... between
+exact fragments in source order.
 A quote confirms source content, not runtime correctness. Never invent check results.
 Only requirements marked kind=runtime may be deferred, with concrete verification
 instructions. Runtime claims require observed, ledger-verified successful local, SSH

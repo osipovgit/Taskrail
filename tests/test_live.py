@@ -847,6 +847,25 @@ class LiveTests(unittest.TestCase):
         self.assertIn("You are the planner stage", prompt)
         self.assertIn(str(run / planner[0]["directory"] / "request.md"), prompt)
 
+    def test_rejected_quote_is_corrected_in_the_same_session(self):
+        run, status, state = self.run_mode("bad-quote")
+        self.assertEqual(status, "READY_FOR_REVIEW", state.get("summary"))
+        planner = [stage for stage in state["stages"] if stage["stage"] == "planner"]
+        self.assertEqual([stage["mode"] for stage in planner], ["model"])
+        prompt = (run / planner[0]["directory"] / "tool-result.md").read_text()
+        self.assertIn("Quotation differs from source: Evidence E1", prompt)
+        self.assertIn("Those lines read", prompt)
+        self.assertIn("# user comment", prompt)
+
+    def test_kept_wrong_quote_gets_a_full_attempt_instead_of_a_blind_repair(self):
+        run, status, state = self.run_mode("bad-quote-kept")
+        self.assertEqual(status, "READY_FOR_REVIEW", state.get("summary"))
+        planner = [stage for stage in state["stages"] if stage["stage"] == "planner"]
+        self.assertEqual([stage["mode"] for stage in planner], ["model", "research-recovery"])
+        self.assertEqual(planner[0]["session_turns"], 3)
+        request = (run / planner[1]["directory"] / "request.md").read_text()
+        self.assertIn("PREVIOUS FINAL RESPONSE WAS INVALID: Quotation differs from source", request)
+
     def test_markup_request_gets_the_json_format_in_the_same_session(self):
         run, status, state = self.run_mode("markup-request")
         self.assertEqual(status, "READY_FOR_REVIEW", state.get("summary"))

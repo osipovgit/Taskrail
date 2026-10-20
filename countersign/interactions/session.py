@@ -6,6 +6,7 @@ from countersign.core import control
 from countersign.core.files import atomic_json, changed
 from countersign.infrastructure import opencode_api
 from countersign.infrastructure.runner import run_agent
+from countersign.interactions import events
 from countersign.interactions.actions import Actions
 from countersign.interactions.clock import StageClock
 
@@ -14,6 +15,8 @@ SESSION_ID = "session_id"
 # continuation names the role and where its instructions and response schema are.
 CONTINUE = "\nContinue the SAME task using existing context. Do not restart research. You are the {role} stage; if earlier context was summarized, re-read your instructions and response schema in {request}. Planner and reviewer stages never change project files. Return exactly one JSON object as the entire message: the next executor request or the final stage result.\n"
 TOKENS = "tokens"
+MAX_RESULT_CORRECTIONS = 2
+RESULT_REJECTED = "Your final result was rejected, so the stage did not finish: {0}\nFix exactly this in the same session. Re-read cited lines if needed, keep the rest of the result, and return the complete corrected final JSON result as the entire message.\n"
 
 
 class StageSession:
@@ -29,6 +32,7 @@ class StageSession:
         self.clock = StageClock(active[1]["budget"]["timeout"])
         self.context = dict(session_id=None, turns=0, tokens={}, attachment={})
         self.context["corrections"] = 0
+        self.context["result_corrections"] = 0
 
     def run(self):
         """One stage server serves every turn and stops with the stage."""
@@ -43,7 +47,7 @@ class StageSession:
         """Only intermediate responses continue; final validation stays independent."""
         while self.clock.remaining() > 0:
             outcome = self.turn()
-            response = Actions(self).route(outcome)
+            response = Actions(self).route(outcome) or result_feedback(self, outcome)
             if response is None:
                 return self.finished(outcome)
             if not self.continue_context(outcome, response):
@@ -120,6 +124,26 @@ class StageSession:
         record = self.active[1]
         record.update(session_turns=self.context["turns"], paused_seconds=self.clock.paused)
         return outcome
+
+
+def result_feedback(session, outcome):
+    """Return a final result that fails validation to the same session, twice per stage.
+
+    The session still has its context and tools; a later format repair has neither.
+    """
+    check = session.environment.get("check_result")
+    context = session.context
+    if check is None or session.environment["format_only"] or outcome["status"] != "OK":
+        return None
+    if context["result_corrections"] >= MAX_RESULT_CORRECTIONS:
+        return None
+    error = check(outcome)
+    if error is None:
+        return None
+    context["result_corrections"] += 1
+    feedback = RESULT_REJECTED.format(error)
+    events.append(session.active[0], "correction", dict(response="final result"), feedback)
+    return feedback
 
 
 def run_stage(active, state, environment, launch):
