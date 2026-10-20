@@ -21,7 +21,9 @@ export function epicSection(epic, actions) {
   section.append(el('h3', 'Tasks · ' + epic.progress + ' done'));
   const list = el('ol', undefined, 'epic-tasks');
   for (const task of epic.tasks) list.append(taskItem(task, epic, actions));
-  const next = el('button', epic.next ? 'Start ' + epic.next : 'No task ready', 'primary');
+  const again = epic.tasks.some((task) => task.id === epic.next && task.run);
+  const label = epic.next ? 'Start ' + epic.next + (again ? ' again' : '') : 'No task ready';
+  const next = el('button', label, 'primary');
   next.type = 'button';
   next.disabled = !epic.next;
   next.title = 'Start the next task as a new run with a brief of the earlier tasks.';
@@ -30,10 +32,13 @@ export function epicSection(epic, actions) {
   auto.type = 'checkbox';
   auto.checked = epic.auto_continue;
   auto.onchange = () => actions.act(auto.checked ? 'epic_auto_on' : 'epic_auto_off');
-  const label = el('label', undefined, 'epic-auto');
-  label.append(auto, el('span', ' Start the next task automatically after each successful one'));
+  const autoLabel = el('label', undefined, 'epic-auto');
+  autoLabel.append(
+    auto,
+    el('span', ' Start the next task automatically after each successful one'),
+  );
   const controls = el('div', undefined, 'run-actions');
-  controls.append(next, label);
+  controls.append(next, autoLabel);
   section.append(list, controls);
   return section;
 }

@@ -5,6 +5,7 @@ import re
 from types import MappingProxyType
 
 from countersign.application import worktree_isolation
+from countersign.core import requirements
 
 FIELDS = MappingProxyType(
     {
@@ -70,7 +71,7 @@ class TaskDraft:
         if self.sections.get("Goal") and self.preamble:
             paragraphs.append(self.preamble)
         for title, section in self.sections.items():
-            if title not in {*FIELDS.values(), "Turn control", "Current turn"}:
+            if title not in {*FIELDS.values(), *requirements.SERVER_TITLES}:
                 paragraphs.append(f"### {title}\n{section}")
         return "\n\n".join(paragraphs).strip()
 

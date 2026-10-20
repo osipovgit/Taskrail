@@ -7,7 +7,7 @@ import unittest
 from pathlib import Path
 
 from countersign.application import evidence, instruction_sources, prompts, result_validation
-from countersign.core import coverage, plan_contract, schema
+from countersign.core import control, coverage, plan_contract, schema
 from countersign.core.requirements import task_requirements
 
 
@@ -161,6 +161,18 @@ class ContractTests(unittest.TestCase):
         ]:
             with self.subTest(invalid=invalid[:50]), self.assertRaises(ValueError):
                 schema.decode(invalid, "planner")
+
+    def test_server_sections_are_instructions_and_splits_stay_small(self):
+        task = "# Title\n\n## Goal\nShip it\n\n## Workflow rules\nUse English\n\n## Turn control\nSplit\n"
+        self.assertEqual(
+            [entry["text"] for entry in task_requirements(task, [])],
+            ["# Title", "## Goal\nShip it"],
+        )
+        steps = [dict(id=f"S{number}") for number in range(9)]
+        plan = dict(steps=steps, proposed_change_files=["a"])
+        with self.assertRaisesRegex(ValueError, "at most 8 tasks"):
+            control.check_plan(plan, dict(decompose=True))
+        control.check_plan(dict(plan, steps=steps[:8]), dict(decompose=True))
 
     def test_structured_step_must_own_planned_requirement(self):
         self.payload["coverage"][0]["outcome"] = "planned"

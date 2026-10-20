@@ -7,14 +7,23 @@ FINISHED = epic_tasks.FINISHED
 STATUS = epic_tasks.STATUS
 
 
+def finished(task):
+    """A task whose run succeeded, or that the operator marked done."""
+    return task[STATUS] in FINISHED or task["done"]
+
+
 def next_task(entries):
-    """The first task without a run whose dependencies finished, unless a task is active."""
+    """The first unfinished task once its dependencies finished, unless a task is active.
+
+    A task whose run failed may be started again by the operator; auto-continue never
+    does, because the epic then needs the operator (see group).
+    """
     if any(task[STATUS] in ACTIVE for task in entries):
         return None
-    finished = {task["id"] for task in entries if task[STATUS] in FINISHED}
+    done = {task["id"] for task in entries if finished(task)}
     for task in entries:
-        if task["run"] is None:
-            return task if set(task["depends_on"]) <= finished else None
+        if task["id"] not in done:
+            return task if set(task["depends_on"]) <= done else None
     return None
 
 
@@ -23,7 +32,7 @@ def group(entries, auto_continue):
     statuses = [task[STATUS] for task in entries]
     if any(status in ACTIVE for status in statuses):
         return "running"
-    if any(status and status not in FINISHED for status in statuses):
+    if any(task[STATUS] and not finished(task) for task in entries):
         return "attention"
     if next_task(entries) is not None:
         return "running" if auto_continue else "attention"
@@ -56,5 +65,5 @@ def list_fields(run, state, current):
 
 def progress(entries):
     """Finished tasks out of all tasks, as shown in the run list."""
-    finished = sum(task[STATUS] in FINISHED for task in entries)
-    return "{0}/{1}".format(finished, len(entries))
+    count = sum(finished(task) for task in entries)
+    return "{0}/{1}".format(count, len(entries))

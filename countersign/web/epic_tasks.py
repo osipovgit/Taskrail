@@ -9,7 +9,7 @@ import json
 from types import MappingProxyType
 
 from countersign.core.files import atomic_json
-from countersign.web import lifecycle
+from countersign.web import lifecycle, run_groups
 from countersign.web.history import read_artifact
 
 EPIC = "epic.json"
@@ -20,7 +20,7 @@ ACTIVE = frozenset(("STARTING", "RUNNING"))
 SUMMARY_LIMIT = 400
 TITLE_LIMIT = 120
 IDENTIFIER = "id"
-NOT_STARTED = MappingProxyType(dict(status=None, summary="", changed_files=()))
+NOT_STARTED = MappingProxyType(dict(status=None, summary="", changed_files=(), done=False))
 STEP_FIELDS = MappingProxyType(
     {"goal": "action", "checks": "checks", "files": "files", "depends_on": "depends_on"}
 )
@@ -74,4 +74,6 @@ def outcome(child):
     state = json.loads(index.read_text())
     summary = state.get("summary", "")[:SUMMARY_LIMIT]
     status = lifecycle.display_status(child, state)
-    return dict(status=status, summary=summary, changed_files=state.get("changed_files", []))
+    outcome = dict(status=status, summary=summary, done=run_groups.marked(child, state))
+    outcome["changed_files"] = state.get("changed_files", [])
+    return outcome

@@ -31,14 +31,17 @@ The run list groups runs by what they need:
 
 Choose the **Split into tasks** mode for a goal too large for one review. The planner
 writes each task as a plan step (title, files, covered requirements, dependencies and
-acceptance checks), plan review checks the split, and the run stops as
-**Tasks ready** without editing anything.
+acceptance checks), at most 8 tasks; plan review checks the split, and the run stops
+as **Tasks ready** without editing anything.
 
 The run page lists the tasks with the status of each task's run. **Start S-n** starts
 the next task whose dependencies finished, as a new run in the same projects (the same
 worktrees if the split was isolated). That run gets the overall goal, every task with
-its outcome so far and its own step, instead of the whole conversation, so it stays
-within the model context. It is planned, implemented and reviewed like any task.
+its outcome so far and its own step in a **Task split context** section, instead of
+the whole conversation, so it stays within the model context. It is planned,
+implemented and reviewed like any task. A task whose run failed can be started again
+with **Start S-n again**; marking a task's run done counts it as finished. A stopped
+**Allow all actions** on the split also applies to the tasks started after it.
 **Start the next task automatically after each successful one** continues on its own
 and stops at the first task that does not finish successfully; that task, and the
 split, then appear under Needs you. The list shows the split's progress (`Tasks 1/3`)

@@ -55,9 +55,10 @@ also run in [isolated Git worktrees](docs/task-format.md#worktree-isolation) on 
 branch, leaving the source checkout untouched. Tasks on different projects run in
 parallel; one project runs one task at a time.
 
-Success means **Ready for your review** or **No changes required**. Other project
-tests, Docker, CI and deployment never run automatically; agents may request local
-commands that you approve one by one or once per run. The optional
+Success means **Ready for your review**, **No changes required** or, for a goal split
+into tasks, **Tasks ready**. Other project tests, Docker, CI and deployment never run
+automatically; agents may request local commands that you approve one by one or once
+per run, while read-only listings inside the projects run without asking. The optional
 [isolated SSH executor](docs/ssh-executor.md) runs exact remote scripts and Jenkins builds after personal
 root approval, with results returned to the same task. Deferred runtime checks
 remain visible. Every model result follows a strict JSON contract; source quotations

@@ -4,6 +4,9 @@ import hashlib
 import re
 
 HEADER = re.compile(r"(?ms)^```countersign-task\s*\n.*?^```\s*$")
+# Server-generated instructions are followed as policy, not covered as requirements.
+SERVER_TITLES = ("Workflow rules", "Turn control", "Current turn", "Task split context")
+SERVER_SECTIONS = re.compile(r"(?ms)^## (?:{0})\n.*?(?=^## |\Z)".format("|".join(SERVER_TITLES)))
 HASH_PREFIX_LENGTH = 12
 HISTORY = "\n## Conversation history"
 
@@ -11,7 +14,7 @@ HISTORY = "\n## Conversation history"
 def task_requirements(task, deferred):
     """Retain every current task block; old conversation remains reference data."""
     task = task.split(HISTORY, 1)[0]
-    current = HEADER.sub("", task).strip()
+    current = SERVER_SECTIONS.sub("", HEADER.sub("", task)).strip()
     blocks = re.split(r"\n\s*\n|\n(?=\s*(?:[-*] |\d+[.)] ))", current)
     entries = [entry.strip() for entry in blocks if entry.strip()]
     requirements = [requirement(entry, "task") for entry in entries]
