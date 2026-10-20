@@ -843,7 +843,17 @@ class LiveTests(unittest.TestCase):
         self.assertEqual([stage["mode"] for stage in planner], ["model"])
         self.assertEqual(planner[0]["session_turns"], 2)
         prompt = (run / planner[0]["directory"] / "tool-result.md").read_text()
-        self.assertIn("neither an executor request nor a final result", prompt)
+        self.assertIn("not one JSON request or result", prompt)
+        self.assertIn("You are the planner stage", prompt)
+        self.assertIn(str(run / planner[0]["directory"] / "request.md"), prompt)
+
+    def test_markup_request_gets_the_json_format_in_the_same_session(self):
+        run, status, state = self.run_mode("markup-request")
+        self.assertEqual(status, "READY_FOR_REVIEW", state.get("summary"))
+        planner = [stage for stage in state["stages"] if stage["stage"] == "planner"]
+        self.assertEqual([stage["mode"] for stage in planner], ["model"])
+        prompt = (run / planner[0]["directory"] / "tool-result.md").read_text()
+        self.assertIn('"status": "LOCAL_REQUEST"', prompt)
 
     def test_failed_writer_response_can_continue_with_an_operator_note(self):
         run, status, state = self.run_mode("writer-prose-always")
