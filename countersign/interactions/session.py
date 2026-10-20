@@ -10,6 +10,9 @@ from countersign.interactions.actions import Actions
 from countersign.interactions.clock import StageClock
 
 SESSION_ID = "session_id"
+# opencode may summarize a long session and drop the attached instructions, so every
+# continuation names the role and where its instructions and response schema are.
+CONTINUE = "\nContinue the SAME task using existing context. Do not restart research. You are the {role} stage; if earlier context was summarized, re-read your instructions and response schema in {request}. Planner and reviewer stages never change project files. Return exactly one JSON object as the entire message: the next executor request or the final stage result.\n"
 TOKENS = "tokens"
 
 
@@ -97,7 +100,7 @@ class StageSession:
         folder, record = self.active
         prompt = folder / "tool-result.md"
         prompt.write_text(
-            f"{response}\nContinue the SAME task using existing context. Do not restart research. Return the next request or final result.\n"
+            response + CONTINUE.format(role=record["role"], request=folder / "request.md")
         )
         self.launch["prompt"] = prompt
         record.update(

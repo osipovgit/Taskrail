@@ -4,6 +4,7 @@ import json
 import subprocess
 from pathlib import Path
 
+from countersign.core import json_response
 from countersign.git import dispatch, requests
 from countersign.git.deadline import Deadline
 from countersign.interactions import (
@@ -19,7 +20,7 @@ from countersign.interactions import (
 from countersign.interactions.clock import ApprovalPause
 
 MAX_CORRECTIONS = 2
-NARRATION = "Your last message is neither an executor request nor a final result, so nothing was executed and the stage cannot finish. If it describes your next step, return that request now as the entire response; otherwise return the final result JSON."
+NARRATION = 'Your last message is not one JSON request or result, so nothing was executed and the stage cannot finish. Requests and results are plain JSON objects, not XML or tool-call markup. A local command is {{"schema_version": 1, "status": "LOCAL_REQUEST", "cwd": "...", "argv": ["..."], "reason": "..."}}; a Git command is {{"schema_version": 1, "status": "GIT_REQUEST", "root": "...", "argv": ["..."], "reason": "..."}}; the final stage result follows the response schema in {0}. Return exactly one of them as the entire message.'
 MISSING_PROGRAM = "{0} is not installed on the orchestrator host. Install it, then Allow to run this exact command; or Deny."
 
 
@@ -113,16 +114,16 @@ class Actions:
 def incomplete_request(actions, text):
     """Return a near-miss request or bare narration to the same session, twice per stage.
 
-    A turn that only describes its next step would otherwise go to a format repair
-    without tools or context, which cannot rebuild a result from narration.
+    A turn that only describes its next step, or writes a request as XML or tool-call
+    markup, would otherwise go to a format repair without tools or context.
     """
     context = actions.session.context
     if context["corrections"] >= MAX_CORRECTIONS:
         return None
     if local_request.incomplete(text):
         feedback = local_request.correction(text)
-    elif narration(text):
-        feedback = NARRATION
+    elif not_json(text):
+        feedback = NARRATION.format(actions.folder / "request.md")
     else:
         return None
     context["corrections"] += 1
@@ -130,9 +131,18 @@ def incomplete_request(actions, text):
     return feedback
 
 
-def narration(text):
-    """Plain text without any JSON object: the turn ended while describing a next step."""
-    return bool(text.strip()) and "{" not in text
+def not_json(text):
+    """Text without one JSON object: narration or a request written as markup.
+
+    A single JSON object, even an invalid result, goes to validation and format repair.
+    """
+    if not text.strip():
+        return False
+    try:
+        json_response.extract(text, dict)
+    except ValueError:
+        return True
+    return False
 
 
 def install_notice(payload):
