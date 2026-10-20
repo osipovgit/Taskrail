@@ -272,6 +272,10 @@ class TaskControlTests(unittest.TestCase):
         ids = [entry["text"] for entry in task_requirements(text, [])]
         self.assertFalse(any("S-2" in entry or "Workflow rules" in entry for entry in ids))
         self.assertIn("## Task split context", text)
+        self.assertIn(
+            "Overall acceptance criteria (apply to this task's part):\n" + self.payload["criteria"],
+            text,
+        )
         self.assertEqual(json.loads((epic / "epic.json").read_text())["tasks"], {"S-1": "child-1"})
         with self.assertRaisesRegex(ValueError, "No task is ready"):
             self.launcher.action(dict(id="epic", action="epic_next"))

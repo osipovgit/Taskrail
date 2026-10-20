@@ -54,8 +54,10 @@ def payload(run, state, entries, task):
 
 
 def brief(epic, draft, entries, current):
-    """The scope rule, the overall goal and every task with its outcome so far."""
-    lines = [SCOPE, "", f"Overall goal (task split run {epic}):", draft["goal"], "", "Tasks:"]
+    """The scope rule, the overall goal and criteria, and every task with its outcome so far."""
+    lines = [SCOPE, "", f"Overall goal (task split run {epic}):", draft["goal"], ""]
+    lines.extend(["Overall acceptance criteria (apply to this task's part):", draft["criteria"]])
+    lines.extend(["", "Tasks:"])
     lines.extend(task_line(task, current) for task in entries)
     return "\n".join(lines)
 

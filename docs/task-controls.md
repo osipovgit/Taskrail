@@ -36,7 +36,7 @@ as **Tasks ready** without editing anything.
 
 The run page lists the tasks with the status of each task's run. **Start S-n** starts
 the next task whose dependencies finished, as a new run in the same projects (the same
-worktrees if the split was isolated). That run gets the overall goal, every task with
+worktrees if the split was isolated). That run gets the overall goal and acceptance criteria, every task with
 its outcome so far and its own step in a **Task split context** section, instead of
 the whole conversation, so it stays within the model context. It is planned,
 implemented and reviewed like any task. A task whose run failed can be started again
