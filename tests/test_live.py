@@ -836,6 +836,15 @@ class LiveTests(unittest.TestCase):
         request = (run / repair["directory"] / "request.md").read_text()
         self.assertIn("This pass cannot edit files", request)
 
+    def test_narration_without_a_request_continues_the_same_session(self):
+        run, status, state = self.run_mode("narrate")
+        self.assertEqual(status, "READY_FOR_REVIEW", state.get("summary"))
+        planner = [stage for stage in state["stages"] if stage["stage"] == "planner"]
+        self.assertEqual([stage["mode"] for stage in planner], ["model"])
+        self.assertEqual(planner[0]["session_turns"], 2)
+        prompt = (run / planner[0]["directory"] / "tool-result.md").read_text()
+        self.assertIn("neither an executor request nor a final result", prompt)
+
     def test_failed_writer_response_can_continue_with_an_operator_note(self):
         run, status, state = self.run_mode("writer-prose-always")
         self.assertEqual(status, "INVALID_RESULT")
