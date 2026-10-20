@@ -33,6 +33,7 @@ def start(workflow, resume):
     workflow.state[approval_policy.AUTO_APPROVE] = approval_policy.at_start(
         workflow.run, workflow.config
     )
+    workflow.state["decompose"] = workflow.config.get("decompose") is True
     control.clear_stop(workflow.run, resume)
 
 

@@ -11,6 +11,7 @@
 | Send a follow-up Goal | Previous run stopped, no active run on its projects | Snapshot prior public evidence and start a new run from planning |
 | Answer only | New or follow-up submission | Research and independent review, no implementation |
 | Design discussion | New or follow-up submission | Like Answer only, but the reviewed summary is a design document, saved as `design.md`; follow-ups refine it, a **Change code** follow-up implements it |
+| Split into tasks | New or restarted submission | Plan the Goal as 2 to 8 reviewed tasks without editing; the run ends as **Tasks ready** and its page tracks the tasks |
 | Mark as done / Move back from Done | Stopped run | Move the run to the Done group, or return it to its computed group; nothing else changes |
 | Delete from history | Stopped/completed run | Move run and launcher artifacts to local trash; leave source files untouched |
 
@@ -22,6 +23,24 @@ The run list groups runs by what they need:
 | Needs you | A pending UI decision, an SSH or Jenkins ticket waiting for root approval, or a stop without a successful result (errors, budgets, interruptions); highlighted in yellow |
 | Ready for review | Finished with changes to review |
 | Done | Finished without changes, or marked done; collapsed until opened or searched |
+
+## Split into tasks
+
+Choose the **Split into tasks** mode for a goal too large for one review. The planner
+writes each task as a plan step (title, files, covered requirements, dependencies and
+acceptance checks), plan review checks the split, and the run stops as
+**Tasks ready** without editing anything.
+
+The run page lists the tasks with the status of each task's run. **Start S-n** starts
+the next task whose dependencies finished, as a new run in the same projects (the same
+worktrees if the split was isolated). That run gets the overall goal, every task with
+its outcome so far and its own step, instead of the whole conversation, so it stays
+within the model context. It is planned, implemented and reviewed like any task.
+**Start the next task automatically after each successful one** continues on its own
+and stops at the first task that does not finish successfully; that task, and the
+split, then appear under Needs you. The list shows the split's progress (`Tasks 1/3`)
+and puts it under Running while a task runs, Needs you when the next task waits for
+you, and Ready for review when all tasks finished.
 
 A done mark belongs to the outcome it was given for: if a continuation ends with a
 different result, the run leaves Done again.

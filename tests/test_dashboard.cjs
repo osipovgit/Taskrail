@@ -270,6 +270,39 @@ async function main() {
   state.runs = [];
   console.log('Run groups and the Needs you highlight passed.');
 
+  const { epicSection } = await load('epic');
+  const acted = [];
+  const panel = epicSection(
+    {
+      progress: '1/2',
+      next: 'S-2',
+      auto_continue: false,
+      tasks: [
+        {
+          id: 'S-1',
+          title: 'Change hello',
+          status: 'READY_FOR_REVIEW',
+          run: 'child-1',
+          summary: 'Done',
+        },
+        { id: 'S-2', title: 'Document hello', status: null, run: null, summary: '' },
+      ],
+    },
+    { act: (action) => acted.push(action), open: (id) => acted.push('open ' + id) },
+  );
+  const epicButtons = all(panel).filter((n) => n.tagName === 'button');
+  assert.deepEqual(
+    epicButtons.map((n) => n.textContent),
+    ['Open run', 'Start S-2'],
+  );
+  epicButtons.forEach((button) => button.onclick());
+  const toggle = all(panel).find((n) => n.type === 'checkbox');
+  toggle.checked = true;
+  toggle.onchange();
+  assert.deepEqual(acted, ['open child-1', 'epic_next', 'epic_auto_on']);
+  assert.ok(all(panel).some((n) => n.textContent === 'Next'));
+  console.log('Task split panel passed.');
+
   // A budget-paused run exposes both continuation choices and reversible deletion.
   for (const name of ['reply-goal', 'send-reply', 'monitor']) nodes[name] = new Node('div');
   globalThis.scrollY = 0;

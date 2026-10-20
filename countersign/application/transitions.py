@@ -29,7 +29,9 @@ def plan_review(flow, state, verdict, limit):
         return
     flow[ALLOWED] = flow["plan"]["proposed_change_files"]
     state["no_changes_needed"] = not bool(flow[ALLOWED])
-    if flow[ALLOWED]:
+    if flow[ALLOWED] and state.get("decompose"):
+        state.update(status="TASKS_READY", summary=verdict[SUMMARY])
+    elif flow[ALLOWED]:
         flow.update(stage=IMPLEMENTER, feedback=None, effect="capture_preimages")
     else:
         terminal = "READY_FOR_REVIEW" if state.get("execution_jobs") else "NO_CHANGES_REQUIRED"

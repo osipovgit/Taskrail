@@ -4,7 +4,7 @@ from collections import Counter
 
 from countersign.web.run_files import contained, read_json
 
-SUCCESS = frozenset(("READY_FOR_REVIEW", "NO_CHANGES_REQUIRED"))
+SUCCESS = frozenset(("READY_FOR_REVIEW", "NO_CHANGES_REQUIRED", "TASKS_READY"))
 STAGE_OK = frozenset(
     ("RESULT_VALID", "CHECK_COMPLETED", "ACTION_REQUEST", "GIT_REQUEST", "RUNNING")
 )

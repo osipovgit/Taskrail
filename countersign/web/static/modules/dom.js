@@ -14,6 +14,7 @@ export const statuses = {
   RUNNING: 'Running',
   WAITING_APPROVAL: 'Your decision required',
   NO_CHANGES_REQUIRED: 'No changes required',
+  TASKS_READY: 'Tasks ready',
   READY_FOR_REVIEW: 'Ready for your review',
   RESULT_VALID: 'Result validated',
   PLAN_READY: 'Plan ready',
@@ -40,7 +41,13 @@ export function el(tag, text, cls) {
   return node;
 }
 export function badge(text) {
-  const good = ['NO_CHANGES_REQUIRED', 'READY_FOR_REVIEW', 'APPROVE', 'PASS'].includes(text);
+  const good = [
+    'NO_CHANGES_REQUIRED',
+    'READY_FOR_REVIEW',
+    'TASKS_READY',
+    'APPROVE',
+    'PASS',
+  ].includes(text);
   const cls = good ? 'good' : /ERROR|BLOCKED|FAIL|INVALID|TIMEOUT/.test(text) ? 'bad' : '';
   return el('span', statuses[text] || text, 'badge ' + cls);
 }

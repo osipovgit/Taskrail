@@ -9,7 +9,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from countersign.application.live import execute_task
-from countersign.web import requests
+from countersign.web import epic_launch, requests
 from countersign.web.history import HISTORY, conversation, previous_messages, task_draft
 from countersign.web.lifecycle import trash_run
 from countersign.web.run_list import list_runs
@@ -196,6 +196,80 @@ class TaskControlTests(unittest.TestCase):
             followup = launch.call_args.args[0]["text"]
         self.assertIn('"design": true', followup)
         self.assertIn("Conversation history", followup)
+
+    def make_epic(self):
+        epic = self.runs / "epic"
+        (epic / "00-input").mkdir(parents=True)
+        text, _ = build_task(dict(self.payload, goal="Return 2 and document it"), self.runs)
+        decorated = text.replace('"roots":', '"decompose": true, "auto_approve": true, "roots":', 1)
+        (epic / "00-input/task.md").write_text(decorated)
+        steps = [
+            dict(
+                id="S-1",
+                action="Change hello: return 2",
+                files=[],
+                criteria=[],
+                depends_on=[],
+                checks=["hello returns 2"],
+            ),
+            dict(
+                id="S-2",
+                action="Document hello: describe the value",
+                files=[],
+                criteria=[],
+                depends_on=["S-1"],
+                checks=["README mentions 2"],
+            ),
+        ]
+        (epic / "plan.json").write_text(json.dumps(dict(steps=steps)))
+        index = dict(
+            status="TASKS_READY",
+            roots={"project": str(self.repo)},
+            results={"plan": "plan.json"},
+            stages=[],
+        )
+        (epic / "run.json").write_text(json.dumps(index))
+        return epic
+
+    def finish(self, name, status):
+        child = self.runs / name
+        (child / "00-input").mkdir(parents=True, exist_ok=True)
+        (child / "00-input/task.md").write_text("# child\n")
+        state = dict(status=status, summary=f"{name} summary", changed_files=["/repo/hello.py"])
+        (child / "run.json").write_text(json.dumps(state))
+
+    def test_task_split_starts_tasks_in_order_with_a_brief(self):
+        epic = self.make_epic()
+        epic_entry = next(run for run in list_runs(self.runs) if run["id"] == "epic")
+        self.assertEqual((epic_entry["group"], epic_entry["progress"]), ("attention", "0/2"))
+        view = run_view(self.runs, "epic")["epic"]
+        self.assertEqual(view["next"], "S-1")
+        with patch.object(self.launcher, "launch", return_value={"id": "child-1"}) as launch:
+            self.launcher.action(dict(id="epic", action="epic_next"))
+            text = launch.call_args.args[0]["text"]
+        self.assertIn("Change hello: return 2", text)
+        self.assertIn("S-1: Change hello (current task)", text)
+        self.assertIn("S-2: Document hello (later; not part of this run)", text)
+        self.assertIn('"auto_approve": true', text)
+        self.assertNotIn('"decompose"', text)
+        self.assertNotIn("Conversation history", text)
+        self.assertEqual(json.loads((epic / "epic.json").read_text())["tasks"], {"S-1": "child-1"})
+        with self.assertRaisesRegex(ValueError, "No task is ready"):
+            self.launcher.action(dict(id="epic", action="epic_next"))
+        self.finish("child-1", "TOOL_ERROR")
+        self.assertEqual(run_view(self.runs, "epic")["epic"]["next"], None)
+        self.launcher.action(dict(id="epic", action="epic_auto_on"))
+        with patch.object(self.launcher, "launch") as launch:
+            epic_launch.advance(self.launcher)
+        launch.assert_not_called()
+        self.finish("child-1", "READY_FOR_REVIEW")
+        with patch.object(self.launcher, "launch", return_value={"id": "child-2"}) as launch:
+            epic_launch.advance(self.launcher)
+            text = launch.call_args.args[0]["text"]
+        self.assertIn("S-1: Change hello (READY_FOR_REVIEW): child-1 summary", text)
+        self.finish("child-2", "READY_FOR_REVIEW")
+        epic_entry = next(run for run in list_runs(self.runs) if run["id"] == "epic")
+        self.assertEqual((epic_entry["group"], epic_entry["progress"]), ("review", "2/2"))
 
     def test_allow_all_actions_can_be_revoked_from_the_ui(self):
         index = self.run / "run.json"
