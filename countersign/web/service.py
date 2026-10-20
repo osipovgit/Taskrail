@@ -10,8 +10,8 @@ from pathlib import Path
 
 from countersign.core.files import atomic_json
 from countersign.core.runtime import run_storage
+from countersign.web import epic_launch, server
 from countersign.web.config_watch import ConfigurationWatch
-from countersign.web.server import make_server
 from countersign.web.submissions import TaskLauncher
 
 POLL_SECONDS = 0.2
@@ -25,7 +25,7 @@ class ApplicationService:
     def __init__(self, base, port=DEFAULT_PORT, settings=None):
         base = run_storage(settings, base)
         self.launcher = TaskLauncher(base, settings)
-        self.server = make_server(base, port, launcher=self.launcher)
+        self.server = server.make_server(base, port, launcher=self.launcher)
         self.stopping = threading.Event()
 
     def request_stop(self, signum=None, frame=None):
@@ -51,6 +51,7 @@ class ApplicationService:
             cleanup.callback(self.shutdown, thread)
             while not self.stopping.wait(CONFIG_POLL_SECONDS):
                 watcher.poll()
+                epic_launch.advance(self.launcher)
 
     def shutdown(self, thread):
         """Serialize shutdown with worker creation, including in-flight HTTP requests."""

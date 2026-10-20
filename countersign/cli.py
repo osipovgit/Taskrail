@@ -10,7 +10,7 @@ from countersign import cli_service
 ERROR_PREFIX = "Error: "
 SETTINGS_OPTION = "--settings"
 COMMAND_ARGUMENT = "command"
-SUCCESS = frozenset(("READY_FOR_REVIEW", "NO_CHANGES_REQUIRED"))
+SUCCESS = frozenset(("READY_FOR_REVIEW", "NO_CHANGES_REQUIRED", "TASKS_READY"))
 FAILED = 2
 INTERRUPTED = 130
 FAILURES = (ValueError, OSError, KeyError)

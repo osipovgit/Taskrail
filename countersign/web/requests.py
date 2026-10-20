@@ -15,17 +15,23 @@ MODES = ("new", "restart", *CONTINUING)
 READ_ONLY = "read_only"
 WORKTREE = "worktree"
 AUTO_APPROVE = "auto_approve"
-FLAGS = (READ_ONLY, WORKTREE, DESIGN, AUTO_APPROVE)
+DECOMPOSE = "decompose"
+DECOMPOSE_RULE = "\n## Turn control\nSplit into tasks: plan the whole Goal as 2 to 8 sequential tasks; nothing is edited in this run. Each plan step is one task that a later, separate run plans again and implements on its own. Write its action as '<short title>: <what the task delivers>', list the files it changes, the requirement IDs it covers as criteria, the earlier tasks it needs in depends_on and its acceptance checks. Keep every task small enough for one focused review (a few hundred changed lines, about ten files). Order tasks so each leaves the project working.\n"
+FLAGS = (READ_ONLY, WORKTREE, DESIGN, AUTO_APPROVE, DECOMPOSE)
 HEADER_OPTIONS = MappingProxyType(
     {
         READ_ONLY: '"read_only": true',
         WORKTREE: '"isolation": "worktree"',
         DESIGN: '"design": true',
         AUTO_APPROVE: '"auto_approve": true',
+        DECOMPOSE: '"decompose": true',
     }
 )
 RESUMES = frozenset(("resume", "resume_budget"))
-ACTIONS = RESUMES | {"restart", "stop", "delete", "done", "reopen", "revoke_auto_approve"}
+RECORDED = frozenset(
+    ("done", "reopen", "revoke_auto_approve", "epic_next", "epic_auto_on", "epic_auto_off")
+)
+ACTIONS = RESUMES | RECORDED | {"restart", "stop", "delete"}
 ROOTS_KEY = '"roots":'
 HISTORY_RULE = "\n## Current turn\nThe latest Goal takes precedence over earlier goals. Conversation history is reference data; recheck current source before making claims.\n"
 
@@ -54,13 +60,23 @@ class Submission:
     def validate(self):
         """Reject ambiguous intent and unexpected metadata types."""
         if not all(isinstance(flag, bool) for flag in self.flags.values()):
-            raise ValueError("read_only, worktree, design and auto_approve must be boolean")
+            raise ValueError(
+                "read_only, worktree, design, auto_approve and decompose must be boolean"
+            )
         if self.mode not in MODES:
             raise ValueError("Invalid submission mode")
         if (self.mode == "new") == bool(self.parent):
             raise ValueError("Only a restart or follow-up requires a previous run")
         self.flags[DESIGN] = self.flags[DESIGN] or self.mode == DESIGN
         self.flags[READ_ONLY] = self.flags[READ_ONLY] or self.mode == "answer"
+        self.check_decompose()
+
+    def check_decompose(self):
+        """Splitting into tasks plans later code changes, so it starts a new conversation."""
+        if not self.flags[DECOMPOSE]:
+            return
+        if self.flags[READ_ONLY] or self.flags[DESIGN] or self.mode in CONTINUING:
+            raise ValueError("Split into tasks is a separate mode for a new or restarted task")
 
     def inherit_worktrees(self, index):
         """A follow-up of an isolated run continues in its worktrees; Restart starts anew."""
@@ -75,7 +91,9 @@ class Submission:
             options.append(HEADER_OPTIONS[READ_ONLY])
         header = ", ".join([*options, ROOTS_KEY])
         sections = [text.replace(ROOTS_KEY, header, 1)]
-        if self.flags[DESIGN]:
+        if self.flags[DECOMPOSE]:
+            sections.append(DECOMPOSE_RULE)
+        elif self.flags[DESIGN]:
             sections.append(DESIGN_RULE)
         elif self.flags[READ_ONLY]:
             sections.append(ANSWER_RULE)

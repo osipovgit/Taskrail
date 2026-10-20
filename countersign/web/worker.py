@@ -10,7 +10,7 @@ from countersign.application.live import execute_task
 from countersign.core.files import atomic_json
 from countersign.observability.progress import say
 
-SUCCESS = frozenset(("READY_FOR_REVIEW", "NO_CHANGES_REQUIRED"))
+SUCCESS = frozenset(("READY_FOR_REVIEW", "NO_CHANGES_REQUIRED", "TASKS_READY"))
 
 
 def arguments():

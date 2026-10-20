@@ -19,7 +19,8 @@ PAGES = MappingProxyType(
 SCRIPTS = frozenset(
     ("/dashboard.js", "/theme.js")
     + tuple(
-        f"/modules/{name}.js" for name in ("analytics", "app", "dom", "monitor", "stages", "state")
+        f"/modules/{name}.js"
+        for name in ("analytics", "app", "dom", "epic", "monitor", "stages", "state")
     )
 )
 JAVASCRIPT = "text/javascript; charset=utf-8"
