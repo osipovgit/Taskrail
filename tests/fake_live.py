@@ -455,8 +455,10 @@ writer_prose = mode == "writer-prose-always" or (
 )
 if writer_prose and role == "implementer":
     response = "I changed hello.py; the work is done."
-if mode == "narrate" and role == "planner" and "neither an executor request" not in prompt:
+if mode == "narrate" and role == "planner" and "not one JSON request" not in prompt:
     response = "Let me run ansible-lint through bash -c to capture the full output."
+if mode == "markup-request" and role == "planner" and "not one JSON request" not in prompt:
+    response = '<request type="LOCAL_REQUEST"><command>python3</command><arg>print(f"{len(fixed)}")</arg></request>'
 if mode == "prose-block" and role == "planner":
     value["blocking_gaps"] = ["Mandatory local commands unavailable"]
     response = "Research complete [note].\n" + json.dumps(value)

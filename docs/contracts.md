@@ -99,9 +99,12 @@ argument is changed. Multiple objects, duplicate keys, arrays and malformed JSON
 are rejected. `cwd` is a declared root or an existing directory inside one. A
 response with `cwd` and `argv` but without `"status": "LOCAL_REQUEST"` or
 `schema_version` executes nothing; the same session is told what is missing, at most
-twice per stage. A turn that ends with plain text and no JSON object at all (for
-example, only announcing its next step) gets the same reminder in the same session,
-within the same limit, before a format repair is tried. When the provider rejects a
+twice per stage. A turn that ends without one JSON object (for
+example, only announcing its next step, or a request written as XML or tool-call
+markup) gets a reminder with the exact JSON formats in the same session, within the
+same limit, before a format repair is tried. Every continuation also names the stage
+role and its `request.md`, so a model whose session was summarized can re-read its
+instructions and response schema. When the provider rejects a
 turn because the session exceeded the model context window, the stage status is
 `CONTEXT_EXCEEDED` and a read-only stage continues in a new session from its recorded
 evidence (within `read_retries`); the implementer stops so Continue can inspect its edits. Denial means the command is
