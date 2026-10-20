@@ -30,11 +30,12 @@ def token_allowance(workflow):
     return budget - observed
 
 
-def session_environment(workflow, profile, files, format_only):
+def session_environment(workflow, profile, files, format_only, check_result):
     """What the stage session needs to keep scope and integrity guards between turns."""
     guard = workflow.guard
     return dict(
         format_only=format_only,
+        check_result=check_result,
         run=workflow.run,
         roots=workflow.config[ROOTS],
         profile=profile,
