@@ -242,6 +242,7 @@ class TaskControlTests(unittest.TestCase):
         epic = self.make_epic()
         epic_entry = next(run for run in list_runs(self.runs) if run["id"] == "epic")
         self.assertEqual((epic_entry["group"], epic_entry["progress"]), ("attention", "0/2"))
+        self.assertEqual(epic_entry["mode"], "decompose")
         view = run_view(self.runs, "epic")["epic"]
         self.assertEqual(view["next"], "S-1")
         with patch.object(self.launcher, "launch", return_value={"id": "child-1"}) as launch:
@@ -289,6 +290,7 @@ class TaskControlTests(unittest.TestCase):
         index = self.run / "run.json"
         state = json.loads(index.read_text())
         self.assertEqual(group(), "review")
+        self.assertEqual(list_runs(self.runs)[0]["mode"], "change")
         self.launcher.action(dict(id="original", action="done"))
         self.assertEqual(group(), "done")
         self.assertTrue(run_view(self.runs, "original")["actions"]["reopen"])

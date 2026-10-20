@@ -7,13 +7,16 @@
 | Restart from scratch | No active run on its projects | Open the prefilled task form; submit explicitly to create a new run |
 | Stop task | Running | Write a stop request; the worker cleans up opencode and saves an interruption checkpoint |
 | Continue with extra budget | Eligible checkpoint; explicit confirmation | Add two attempts and one attempt timeout to the interrupted stage; retain consumption |
-| Continue interrupted run | Eligible checkpoint and unchanged source | Append new attempts to the same run, starting at the interrupted stage |
+| Continue interrupted run | Eligible checkpoint and unchanged source | Append new attempts to the same run, starting at the interrupted stage; a planning or review stage that reported **Blocked** can continue too, with your note answering its question |
 | Send a follow-up Goal | Previous run stopped, no active run on its projects | Snapshot prior public evidence and start a new run from planning |
 | Answer only | New or follow-up submission | Research and independent review, no implementation |
 | Design discussion | New or follow-up submission | Like Answer only, but the reviewed summary is a design document, saved as `design.md`; follow-ups refine it, a **Change code** follow-up implements it |
 | Split into tasks | New or restarted submission | Plan the Goal as 2 to 8 reviewed tasks without editing; the run ends as **Tasks ready** and its page tracks the tasks |
 | Mark as done / Move back from Done | Stopped run | Move the run to the Done group, or return it to its computed group; nothing else changes |
 | Delete from history | Stopped/completed run | Move run and launcher artifacts to local trash; leave source files untouched |
+
+Each run page shows its mode (**Change code**, **Answer only**, **Design discussion** or
+**Split into tasks**); the run list shows the mode when it is not Change code.
 
 The run list groups runs by what they need:
 

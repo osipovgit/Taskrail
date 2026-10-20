@@ -1024,6 +1024,21 @@ class LiveTests(unittest.TestCase):
         self.assertTrue((run / "01-plan/blocked-draft.json").exists())
         self.assertIn("return 1", (self.root / "hello.py").read_text())
 
+    def test_blocked_plan_continues_with_the_operator_answer(self):
+        run, status, state = self.run_mode("prose-block")
+        self.assertEqual(status, "BLOCKED")
+        settings = json.loads(self.settings.read_text())
+        settings["command"][-1] = "ok"
+        self.settings.write_text(json.dumps(settings))
+        note = "Keep the uppercase environment variable names; plan the rest."
+        _, status = execute_task(
+            run / "00-input/task.md", self.settings, run_dir=run, resume=True, note=note
+        )
+        self.assertEqual(status, "READY_FOR_REVIEW")
+        state = json.loads((run / "run.json").read_text())
+        resumed = [stage for stage in state["stages"] if stage["stage"] == "planner"][-1]
+        self.assertIn(note, (run / resumed["directory"] / "request.md").read_text())
+
 
 if __name__ == "__main__":
     unittest.main()

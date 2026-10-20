@@ -60,7 +60,9 @@ class P2Tests(unittest.TestCase):
         self.assertFalse(actions(self.run, state, True)["resume_budget"])
         self.assertFalse(actions(self.run, state, True)["delete"])
         state["status"] = "BLOCKED"
-        self.assertFalse(actions(self.run, state, False)["resume_budget"])
+        self.assertTrue(actions(self.run, state, False)["resume"])
+        (self.run / "checkpoint.json").write_text(json.dumps(dict(stage="implementer")))
+        self.assertFalse(actions(self.run, state, False)["resume"])
         (self.run / "checkpoint.json").unlink()
         state["status"] = "INTERRUPTED"
         self.assertFalse(actions(self.run, state, False)["resume"])
