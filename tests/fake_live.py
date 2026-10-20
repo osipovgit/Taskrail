@@ -460,6 +460,11 @@ if mode == "narrate" and role == "planner" and "neither an executor request" not
 if mode == "prose-block" and role == "planner":
     value["blocking_gaps"] = ["Mandatory local commands unavailable"]
     response = "Research complete [note].\n" + json.dumps(value)
+if mode == "context-overflow" and role == "planner" and "EXCEEDED THE MODEL" not in prompt:
+    message = "litellm.ContextWindowExceededError: Context Window exceeded for given call. Max Input Tokens=94208, Got=96808"
+    overflow = dict(type="error", error=dict(name="APIError", data=dict(message=message)))
+    print(json.dumps(dict(overflow, sessionID="ses1")))
+    sys.exit(0)
 if mode == "failed-read" and role == "planner":
     failed = dict(
         status="error", input=dict(filePath=str(root)), error=f"Error: {root} is a directory"

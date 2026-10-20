@@ -20,6 +20,7 @@ RESUMABLE = frozenset(
         "BLOCKED_PERMISSION",
         "INVALID_RESULT",
         "TOOL_ERROR",
+        "CONTEXT_EXCEEDED",
         "CHANGE_LIMIT_EXCEEDED",
     )
 )

@@ -4,7 +4,7 @@ import re
 import time
 from types import MappingProxyType
 
-from countersign.infrastructure import turn_io, usage_limits
+from countersign.infrastructure import context_overflow, turn_io, usage_limits
 from countersign.infrastructure.event_summary import parse_events
 from countersign.infrastructure.process_watch import SUCCESS, TurnWatch
 
@@ -87,10 +87,12 @@ def final_status(status, code, outcome, stderr):
     """A clean exit still fails on denials, tool errors or a missing final answer."""
     if status != SUCCESS:
         return status
+    errors = outcome["errors"]
     failures = (
         (outcome["permission"] or AUTO_REJECT in stderr, "BLOCKED_PERMISSION"),
+        (context_overflow.exceeded(errors), context_overflow.STATUS),
         (code != 0, "PROCESS_ERROR"),
-        (bool(outcome["errors"]), "TOOL_ERROR"),
+        (bool(errors), "TOOL_ERROR"),
         (not outcome["completed"] or not outcome["final_text"].strip(), "INCOMPLETE"),
     )
     return next((name for failed, name in failures if failed), SUCCESS)

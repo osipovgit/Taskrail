@@ -21,6 +21,7 @@ export const statuses = {
   IMPLEMENTED: 'Changes implemented',
   BLOCKED_PERMISSION: 'Permission denied',
   TOOL_ERROR: 'Tool error',
+  CONTEXT_EXCEEDED: 'Context window exceeded',
   INVALID_RESULT: 'Invalid result',
   BLOCKED: 'Blocked',
   REQUEST_CHANGES: 'Changes requested',

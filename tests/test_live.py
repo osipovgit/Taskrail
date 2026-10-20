@@ -926,6 +926,17 @@ class LiveTests(unittest.TestCase):
         frozen = json.loads((run / "00-input/settings.json").read_text())
         self.assertIn("max_change_lines", frozen)
 
+    def test_context_overflow_continues_in_a_fresh_session(self):
+        run, status, state = self.run_mode("context-overflow")
+        self.assertEqual(status, "READY_FOR_REVIEW", state.get("summary"))
+        planner = [stage for stage in state["stages"] if stage["stage"] == "planner"]
+        self.assertEqual(
+            [stage["status"] for stage in planner], ["CONTEXT_EXCEEDED", "RESULT_VALID"]
+        )
+        self.assertEqual(planner[1]["mode"], "research-recovery")
+        request = (run / planner[1]["directory"] / "request.md").read_text()
+        self.assertIn("EXCEEDED THE MODEL CONTEXT WINDOW", request)
+
     def test_failed_read_does_not_fail_the_stage(self):
         run, status, state = self.run_mode("failed-read")
         self.assertEqual(status, "READY_FOR_REVIEW", state.get("summary"))
