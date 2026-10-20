@@ -311,6 +311,7 @@ async function main() {
     id: 'paused',
     status: 'STAGE_BUDGET_EXCEEDED',
     auto_approve: true,
+    draft: { decompose: true, roots: [] },
     actions: { resume: true, resume_budget: true, delete: true },
     task: { text: 'Task' },
     roots: {},
@@ -329,6 +330,7 @@ async function main() {
   assert.equal(buttons.find((node) => node.textContent === 'Stop task').disabled, true);
   assert.ok(all(nodes.chat).some((node) => node.className === 'resume-note'));
   assert.ok(all(nodes.chat).some((node) => node.textContent === 'All actions allowed'));
+  assert.ok(all(nodes.chat).some((node) => node.textContent === 'Mode: Split into tasks'));
   console.log('Budget continuation and deletion controls passed.');
 
   const toolToggle = all(nodes.chat).find((node) => node.type === 'checkbox');
