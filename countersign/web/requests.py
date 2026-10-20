@@ -1,6 +1,7 @@
 """Validate chat turn options independently of worker launch mechanics."""
 
 import json
+import re
 from types import MappingProxyType
 
 from countersign.application import worktree_isolation
@@ -25,9 +26,15 @@ HEADER_OPTIONS = MappingProxyType(
     }
 )
 RESUMES = frozenset(("resume", "resume_budget"))
-RECORDED = frozenset(
-    ("done", "reopen", "revoke_auto_approve", "epic_next", "epic_auto_on", "epic_auto_off")
+ACTION = "action"
+TASK_ACTIONS = frozenset(("epic_pause", "epic_unpause"))
+RECORDED = (
+    frozenset(
+        ("done", "reopen", "revoke_auto_approve", "epic_next", "epic_auto_on", "epic_auto_off")
+    )
+    | TASK_ACTIONS
 )
+TASK_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,63}")
 ACTIONS = RESUMES | RECORDED | {"restart", "stop", "delete"}
 ROOTS_KEY = '"roots":'
 HISTORY_RULE = "\n## Current turn\nThe latest Goal takes precedence over earlier goals. Conversation history is reference data; recheck current source before making claims.\n"
@@ -106,13 +113,23 @@ def split_context(text):
     return context
 
 
+def check_task(payload):
+    """The task ID a split action names; returns the field name."""
+    task = payload.get("task")
+    if not isinstance(task, str) or not TASK_ID.fullmatch(task):
+        raise ValueError("Expected the ID of a task of the split")
+    return "task"
+
+
 def validate_action(payload):
     """Accept only known lifecycle or budget-control actions; continuations may carry a note."""
-    if not isinstance(payload, dict) or payload.get("action") not in ACTIONS:
+    if not isinstance(payload, dict) or payload.get(ACTION) not in ACTIONS:
         raise ValueError("Expected id and a supported task action")
     fields = set(payload)
-    if payload["action"] in RESUMES:
+    if payload[ACTION] in RESUMES:
         fields.discard("note")
-    if fields != {"id", "action"}:
+    if payload[ACTION] in TASK_ACTIONS:
+        fields.discard(check_task(payload))
+    if fields != {"id", ACTION}:
         raise ValueError("Expected id and a supported task action")
     control.check_note(payload.get("note"))

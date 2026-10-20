@@ -62,6 +62,8 @@ class P2Tests(unittest.TestCase):
         state["status"] = "BLOCKED"
         self.assertTrue(actions(self.run, state, False)["resume"])
         (self.run / "checkpoint.json").write_text(json.dumps(dict(stage="implementer")))
+        self.assertTrue(actions(self.run, state, False)["resume"])
+        state["status"] = "BLOCKED_PERMISSION"
         self.assertFalse(actions(self.run, state, False)["resume"])
         (self.run / "checkpoint.json").unlink()
         state["status"] = "INTERRUPTED"

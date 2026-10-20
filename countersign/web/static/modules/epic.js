@@ -13,6 +13,16 @@ function taskItem(task, epic, actions) {
     item.append(open);
   }
   if (task.summary) item.append(el('p', task.summary, 'muted'));
+  if (!task.status) {
+    const pause = el('input');
+    pause.type = 'checkbox';
+    pause.checked = task.pause_before;
+    pause.onchange = () =>
+      actions.act(pause.checked ? 'epic_pause' : 'epic_unpause', { task: task.id });
+    const label = el('label', undefined, 'epic-pause');
+    label.append(pause, el('span', ' Pause before this task (auto-continue waits for you)'));
+    item.append(label);
+  }
   return item;
 }
 

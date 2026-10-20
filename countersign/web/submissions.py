@@ -63,7 +63,7 @@ class TaskLauncher:
         if action == "delete":
             return self.delete(run)
         if action in run_records.ACTIONS:
-            return run_records.record(self, run, action)
+            return run_records.record(self, run, payload)
         lifecycle.require_resumable(run)
         launch = continuation(run, action == "resume_budget", payload.get("note"))
         return self.launch(launch, run_sources(run))

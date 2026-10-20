@@ -7,7 +7,7 @@
 | Restart from scratch | No active run on its projects | Open the prefilled task form; submit explicitly to create a new run |
 | Stop task | Running | Write a stop request; the worker cleans up opencode and saves an interruption checkpoint |
 | Continue with extra budget | Eligible checkpoint; explicit confirmation | Add two attempts and one attempt timeout to the interrupted stage; retain consumption |
-| Continue interrupted run | Eligible checkpoint and unchanged source | Append new attempts to the same run, starting at the interrupted stage; a planning or review stage that reported **Blocked** can continue too, with your note answering its question |
+| Continue interrupted run | Eligible checkpoint and unchanged source | Append new attempts to the same run, starting at the interrupted stage; a stage that reported **Blocked** can continue too, with your note answering its question; an interrupted or blocked implementer first inspects its existing edits |
 | Send a follow-up Goal | Previous run stopped, no active run on its projects | Snapshot prior public evidence and start a new run from planning |
 | Answer only | New or follow-up submission | Research and independent review, no implementation |
 | Design discussion | New or follow-up submission | Like Answer only, but the reviewed summary is a design document, saved as `design.md`; follow-ups refine it, a **Change code** follow-up implements it |
@@ -43,7 +43,9 @@ implemented and reviewed like any task. A task whose run failed can be started a
 with **Start S-n again**; marking a task's run done counts it as finished. A stopped
 **Allow all actions** on the split also applies to the tasks started after it.
 **Start the next task automatically after each successful one** continues on its own
-and stops at the first task that does not finish successfully; that task, and the
+and stops at the first task that does not finish successfully, or before a task marked
+**Pause before this task**, for example when you want to review the code before a task
+that checks it on a server; that task, and the
 split, then appear under Needs you. The list shows the split's progress (`Tasks 1/3`)
 and puts it under Running while a task runs, Needs you when the next task waits for
 you, and Ready for review when all tasks finished.

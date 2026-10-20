@@ -13,6 +13,7 @@ from countersign.web import lifecycle, run_groups
 from countersign.web.history import read_artifact
 
 EPIC = "epic.json"
+PAUSE = "pause_before"
 STATUS = "status"
 READY = "TASKS_READY"
 FINISHED = frozenset(("READY_FOR_REVIEW", "NO_CHANGES_REQUIRED"))
@@ -31,7 +32,7 @@ def record(run):
     path = run / EPIC
     if path.is_file() and not path.is_symlink():
         return json.loads(path.read_text())
-    return dict(tasks={}, auto_continue=False)
+    return dict(tasks={}, auto_continue=False, pause_before=[])
 
 
 def set_auto(run, enabled):
@@ -42,18 +43,28 @@ def set_auto(run, enabled):
     return dict(id=run.name, status="AUTO_CONTINUE_ON" if enabled else "AUTO_CONTINUE_OFF")
 
 
+def set_pause(run, task, paused):
+    """Make auto-continue wait for the operator before one task, or stop waiting."""
+    epic = record(run)
+    waiting = set(epic.get(PAUSE, [])) - {task}
+    epic[PAUSE] = sorted(waiting | {task} if paused else waiting)
+    atomic_json(run / EPIC, epic)
+    return dict(id=run.name, status="PAUSE_SET" if paused else "PAUSE_CLEARED")
+
+
 def tasks(run, state):
     """Each planned task with the status and outcome of its run, if one was started."""
     plan = json.loads(read_artifact(run, state["results"]["plan"]))
-    links = record(run)["tasks"]
-    return [entry(run.parent, step, links) for step in plan["steps"]]
+    epic = record(run)
+    return [entry(run.parent, step, epic) for step in plan["steps"]]
 
 
-def entry(base, step, links):
+def entry(base, step, epic):
     """One task: its plan step and, once started, its run's status and outcome."""
-    child = links.get(step[IDENTIFIER])
+    child = epic["tasks"].get(step[IDENTIFIER])
     task = {key: step[source] for key, source in STEP_FIELDS.items()}
     task.update(NOT_STARTED, id=step[IDENTIFIER], run=child)
+    task["pause_before"] = step[IDENTIFIER] in epic.get(PAUSE, [])
     task["title"] = short_title(task["goal"])
     if child:
         task.update(outcome(base / child))

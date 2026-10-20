@@ -52,6 +52,15 @@ verification instructions in unverified; contradicted means evidence shows it is
 violated; gap means required evidence or input is missing; not_evaluated means it
 could not be assessed. Any gap, not_evaluated or blocking gap makes the result BLOCKED.
 
+Conflicting requirements are a decision, not a gap. When requirements cannot all be met
+literally, for example fixing every lint finding while keeping behavior and not
+disabling rules, keep existing behavior and every safety constraint, do all other
+work, and give the affected requirement the outcome of the work done for it, naming
+the exclusion in its explanation. Record the conflict and your choice in summary and
+unverified for the operator. Reviewers accept such a recorded choice and report a
+defect only when it breaks behavior or a safety constraint, or when other work is
+missing. Block only when no useful work is possible without the operator's answer.
+
 Use exact reads and dependency-driven searches. Stop discovery once every requirement has an
 evidence-backed outcome. Read offsets are source LINE numbers, not event lines or
 bytes. Correct the offset after an out-of-range error. Do not repeat broad searches.

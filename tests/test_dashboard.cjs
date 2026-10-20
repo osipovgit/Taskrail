@@ -285,10 +285,20 @@ async function main() {
           run: 'child-1',
           summary: 'Done',
         },
-        { id: 'S-2', title: 'Document hello', status: null, run: null, summary: '' },
+        {
+          id: 'S-2',
+          title: 'Document hello',
+          status: null,
+          run: null,
+          summary: '',
+          pause_before: false,
+        },
       ],
     },
-    { act: (action) => acted.push(action), open: (id) => acted.push('open ' + id) },
+    {
+      act: (action, extra) => acted.push(extra ? action + ' ' + extra.task : action),
+      open: (id) => acted.push('open ' + id),
+    },
   );
   const epicButtons = all(panel).filter((n) => n.tagName === 'button');
   assert.deepEqual(
@@ -296,10 +306,15 @@ async function main() {
     ['Open run', 'Start S-2'],
   );
   epicButtons.forEach((button) => button.onclick());
-  const toggle = all(panel).find((n) => n.type === 'checkbox');
+  const toggle = all(panel)
+    .filter((n) => n.type === 'checkbox')
+    .at(-1);
   toggle.checked = true;
   toggle.onchange();
-  assert.deepEqual(acted, ['open child-1', 'epic_next', 'epic_auto_on']);
+  const pause = all(panel).filter((n) => n.type === 'checkbox')[0];
+  pause.checked = true;
+  pause.onchange();
+  assert.deepEqual(acted, ['open child-1', 'epic_next', 'epic_auto_on', 'epic_pause S-2']);
   assert.ok(all(panel).some((n) => n.textContent === 'Next'));
   console.log('Task split panel passed.');
 
