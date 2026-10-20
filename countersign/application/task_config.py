@@ -16,6 +16,7 @@ ROLES = ("planner", "implementer", "reviewer")
 BUNDLED_AGENTS = Path(__file__).resolve().parents[1] / "agents"
 VERIFICATION = "verification"
 DESIGN = "design"
+PHASES = frozenset(("task", "validation", "server"))
 CHANGE_LINES = 400
 CHANGE_FILES = 15
 CHECK_LIST = "verification must list runtime acceptance checks as strings"
@@ -35,6 +36,7 @@ def configuration(task, settings=None, roots_override=None):
         read_only=meta.get("read_only") is True or meta.get(DESIGN) is True,
         design=meta.get(DESIGN) is True,
         decompose=meta.get("decompose") is True,
+        phase=meta.get("phase") if meta.get("phase") in PHASES else None,
         auto_approve=meta.get("auto_approve") is True,
         task=path,
         task_text=text,

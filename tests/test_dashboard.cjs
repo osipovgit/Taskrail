@@ -270,42 +270,44 @@ async function main() {
   state.runs = [];
   console.log('Run groups and the Needs you highlight passed.');
 
-  const { epicSection } = await load('epic');
+  const { deliverySection } = await load('epic');
   const acted = [];
-  const panel = epicSection(
-    {
-      progress: '1/2',
-      next: 'S-2',
-      auto_continue: false,
-      tasks: [
-        {
-          id: 'S-1',
-          title: 'Change hello',
-          status: 'READY_FOR_REVIEW',
-          run: 'child-1',
-          summary: 'Done',
-        },
-        {
-          id: 'S-2',
-          title: 'Document hello',
-          status: null,
-          run: null,
-          summary: '',
-          pause_before: false,
-        },
-      ],
-    },
-    {
-      act: (action, extra) => acted.push(extra ? action + ' ' + extra.task : action),
-      open: (id) => acted.push('open ' + id),
-    },
-  );
-  const epicButtons = all(panel).filter((n) => n.tagName === 'button');
+  const delivery = {
+    step: 'confirm',
+    confirmed: false,
+    progress: '1/2',
+    next: 'S-2',
+    auto_continue: false,
+    checks: { jenkins: ['ci/tests: passes'], server: ['health returns 200'] },
+    phases: { validation: { run: 'val-1', status: 'NO_CHANGES_REQUIRED', summary: 'Passed' } },
+    tasks: [
+      {
+        id: 'S-1',
+        title: 'Change hello',
+        status: 'READY_FOR_REVIEW',
+        run: 'child-1',
+        summary: 'Done',
+      },
+      {
+        id: 'S-2',
+        title: 'Document hello',
+        status: null,
+        run: null,
+        summary: '',
+        pause_before: false,
+      },
+    ],
+  };
+  const panel = deliverySection(delivery, {
+    act: (action, extra) => acted.push(extra ? action + ' ' + extra.task : action),
+    open: (id) => acted.push('open ' + id),
+  });
+  const panelButtons = all(panel).filter((n) => n.tagName === 'button');
   assert.deepEqual(
-    epicButtons.map((n) => n.textContent),
-    ['Open run', 'Start S-2'],
+    panelButtons.map((n) => n.textContent),
+    ['Open run', 'Start S-2', 'Open run', 'Confirm changes'],
   );
-  epicButtons.forEach((button) => button.onclick());
+  panelButtons.forEach((button) => button.onclick());
   const toggle = all(panel)
     .filter((n) => n.type === 'checkbox')
     .at(-1);
@@ -314,9 +316,19 @@ async function main() {
   const pause = all(panel).filter((n) => n.type === 'checkbox')[0];
   pause.checked = true;
   pause.onchange();
-  assert.deepEqual(acted, ['open child-1', 'epic_next', 'epic_auto_on', 'epic_pause S-2']);
-  assert.ok(all(panel).some((n) => n.textContent === 'Next'));
-  console.log('Task split panel passed.');
+  assert.deepEqual(acted, [
+    'open child-1',
+    'epic_next',
+    'open val-1',
+    'confirm',
+    'epic_auto_on',
+    'epic_pause S-2',
+  ]);
+  assert.ok(all(panel).some((n) => n.textContent === 'Delivery · Waiting for your confirmation'));
+  assert.ok(all(panel).some((n) => n.textContent.includes('each action needs root approval')));
+  const quiet = { step: 'implementing', confirmed: false, checks: { jenkins: [], server: [] } };
+  assert.equal(deliverySection(quiet, {}), null);
+  console.log('Delivery panel passed.');
 
   // A budget-paused run exposes both continuation choices and reversible deletion.
   for (const name of ['reply-goal', 'send-reply', 'monitor']) nodes[name] = new Node('div');

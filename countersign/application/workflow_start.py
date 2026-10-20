@@ -2,7 +2,7 @@
 
 import json
 
-from countersign.application import instruction_sources, resume_inputs
+from countersign.application import instruction_sources, mode_rules, resume_inputs
 from countersign.application.artifacts import save_run
 from countersign.application.checkpoints import load_checkpoint
 from countersign.application.workflow_state import FLOW_KEYS, STAGE
@@ -34,6 +34,8 @@ def start(workflow, resume):
         workflow.run, workflow.config
     )
     workflow.state["decompose"] = workflow.config.get("decompose") is True
+    workflow.state["split_files"] = mode_rules.split_files(workflow.config)
+    workflow.state.setdefault("auto_continue", True)
     control.clear_stop(workflow.run, resume)
 
 

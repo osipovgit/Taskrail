@@ -28,6 +28,16 @@ def validate_plan_steps(payload, requirements):
         require(not steps, "No-change plan cannot contain implementation steps")
 
 
+def splits(plan, forced, split_files):
+    """A forced split, or a multi-task plan touching more files than one review allows."""
+    if not plan["proposed_change_files"]:
+        return False
+    if forced:
+        return True
+    several = len(plan[STEPS]) > 1
+    return several and len(plan["proposed_change_files"]) > split_files
+
+
 def validate_sequence(steps, criteria):
     """Dependencies must precede consumers; every step owns actual work."""
     previous = set()

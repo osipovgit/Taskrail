@@ -4,7 +4,7 @@ from functools import partial
 from types import MappingProxyType
 
 from countersign.interactions import approval_policy
-from countersign.web import epic_launch, epic_tasks, run_groups
+from countersign.web import delivery_launch, epic_launch, epic_tasks, run_groups
 
 RECORDS = MappingProxyType(
     {
@@ -16,8 +16,9 @@ RECORDS = MappingProxyType(
     }
 )
 EPIC_NEXT = "epic_next"
+CONFIRM = "confirm"
 PAUSES = MappingProxyType({"epic_pause": True, "epic_unpause": False})
-ACTIONS = frozenset((*RECORDS, *PAUSES, EPIC_NEXT))
+ACTIONS = frozenset((*RECORDS, *PAUSES, EPIC_NEXT, CONFIRM))
 
 
 def record(launcher, run, payload):
@@ -25,6 +26,8 @@ def record(launcher, run, payload):
     action = payload["action"]
     if action == EPIC_NEXT:
         return epic_launch.start_next(launcher, run)
+    if action == CONFIRM:
+        return delivery_launch.confirm(launcher, run)
     paused = PAUSES.get(action)
     if paused is not None:
         return epic_tasks.set_pause(run, payload["task"], paused)

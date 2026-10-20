@@ -11,7 +11,7 @@ from unittest.mock import patch
 from countersign.application import mode_rules
 from countersign.application.live import execute_task
 from countersign.core.requirements import task_requirements
-from countersign.web import epic_launch, requests, task_form
+from countersign.web import delivery_launch, requests, task_form
 from countersign.web.history import HISTORY, conversation, previous_messages, task_draft
 from countersign.web.lifecycle import trash_run
 from countersign.web.run_list import list_runs
@@ -185,11 +185,12 @@ class TaskControlTests(unittest.TestCase):
         self.assertTrue(meta["design"])
         self.assertTrue(meta["read_only"])
         self.assertNotIn("Turn control", text)
-        rule = mode_rules.render(dict(design=True, read_only=True))
+        rule = mode_rules.render(dict(design=True, read_only=True), "planner")
         self.assertIn("Design discussion: no edits", rule)
         self.assertNotIn("Answer only", rule)
-        self.assertIn("Split into tasks", mode_rules.render(dict(decompose=True)))
-        self.assertEqual(mode_rules.render({}), "")
+        self.assertIn("Split into tasks", mode_rules.render(dict(decompose=True), "planner"))
+        self.assertIn("this run implements them", mode_rules.render({}, "planner"))
+        self.assertEqual(mode_rules.render({}, "implementer"), "")
         with patch.object(self.launcher, "launch", return_value={"id": "next"}) as launch:
             self.launcher.submit(
                 dict(
@@ -258,7 +259,7 @@ class TaskControlTests(unittest.TestCase):
         epic_entry = next(run for run in list_runs(self.runs) if run["id"] == "epic")
         self.assertEqual((epic_entry["group"], epic_entry["progress"]), ("attention", "0/2"))
         self.assertEqual(epic_entry["mode"], "decompose")
-        view = run_view(self.runs, "epic")["epic"]
+        view = run_view(self.runs, "epic")["delivery"]
         self.assertEqual(view["next"], "S-1")
         with patch.object(self.launcher, "launch", return_value={"id": "child-1"}) as launch:
             self.launcher.action(dict(id="epic", action="epic_next"))
@@ -280,15 +281,15 @@ class TaskControlTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "No task is ready"):
             self.launcher.action(dict(id="epic", action="epic_next"))
         self.finish("child-1", "TOOL_ERROR")
-        self.assertEqual(run_view(self.runs, "epic")["epic"]["next"], "S-1")
+        self.assertEqual(run_view(self.runs, "epic")["delivery"]["next"], "S-1")
         epic_entry = next(run for run in list_runs(self.runs) if run["id"] == "epic")
         self.assertEqual(epic_entry["group"], "attention")
         self.launcher.action(dict(id="epic", action="epic_auto_on"))
         with patch.object(self.launcher, "launch") as launch:
-            epic_launch.advance(self.launcher)
+            delivery_launch.advance(self.launcher)
         launch.assert_not_called()
         self.launcher.action(dict(id="child-1", action="done"))
-        self.assertEqual(run_view(self.runs, "epic")["epic"]["next"], "S-2")
+        self.assertEqual(run_view(self.runs, "epic")["delivery"]["next"], "S-2")
         self.launcher.action(dict(id="child-1", action="reopen"))
         self.launcher.action(dict(id="epic", action="revoke_auto_approve"))
         with patch.object(self.launcher, "launch", return_value={"id": "child-1b"}) as launch:
@@ -299,9 +300,9 @@ class TaskControlTests(unittest.TestCase):
         self.finish("child-1b", "TOOL_ERROR")
         self.finish("child-1b", "READY_FOR_REVIEW")
         self.launcher.action(dict(id="epic", action="epic_pause", task="S-2"))
-        self.assertTrue(run_view(self.runs, "epic")["epic"]["tasks"][1]["pause_before"])
+        self.assertTrue(run_view(self.runs, "epic")["delivery"]["tasks"][1]["pause_before"])
         with patch.object(self.launcher, "launch") as launch:
-            epic_launch.advance(self.launcher)
+            delivery_launch.advance(self.launcher)
         launch.assert_not_called()
         epic_entry = next(run for run in list_runs(self.runs) if run["id"] == "epic")
         self.assertEqual(epic_entry["group"], "attention")
@@ -309,12 +310,97 @@ class TaskControlTests(unittest.TestCase):
             self.launcher.action(dict(id="epic", action="epic_pause", task="../x"))
         self.launcher.action(dict(id="epic", action="epic_unpause", task="S-2"))
         with patch.object(self.launcher, "launch", return_value={"id": "child-2"}) as launch:
-            epic_launch.advance(self.launcher)
+            delivery_launch.advance(self.launcher)
             text = launch.call_args.args[0]["text"]
         self.assertIn("S-1: Change hello (READY_FOR_REVIEW): child-1b summary", text)
         self.finish("child-2", "READY_FOR_REVIEW")
         epic_entry = next(run for run in list_runs(self.runs) if run["id"] == "epic")
         self.assertEqual((epic_entry["group"], epic_entry["progress"]), ("review", "2/2"))
+
+    def test_delivery_validates_waits_for_confirmation_then_checks_servers(self):
+        unverified = [
+            "Jenkins check: ci/shop-tests: passes",
+            "Server check: health returns 200",
+            "Lint only",
+        ]
+        (self.run / "plan.json").write_text(
+            json.dumps(dict(status="PLAN_READY", unverified=unverified))
+        )
+        (self.run / "run.json").write_text(
+            json.dumps(
+                dict(
+                    json.loads((self.run / "run.json").read_text()),
+                    changed_files=["/repo/hello.py"],
+                )
+            )
+        )
+        offers = dict(jenkins={"ci": {}}, hosts={"web": {}})
+
+        def delivery():
+            return run_view(self.runs, "original")["delivery"]
+
+        self.assertEqual(
+            delivery()["checks"],
+            dict(jenkins=["ci/shop-tests: passes"], server=["health returns 200"]),
+        )
+        self.assertEqual(delivery()["step"], "validating")
+        with self.assertRaisesRegex(ValueError, "waits for confirmation"):
+            self.launcher.action(dict(id="original", action="confirm"))
+        with (
+            patch.object(delivery_launch, "executor_offers", return_value=offers),
+            patch.object(self.launcher, "launch", return_value={"id": "validation-1"}) as launch,
+        ):
+            delivery_launch.advance(self.launcher)
+            delivery_launch.advance(self.launcher)
+        self.assertEqual(launch.call_count, 1)
+        text = launch.call_args.args[0]["text"]
+        self.assertIn('"phase": "validation"', text)
+        self.assertIn('"read_only": true', text)
+        self.assertIn('"ci/shop-tests: passes"', text)
+        self.assertIn("Changed files: /repo/hello.py", text)
+        self.finish("validation-1", "NO_CHANGES_REQUIRED")
+        self.assertEqual(delivery()["step"], "confirm")
+        entry = next(run for run in list_runs(self.runs) if run["id"] == "original")
+        self.assertEqual(entry["group"], "review")
+        with (
+            patch.object(delivery_launch, "executor_offers", return_value=offers),
+            patch.object(self.launcher, "launch", return_value={"id": "server-1"}) as launch,
+        ):
+            self.launcher.action(dict(id="original", action="confirm"))
+        text = launch.call_args.args[0]["text"]
+        self.assertIn('"phase": "server"', text)
+        self.assertIn('"health returns 200"', text)
+        self.assertEqual(delivery()["step"], "server")
+        self.finish("server-1", "RUNNING")
+        waiting = json.loads((self.runs / "server-1/run.json").read_text())
+        waiting["execution_jobs"] = [dict(status="PENDING_APPROVAL")]
+        (self.runs / "server-1/run.json").write_text(json.dumps(waiting))
+        self.assertEqual(delivery()["step"], "approval")
+        entry = next(run for run in list_runs(self.runs) if run["id"] == "original")
+        self.assertEqual(entry["group"], "attention")
+        self.finish("server-1", "READY_FOR_REVIEW")
+        self.assertEqual(delivery()["step"], "done")
+
+    def test_delivery_phases_are_skipped_without_an_executor_and_wait_when_unreachable(self):
+        unverified = ["Jenkins check: ci/tests: passes"]
+        (self.run / "plan.json").write_text(
+            json.dumps(dict(status="PLAN_READY", unverified=unverified))
+        )
+        with patch.object(delivery_launch, "executor_offers", return_value=None):
+            delivery_launch.advance(self.launcher)
+        self.assertNotIn(
+            "phases",
+            json.loads((self.run / "epic.json").read_text())
+            if (self.run / "epic.json").exists()
+            else {},
+        )
+        with patch.object(delivery_launch, "executor_offers", return_value={}):
+            delivery_launch.advance(self.launcher)
+        view = run_view(self.runs, "original")["delivery"]
+        self.assertEqual(view["phases"]["validation"]["status"], "skipped")
+        self.assertEqual(view["step"], "confirm")
+        self.launcher.action(dict(id="original", action="confirm"))
+        self.assertEqual(run_view(self.runs, "original")["delivery"]["step"], "done")
 
     def test_allow_all_actions_can_be_revoked_from_the_ui(self):
         index = self.run / "run.json"

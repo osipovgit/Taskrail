@@ -66,7 +66,10 @@ Specify target **aliases**, the goal, expected checks and constraints. Do not pu
 passwords in task text or project files. With the service installed, stage prompts
 include the available aliases and the `ACTION_REQUEST` contract. The agent can
 request a script plus a text-file bundle. Every remote action, including inspection,
-waits for personal approval. Direct shell tools remain disabled.
+waits for personal approval. Direct shell tools remain disabled. Before you confirm a
+code change, planning and review may only inspect servers and the implementer cannot
+use SSH at all; actions that check or change servers run in the server-check step after
+**Confirm changes** ([delivery](task-controls.md#delivery-of-a-code-change)).
 
 The UI shows the exact script, bundled files, connection targets and ticket ID.
 Review them, then run the command displayed by the UI:

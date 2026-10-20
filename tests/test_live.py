@@ -957,6 +957,19 @@ class LiveTests(unittest.TestCase):
         plan = json.loads((run / state["results"]["plan"]).read_text())
         self.assertTrue(plan["steps"])
 
+    def test_plan_larger_than_one_review_becomes_task_runs(self):
+        run, status, state = self.run_mode("two-tasks", max_change_files=1)
+        self.assertEqual(status, "TASKS_READY", state.get("summary"))
+        self.assertEqual(
+            [stage["stage"] for stage in state["stages"]], ["planner", "plan-reviewer"]
+        )
+        self.assertTrue(state["auto_continue"])
+        self.assertIn("return 1", (self.root / "hello.py").read_text())
+        request = (run / "01-plan/request.md").read_text()
+        self.assertIn(
+            "If all tasks together change at most 1 files, this run implements them", request
+        )
+
     def test_design_discussion_leaves_a_reviewed_design_document(self):
         header = {"roots": {"project": str(self.root)}, "design": True}
         self.task.write_text(f"```countersign-task\n{json.dumps(header)}\n```\nDesign caching")

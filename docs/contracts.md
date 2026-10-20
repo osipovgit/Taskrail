@@ -23,7 +23,11 @@ the server. The server-generated sections Workflow rules, Current turn, Task spl
 context and, in older tasks, Turn control are instructions without IDs. Each ID needs one outcome: satisfied, planned, contradicted, gap,
 deferred or not_evaluated. `not_evaluated` is allowed only in BLOCKED results, when
 a shared blocker prevented validation. Only runtime requirements may be deferred.
-Required missing evidence means BLOCKED, even when the JSON is valid. Requirements
+Required missing evidence means BLOCKED, even when the JSON is valid. A plan names
+checks that must run after the change in unverified, one per entry, prefixed
+`Jenkins check: <server>/<job>: <parameters and expected result>` or
+`Server check: <what to run and the expected result>`; the server starts Jenkins
+validation and, after the operator confirms the change, server checks from them. Requirements
 that cannot all be met literally are not a gap: the agent keeps behavior and safety
 constraints, does the rest, records the choice in summary and unverified, and
 reviewers accept that recorded choice.

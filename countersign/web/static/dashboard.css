@@ -589,6 +589,21 @@ label:has(> input[type='checkbox']) .hint {
   min-height: 2.6rem;
 }
 
+/* Delivery */
+.delivery-part {
+  margin: 12px 0;
+}
+
+.delivery-part h4 {
+  margin: 0 0 6px;
+  font-size: 13.5px;
+}
+
+.delivery-part ul {
+  margin: 4px 0 8px;
+  padding-left: 20px;
+}
+
 /* Task splits */
 .epic-tasks {
   margin: 8px 0 12px;

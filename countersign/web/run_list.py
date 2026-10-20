@@ -3,7 +3,7 @@
 from operator import itemgetter
 from types import MappingProxyType
 
-from countersign.web import epic_progress, history, lifecycle, run_groups
+from countersign.web import delivery_state, history, lifecycle, run_groups
 from countersign.web.run_files import contained, read_json
 
 SUMMARY_LIMIT = 500
@@ -48,7 +48,7 @@ def run_summary(path):
         group=run_groups.group(path, state, status),
         summary=state.get("summary", "")[:SUMMARY_LIMIT],
     )
-    summary.update(epic_progress.list_fields(path, state, summary["group"]))
+    summary.update(delivery_state.list_fields(path, state, summary["group"]))
     return summary
 
 

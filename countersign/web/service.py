@@ -10,7 +10,7 @@ from pathlib import Path
 
 from countersign.core.files import atomic_json
 from countersign.core.runtime import run_storage
-from countersign.web import epic_launch, server
+from countersign.web import delivery_launch, server
 from countersign.web.config_watch import ConfigurationWatch
 from countersign.web.submissions import TaskLauncher
 
@@ -51,7 +51,7 @@ class ApplicationService:
             cleanup.callback(self.shutdown, thread)
             while not self.stopping.wait(CONFIG_POLL_SECONDS):
                 watcher.poll()
-                epic_launch.advance(self.launcher)
+                delivery_launch.advance(self.launcher)
 
     def shutdown(self, thread):
         """Serialize shutdown with worker creation, including in-flight HTTP requests."""
