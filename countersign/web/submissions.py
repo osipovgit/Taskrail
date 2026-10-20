@@ -9,14 +9,13 @@ from pathlib import Path
 
 from countersign.core.files import atomic_json
 from countersign.core.runtime import settings_path
-from countersign.web import history, lifecycle, requests, run_groups
+from countersign.web import history, lifecycle, requests, run_records
 from countersign.web.run_activity import BusyError, require_idle, run_sources
 from countersign.web.task_form import build_task
 
 PACKAGE_ROOT = Path(__file__).resolve().parents[2]
 TASK_FILE = "task.md"
 ID = "id"
-MARKS = frozenset(("done", "reopen"))
 
 
 class TaskLauncher:
@@ -63,8 +62,8 @@ class TaskLauncher:
             return lifecycle.request_stop(run)
         if action == "delete":
             return self.delete(run)
-        if action in MARKS:
-            return run_groups.mark(run, action == "done")
+        if action in run_records.ACTIONS:
+            return run_records.record(run, action)
         lifecycle.require_resumable(run)
         launch = continuation(run, action == "resume_budget", payload.get("note"))
         return self.launch(launch, run_sources(run))

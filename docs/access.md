@@ -59,7 +59,20 @@ All roles can request installed linters, tests and diagnostic commands. The exac
 working directory, argv and reason appear in the UI before execution. Allow is
 single-use; Deny skips execution; Alternative sends your text back to the agent.
 Waiting has no expiry and is excluded from active stage time. Stop remains available.
-Each decision is bound to a random ticket and retained for audit. **Allow all
+Each decision is bound to a random ticket and retained for audit.
+
+Read-only requests are approved without asking and recorded in the same ledger with
+`"rule": "read_only"`:
+
+- reads and searches of canonical paths inside the declared roots, except protected
+  `.env` files;
+- Jenkins status, console and test reads;
+- `ls`, `find`, `du`, `stat`, `wc`, `cat`, `head`, `tail` and `grep` when the program is
+  named without a path, every operand resolves inside a declared root and is not a
+  protected file, and no option executes, writes, follows links, recurses into files
+  (`grep -r`), never ends (`tail -f`) or carries a path value (`--file=/...`).
+
+Everything else is asked as before. **Allow all
 actions** ([task controls](task-controls.md)) approves this run's local commands, read
 access and change limit automatically; it trusts every command the agents choose, so
 use it only where you would allow them anyway.
