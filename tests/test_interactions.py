@@ -158,6 +158,23 @@ class InteractionTests(unittest.TestCase):
         Path(next(iter(paths))).write_text("{}")
         self.assertEqual(transcripts.confirmed_paths(self.run), set())
 
+    def test_long_output_is_readable_line_by_line_and_trusted_while_unchanged(self):
+        stage = self.run / "01-plan"
+        stage.mkdir()
+        (stage / "events.jsonl").touch()
+        lines = "".join(
+            f"roles/web/tasks/main.yml:{number}: name[missing]\n" for number in range(3000)
+        )
+        outcome = dict(status="SUCCEEDED", exit_code=0, stdout=lines, stderr="")
+        response = transcripts.local_snapshot(self.run, stage, self.request(["lint"]), outcome)
+        text_file = self.run / "00-input/local/01-plan-0.stdout.txt"
+        self.assertEqual(text_file.read_text(), lines)
+        self.assertIn(f"read omitted lines from the full text files: {text_file}", response)
+        self.assertFalse((self.run / "00-input/local/01-plan-0.stderr.txt").exists())
+        self.assertIn(str(text_file), transcripts.confirmed_paths(self.run))
+        text_file.write_text("edited\n")
+        self.assertNotIn(str(text_file), transcripts.confirmed_paths(self.run))
+
     def test_local_decisions_resume_same_session_and_exclude_long_wait(self):
         for role in ("planner", "reviewer", "implementer"):
             for decision in ("allow", "deny", "alternative"):
