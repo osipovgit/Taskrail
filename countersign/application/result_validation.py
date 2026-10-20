@@ -46,9 +46,21 @@ def validate(response, context):
 def approved_path(filename, roots, scope="declared roots or executor snapshots"):
     """Do not resolve guessed aliases or allow symlinks to expand source access."""
     path = Path(filename)
-    schema.require(path.is_absolute() and path.resolve() == path, "Use canonical absolute paths")
+    canonical = path.is_absolute() and path.resolve() == path
+    schema.require(canonical, f"Use canonical absolute paths, not {filename}{example(path, roots)}")
     inside = any(root in path.parents for root in roots.values())
     schema.require(inside, f"Path outside {scope}: {path}")
+
+
+def example(path, roots):
+    """The absolute form of a relative path that exists in a declared root."""
+    if path.is_absolute():
+        return ""
+    for root in roots.values():
+        candidate = root / path
+        if candidate.exists():
+            return f" (for example {candidate})"
+    return ""
 
 
 def validate_role(payload, context):

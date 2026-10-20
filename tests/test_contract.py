@@ -174,6 +174,14 @@ class ContractTests(unittest.TestCase):
             control.check_plan(plan, dict(decompose=True))
         control.check_plan(dict(plan, steps=steps[:8]), dict(decompose=True))
 
+    def test_relative_path_error_names_the_absolute_form(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            (root / "roles").mkdir()
+            (root / "roles/main.yaml").write_text("- name: x\n")
+            with self.assertRaisesRegex(ValueError, "not roles/main.yaml \\(for example /"):
+                result_validation.approved_path("roles/main.yaml", {"project": root})
+
     def test_structured_step_must_own_planned_requirement(self):
         self.payload["coverage"][0]["outcome"] = "planned"
         with self.assertRaisesRegex(ValueError, "owning step"):
