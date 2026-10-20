@@ -122,6 +122,11 @@ Managed profiles default to `$OPENCODE_CONFIG_DIR/agent`, else
 to one base directory: the Git worktree for 1.x, the first root (the run directory)
 for 2.x. Profiles allow every declared path in both forms and deny everything else.
 
+opencode compacts a long session only when it knows the model's context size. For a
+custom or self-hosted provider, declare it in the opencode configuration, for example
+`"limit": {"context": 94208, "output": 8192}` on the model entry; otherwise a long stage
+grows until the provider refuses it (`CONTEXT_EXCEEDED`).
+
 Format repair runs with every tool denied by default. opencode's free Zen models
 reject such tool-less requests (`FreeTierError`); for them set `format_repair_tools`
 to `read`, which keeps read-only tools in format passes (edits stay denied) and

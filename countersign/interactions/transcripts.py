@@ -7,6 +7,8 @@ from countersign.application import evidence
 from countersign.core.files import atomic_json
 
 INLINE_LIMIT = 24000
+# With full text files beside the snapshot, a shorter inline copy saves model context.
+INLINE_WITH_FILES = 8000
 # The JSON snapshot keeps each output on one line; file readers cut lines this long.
 LINE_LIMIT = 2000
 OUTPUT_FIELDS = ("stdout", "stderr", "console")
@@ -14,7 +16,7 @@ OUTPUT_FIELDS = ("stdout", "stderr", "console")
 
 def delivered(run, folder, path, text, outputs=None):
     """Record exactly the text attached to the next model turn."""
-    visible = text[:INLINE_LIMIT]
+    visible = text[: INLINE_WITH_FILES if outputs else INLINE_LIMIT]
     clipped = len(visible) < len(text)
     line_count = len(visible.splitlines())
     index = evidence.load_index(run, evidence.OBSERVATIONS)

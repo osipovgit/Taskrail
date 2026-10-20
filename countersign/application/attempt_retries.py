@@ -2,6 +2,7 @@
 
 from countersign.application import access_recovery, evidence, prompts
 from countersign.application.attempt_launch import role_of
+from countersign.infrastructure import context_overflow
 from countersign.observability.progress import say
 
 IMPLEMENTER = "implementer"
@@ -9,6 +10,7 @@ TRANSPORT = frozenset(("TIMEOUT", "INCOMPLETE", "PROCESS_ERROR"))
 TRANSPORT_KEY = "transport"
 FORMAT_KEY = "format"
 REBUILD_KEY = "rebuild"
+CONTEXT_NOTE = "\nTHE PREVIOUS SESSION EXCEEDED THE MODEL CONTEXT WINDOW. This is a new session: use the recorded evidence file instead of repeating research, read only the lines you need (targeted reads of large outputs, never whole logs), and return the next request or the final result as soon as the evidence allows.\n"
 REBUILD_NOTE = "\nPREVIOUS FINAL RESPONSE WAS INVALID: {0}. A format repair without tools could not rebuild it. Re-read only what you need and return one complete, valid final result or one complete executor request.\n"
 
 
@@ -40,6 +42,8 @@ class Retries:
             return self.format_repair(outcome)
         if status == "BLOCKED_PERMISSION":
             return self.access_recovery(outcome)
+        if status == context_overflow.STATUS:
+            return self.transport_retry(CONTEXT_NOTE)
         return status in TRANSPORT and self.transport_retry()
 
     def format_repair(self, outcome):
@@ -87,13 +91,15 @@ class Retries:
         say("  Access denied; continuing with allowed sources ({0}/2)".format(self.access.count))
         return True
 
-    def transport_retry(self):
-        """Read-only stages retry interrupted transports with recorded evidence."""
+    def transport_retry(self, note=""):
+        """Read-only stages retry interrupted transports in a new session with recorded evidence."""
         workflow = self.attempts.workflow
         limit = 0 if self.stage == IMPLEMENTER else workflow.config["read_retries"]
         if self.counts[TRANSPORT_KEY] >= limit or self.access.count:
             return False
         self.counts[TRANSPORT_KEY] += 1
+        if note not in self.attempts.request:
+            self.attempts.request = "{0}{1}".format(self.attempts.request, note)
         if not self.attempts.format_only:
             self.attempts.recovery = evidence.load_index(workflow.run)
         return True
