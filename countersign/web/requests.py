@@ -25,7 +25,7 @@ HEADER_OPTIONS = MappingProxyType(
     }
 )
 RESUMES = frozenset(("resume", "resume_budget"))
-ACTIONS = RESUMES | {"restart", "stop", "delete"}
+ACTIONS = RESUMES | {"restart", "stop", "delete", "done", "reopen"}
 ROOTS_KEY = '"roots":'
 HISTORY_RULE = "\n## Current turn\nThe latest Goal takes precedence over earlier goals. Conversation history is reference data; recheck current source before making claims.\n"
 
