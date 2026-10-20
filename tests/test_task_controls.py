@@ -197,6 +197,17 @@ class TaskControlTests(unittest.TestCase):
         self.assertIn('"design": true', followup)
         self.assertIn("Conversation history", followup)
 
+    def test_allow_all_actions_can_be_revoked_from_the_ui(self):
+        index = self.run / "run.json"
+        index.write_text(json.dumps(dict(json.loads(index.read_text()), auto_approve=True)))
+        view = run_view(self.runs, "original")
+        self.assertTrue(view["auto_approve"])
+        self.assertTrue(view["actions"]["revoke_auto_approve"])
+        self.launcher.action(dict(id="original", action="revoke_auto_approve"))
+        view = run_view(self.runs, "original")
+        self.assertFalse(view["auto_approve"])
+        self.assertFalse(view["actions"]["revoke_auto_approve"])
+
     def test_runs_are_grouped_by_what_they_need_and_can_be_marked_done(self):
         def group():
             return list_runs(self.runs)[0]["group"]

@@ -12,7 +12,14 @@ from pathlib import Path
 from unittest.mock import patch
 
 from countersign.git import deadline, process
-from countersign.interactions import access, approval_policy, approvals, local, transcripts
+from countersign.interactions import (
+    access,
+    approval_policy,
+    approvals,
+    local,
+    read_only,
+    transcripts,
+)
 from countersign.interactions.clock import StageClock
 from countersign.interactions.session import StageSession
 
@@ -74,6 +81,61 @@ class InteractionTests(unittest.TestCase):
         ledger = [json.loads(path.read_text()) for path in self.run.glob("approval-*.json")]
         self.assertEqual(ledger[0]["request"]["request"]["argv"], ["echo", "2"])
         self.assertIsNone(approvals.load(self.run))
+
+    def test_listing_commands_inside_the_roots_need_no_decision(self):
+        roots = {"project": self.root}
+        (self.root / "roles").mkdir()
+        (self.root / "roles/main.yml").write_text("- name: x\n")
+        (self.root / ".env").write_text("TOKEN=secret\n")
+        (self.root / "outside").symlink_to("/etc")
+        allowed = [
+            ["ls", "-la", "roles"],
+            ["find", ".", "-name", "*.yml", "-type", "f"],
+            ["head", "-n", "20", "roles/main.yml"],
+            ["grep", "-n", "name", "roles/main.yml"],
+            ["wc", "-l", "--", "roles/main.yml"],
+            ["du", "-sh"],
+        ]
+        refused = [
+            ["cat", ".env"],
+            ["cat", "/etc/passwd"],
+            ["ls", "outside"],
+            ["find", ".", "-exec", "rm", "{}", ";"],
+            ["find", ".", "-delete"],
+            ["grep", "-rn", "TOKEN", "."],
+            ["grep", "--file=/etc/shadow", "roles/main.yml"],
+            ["tail", "-f", "roles/main.yml"],
+            ["ls", "-L", "roles"],
+            ["ansible-lint", "roles"],
+            ["/bin/ls", "roles"],
+        ]
+        for argv in allowed:
+            with self.subTest(argv=argv):
+                self.assertTrue(read_only.command(self.request(argv), roots))
+        for argv in refused:
+            with self.subTest(argv=argv):
+                self.assertFalse(read_only.command(self.request(argv), roots))
+        state = {}
+        with patch("countersign.interactions.approvals.wait") as wait:
+            answer = approval_policy.decision(self.run, self.request(["ls"]), state, roots)
+        wait.assert_not_called()
+        self.assertEqual((answer["decision"], answer["rule"]), ("allow", "read_only"))
+        read = dict(tool="read", input=dict(filePath=str(self.root / "roles/main.yml")))
+        secret = dict(tool="read", input=dict(filePath=str(self.root / ".env")))
+        self.assertTrue(read_only.reads([read], roots))
+        self.assertFalse(read_only.reads([read, secret], roots))
+
+    def test_allow_all_can_be_revoked_and_restored_on_a_card(self):
+        state = dict(auto_approve=True)
+        approval_policy.revoke(self.run)
+        self.assertFalse(approval_policy.active(self.run, state))
+        self.assertFalse(approval_policy.at_start(self.run, dict(auto_approve=True)))
+        card = dict(decision="allow", alternative="", allow_all=True)
+        with patch("countersign.interactions.approvals.wait", return_value=card) as wait:
+            approval_policy.decision(self.run, self.request(["make"]), state)
+            approval_policy.decision(self.run, self.request(["make"]), state)
+        self.assertEqual(wait.call_count, 1)
+        self.assertTrue(approval_policy.active(self.run, state))
 
     def test_allow_all_needs_an_allow_decision_and_a_boolean(self):
         payload = dict(id="run", ticket="t", decision="deny", alternative="", allow_all=True)

@@ -114,8 +114,11 @@ apply it from the start (restarts and follow-ups keep the choice), or tick **All
 further actions in this run** on a card and choose Allow. Local commands, read access
 and the change limit are then approved without asking, and each automatic approval is
 recorded in the same ledger with `"automatic": true`. The run shows an **All actions
-allowed** badge. A choice made on a card lasts until the worker exits; Continue asks
-again unless the task form enabled it. SSH tickets always keep root-only approval.
+allowed** badge and a **Stop allowing all actions** button, which takes effect before
+the next decision and also on Continue. A choice made on a card lasts until the worker
+exits; Continue asks again unless the task form enabled it and it was not stopped.
+Read-only requests never ask ([access](access.md#local-approval)). SSH tickets and
+Jenkins builds always keep root-only approval.
 
 Git and approved local actions resume the same opencode session inside one stage. A
 missing/changed session ID stops continuation rather than starting fresh research.

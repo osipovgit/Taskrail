@@ -101,8 +101,9 @@ class Actions:
     def approve(self, payload):
         """Pause only approval time, with no deadline for the operator."""
         request = dict(stage=self.folder.name, **payload)
+        roots = self.session.environment["roots"]
         with ApprovalPause(self.session):
-            return approval_policy.decision(self.run, request, self.session.state)
+            return approval_policy.decision(self.run, request, self.session.state, roots)
 
     def local_result(self, payload, answer):
         """Keep command results in the public transcript and evidence ledger."""
