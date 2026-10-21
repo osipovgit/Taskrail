@@ -6,17 +6,17 @@ executor does not offer Jenkins or SSH targets, the phase is recorded as skipped
 
 import json
 import time
+from functools import partial
 from pathlib import Path
 from types import MappingProxyType
 
-from countersign.core.files import atomic_json
 from countersign.executor import client, protocol
 from countersign.web import (
     delivery_checks,
     delivery_payload,
     delivery_state,
     epic_launch,
-    epic_tasks,
+    epic_record,
     history,
 )
 from countersign.web.delivery_steps import SERVER, VALIDATION
@@ -30,6 +30,7 @@ UNAVAILABLE = MappingProxyType(
     }
 )
 INDEX = "run.json"
+PHASES = "phases"
 
 
 def advance(launcher):
@@ -62,41 +63,34 @@ def proceed(launcher, run):
 
 
 def start_phase(launcher, run, name):
-    """Start one phase run, or record that the executor cannot run it."""
-    with launcher.lock:
-        if name in epic_tasks.record(run).get("phases", {}):
-            return None
-        offers = executor_offers()
-        if offers is None:
+    """Start one phase run, linked before its worker starts, or record why it cannot run."""
+    offers = executor_offers()
+    if offers is None:
+        return None
+    with launcher.lock, epic_record.changing(run) as epic:
+        if name in epic.get(PHASES, {}):
             return None
         if not offers.get(OFFERS[name]):
-            return record_phase(run, name, UNAVAILABLE[name])
+            epic.setdefault(PHASES, {})[name] = UNAVAILABLE[name]
+            return dict(id=run.name, status="PHASE_RECORDED")
         state = json.loads(history.read_artifact(run, INDEX))
         checks = delivery_checks.checks(run, state)
-        started = launcher.submit(delivery_payload.payload(run, state, name, checks))
-        record_phase(run, name, started["id"])
-        return started
+        link = partial(epic_record.link, run, epic, (PHASES, name))
+        return launcher.submit(
+            delivery_payload.payload(run, state, name, checks), before_start=link
+        )
 
 
 def confirm(launcher, run):
     """The operator accepts the finished change; server checks may run after this."""
-    state = json.loads(history.read_artifact(run, INDEX))
-    delivery = delivery_state.view(run, state)
-    if delivery is None or delivery["step"] != "confirm":
-        raise ValueError("Only a finished change that waits for confirmation can be confirmed")
-    epic = epic_tasks.record(run)
-    epic["confirmed"] = time.time()
-    atomic_json(run / epic_tasks.EPIC, epic)
+    with epic_record.changing(run) as epic:
+        state = json.loads(history.read_artifact(run, INDEX))
+        delivery = delivery_state.view(run, state)
+        if delivery is None or delivery["step"] != "confirm":
+            raise ValueError("Only a finished change that waits for confirmation can be confirmed")
+        epic["confirmed"] = time.time()
     proceed_quietly(launcher, run)
     return dict(id=run.name, status="CONFIRMED")
-
-
-def record_phase(run, name, entry):
-    """Remember the phase run, or why it was skipped."""
-    epic = epic_tasks.record(run)
-    epic.setdefault("phases", {})[name] = entry
-    atomic_json(run / epic_tasks.EPIC, epic)
-    return dict(id=run.name, status="PHASE_RECORDED")
 
 
 def executor_offers():
