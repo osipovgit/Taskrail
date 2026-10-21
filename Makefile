@@ -2,7 +2,7 @@ PYTHON ?= python3
 
 .PHONY: lint lint-python lint-ui test format-check check
 lint: lint-python lint-ui
-	bash -n deploy/fresh.sh deploy/reset-executor.sh deploy/install.sh deploy/options.sh deploy/countersign deploy/install-executor.sh deploy/executor-service deploy/countersign-executor-approve deploy/ssh-askpass
+	bash -n deploy/fresh.sh deploy/executor-maintenance.sh deploy/reset-executor.sh deploy/install.sh deploy/options.sh deploy/countersign deploy/install-executor.sh deploy/executor-service deploy/countersign-executor-approve deploy/ssh-askpass
 lint-python:
 	$(PYTHON) -m ruff check countersign tests tools
 	$(PYTHON) tools/lint_python.py
