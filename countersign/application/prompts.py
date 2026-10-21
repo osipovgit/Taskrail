@@ -12,8 +12,9 @@ from countersign.application import (
     instruction_modules,
     instruction_sources,
     mode_rules,
+    plan_file,
 )
-from countersign.core import schema
+from countersign.core import schema, task_graph
 from countersign.core.paths import tool_paths
 from countersign.git import requests as git_requests
 from countersign.infrastructure.artifact_access import result_inputs
@@ -24,6 +25,19 @@ CHUNK_SIZE = 500
 INSTRUCTIONS = json.loads(Path(__file__).with_name("stage-instructions.json").read_text())
 
 POLICY = Path(__file__).with_name("policy.md").read_text()
+PLANNER = "planner"
+ROUTING = (
+    "\nRESPONSE ROUTING: return exactly one JSON object, no prose or fences. For an executor "
+    "operation use the advertised GIT_REQUEST, LOCAL_REQUEST, ACTION_REQUEST or JENKINS_REQUEST "
+    "object INSTEAD of the stage-result schema and end your turn. Otherwise use the stage-result "
+    "alternative below. ACTION_REQUEST and JENKINS_REQUEST are only available when advertised. "
+    "An intermediate request is not a tool call and not a final task verdict.\nResponse schema:\n"
+)
+PLAN_ROUTING = (
+    "\nRESPONSE ROUTING: the plan file is your result; end with DONE. For an executor "
+    "operation return one advertised request object as your entire final message and end your "
+    "turn; it is not a tool call. Request schemas:\n"
+)
 
 WRITER_REPAIR = MappingProxyType(
     {
@@ -53,19 +67,6 @@ def make_request(config, execution, state, run):
     state["module_source_files"] = instruction_modules.observed_files(run)
     frozen = instruction_sources.freeze_contract(run, POLICY, INSTRUCTIONS, state)
     stage = execution[0]
-    role = "reviewer" if stage == "plan-reviewer" else stage
-    output_schema = json.dumps(
-        {
-            "oneOf": [
-                json.loads(contract(role, state.get("contract_version"))),
-                executor_contracts.git_schema(),
-                executor_contracts.ssh_schema(),
-                executor_contracts.local_schema(),
-                executor_contracts.jenkins_schema(),
-            ]
-        },
-        indent=2,
-    )
     return (
         "# Task (verbatim)\n"
         + history_file.prompt_task(config["task_text"], run)
@@ -77,11 +78,7 @@ def make_request(config, execution, state, run):
         + execution_requests.instructions(config, stage, run)
         + git_requests.instructions()
         + local.instructions()
-        + "\nRESPONSE ROUTING: return exactly one JSON object, no prose or fences. "
-        "For an executor operation use the advertised GIT_REQUEST, LOCAL_REQUEST, ACTION_REQUEST or JENKINS_REQUEST object INSTEAD of "
-        "the stage-result schema and end your turn. Otherwise use the stage-result alternative below. ACTION_REQUEST and JENKINS_REQUEST are only available when advertised. "
-        "An intermediate request is not a tool call and not a final task verdict.\nResponse schema:\n"
-        + output_schema
+        + response_section(stage, state, run, config["roots"])
         + "\nContext:\n"
         + json.dumps(
             readable_context(request_context(config, execution, state, run)),
@@ -91,12 +88,35 @@ def make_request(config, execution, state, run):
     )
 
 
+def response_section(stage, state, run, roots):
+    """How to answer: the plan file for the planner, else one JSON object.
+
+    Schemas are compact JSON with one field per line, so no line is cut when the request
+    is read; every alternative is still the validated contract.
+    """
+    alternatives = [
+        executor_contracts.git_schema(),
+        executor_contracts.ssh_schema(),
+        executor_contracts.local_schema(),
+        executor_contracts.jenkins_schema(),
+    ]
+    if stage == PLANNER:
+        text = plan_file.instructions(run, roots, state.get("requirements", [])) + PLAN_ROUTING
+    else:
+        role = "reviewer" if stage == "plan-reviewer" else stage
+        own = contract(role, state.get("contract_version"))
+        alternatives.insert(0, json.loads(own))
+        text = ROUTING
+    schemas = json.dumps({"oneOf": alternatives}, indent=1, separators=(",", ":"))
+    return "{0}{1}\n".format(text, schemas)
+
+
 def request_context(config, execution, state, run):
     """Resolve server-owned roots and inputs once for all role prompts."""
     roots = config["roots"]
     return dict(
         schema_version=state.get("contract_version"),
-        requirements=state.get("requirements", []),
+        requirements=[] if execution[0] == PLANNER else state.get("requirements", []),
         requirement_ids=[entry["id"] for entry in state.get("requirements", [])],
         stage=execution[0],
         roots=state["roots"],
@@ -109,6 +129,7 @@ def request_context(config, execution, state, run):
         feedback=tool_paths(execution[3], roots),
         checks=tool_paths(state["checks"], roots),
         prior_plan_review=tool_paths(state.get("plan_review"), roots),
+        task_order=task_graph.plan_order(execution[1]),
         no_changes_needed=bool(
             execution[1] is not None and not execution[1]["proposed_change_files"]
         ),

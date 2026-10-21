@@ -18,6 +18,7 @@ class PlanningRegressions(unittest.TestCase):
         return dict(
             schema_version=1,
             status="BLOCKED",
+            decision="blocked",
             summary="Required history is unavailable",
             coverage=[],
             evidence=[],

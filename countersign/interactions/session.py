@@ -37,9 +37,10 @@ class StageSession:
     def run(self):
         """One stage server serves every turn and stops with the stage."""
         launch = self.launch
-        allow = launch.get("runtime", {}).get("env_allow", ())
+        runtime = launch.get("runtime", {})
+        allow = (runtime.get("env_allow", ()), runtime.get("autocompact", True))
         command = launch.get("command", ())
-        with opencode_api.stage_server(command, launch.get("workspace"), allow) as server:
+        with opencode_api.stage_server(command, launch.get("workspace"), *allow) as server:
             self.context["attachment"] = server.attachment() if server else {}
             return self.turns()
 

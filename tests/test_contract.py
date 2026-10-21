@@ -27,6 +27,7 @@ class ContractTests(unittest.TestCase):
         self.payload = {
             "schema_version": 1,
             "status": "PLAN_READY",
+            "decision": "none",
             "summary": "Already returns 2",
             "steps": [],
             "files_read": [str(self.source)],
@@ -82,7 +83,8 @@ class ContractTests(unittest.TestCase):
         return evidence.refresh(self.run, events, self.context["roots"].values())
 
     def validate(self, payload=None):
-        return result_validation.validate(json.dumps(payload or self.payload), self.context)
+        decoded = schema.decode(json.dumps(payload or self.payload), "planner")
+        return result_validation.checked(decoded, self.context)
 
     def test_observed_no_change_result_and_binding(self):
         self.validate()
@@ -168,11 +170,11 @@ class ContractTests(unittest.TestCase):
             [entry["text"] for entry in task_requirements(task, [])],
             ["# Title", "## Goal\nShip it"],
         )
-        steps = [dict(id=f"S{number}") for number in range(9)]
+        steps = [dict(id=f"T{number}") for number in range(30)]
         plan = dict(steps=steps, proposed_change_files=["a"])
-        with self.assertRaisesRegex(ValueError, "at most 8 tasks"):
-            control.check_plan(plan, dict(decompose=True))
-        control.check_plan(dict(plan, steps=steps[:8]), dict(decompose=True))
+        control.check_plan(plan, dict(decompose=True))
+        with self.assertRaisesRegex(ValueError, "no change and no tasks"):
+            control.check_plan(plan, dict(read_only=True))
 
     def test_relative_path_error_names_the_absolute_form(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -187,19 +189,13 @@ class ContractTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "owning step"):
             self.validate()
         self.payload["proposed_change_files"] = [str(self.source)]
+        self.payload["decision"] = "single"
         self.payload["steps"] = [
-            dict(
-                id="S1",
-                action="Return 3",
-                files=[str(self.source)],
-                criteria=["R1"],
-                depends_on=[],
-                checks=["Static read"],
-            )
+            step(id="S1", action="Return 3", files=[str(self.source)], criteria=["R1"])
         ]
         self.validate()
         self.payload["steps"][0]["depends_on"] = ["S2"]
-        with self.assertRaisesRegex(ValueError, "dependency"):
+        with self.assertRaisesRegex(ValueError, "unknown task"):
             self.validate()
 
     def test_incomplete_and_no_change_reviews_cannot_approve(self):
@@ -284,14 +280,7 @@ class ContractTests(unittest.TestCase):
         self.payload["blocking_gaps"] = ["Local linter execution unavailable"]
         self.payload["evidence"][0]["path"] = "/outside/request.md"
         self.payload["steps"] = [
-            dict(
-                id="S1",
-                action="Change",
-                files=["/outside/file"],
-                criteria=["Wrong criterion"],
-                depends_on=[],
-                checks=["Check"],
-            )
+            step(id="S1", action="Change", files=["/outside/file"], criteria=["Wrong criterion"])
         ]
         self.payload["proposed_change_files"] = ["/outside/file"]
         outcome = self.validate()
@@ -301,3 +290,10 @@ class ContractTests(unittest.TestCase):
         self.assertEqual(outcome["evidence"], [])
         self.assertEqual(outcome["coverage"][0]["outcome"], "not_evaluated")
         self.assertEqual(json.loads((self.stage / "blocked-draft.json").read_text()), self.payload)
+
+
+def step(**fields):
+    """A stored plan step with the fields the planner schema requires."""
+    entry = dict(id="S1", title="Task", line=1, depends_on=[], checks=["Check"], done_when=["Done"])
+    entry.update(scopes=[], notes="")
+    return dict(entry, **fields)

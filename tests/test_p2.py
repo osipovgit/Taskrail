@@ -12,7 +12,7 @@ from countersign.application import (
     instruction_modules,
     transitions,
 )
-from countersign.core import work_packages
+from countersign.core import task_graph
 from countersign.web.lifecycle import actions
 from countersign.web.submissions import worker_command
 
@@ -98,39 +98,29 @@ class P2Tests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "missing"):
             instruction_modules.render(self.run, execution, state)
 
-    def test_large_plan_gets_decomposition_and_disjoint_modules_stay_absent(self):
+    def test_language_modules_follow_the_plan_and_disjoint_ones_stay_absent(self):
         catalog = json.loads(instruction_modules.CATALOG.read_text())
         plan = dict(proposed_change_files=[f"/repo/{index}.sh" for index in range(4)])
         selected = instruction_modules.select(catalog, ("plan-reviewer", plan), {})
-        self.assertEqual(
-            {entry["id"] for entry in selected},
-            {"reading", "shell", "verification", "decomposition"},
-        )
+        self.assertEqual({entry["id"] for entry in selected}, {"reading", "shell", "verification"})
         selected = instruction_modules.select(catalog, ("implementer", None), {})
         self.assertEqual([entry["id"] for entry in selected], ["reading"])
 
-    def test_shared_packages_need_transitive_dependencies(self):
+    def test_tasks_run_in_dependency_order_and_cycles_are_named(self):
         steps = [
-            dict(id="S1", action="Change producer", files=["a.py"], criteria=["R1"], depends_on=[]),
-            dict(
-                id="S2", action="Change caller", files=["b.py"], criteria=["R2"], depends_on=["S1"]
-            ),
-            dict(
-                id="S3",
-                action="Complete integration",
-                files=["a.py"],
-                criteria=["R3"],
-                depends_on=["S2"],
-            ),
+            dict(id="T1", depends_on=["T3"]),
+            dict(id="T2", depends_on=[]),
+            dict(id="T3", depends_on=["T2"]),
+            dict(id="T4", depends_on=["T2"]),
         ]
-        work_packages.validate(steps)
-        steps[-1]["depends_on"] = []
-        with self.assertRaisesRegex(ValueError, "explicit dependency"):
-            work_packages.validate(steps)
-        steps[-1]["depends_on"] = ["S2"]
-        steps[-1]["action"] = steps[0]["action"]
-        with self.assertRaisesRegex(ValueError, "distinct deliverables"):
-            work_packages.validate(steps)
+        self.assertEqual(task_graph.order(steps), ["T2", "T3", "T1", "T4"])
+        self.assertEqual(task_graph.waves(steps), {"T2": 1, "T3": 2, "T4": 2, "T1": 3})
+        self.assertEqual(task_graph.ancestors(steps, "T1"), {"T2", "T3"})
+        steps[1]["depends_on"] = ["T1"]
+        with self.assertRaisesRegex(ValueError, "cycle: T1 -> T3 -> T2 -> T1"):
+            task_graph.order(steps)
+        with self.assertRaisesRegex(ValueError, "T5 depends on an unknown task or itself"):
+            task_graph.order([dict(id="T5", depends_on=["T5"])])
 
     def test_approved_no_change_plan_never_enters_writer(self):
         state = dict(status="RUNNING", results={})

@@ -68,6 +68,8 @@ usage is reported as zero tokens, so compare models only on runs with telemetry.
 | `request.md`, `agent.md`, `permissions.log` | Effective request/profile/preflight |
 | `events.jsonl`, `stderr.log`, `response.raw.txt` | Raw evidence; response may be invalid JSON |
 | `result.json`, `evidence-bindings.json` | Validated result and source/event bindings |
+| `plan.md`, `NN-plan/plan.md` | The planner's plan file, and the copy each planning attempt accepted |
+| `00-input/project-map.md` | Files, landmarks and requirement hints the server wrote before planning |
 | `evidence.json`, `recovery.md` | Source-versioned recovery data; clipping stays explicit |
 | `budgets.json` | Durable reservations, consumption and allowance changes |
 | `changes.diff`, `report.md` | Actual edits and human review report |

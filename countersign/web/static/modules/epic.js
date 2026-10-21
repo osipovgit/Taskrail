@@ -31,6 +31,9 @@ function openButton(run, actions) {
 function taskItem(task, delivery, actions) {
   const item = el('li');
   item.append(el('strong', task.id + ' · ' + task.title));
+  if (task.depends_on && task.depends_on.length) {
+    item.append(el('span', ' after ' + task.depends_on.join(', '), 'muted'));
+  }
   if (task.status) item.append(badge(task.status));
   else item.append(el('span', task.id === delivery.next ? 'Next' : 'Not started', 'badge'));
   if (task.run) item.append(openButton(task.run, actions));

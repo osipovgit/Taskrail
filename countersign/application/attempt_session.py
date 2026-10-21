@@ -63,7 +63,11 @@ def launch_options(workflow, active, allowance, format_only):
         debug=workflow.runtime["debug"],
         progress=True,
         format_only=format_only,
-        runtime=dict(token_budget=allowance, env_allow=config["agent_env_allow"]),
+        runtime=dict(
+            token_budget=allowance,
+            env_allow=config["agent_env_allow"],
+            autocompact=record["role"] == "implementer",
+        ),
     )
 
 

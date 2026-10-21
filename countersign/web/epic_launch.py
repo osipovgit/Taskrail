@@ -11,11 +11,10 @@ from functools import partial
 
 from countersign.application import worktree_isolation
 from countersign.interactions import approval_policy
-from countersign.web import epic_progress, epic_record, epic_tasks, history
+from countersign.web import epic_progress, epic_record, epic_tasks, history, task_brief
 
 TITLE_LIMIT = 160
 IDENTIFIER = "id"
-SCOPE = "This run is one task of a larger goal that was split into tasks. Do only the current task below; every other task has its own run. Finished tasks are already in the source."
 
 
 def start_next(launcher, run, automatic=False):
@@ -43,38 +42,18 @@ def payload(run, state, entries, task):
     """Task form fields of one task run."""
     draft = history.task_draft(run)
     title = "{0} · {1}: {2}".format(draft["title"], task[IDENTIFIER], task["title"])
+    done_when = "; ".join(task["done_when"])
     return dict(
         title=title[:TITLE_LIMIT],
-        goal=task["goal"],
-        criteria="\n".join(task["checks"]),
+        goal="{0}: {1}".format(task["title"], done_when) if done_when else task["goal"],
+        criteria=task_brief.requirements(state, task),
         entry_points="\n".join(task["files"]),
         constraints=draft["constraints"],
-        split_context=brief(run.name, draft, entries, task),
+        split_context=task_brief.brief(run, draft, entries, task),
         roots=worktree_isolation.root_entries(state["roots"]),
         auto_approve=approval_policy.at_start(run, draft),
         phase="task",
     )
-
-
-def brief(epic, draft, entries, current):
-    """The scope rule, the overall goal and criteria, and every task with its outcome so far."""
-    lines = [SCOPE, "", f"Overall goal (task split run {epic}):", draft["goal"], ""]
-    lines.extend(["Overall acceptance criteria (apply to this task's part):", draft["criteria"]])
-    lines.extend(["", "Tasks:"])
-    lines.extend(task_line(task, current) for task in entries)
-    return "\n".join(lines)
-
-
-def task_line(task, current):
-    """One task of the brief: current, later, or finished with its outcome."""
-    label = "{0}: {1}".format(task[IDENTIFIER], task["title"])
-    if task is current:
-        return f"- {label} (current task)"
-    if task["status"] is None:
-        return f"- {label} (later; not part of this run)"
-    state = "marked done" if task["done"] else task["status"]
-    changed = ", ".join(task["changed_files"]) or "none"
-    return f"- {label} ({state}): {task['summary']} Changed files: {changed}"
 
 
 def continue_quietly(launcher, run):

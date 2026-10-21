@@ -72,14 +72,14 @@ returning a status alone. See [contracts](contracts.md).
 
 ## Curated instruction modules
 
-`application/instruction-modules.json` contains reading, Python, shell, UI,
-verification and decomposition guidance. Every stage gets the reading module, which
+`application/instruction-modules.json` contains reading, Python, shell, UI and
+verification guidance. Every stage gets the reading module, which
 keeps large inputs within the model context: search first, map a large file by its
 landmarks, read windows of at most 200 lines, never re-read a range, and map diffs
 and long outputs before reading them. Selection of the others uses validated plan
 paths and observed source reads. Initial planning starts with general verification
-guidance; later attempts and stages add matching language modules. Four or more proposed change files select
-decomposition guidance for planning and plan review.
+guidance; later attempts and stages add matching language modules. The decomposition
+rules belong to the run's mode rule (`application/mode_rules.py`).
 
 The catalog is frozen in `00-input/modules.json`. Each stage records selected IDs,
 module versions and text hashes; the UI shows them with instruction provenance.
@@ -87,13 +87,23 @@ Continuation rejects a missing or modified frozen catalog, so updating the
 application does not change a running task. Modules grant no tools or permissions,
 and no global skill loading is enabled.
 
-Structured plan steps are local work packages. Every package owns concrete files,
-criteria, dependencies and checks. Shared files or criteria require a dependency
-path; identical deliverables are rejected. Independent review checks semantic
-overlap and the remaining deliverable after dependencies finish. Checks and
-documentation stay with their owning change. There are no parallel writers;
-checkpoints keep the approved ordered plan, and an interrupted writer inspects
-current files before it continues.
+Plan tasks form a dependency graph (`core/task_graph.py`): the server rejects unknown,
+self and cyclic dependencies, runs tasks in topological order (plan order breaks
+ties) and gives reviewers that order. Every task owns concrete files, requirements
+or scoped parts of them, results and checks; two tasks may change one file when each
+delivers its own behavior. Independent review checks semantic overlap and the
+remaining deliverable after dependencies finish. There are no parallel writers;
+checkpoints keep the approved plan, and an interrupted writer inspects current files
+before it continues.
+
+Before the first planning request the server writes `00-input/project-map.md`
+(`application/project_map.py`): an index, every source file of each root with its line
+count and landmarks (YAML task names and keys, definitions, headings), and for every
+requirement the first lines that name its distinctive words. Long command output also
+comes with a digest of its severities, most mentioned files and rules
+(`interactions/output_digest.py`). Read-only stages run with opencode's automatic
+compaction off: an overflowing session fails and continues in a fresh session from
+recorded evidence, while the plan file keeps the planner's progress.
 
 The optional SSH executor owns its private credentials and queue under a separate
 OS user. The application submits requests through a Unix socket; only a root peer

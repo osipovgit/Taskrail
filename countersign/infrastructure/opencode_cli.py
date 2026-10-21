@@ -44,9 +44,16 @@ def permission_error(message):
     return any(marker in message for marker in PERMISSION_MARKERS)
 
 
-def environment(allow=()):
-    """Secrets stay filtered; opencode rejects unknown flags, so updates are disabled here."""
-    return dict(host_environment.filtered(allow), OPENCODE_DISABLE_AUTOUPDATE="true")
+def environment(allow=(), compact=True):
+    """Secrets stay filtered; opencode rejects unknown flags, so updates are disabled here.
+
+    Without compact, a session that outgrows the model fails instead of being summarized,
+    and the workflow continues in a fresh session from recorded evidence.
+    """
+    variables = dict(host_environment.filtered(allow), OPENCODE_DISABLE_AUTOUPDATE="true")
+    if not compact:
+        variables["OPENCODE_DISABLE_AUTOCOMPACT"] = "true"
+    return variables
 
 
 def agent_directory():

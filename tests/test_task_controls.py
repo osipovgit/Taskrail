@@ -201,7 +201,7 @@ class TaskControlTests(unittest.TestCase):
         self.assertIn("Design discussion: no edits", rule)
         self.assertNotIn("Answer only", rule)
         self.assertIn("Split into tasks", mode_rules.render(dict(decompose=True), "planner"))
-        self.assertIn("this run implements them", mode_rules.render({}, "planner"))
+        self.assertIn("this run then implements it", mode_rules.render({}, "planner"))
         self.assertEqual(mode_rules.render({}, "implementer"), "")
         with patch.object(self.launcher, "launch", return_value={"id": "next"}) as launch:
             self.launcher.submit(
@@ -295,10 +295,8 @@ class TaskControlTests(unittest.TestCase):
         ids = [entry["text"] for entry in task_requirements(text, [])]
         self.assertFalse(any("S-2" in entry or "Workflow rules" in entry for entry in ids))
         self.assertIn("## Task split context", text)
-        self.assertIn(
-            "Overall acceptance criteria (apply to this task's part):\n" + self.payload["criteria"],
-            text,
-        )
+        self.assertIn("Overall acceptance criteria:\n" + self.payload["criteria"], text)
+        self.assertIn("## Acceptance criteria\n- hello returns 2", text)
         self.assertEqual(json.loads((epic / "epic.json").read_text())["tasks"], {"S-1": "child-1"})
         with self.assertRaisesRegex(ValueError, "No task is ready"):
             self.launcher.action(dict(id="epic", action="epic_next"))

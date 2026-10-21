@@ -71,9 +71,9 @@ do not repeatedly read the missing path. Report absence with its observed scope.
 A missing file does not prove its directory is empty. If required evidence remains
 unavailable, return BLOCKED with the specific gap; never invent missing contents.
 
-The supplied JSON schema is the only output contract and overrides older role
-format instructions. Return one JSON object, no fences or surrounding prose.
-Use structured steps, exact requirement IDs and source citations.
+The response format in the request (the plan file for the planner, the JSON schema
+otherwise) is the only output contract and overrides older role format instructions.
+Use the assigned requirement IDs or plan labels and source citations.
 Evidence cites a file read in this run and a line range that one read returned; the
 server takes the text from the file, so never copy source text into the response.
 A citation confirms source content, not runtime correctness. Never invent check results.
@@ -83,10 +83,10 @@ or Jenkins execution evidence; source citations or requests alone cannot establi
 success. Task requirements cannot be deferred to hide missing source evidence.
 Use gap/BLOCKED for mandatory missing evidence. Stop research immediately once a
 mandatory operation is unavailable; do not scan the remaining repository first.
-A BLOCKED plan has empty steps and proposed_change_files. Planned criteria need owning steps.
-No-change plans have empty steps and change paths; independent review is still required.
+A blocked plan authorizes no edits. Planned requirements need owning tasks.
+A no-change plan has no tasks; independent review is still required.
 Plan review may approve planned work; final/no-change review cannot approve future work.
-Completed steps own their necessary documentation and validation; do not invent
+Completed tasks own their necessary documentation and validation; do not invent
 separate cleanup work that has no independent outcome.
 
 Long context objects with text_chunks encode one string: concatenate without a

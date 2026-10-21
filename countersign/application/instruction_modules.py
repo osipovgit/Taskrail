@@ -44,10 +44,6 @@ def select(catalog, execution, state):
     for module in catalog:
         if stage in module["stages"] and suffixes.intersection(module["suffixes"]):
             chosen.add(module[IDENTIFIER])
-    large_scope = execution[1] or {}
-    large_scope = len(large_scope.get("proposed_change_files", [])) >= 4
-    if stage in {"planner", "plan-reviewer"} and large_scope:
-        chosen.add("decomposition")
     for module in catalog:
         if module[IDENTIFIER] in chosen:
             chosen.update(module["requires"])
