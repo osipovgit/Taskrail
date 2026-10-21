@@ -32,14 +32,17 @@ The run list groups runs by what they need:
 
 Every **Change code** task goes through the same steps:
 
-1. **Planning is decomposition.** The planner plans the Goal as tasks: a small goal is
-   one task, larger work several (at most 8), each with its files, covered requirements,
-   dependencies and acceptance checks. Plan review checks the plan.
-2. **Implementation and review.** When all tasks together change at most as many
-   files as one review allows (`max_change_files`, 15 by default), this run implements
-   and reviews them. Otherwise the run stops as **Tasks ready** and each task runs as
-   its own run with its own planning, implementation and review rounds, one after
-   another in the same projects (the same worktrees if the task was isolated).
+1. **Planning is decomposition.** The planner writes `plan.md`: independent tasks,
+   each one action that one implementation run and one review can finish, owning at
+   least one requirement (or a scoped part of one) with its files, results, checks and
+   dependencies. There is no size limit; a task survives only if it keeps its own
+   requirement once its prerequisites are done. Plan review checks the plan.
+2. **Implementation and review.** With **Decision: single** this run implements and
+   reviews the tasks. With **Decision: split** the run stops as **Tasks ready** and
+   each task runs as its own run with its own planning, implementation and review
+   rounds, in dependency order, in the same projects (the same worktrees if the task
+   was isolated). A task run receives the parent requirements it owns, its results
+   and checks, and the other tasks by title.
 3. **Jenkins validation.** When the plan names Jenkins checks (`Jenkins check:` entries)
    and the executor offers Jenkins, a validation run starts once the code is done. It
    starts the listed builds (each needs root approval) and reports their results.

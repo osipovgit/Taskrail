@@ -110,3 +110,52 @@ def enrich(value, context, target, prompt):
                     if prior != current:
                         value["changed_files"].append(name)
     return value
+
+
+CHECK_PREFIXES = ("Jenkins check:", "Server check:")
+
+
+def plan_text(value, context):
+    """The planner's JSON-shaped fixture value written as plan.md."""
+    requirements = [entry["id"] for entry in context["requirements"]]
+    steps = value.get("steps", [])
+    names = {step["id"]: f"T{number}" for number, step in enumerate(steps, 1)}
+    if value["status"] == "BLOCKED":
+        decision = "blocked"
+    elif not steps:
+        decision = "no change"
+    else:
+        decision = "split" if len(steps) > 1 else "single"
+    summary = (value.get("blocking_gaps") or [value.get("summary") or "Fixture plan"])[0]
+    lines = [f"Decision: {decision}", f"Summary: {summary}"]
+    lines += ["", "## Requirements"]
+    evidence = {entry["id"]: entry for entry in value.get("evidence", [])}
+    for entry in value.get("coverage", []):
+        label = "R{0}".format(requirements.index(entry["id"]) + 1)
+        lines.append(f"- {label} → {outcome(entry, steps, names, evidence, value)}")
+    for step in steps:
+        lines += ["", "## {0}: {1}".format(names[step["id"]], step["action"].split(":")[0])]
+        depends = ", ".join(names[name] for name in step.get("depends_on", [])) or "none"
+        lines += [f"Depends on: {depends}", "Files: " + ", ".join(step["files"])]
+        lines += ["Done when:", f"- {step['action']}", "Verify:"]
+        lines += [f"- {check}" for check in step.get("checks") or ["Static review"]]
+    checks = [entry for entry in value.get("unverified", []) if entry.startswith(CHECK_PREFIXES)]
+    lines += ["", "## After the change", *[f"- {entry}" for entry in checks]]
+    return "\n".join(lines) + "\n"
+
+
+def outcome(entry, steps, names, evidence, value):
+    """One requirement line's outcome."""
+    kind = entry["outcome"]
+    if kind == "planned":
+        owners = [names[step["id"]] for step in steps if entry["id"] in step["criteria"]]
+        if len(owners) > 1:
+            owners = [f"{owner} [part {number}]" for number, owner in enumerate(owners, 1)]
+        return ", ".join(owners)
+    if kind in ("satisfied", "contradicted"):
+        cited = [evidence[name] for name in entry["evidence_ids"] if name in evidence]
+        spans = ["{path}:{line_start}-{line_end}".format(**item) for item in cited]
+        return "{0}: {1}".format("done" if kind == "satisfied" else kind, ", ".join(spans))
+    if kind == "deferred":
+        return "runtime: " + (value.get("unverified") or ["Run the runtime check"])[0]
+    return "gap: " + (value.get("blocking_gaps") or ["Missing input"])[0]

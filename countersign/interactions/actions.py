@@ -1,6 +1,7 @@
 """Route intermediate operations while retaining the original stage/session."""
 
 import json
+import re
 import subprocess
 from pathlib import Path
 
@@ -22,6 +23,7 @@ from countersign.interactions.clock import ApprovalPause
 MAX_CORRECTIONS = 2
 NARRATION = 'Your last message is not one JSON request or result, so nothing was executed and the stage cannot finish. Requests and results are plain JSON objects, not XML or tool-call markup. A local command is {{"schema_version": 1, "status": "LOCAL_REQUEST", "cwd": "...", "argv": ["..."], "reason": "..."}}; a Git command is {{"schema_version": 1, "status": "GIT_REQUEST", "root": "...", "argv": ["..."], "reason": "..."}}; the final stage result follows the response schema in {0}. Return exactly one of them as the entire message.'
 MISSING_PROGRAM = "{0} is not installed on the orchestrator host. Install it, then Allow to run this exact command; or Deny."
+REQUEST_NAME = re.compile(r"(?:GIT|LOCAL|ACTION|JENKINS)_REQUEST")
 
 
 class Actions:
@@ -115,20 +117,27 @@ def incomplete_request(actions, text):
     """Return a near-miss request or bare narration to the same session, twice per stage.
 
     A turn that only describes its next step, or writes a request as XML or tool-call
-    markup, would otherwise go to a format repair without tools or context.
+    markup, would otherwise go to a format repair without tools or context. A planner
+    answers in plan.md, so its final text is not narration; the plan check corrects it.
     """
     context = actions.session.context
     if context["corrections"] >= MAX_CORRECTIONS:
         return None
     if local_request.incomplete(text):
         feedback = local_request.correction(text)
-    elif not_json(text):
+    elif not_json(text) and narrated(actions, text):
         feedback = NARRATION.format(actions.folder / "request.md")
     else:
         return None
     context["corrections"] += 1
     events.append(actions.folder, "correction", dict(response=text), feedback)
     return feedback
+
+
+def narrated(actions, text):
+    """A planner answers in plan.md, so only a request written as markup counts."""
+    planner = actions.session.active[1]["role"] == "planner"
+    return not planner or bool(REQUEST_NAME.search(text))
 
 
 def not_json(text):

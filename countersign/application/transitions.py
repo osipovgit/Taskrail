@@ -13,7 +13,6 @@ IMPLEMENTER = "implementer"
 REPAIRS = "repair_count"
 REVIEWER = "reviewer"
 # Runs started before automatic splitting never split on their own.
-UNLIMITED = 10**9
 
 
 def planning(flow, state, verdict, limit):
@@ -33,8 +32,7 @@ def plan_review(flow, state, verdict, limit):
         return
     flow[ALLOWED] = flow["plan"]["proposed_change_files"]
     state["no_changes_needed"] = not bool(flow[ALLOWED])
-    split_files = state.get("split_files", UNLIMITED)
-    if plan_contract.splits(flow["plan"], state.get("decompose"), split_files):
+    if plan_contract.splits(flow["plan"], state.get("decompose")):
         state.update(status="TASKS_READY", summary=verdict[SUMMARY])
     elif flow[ALLOWED]:
         flow.update(stage=IMPLEMENTER, feedback=None, effect="capture_preimages")

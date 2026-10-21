@@ -2,7 +2,13 @@
 
 from pathlib import Path
 
-from countersign.application import declared_block, evidence, execution_evidence
+from countersign.application import (
+    declared_block,
+    evidence,
+    execution_evidence,
+    plan_file,
+    plan_result,
+)
 from countersign.core import coverage, plan_contract, schema, source_claims
 from countersign.core.files import atomic_json
 from countersign.git.requests import output_directory
@@ -12,8 +18,20 @@ PLAN_FILES = "declared roots (files_read and proposed_change_files name project 
 
 
 def validate(response, context):
-    """Return a versioned result only after all independent validations pass."""
-    payload = schema.decode(response, context["role"])
+    """Return a versioned result only after all independent validations pass.
+
+    A planner's problems name requirements by their plan labels.
+    """
+    if context["stage"] != plan_result.PLANNER:
+        return checked(schema.decode(response, context["role"]), context)
+    try:
+        return checked(plan_result.stage_result(context), context)
+    except ValueError as error:
+        raise ValueError(plan_file.labelled(str(error), context["requirements"])) from error
+
+
+def checked(payload, context):
+    """Coverage, evidence and role checks of a decoded result."""
     atomic_json(context["folder"] / "response-object.json", payload)
     if declared_block.present(payload):
         payload = declared_block.stop_result(payload, context)

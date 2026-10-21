@@ -5,7 +5,7 @@
 | `countersign/agents/*.md` | Role-specific method; no duplicate schema or budget |
 | `application/policy.md` | Shared trust, paths, recovery and execution boundaries |
 | `application/stage-instructions.json` | Stage-specific objective |
-| `application/mode_rules.py` | Mode rule (Answer only, Design discussion, Split into tasks) from the task header, for browser and CLI tasks |
+| `application/mode_rules.py` | Mode rule (Change code with its decomposition rules, Answer only, Design discussion, forced Split into tasks) from the task header, for browser and CLI tasks |
 | `core/result-schemas.json` | Exact machine-readable response shape |
 | `00-input/` | Frozen task, role sources and effective contract for this run |
 
@@ -32,9 +32,10 @@ that cannot all be met literally are not a gap: the agent keeps behavior and saf
 constraints, does the rest, records the choice in summary and unverified, and
 reviewers accept that recorded choice.
 
-- Planner: structured steps (id, action, files, criteria, depends_on, checks),
-  files_read and proposed_change_files. Every planned criterion needs an owning
-  step, and the files of all steps must equal proposed_change_files.
+- Planner: writes `plan.md` in the run directory (see [plan file](#plan-file)); the
+  server derives the stored plan result from it: coverage, evidence, steps (one per
+  task, with its files, owned requirements and scopes, dependencies, results and
+  checks), files_read from observed reads and proposed_change_files from the tasks.
 - Implementer: completed_steps and changed_files, checked against the approved
   scope and observed source changes. IMPLEMENTED cannot leave planned requirements.
 - Reviewer: input_complete and findings. Plan review can approve future work;
@@ -94,7 +95,48 @@ result with no edit authorization. Detected edits remain in the report.
 `response-object.json` holds the decoded candidate; `response.raw.txt` keeps the
 untouched response.
 
-## Roles
+## Plan file
+
+The planner's only writable file is `<run>/plan.md`. The server writes its template on
+the first attempt (one `R<n> →` line per requirement) and reads it when the session
+ends; the file survives an interrupted or overflowing session, and the next attempt
+continues it. The request lists the requirements verbatim with their `R<n>` labels and
+names the project map. The format:
+
+```markdown
+Decision: split | single | no change | blocked
+Summary: one or two sentences (an answer or design document goes in ## Answer)
+
+## Requirements
+- R1 → T1 [roles/ntp], T2 [roles/web]
+- R2 → done: project/README.md:12-18
+- R3 → runtime: ansible-playbook --check site.yml passes
+- R4 → gap: the Jenkins job name is not in the task
+
+## T1: Fix lint in roles/ntp
+Depends on: none
+Files: project/roles/ntp/tasks/main.yml, project/roles/ntp/defaults/main.yml (new)
+Done when:
+- ansible-lint roles/ntp reports no var-naming findings
+Verify:
+- ansible-lint roles/ntp
+Notes: optional pointers for the implementer
+
+## After the change
+- Jenkins check: ci/ansible-lint: BRANCH=main passes
+- Server check: run ansible-playbook --check site.yml on the controller
+```
+
+Keys, emphasis, backticks and bullet styles are read leniently. Every problem is
+reported at once with its line, back to the same session: an unknown or missing
+requirement line, a task without files, requirements, results or checks, an unknown,
+self or cyclic dependency, a requirement split between tasks without a distinct
+`[scope]` for each part, a gap under any decision but blocked, or a task count the
+decision rules out (split needs two tasks, single one, no change none). A blocked plan
+authorizes nothing. A planner result that still fails goes to one full attempt with
+tools, never to a tool-less format repair. Error messages name requirements by label.
+
+
 
 Custom `agent_source` directories take precedence over bundled roles, and updates
 never overwrite installed custom roles. Each role must contain the exact line

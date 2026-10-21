@@ -8,7 +8,7 @@ import time
 import uuid
 from pathlib import Path
 
-from fake_contract import enrich
+from fake_contract import enrich, plan_text
 
 args = sys.argv[1:]
 if "--version" in args:
@@ -59,6 +59,17 @@ if "Context:\n" in prompt:
 else:
     context = json.loads(saved_context.read_text())
 header = json.loads((profiles / (agent + ".md")).read_text().split("---")[1])
+if context["stage"] == "planner" and not context["requirements"] and "PLAN FILE:" in prompt:
+    listed = prompt.split("(use their labels in the plan file):\n", 1)[1]
+    kinds = [
+        "runtime" if line.split(".", 1)[1].startswith(" (runtime)") else "task"
+        for line in listed.splitlines()
+        if line[:1] == "R" and "." in line[:6]
+    ]
+    context["requirements"] = [
+        dict(id=name, kind=kind) for name, kind in zip(context["requirement_ids"], kinds)
+    ]
+    saved_context.write_text(json.dumps(context))
 if "FORMAT REPAIR ONLY" not in prompt and "SYNTHESIS ONLY" not in prompt:
     for file in [Path(args[args.index("--file") + 1]), Path(context["task_file"])] + (
         [Path(context["diff_file"])] if context.get("diff_file") else []
@@ -386,7 +397,7 @@ if mode == "structured-steps" and role == "planner":
             dependency="none",
         )
     ]
-if mode == "format-unavailable" and role == "planner" and "FORMAT REPAIR ONLY" in prompt:
+if mode == "format-unavailable" and role == "plan-reviewer" and "FORMAT REPAIR ONLY" in prompt:
     for index in range(2):
         print(
             json.dumps(
@@ -454,36 +465,41 @@ if mode == "git-actions":
                 line_end=2,
             )
         )
-if (
-    mode in ("invalid-once", "timeout-then-invalid", "format-unavailable")
-    and role == "planner"
-    and "FORMAT REPAIR ONLY" not in prompt
-):
-    value.pop("proposed_change_files", None)
-if mode == "repair-blocked" and role == "planner" and "PREVIOUS FINAL RESPONSE" not in prompt:
+if mode == "format-unavailable" and role == "plan-reviewer" and "FORMAT REPAIR ONLY" not in prompt:
+    value.pop("input_complete", None)
+if mode == "repair-blocked" and role == "plan-reviewer" and "PREVIOUS FINAL RESPONSE" not in prompt:
     if "FORMAT REPAIR ONLY" in prompt:
-        value["blocking_gaps"] = ["The saved response omits sources; a repair cannot rebuild it"]
+        value.update(status="BLOCKED", blocking_gaps=["The saved response omits sources"])
+        value["coverage"] = [dict(entry, outcome="gap") for entry in value["coverage"]]
     else:
-        value.pop("proposed_change_files", None)
+        value.pop("input_complete", None)
 bad_citation = mode == "bad-citation" and "final result was rejected" not in prompt
 bad_citation = bad_citation or (
     mode == "bad-citation-kept" and "PREVIOUS FINAL RESPONSE" not in prompt
 )
-if bad_citation and role == "planner":
+if bad_citation and role == "plan-reviewer":
     value["evidence"][0].update(line_start=9, line_end=9)
 response = json.dumps(value)
+plan_broken = mode in ("invalid-once", "timeout-then-invalid")
+plan_broken = plan_broken and "PREVIOUS FINAL RESPONSE" not in prompt
+plan_broken = plan_broken and "final result was rejected" not in prompt
+if mode == "prose-block" and role == "planner":
+    value.update(status="BLOCKED", blocking_gaps=["Mandatory local commands unavailable"])
+plan = Path(context["task_file"]).parent.parent / "plan.md"
+if role == "planner" and header["permission"]["edit"].get(str(plan)) == "allow":
+    assert "PLAN FILE:" in prompt or "--session" in args
+    if not plan_broken:
+        plan.write_text(plan_text(value, context))
+    response = "DONE"
 writer_prose = mode == "writer-prose-always" or (
     mode == "writer-prose" and "FORMAT REPAIR ONLY" not in prompt
 )
 if writer_prose and role == "implementer":
     response = "I changed hello.py; the work is done."
-if mode == "narrate" and role == "planner" and "not one JSON request" not in prompt:
+if mode == "narrate" and role == "plan-reviewer" and "not one JSON request" not in prompt:
     response = "Let me run ansible-lint through bash -c to capture the full output."
 if mode == "markup-request" and role == "planner" and "not one JSON request" not in prompt:
     response = '<request type="LOCAL_REQUEST"><command>python3</command><arg>print(f"{len(fixed)}")</arg></request>'
-if mode == "prose-block" and role == "planner":
-    value["blocking_gaps"] = ["Mandatory local commands unavailable"]
-    response = "Research complete [note].\n" + json.dumps(value)
 if mode == "context-overflow" and role == "planner" and "EXCEEDED THE MODEL" not in prompt:
     whole = dict(status="completed", input=dict(filePath=str(target)), output="1: x\n" * 6000)
     print(json.dumps(dict(type="tool_use", part=dict(id="whole-read", tool="read", state=whole))))

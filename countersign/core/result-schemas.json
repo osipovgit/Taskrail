@@ -11,7 +11,8 @@
       "blocking_gaps",
       "steps",
       "files_read",
-      "proposed_change_files"
+      "proposed_change_files",
+      "decision"
     ],
     "additionalProperties": false,
     "properties": {
@@ -128,7 +129,12 @@
             "files",
             "criteria",
             "depends_on",
-            "checks"
+            "checks",
+            "title",
+            "line",
+            "scopes",
+            "done_when",
+            "notes"
           ],
           "additionalProperties": false,
           "properties": {
@@ -167,6 +173,45 @@
                 "type": "string",
                 "minLength": 1
               }
+            },
+            "title": {
+              "type": "string",
+              "minLength": 1
+            },
+            "line": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "scopes": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "id",
+                  "scope"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "scope": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                }
+              }
+            },
+            "done_when": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "notes": {
+              "type": "string"
             }
           }
         }
@@ -184,6 +229,15 @@
           "type": "string",
           "minLength": 1
         }
+      },
+      "decision": {
+        "type": "string",
+        "enum": [
+          "split",
+          "single",
+          "none",
+          "blocked"
+        ]
       }
     }
   },
