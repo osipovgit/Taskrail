@@ -15,6 +15,8 @@ def request(payload, address=protocol.SOCKET, timeout=CONNECTION_TIMEOUT):
         connection.sendall(protocol.encode(payload))
         with connection.makefile("rb") as stream:
             response = protocol.receive(stream)
+    if response.get(protocol.MAINTENANCE):
+        raise protocol.MaintenanceError(response.get("error"))
     if response.get("error"):
         raise ValueError(response.get("error"))
     return response

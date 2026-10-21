@@ -25,12 +25,15 @@ PRIVATE_UMASK = 0o77
 SOCKET_MODE = 0o660
 IDENTIFIER = "id"
 PRIVILEGED = frozenset(("approve", "reject"))
+# Operations that could start remote work later; refused while maintenance runs.
+HELD = frozenset(("submit", "approve"))
 
 
 class ExecutorServer(socketserver.ThreadingUnixStreamServer):
     """The application account may submit; only root can authorize execution."""
 
     daemon_threads = True
+    maintenance = Path(protocol.MAINTENANCE_MARKER)
 
     def __init__(self, address, uid, inventory, store, jenkins=None):
         self.client_uid = uid
@@ -43,6 +46,10 @@ class ExecutorServer(socketserver.ThreadingUnixStreamServer):
         if uid not in (0, self.client_uid):
             raise ValueError("Unauthorized local account")
         operation = payload.get("operation")
+        if operation in HELD and self.maintenance.exists():
+            raise protocol.MaintenanceError(
+                "Executor maintenance is in progress; nothing was submitted or approved. Try again after it ends."
+            )
         if operation in PRIVILEGED and uid == 0:
             return self.decide(operation, payload)
         if operation == "catalog":
@@ -86,6 +93,8 @@ class ExecutorServer(socketserver.ThreadingUnixStreamServer):
         with request.makefile("rb") as stream:
             try:
                 response = self.checked_dispatch(protocol.receive(stream), uid)
+            except protocol.MaintenanceError as error:
+                response = {"error": str(error), protocol.MAINTENANCE: True}
             except (ValueError, OSError, LookupError):
                 response = {
                     "error": "Executor rejected request; check fields, targets and permissions"

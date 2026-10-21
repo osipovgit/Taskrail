@@ -19,8 +19,15 @@ sudo systemctl start countersign-executor.service
 
 `--autostart=enable|disable|keep` is explicit and never prompts. Enabled means system
 boot, independently of user login. Updates preserve credentials, host keys and
-queued tickets. The installer refuses to update while a ticket is RUNNING, stops
-the service, installs trusted code and leaves startup to the explicit command above.
+queued tickets. Updates and resets (`deploy/install.sh --fresh` runs
+`deploy/reset-executor.sh`) work in maintenance mode: while
+`/etc/countersign-executor/maintenance` exists the service refuses new submissions and
+approvals, and Countersign waits and asks again. The script then refuses to go on while
+an action is RUNNING (a reset also while one is UNKNOWN), stops the service and fails
+if it does not stop, checks the journal again, and only then swaps in the package it
+prepared beforehand, or deletes the installation. A failed step changes nothing, and a
+reset never deletes the journal of a running or uncertain action. Startup is left to
+the explicit command above.
 
 Log out and back in after first installation so your account inherits the
 `countersign-executor-clients` group, then restart the user application service.

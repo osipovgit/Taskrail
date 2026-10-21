@@ -9,6 +9,13 @@ from countersign.core.schema import unique_fields
 MAX_MESSAGE = 2 * 1024 * 1024
 MAX_SCRIPT = 524288
 SOCKET = "/run/countersign-executor/control.sock"
+# Present while an update or reset runs: no new submissions or approvals.
+MAINTENANCE_MARKER = "/etc/countersign-executor/maintenance"
+MAINTENANCE = "maintenance"
+
+
+class MaintenanceError(OSError):
+    """The executor is being updated or reset; like an outage, ask again later."""
 
 
 def encode(payload):
