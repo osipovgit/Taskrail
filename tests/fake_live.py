@@ -452,7 +452,6 @@ if mode == "git-actions":
                 path=str(output_path),
                 line_start=2,
                 line_end=2,
-                quote=output.splitlines()[1],
             )
         )
 if (
@@ -466,10 +465,12 @@ if mode == "repair-blocked" and role == "planner" and "PREVIOUS FINAL RESPONSE" 
         value["blocking_gaps"] = ["The saved response omits sources; a repair cannot rebuild it"]
     else:
         value.pop("proposed_change_files", None)
-bad_quote = mode == "bad-quote" and "final result was rejected" not in prompt
-bad_quote = bad_quote or (mode == "bad-quote-kept" and "PREVIOUS FINAL RESPONSE" not in prompt)
-if bad_quote and role == "planner":
-    value["evidence"][0]["quote"] = "def hello(): return 3"
+bad_citation = mode == "bad-citation" and "final result was rejected" not in prompt
+bad_citation = bad_citation or (
+    mode == "bad-citation-kept" and "PREVIOUS FINAL RESPONSE" not in prompt
+)
+if bad_citation and role == "planner":
+    value["evidence"][0].update(line_start=9, line_end=9)
 response = json.dumps(value)
 writer_prose = mode == "writer-prose-always" or (
     mode == "writer-prose" and "FORMAT REPAIR ONLY" not in prompt

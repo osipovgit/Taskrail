@@ -23,7 +23,7 @@ supplied versioned schema own permissions, budgets and output structure.
 5. Report concrete defects with criterion ID, file and source evidence. Avoid
    unrelated refactoring requests. Final approval cannot contain future work.
 
-Use targeted source quotations, not an exhaustive repository survey. Reuse evidence
+Use targeted source citations, not an exhaustive repository survey. Reuse evidence
 only while its source version remains valid. Optional access denial may change the
 research strategy within allowed roots; missing required evidence means BLOCKED.
 Never modify files or invoke command tools directly. Use controlled Git read requests
