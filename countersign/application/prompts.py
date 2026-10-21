@@ -7,12 +7,11 @@ from types import MappingProxyType
 
 from countersign.application import (
     execution_requests,
-    executor_contracts,
     history_file,
     instruction_modules,
     instruction_sources,
     mode_rules,
-    plan_file,
+    response_format,
 )
 from countersign.core import schema, task_graph
 from countersign.core.paths import tool_paths
@@ -26,19 +25,6 @@ INSTRUCTIONS = json.loads(Path(__file__).with_name("stage-instructions.json").re
 
 POLICY = Path(__file__).with_name("policy.md").read_text()
 PLANNER = "planner"
-ROUTING = (
-    "\nRESPONSE ROUTING: return exactly one JSON object, no prose or fences. For an executor "
-    "operation use the advertised GIT_REQUEST, LOCAL_REQUEST, ACTION_REQUEST or JENKINS_REQUEST "
-    "object INSTEAD of the stage-result schema and end your turn. Otherwise use the stage-result "
-    "alternative below. ACTION_REQUEST and JENKINS_REQUEST are only available when advertised. "
-    "An intermediate request is not a tool call and not a final task verdict.\nResponse schema:\n"
-)
-PLAN_ROUTING = (
-    "\nRESPONSE ROUTING: the plan file is your result; end with DONE. For an executor "
-    "operation return one advertised request object as your entire final message and end your "
-    "turn; it is not a tool call. Request schemas:\n"
-)
-
 WRITER_REPAIR = MappingProxyType(
     {
         "implementer": "This pass cannot edit files. Report only edits already present in the source; leave unfinished approved work as planned or gap.\n",
@@ -78,7 +64,7 @@ def make_request(config, execution, state, run):
         + execution_requests.instructions(config, stage, run)
         + git_requests.instructions()
         + local.instructions()
-        + response_section(stage, state, run, config["roots"])
+        + response_format.section(stage, state, run, config["roots"])
         + "\nContext:\n"
         + json.dumps(
             readable_context(request_context(config, execution, state, run)),
@@ -86,29 +72,6 @@ def make_request(config, execution, state, run):
             indent=2,
         )
     )
-
-
-def response_section(stage, state, run, roots):
-    """How to answer: the plan file for the planner, else one JSON object.
-
-    Schemas are compact JSON with one field per line, so no line is cut when the request
-    is read; every alternative is still the validated contract.
-    """
-    alternatives = [
-        executor_contracts.git_schema(),
-        executor_contracts.ssh_schema(),
-        executor_contracts.local_schema(),
-        executor_contracts.jenkins_schema(),
-    ]
-    if stage == PLANNER:
-        text = plan_file.instructions(run, roots, state.get("requirements", [])) + PLAN_ROUTING
-    else:
-        role = "reviewer" if stage == "plan-reviewer" else stage
-        own = contract(role, state.get("contract_version"))
-        alternatives.insert(0, json.loads(own))
-        text = ROUTING
-    schemas = json.dumps({"oneOf": alternatives}, indent=1, separators=(",", ":"))
-    return "{0}{1}\n".format(text, schemas)
 
 
 def request_context(config, execution, state, run):

@@ -268,14 +268,19 @@ class LiveTests(unittest.TestCase):
     def test_live_prompt_has_complete_schema(self):
         run, status, state = self.run_mode()
         prompt = (run / "02-plan-review/request.md").read_text()
-        schema_text = prompt.split("Response schema:\n", 1)[1].split("\nContext:", 1)[0]
-        schema = json.loads(schema_text)["oneOf"][0]
+        schemas = prompt.split("one alternative per line:\n", 1)[1].split("\nContext:", 1)[0]
+        schema = json.loads(schemas.splitlines()[0])
+        self.assertNotIn("ACTION_REQUEST", schemas)
         self.assertIn("findings", schema["properties"])
         self.assertNotIn("quote", json.dumps(schema))
         planning = (run / "01-plan/request.md").read_text()
         self.assertIn(f"PLAN FILE: your result is the Markdown file {run / 'plan.md'}", planning)
         self.assertIn("R1. Return 2", planning)
-        self.assertNotIn("proposed_change_files", planning.split("Request schemas:", 1)[1])
+        requests = planning.split("Request schemas, one per line:\n", 1)[1].split("\nContext:")[0]
+        self.assertEqual(
+            [json.loads(line)["properties"]["status"]["const"] for line in requests.splitlines()],
+            ["GIT_REQUEST", "LOCAL_REQUEST"],
+        )
         self.assertIn("Decision: single", (run / "01-plan/plan.md").read_text())
         self.assertNotIn("NEEDS_INFO", (run / "00-input/agents/planner.md").read_text())
 

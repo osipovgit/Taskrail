@@ -101,7 +101,9 @@ Before the first planning request the server writes `00-input/project-map.md`
 count and landmarks (YAML task names and keys, definitions, headings), and for every
 requirement the first lines that name its distinctive words. Long command output also
 comes with a digest of its severities, most mentioned files and rules
-(`interactions/output_digest.py`). Read-only stages run with opencode's automatic
+(`interactions/output_digest.py`). Response schemas are compact JSON, one alternative
+per line, and the SSH and Jenkins request schemas appear only when the executor is
+installed (`application/response_format.py`). Read-only stages run with opencode's automatic
 compaction off: an overflowing session fails and continues in a fresh session from
 recorded evidence, while the plan file keeps the planner's progress.
 
