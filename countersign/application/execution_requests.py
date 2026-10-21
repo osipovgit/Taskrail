@@ -5,8 +5,12 @@ from pathlib import Path
 from types import MappingProxyType
 
 from countersign.application import jenkins_requests
-from countersign.core import schema
+from countersign.core import delivery_record, schema
 from countersign.executor import action_schema, client, protocol
+from countersign.interactions import remote_inspection
+
+INSPECT = "inspect"
+SERVER = "server"
 
 CONTRACT = MappingProxyType(
     {
@@ -23,7 +27,7 @@ CONTRACT = MappingProxyType(
 )
 
 
-def instructions(config, stage):
+def instructions(config, stage, run):
     """Advertise only an installed executor and what it offers; expose no credentials."""
     if not Path(protocol.SOCKET).exists():
         return "\nSSH executor unavailable. Do not claim remote execution.\n"
@@ -31,16 +35,31 @@ def instructions(config, stage):
         catalog = client.request({"operation": "catalog"})
     except (OSError, ValueError):
         return "\nSSH executor unreachable. Continue local analysis; report required remote checks as blocked.\n"
-    return ssh_instructions(catalog.get("hosts"), server_scope(config, stage)) + (
+    return ssh_instructions(catalog.get("hosts"), server_scope(config, stage, run)) + (
         jenkins_requests.instructions(catalog.get("jenkins"))
     )
 
 
-def server_scope(config, stage):
+def server_scope(config, stage, run):
     """What server actions may do in this stage; None when they are unavailable."""
-    if config.get("phase") == "server":
-        return SERVER_STEP
-    return None if stage == "implementer" else INSPECT_ONLY
+    mode = remote_mode(run, config, stage)
+    if mode is None:
+        return None
+    return SERVER_STEP if mode == SERVER else INSPECT_ONLY.format(remote_inspection.listed())
+
+
+def remote_mode(run, config, role):
+    """What the SSH route allows, decided by the server, never by the model.
+
+    server: this is the server check run of a change the operator confirmed; inspect:
+    one read-only command per action; None: no server actions while implementing.
+    """
+    if role == "implementer":
+        return None
+    change = config.get("confirmed_change")
+    if config.get("phase") == SERVER and delivery_record.server_checks_confirmed(run, change):
+        return SERVER
+    return INSPECT
 
 
 def ssh_instructions(targets, scope):
@@ -69,7 +88,7 @@ def ssh_instructions(targets, scope):
 
 
 SERVER_STEP = "This is the server check step: the operator confirmed the changes. Run the requested server checks; an action may change server state only as far as a check requires."
-INSPECT_ONLY = "Before the operator confirms the changes, only inspect server state; anything that changes a server belongs in a 'Server check:' entry of unverified and runs after confirmation."
+INSPECT_ONLY = "Before the operator confirms the changes, an SSH action only inspects: its script is exactly one read-only command with literal arguments and no files (no pipes, redirects, globs, variables or command chains), from: {0}. The server refuses anything else. Anything that changes a server belongs in a 'Server check:' entry of unverified and runs after confirmation."
 NOT_WHILE_IMPLEMENTING = "\nServer actions are not available while implementing; checks on servers run after the operator confirms the changes.\n"
 
 

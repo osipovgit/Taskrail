@@ -71,6 +71,15 @@ code change, planning and review may only inspect servers and the implementer ca
 use SSH at all; actions that check or change servers run in the server-check step after
 **Confirm changes** ([delivery](task-controls.md#delivery-of-a-code-change)).
 
+The server enforces this, whatever the model writes. Until a confirmed change's
+server-check run (its task names the change, whose record shows your confirmation and
+that run), an action is exactly one listed read-only command without files: for
+example `cat`, `grep`, `find` without `-exec` or `-delete`, `journalctl` without
+`--follow` or vacuuming, `systemctl status` and other read operations, `docker ps`,
+`inspect` or `logs`, optionally through `sudo`. Its arguments are quoted again, so
+pipes, redirects, globs and variables stay literal; anything else is refused before a
+ticket exists, and the session is told why.
+
 The UI shows the exact script, bundled files, connection targets and ticket ID.
 Review them, then run the command displayed by the UI:
 

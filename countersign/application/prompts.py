@@ -74,7 +74,7 @@ def make_request(config, execution, state, run):
         + frozen["instructions"][stage]
         + mode_rules.render(config, stage)
         + instruction_modules.render(run, execution, state)
-        + execution_requests.instructions(config, stage)
+        + execution_requests.instructions(config, stage, run)
         + git_requests.instructions()
         + local.instructions()
         + "\nRESPONSE ROUTING: return exactly one JSON object, no prose or fences. "

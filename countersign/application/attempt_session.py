@@ -37,6 +37,7 @@ def session_environment(workflow, profile, files, format_only, check_result):
         format_only=format_only,
         check_result=check_result,
         run=workflow.run,
+        config=workflow.config,
         roots=workflow.config[ROOTS],
         profile=profile,
         allowed=workflow.flow["allowed"],

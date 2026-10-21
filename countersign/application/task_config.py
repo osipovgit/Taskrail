@@ -37,6 +37,7 @@ def configuration(task, settings=None, roots_override=None):
         design=meta.get(DESIGN) is True,
         decompose=meta.get("decompose") is True,
         phase=meta.get("phase") if meta.get("phase") in PHASES else None,
+        confirmed_change=meta.get("confirmed_change"),
         auto_approve=meta.get("auto_approve") is True,
         task=path,
         task_text=text,

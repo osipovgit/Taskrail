@@ -135,6 +135,16 @@ class TaskControlTests(unittest.TestCase):
         self.assertEqual(task_draft(child)["goal"], "Explain the result")
         self.assertNotIn("Answer only", task_draft(child)["constraints"])
 
+    def test_only_a_server_check_names_its_confirmed_change(self):
+        for fields in (
+            dict(phase="validation", confirmed_change="original"),
+            dict(confirmed_change="original"),
+            dict(phase="server", confirmed_change="../original"),
+        ):
+            with self.subTest(fields=fields):
+                with self.assertRaisesRegex(ValueError, "Only a server check"):
+                    self.launcher.submit(dict(self.payload, **fields))
+
     def test_worktree_flag_is_a_boolean_task_header_option(self):
         with patch.object(self.launcher, "launch", return_value={"id": "next"}) as launch:
             self.launcher.submit(dict(self.payload, worktree=True, read_only=True))
@@ -355,6 +365,7 @@ class TaskControlTests(unittest.TestCase):
         self.assertEqual(launch.call_count, 1)
         text = launch.call_args.args[0]["text"]
         self.assertIn('"phase": "validation"', text)
+        self.assertNotIn("confirmed_change", text)
         self.assertIn('"read_only": true', text)
         self.assertIn('"ci/shop-tests: passes"', text)
         self.assertIn("Changed files: /repo/hello.py", text)
@@ -368,7 +379,7 @@ class TaskControlTests(unittest.TestCase):
         ):
             self.launcher.action(dict(id="original", action="confirm"))
         text = launch.call_args.args[0]["text"]
-        self.assertIn('"phase": "server"', text)
+        self.assertIn('"phase": "server", "confirmed_change": "original"', text)
         self.assertIn('"health returns 200"', text)
         self.assertEqual(delivery()["step"], "server")
         self.finish("server-1", "RUNNING")

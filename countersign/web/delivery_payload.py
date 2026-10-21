@@ -23,7 +23,7 @@ def payload(run, state, name, checks):
     """Task form fields of one phase run; the checks are its runtime requirements."""
     draft = history.task_draft(run)
     title = "{0} · {1}".format(draft["title"], TITLES[name])
-    return dict(
+    fields = dict(
         title=title[:TITLE_LIMIT],
         goal=GOALS[name],
         criteria=CRITERIA,
@@ -34,6 +34,9 @@ def payload(run, state, name, checks):
         auto_approve=approval_policy.at_start(run, draft),
         phase=name,
     )
+    if name == SERVER:
+        fields["confirmed_change"] = run.name
+    return fields
 
 
 def brief(run, state, draft):
