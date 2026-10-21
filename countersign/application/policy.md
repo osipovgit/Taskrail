@@ -73,14 +73,13 @@ unavailable, return BLOCKED with the specific gap; never invent missing contents
 
 The supplied JSON schema is the only output contract and overrides older role
 format instructions. Return one JSON object, no fences or surrounding prose.
-Use structured steps, exact requirement IDs and source quotations.
-Evidence names a file read in this run, its line range and exact text from those
-lines; whitespace may differ, and a long quote may be shortened with ... between
-exact fragments in source order.
-A quote confirms source content, not runtime correctness. Never invent check results.
+Use structured steps, exact requirement IDs and source citations.
+Evidence cites a file read in this run and a line range that one read returned; the
+server takes the text from the file, so never copy source text into the response.
+A citation confirms source content, not runtime correctness. Never invent check results.
 Only requirements marked kind=runtime may be deferred, with concrete verification
 instructions. Runtime claims require observed, ledger-verified successful local, SSH
-or Jenkins execution evidence; source quotations or requests alone cannot establish runtime
+or Jenkins execution evidence; source citations or requests alone cannot establish runtime
 success. Task requirements cannot be deferred to hide missing source evidence.
 Use gap/BLOCKED for mandatory missing evidence. Stop research immediately once a
 mandatory operation is unavailable; do not scan the remaining repository first.

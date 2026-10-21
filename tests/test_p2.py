@@ -84,8 +84,8 @@ class P2Tests(unittest.TestCase):
         execution = ("implementer", plan, [], None)
         text = instruction_modules.render(self.run, execution, state)
         self.assertIn("python v1:", text)
-        self.assertIn("verification v1:", text)
-        self.assertIn("reading v1:", text)
+        self.assertIn("verification v2:", text)
+        self.assertIn("reading v2:", text)
         self.assertNotIn("shell v1:", text)
         self.assertNotIn("ui v1:", text)
         with patch.object(instruction_modules, "CATALOG", self.run / "absent"):

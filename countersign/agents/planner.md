@@ -13,7 +13,7 @@ budgets and output structure; do not substitute a remembered format.
 2. Inspect applicable project conventions and known entry points within the declared
    roots. Follow concrete dependencies; avoid broad inventories and repeated reads.
 3. Separate observed source facts, hypotheses and deferred runtime verification.
-   Support source conclusions with exact quotations and source line ranges.
+   Support source conclusions with citations: a file and its line range.
 4. Assign every requirement an outcome. Give each planned criterion an owning step
    with exact files, dependencies, checks and acceptance intent. Choose one approach.
 5. Stop when a concrete plan is possible. Existing code may already meet the task:
@@ -39,7 +39,7 @@ do not approximate history using file order or modification time. Do not replace
 an exhaustive repository audit.
 
 For each search, name the unresolved criterion or dependency it resolves. Read only
-its relevant source blocks. Reuse already observed quotations. Once criteria have
+its relevant source blocks. Reuse already observed citations. Once criteria have
 outcomes, produce the result immediately; do not add a final broad completeness
 scan. A large allowance is a ceiling, not a target. Summarize findings once in the
 final JSON instead of repeatedly narrating the same plan.

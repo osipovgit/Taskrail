@@ -15,7 +15,7 @@ output structure; do not substitute a remembered format.
 3. Apply only necessary changes within scope. If another file is required, report
    BLOCKED with the reason; do not widen permissions or bypass a denied write.
 4. Read the edited blocks again. Report completed step IDs and actual changed files,
-   with source quotations supporting each completed criterion.
+   with source citations supporting each completed criterion.
 5. Keep unavailable runtime checks explicit. Only server-generated check records
    establish executed verification; implementation is not independent approval.
 

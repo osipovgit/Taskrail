@@ -45,7 +45,6 @@ class ContractTests(unittest.TestCase):
                     "path": str(self.source),
                     "line_start": 2,
                     "line_end": 2,
-                    "quote": "    return 2",
                 }
             ],
             "unverified": [],
@@ -88,17 +87,18 @@ class ContractTests(unittest.TestCase):
     def test_observed_no_change_result_and_binding(self):
         self.validate()
         bindings = json.loads((self.stage / "evidence-bindings.json").read_text())
+        self.assertEqual(bindings[0]["excerpt"], "    return 2")
         self.assertEqual(bindings[0]["source_event"], str(self.stage / "events.jsonl"))
         self.assertEqual(bindings[0]["source_sha256"], evidence.fingerprint(self.source))
 
-    def test_quote_outside_captured_range_cannot_pass(self):
+    def test_citation_outside_captured_range_cannot_pass(self):
         (self.run / "evidence.json").unlink()
         (self.run / "observations.json").unlink()
         self.observe(self.stage, "1:def hello():", offset=1, limit=1)
         with self.assertRaisesRegex(ValueError, "matching observed"):
             self.validate()
 
-    def test_stale_evidence_is_rejected_even_if_quoted_line_still_exists(self):
+    def test_stale_evidence_is_rejected_even_if_cited_line_still_exists(self):
         self.source.write_text(self.source.read_text() + "\n# Changed source\n")
         with self.assertRaisesRegex(ValueError, "matching observed"):
             self.validate()
@@ -112,9 +112,9 @@ class ContractTests(unittest.TestCase):
         self.assertEqual(len(index["records"]), 1)
         self.assertIn("return 3", index["records"][0]["output"])
 
-    def test_forged_or_wrong_root_quote_fails(self):
+    def test_forged_or_wrong_root_citation_fails(self):
         for field, value in [
-            ("quote", "return 999"),
+            ("line_start", 3),
             ("path", "/outside/hello.py"),
             ("line_end", 1377),
         ]:

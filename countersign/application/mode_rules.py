@@ -32,7 +32,7 @@ SPLIT_ONLY = (
 RULES = MappingProxyType(
     {
         "decompose": f"Split into tasks. {TASKS} {SPLIT_ONLY} {CHECKS}",
-        "design": "Design discussion: no edits. Return empty steps and proposed_change_files. In summary write a design document in Markdown with the sections Context, Options, Trade-offs, Recommendation, Risks, Implementation outline and Open questions, grounded in quoted source evidence. In a continued discussion, refine the earlier document according to the latest Goal.",
+        "design": "Design discussion: no edits. Return empty steps and proposed_change_files. In summary write a design document in Markdown with the sections Context, Options, Trade-offs, Recommendation, Risks, Implementation outline and Open questions, grounded in cited source evidence. In a continued discussion, refine the earlier document according to the latest Goal.",
         "read_only": "Answer only: no edits. Return empty steps and proposed_change_files with the evidence-based answer in summary.",
     }
 )
