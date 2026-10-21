@@ -43,13 +43,23 @@ Git deny. Additional Git operations require an explicit reviewed parser and scop
 check, not a prompt-only permission change.
 
 Writes must affect only approved files. Staging pre-existing user edits is rejected.
-Commit application requires a clean working tree. Existing staged changes cannot
-be committed unless the index was staged by this run. Merge commits are not yet
-supported for revert/cherry-pick. A rejected request returns feedback for further
-analysis; the task need not stop unless the operation is mandatory and unresolved.
-A failed or interrupted write is never automatically replayed or rolled back.
-Conflicts remain for inspection. An unknown outcome blocks continuation pending
-operator reconciliation; start a new task after inspecting the repository.
+Commit application requires a clean working tree. The index belongs to the run only
+entry by entry and repository by repository: an `add` records the exact staged blobs
+it produced in its repository, and a later `add` or `commit` there proceeds only
+while every staged entry is one of those blobs. Changes the user staged, in that or
+any other repository, and an entry changed after the run staged it, are rejected even
+inside approved files. A commit or other history write ends that ownership. Merge
+commits are not yet supported for revert/cherry-pick. A rejected request returns
+feedback for further analysis; the task need not stop unless the operation is
+mandatory and unresolved.
+
+The same write is not repeated: an identical request is rejected while its earlier
+outcome is unknown, and other writes are never repeated. An `add` or `commit` that
+repeats an earlier one with a known outcome runs only when what it acts on changed:
+the files to stage after further edits, or the staged content to commit. A failed or
+interrupted write is never automatically replayed or rolled back. Conflicts remain
+for inspection. An unknown outcome blocks continuation pending operator
+reconciliation; start a new task after inspecting the repository.
 
 Hooks, external diffs, text conversion, process filters, custom merge drivers, automatic signatures,
 credential helpers and interactive credential prompts are disabled. Git must be
