@@ -3,8 +3,7 @@
 import json
 import time
 
-from countersign.application import execution_requests
-from countersign.application.artifacts import finish_stage, save_run
+from countersign.application.artifacts import save_run
 from countersign.core import control
 from countersign.core.files import atomic_json
 from countersign.executor import client, protocol
@@ -82,20 +81,6 @@ def observe(pending):
     except OSError:
         return "Executor unreachable; retrying. Last status: {0}"
     return "Executor action: {0}"
-
-
-def consume(outcome, active, state, format_only):
-    """Intercept executable requests before final result validation."""
-    if outcome[STATUS] != "OK" or format_only:
-        return False
-    action = execution_requests.extract(outcome["final_text"])
-    if action is None:
-        return False
-    folder = active[0]
-    submit(folder.parent, folder, action)
-    finish_stage(folder.parent, state, active, dict(status="ACTION_REQUEST", diagnostics=outcome))
-    resume(folder.parent, state)
-    return True
 
 
 def report_lines(state):
