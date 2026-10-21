@@ -108,8 +108,14 @@ messages, then the new workflow stages.
 
 History is flattened across turns and limited to 256 KB. An oversized history
 produces a visible error asking for a new task with selected context. No history is
-silently discarded. Usage monitoring applies to the selected run; each new turn
-starts a fresh configured budget, unlike checkpoint continuation.
+silently discarded. `00-input/task.md` always keeps the complete history. When the
+history part is larger than 24,000 bytes, stage prompts show the current task, the
+latest earlier turn's goal and summary (each clipped to 2,000 characters, marked) and
+the path of `00-input/history.md`. That file starts with an index of the turns and
+the line ranges of their goal, summary, task, conclusions and diff, so the model reads
+only the sections it needs. Smaller histories stay inline unchanged. Usage
+monitoring applies to the selected run; each new turn starts a fresh configured
+budget, unlike checkpoint continuation.
 
 For a question, choose the **Answer only** mode. This sets server-generated `read_only`
 metadata as well as instructions. Nonempty steps or proposed change paths are
