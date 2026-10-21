@@ -5,6 +5,7 @@ from pathlib import Path
 
 from countersign.application import evidence
 from countersign.core.files import atomic_json
+from countersign.interactions import output_digest
 
 INLINE_LIMIT = 24000
 # With full text files beside the snapshot, a shorter inline copy saves model context.
@@ -38,6 +39,8 @@ def delivered(run, folder, path, text, outputs=None):
         notice = "Output clipped; read omitted lines from the full text files: {0}".format(
             ", ".join((outputs or {}).values()) or str(path)
         )
+    if outputs:
+        notice = "{0}\n{1}".format(notice, output_digest.summary(outputs))
     return f"Evidence snapshot (cite this path, never tool-result.md): {path}\n{notice}\n{visible}"
 
 
