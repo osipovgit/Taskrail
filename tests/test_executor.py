@@ -1,5 +1,6 @@
 """Executor authority, immutable approvals and recovery tests; no real SSH."""
 
+import contextlib
 import copy
 import io
 import json
@@ -206,26 +207,67 @@ class ExecutorTest(unittest.TestCase):
 
     def test_server_actions_inspect_before_confirmation_and_never_implement(self):
         targets = {"web": {"hostname": "192.0.2.10"}}
-        self.assertEqual(
-            execution_requests.server_scope({}, "planner"), execution_requests.INSPECT_ONLY
-        )
-        self.assertIsNone(execution_requests.server_scope({}, "implementer"))
-        server = execution_requests.server_scope({"phase": "server"}, "planner")
-        self.assertEqual(server, execution_requests.SERVER_STEP)
-        planning = execution_requests.ssh_instructions(targets, execution_requests.INSPECT_ONLY)
-        self.assertIn("only inspect server state", planning)
+        run = self.root / "server-check"
+        server = {"phase": "server", "confirmed_change": "change"}
+        inspect_only = execution_requests.server_scope({}, "planner", run)
+        self.assertIn("exactly one read-only command", inspect_only)
+        self.assertIn("systemctl status|show", inspect_only)
+        self.assertIsNone(execution_requests.server_scope({}, "implementer", run))
+        self.assertEqual(execution_requests.server_scope(server, "planner", run), inspect_only)
+        self.confirm_server_checks(run)
+        confirmed = execution_requests.server_scope(server, "planner", run)
+        self.assertEqual(confirmed, execution_requests.SERVER_STEP)
+        planning = execution_requests.ssh_instructions(targets, inspect_only)
         self.assertIn("ACTION_REQUEST", planning)
         implementing = execution_requests.ssh_instructions(targets, None)
         self.assertNotIn("ACTION_REQUEST", implementing)
-        run = self.root / "run"
-        folder = run / "03-implement"
-        folder.mkdir(parents=True)
-        session = SimpleNamespace(
-            active=(folder, {"role": "implementer"}), environment=dict(run=run)
-        )
-        request = json.dumps(dict(schema_version=1, status="ACTION_REQUEST", action=ACTION))
-        self.assertEqual(remote.consume(session, request), remote.REFUSED)
+        session = self.session(run, "implementer", server)
+        self.assertEqual(remote.consume(session, self.request("uname -a\n")), remote.REFUSED)
         self.assertEqual(execution_wait.read(run), [])
+
+    def test_a_changing_script_never_runs_before_the_change_is_confirmed(self):
+        run = self.root / "server-check"
+        server = {"phase": "server", "confirmed_change": "change"}
+        restart = self.request("systemctl restart nginx\n")
+        for config in ({}, server):
+            for script in ("systemctl restart nginx\n", "cat /etc/hosts; rm -rf /tmp/x\n"):
+                with self.subTest(config=config, script=script):
+                    answer = remote.consume(
+                        self.session(run, "planner", config), self.request(script)
+                    )
+                    self.assertIn("Nothing was executed", answer)
+        self.assertEqual(execution_wait.read(run), [])
+        with (
+            patch.object(execution_wait, "resume", return_value="observed"),
+            patch.object(remote, "ApprovalPause", return_value=contextlib.nullcontext()),
+        ):
+            reading = self.request("systemctl status nginx --no-pager\n")
+            self.assertEqual(remote.consume(self.session(run, "reviewer", {}), reading), "observed")
+            self.confirm_server_checks(run)
+            self.assertEqual(
+                remote.consume(self.session(run, "planner", server), restart), "observed"
+            )
+        submitted = [entry["request"]["action"]["script"] for entry in execution_wait.read(run)]
+        self.assertEqual(
+            submitted, ["systemctl status nginx --no-pager\n", "systemctl restart nginx\n"]
+        )
+
+    def confirm_server_checks(self, run):
+        change = run.parent / "change"
+        change.mkdir(parents=True, exist_ok=True)
+        record = dict(confirmed=1.0, phases=dict(server=run.name))
+        (change / "epic.json").write_text(json.dumps(record))
+
+    def session(self, run, role, config):
+        folder = run / "01-plan"
+        folder.mkdir(parents=True, exist_ok=True)
+        return SimpleNamespace(
+            active=(folder, {"role": role}), environment=dict(run=run, config=config), state={}
+        )
+
+    def request(self, script):
+        action = dict(ACTION, script=script)
+        return json.dumps(dict(schema_version=1, status="ACTION_REQUEST", action=action))
 
     def test_action_contract_is_distinct_from_final_results(self):
         self.assertIsNone(execution_requests.extract('{"status":"PLAN_READY"}'))

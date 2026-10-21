@@ -5,7 +5,7 @@ import re
 from types import MappingProxyType
 
 from countersign.application import worktree_isolation
-from countersign.core import control
+from countersign.core import control, delivery_record
 from countersign.web import history, task_form
 
 DESIGN = "design"
@@ -28,6 +28,8 @@ HEADER_OPTIONS = MappingProxyType(
 RESUMES = frozenset(("resume", "resume_budget"))
 ACTION = "action"
 PHASE = "phase"
+# The run whose confirmed change a server check run checks.
+CHANGE = "confirmed_change"
 # A split's task run, Jenkins validation and the server checks after confirmation.
 PHASES = frozenset(("", "task", "validation", "server"))
 CHECK_PHASES = frozenset(("validation", "server"))
@@ -65,6 +67,7 @@ class Submission:
         self.mode = self.fields.pop("submission_mode", "new")
         context = split_context(self.fields.pop("split_context", ""))
         self.delivery = {"context": context, PHASE: self.fields.pop(PHASE, "")}
+        self.delivery[CHANGE] = self.fields.pop(CHANGE, "")
         self.validate()
         self.previous = history.checked_run(base, self.parent) if self.parent else None
         if self.previous:
@@ -96,6 +99,9 @@ class Submission:
         if phase not in PHASES:
             raise ValueError("Unknown delivery phase")
         self.flags[READ_ONLY] = self.flags[READ_ONLY] or phase in CHECK_PHASES
+        change = self.delivery[CHANGE]
+        if change and (phase != "server" or not delivery_record.RUN_NAME.fullmatch(change)):
+            raise ValueError("Only a server check names the confirmed change it checks")
 
     def check_decompose(self):
         """Splitting into tasks plans later code changes, so it starts a new conversation."""
@@ -118,8 +124,9 @@ class Submission:
         options = [HEADER_OPTIONS[flag] for flag in FLAGS if self.flags[flag]]
         if self.flags[DESIGN] and not self.flags[READ_ONLY]:
             options.append(HEADER_OPTIONS[READ_ONLY])
-        if self.delivery[PHASE]:
-            options.append('"phase": "{0}"'.format(self.delivery[PHASE]))
+        for name in (PHASE, CHANGE):
+            if self.delivery[name]:
+                options.append('"{0}": "{1}"'.format(name, self.delivery[name]))
         header = ", ".join([*options, ROOTS_KEY])
         sections = [text.replace(ROOTS_KEY, header, 1)]
         if self.delivery["context"]:
