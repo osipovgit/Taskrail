@@ -8,6 +8,7 @@ from types import MappingProxyType
 from countersign.application import (
     execution_requests,
     executor_contracts,
+    history_file,
     instruction_modules,
     instruction_sources,
     mode_rules,
@@ -67,7 +68,7 @@ def make_request(config, execution, state, run):
     )
     return (
         "# Task (verbatim)\n"
-        + config["task_text"]
+        + history_file.prompt_task(config["task_text"], run)
         + "\n\n# Orchestrator instructions\n"
         + frozen["policy"]
         + frozen["instructions"][stage]

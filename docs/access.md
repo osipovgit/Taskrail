@@ -2,7 +2,7 @@
 
 The current attempt's `access.json` is the model input manifest. It is generated
 from the same input list as the runtime profile. Read canonical absolute paths:
-project roots, listed task/preimages/results/recovery inputs and executor snapshots.
+project roots, listed task/history/preimages/results/recovery inputs and executor snapshots.
 Only the approved implementer paths are editable. Source roots are declarations of
 scope, not OS privileges; Unix permissions, network routing and authentication still apply.
 

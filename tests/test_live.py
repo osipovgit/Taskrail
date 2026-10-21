@@ -302,6 +302,27 @@ class LiveTests(unittest.TestCase):
                 self.assertIn(saved, context["saved_results"])
                 self.assertEqual(header["permission"]["read"][saved], "allow")
 
+    def test_large_followup_history_is_read_from_an_indexed_file(self):
+        diff = "".join(f"-old line {number}\n+new line {number}\n" for number in range(2000))
+        turns = [dict(run="earlier", task="Return 1", goal="Return 1", summary="Done", diff=diff)]
+        history = "\n## Conversation history\n" + json.dumps(turns, indent=2)
+        text = self.task.read_text() + history
+        self.task.write_text(text)
+        run, status, state = self.run_mode()
+        self.assertEqual(status, "READY_FOR_REVIEW")
+        history_file = run / "00-input/history.md"
+        self.assertEqual((run / "00-input/task.md").read_text(), text)
+        self.assertEqual([entry["text"] for entry in state["requirements"]], ["Return 2"])
+        for stage in ("01-plan", "02-plan-review", "05-review"):
+            request = (run / stage / "request.md").read_text()
+            task = request.split("# Orchestrator instructions\n", 1)[0]
+            self.assertLess(len(task.encode()), len(history.encode()) // 4)
+            self.assertIn(f"They are in {history_file}. First read lines 1-7", task)
+            self.assertNotIn("+new line 0", task)
+            header = json.loads((run / stage / "agent.md").read_text().split("---")[1])
+            self.assertEqual(header["permission"]["read"][str(history_file)], "allow")
+        self.assertIn("+new line 1999", history_file.read_text())
+
     def test_incomplete_review_cannot_start_writer(self):
         run, status, state = self.run_mode("incomplete-review")
         self.assertEqual(status, "BLOCKED")
