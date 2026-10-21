@@ -41,14 +41,15 @@ reviewers accept that recorded choice.
   result and no-change review cannot. An approval cannot contain defects or
   required gaps.
 
-Evidence supplies an ID, absolute path, source line range and exact quote. The
-engine binds it to a successful read event and the current source hash. Whitespace
-in a quote is not significant, and a long quote may be shortened with `...` between
-exact fragments that appear in source order within the cited lines.
+Evidence supplies an ID, an absolute path and a source line range, never the text: the
+server takes the cited lines from the current file, binds them to a successful read
+event that returned them and to the current source hash, and records the excerpt in
+`evidence-bindings.json`. Whitespace is not significant, and only the start of very
+long lines, which read tools cut, is compared.
 `observations.json` keeps the complete validation ledger; `evidence.json` is a
 bounded recovery subset of at most 60 records that never removes observations
 needed for validation. Changed or unseen content cannot justify approval. A
-matching quote proves provenance, not the model's interpretation, so independent
+matching citation proves provenance, not the model's interpretation, so independent
 review remains necessary. Only server records prove executed checks. The exact
 schema is supplied in each request; do not copy it into custom roles.
 
@@ -62,7 +63,7 @@ after or without a final answer keep their safeguards.
 
 A final result that fails validation first goes back to the same session, at most
 twice per stage, with the error: the evidence ID and the actual text of the cited
-lines for a quote, the missing or unknown IDs for coverage. The session still has its
+range for a citation, the missing or unknown IDs for coverage. The session still has its
 context and tools, so it can re-read and correct the result.
 
 Format repair receives the saved response, the validation error, the schema and the
@@ -73,7 +74,7 @@ implementer, cannot invent requirement IDs or quotations, and must not research.
 implementer repair reports only edits already present; changed files are still
 checked against the observed source. If the repair reports BLOCKED because it
 cannot rebuild the result without tools, the stage gets one full attempt with tools
-and the original validation error. An evidence error (a wrong quote, range or
+and the original validation error. An evidence error (a wrong range, file or
 evidence ID) goes to that full attempt directly, because a repair without read tools
 cannot fix it. Research recovery receives bounded observed source
 material and keeps unresolved requirements explicit. `recovery.md` starts with an
@@ -160,7 +161,7 @@ A JENKINS_REQUEST is available only when the executor has a Jenkins configuratio
 their results are snapshots under `00-input/local`. `build` uses `"build": "new"`,
 only configured parameter names, and a root-approved ticket in `execution.json`.
 
-Runtime requirements may be marked satisfied only with quoted, observed local,
+Runtime requirements may be marked satisfied only with cited, observed local,
 SSH or Jenkins output snapshots that match successful executor results in the server ledger;
 otherwise they stay deferred. Review must confirm that the recorded command and
 output establish the requirement; exit code zero alone is insufficient.

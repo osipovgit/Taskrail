@@ -17,7 +17,6 @@ NAMED_OUTPUTS = 5
 REBUILD_NOTE = "\nPREVIOUS FINAL RESPONSE WAS INVALID: {0}. Fixing it needs source reads that a repair without tools cannot make. Re-read only what you need and return one complete, valid final result or one complete executor request.\n"
 # Errors only a pass that can read sources again can fix.
 EVIDENCE_ERRORS = (
-    "Quotation differs from source",
     "matching observed read",
     "range outside source",
     "reversed line range",

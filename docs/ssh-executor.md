@@ -201,7 +201,7 @@ by the executor; application history deletion does not delete them.
 
 Action success means that the submitted command exited successfully; it does not
 prove every acceptance criterion. A runtime criterion may be marked satisfied only
-when a quoted, observed output snapshot of a successful action establishes it and
+when a cited, observed output snapshot of a successful action establishes it and
 independent review agrees; otherwise it stays deferred.
 
 Diagnostics:

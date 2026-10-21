@@ -345,31 +345,27 @@ class TranslationTests(unittest.TestCase):
         self.assertEqual(failing.translate("not json"), "not json")
 
 
-class QuoteTests(unittest.TestCase):
-    def test_indented_multiline_quote_matches_numbered_read_output(self):
+class CitationTests(unittest.TestCase):
+    def test_cited_lines_must_reach_the_model_through_the_read(self):
         record = dict(
             input=dict(filePath="/a.py"),
             output="Read file /a.py, lines 1-2\n1: def f():\n2:     return 1",
         )
-        claim = dict(path="/a.py", line_start=1, line_end=2, quote="def f():\n    return 1")
-        self.assertTrue(supports(record, claim))
+        claim = dict(path="/a.py", line_start=1, line_end=2)
+        excerpt = "def f():\n    return 1"
+        self.assertTrue(supports(record, claim, excerpt))
         legacy = dict(record, output="00001| def f():\n00002|     return 1")
-        self.assertTrue(supports(legacy, claim))
-        # Whitespace is not significant; every word still has to match.
-        self.assertTrue(supports(dict(record, output="1: def f():\n2:  return 1"), claim))
-        self.assertFalse(supports(dict(record, output="1: def f():\n2:     return 2"), claim))
+        self.assertTrue(supports(legacy, claim, excerpt))
+        self.assertTrue(supports(dict(record, output="1: def f():\n2:  return 1"), claim, excerpt))
+        self.assertFalse(supports(dict(record, output="1: def f():"), claim, excerpt))
+        self.assertFalse(supports(record, dict(claim, path="/b.py"), excerpt))
 
-    def test_shortened_quote_needs_exact_fragments_in_source_order(self):
-        record = dict(
-            input=dict(filePath="/a.py"),
-            output="1: def f():\n2:     x = 1\n3:     return x",
-        )
-        claim = dict(path="/a.py", line_start=1, line_end=3, quote="def f(): ... return x")
-        self.assertTrue(supports(record, claim))
-        self.assertTrue(supports(record, dict(claim, quote="def f():… return x")))
-        self.assertFalse(supports(record, dict(claim, quote="return x ... def f():")))
-        self.assertFalse(supports(record, dict(claim, quote="def f(): ... return y")))
-        self.assertFalse(supports(record, dict(claim, quote=" ... ")))
+    def test_long_lines_cut_by_the_read_tool_still_count(self):
+        line = "x = '" + "a" * 3000 + "'"
+        output = "1: " + line[:2000] + "... (line truncated to 2000 chars)"
+        record = dict(input=dict(filePath="/a.py"), output=output)
+        claim = dict(path="/a.py", line_start=1, line_end=1)
+        self.assertTrue(supports(record, claim, line))
 
 
 FIXTURES = Path(__file__).with_name("fixtures")

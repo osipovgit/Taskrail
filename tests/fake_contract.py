@@ -41,7 +41,6 @@ def enrich(value, context, target, prompt):
             "path": str(target),
             "line_start": 1,
             "line_end": 1,
-            "quote": target.read_text().splitlines()[0],
         }
     )
     value.update(
