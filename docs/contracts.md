@@ -76,7 +76,10 @@ cannot rebuild the result without tools, the stage gets one full attempt with to
 and the original validation error. An evidence error (a wrong quote, range or
 evidence ID) goes to that full attempt directly, because a repair without read tools
 cannot fix it. Research recovery receives bounded observed source
-material and keeps unresolved requirements explicit. A no-change completion still
+material and keeps unresolved requirements explicit. `recovery.md` starts with an
+index: each recorded call with its target, window, size and the line range of its
+block in the file. The recovery prompt names the index lines and asks for windows of
+at most 200 lines, because the whole file can be larger than the model context. A no-change completion still
 needs independent review of all requirements. Text imported with `--plan-response`
 is only an untrusted draft for fresh planning.
 
@@ -125,7 +128,10 @@ role and its `request.md`, so a model whose session was summarized can re-read i
 instructions and response schema. When the provider rejects a
 turn because the session exceeded the model context window, the stage status is
 `CONTEXT_EXCEEDED` and a read-only stage continues in a new session from its recorded
-evidence (within `read_retries`); the implementer stops so Continue can inspect its edits. Denial means the command is
+evidence (within `read_retries`); the implementer stops so Continue can inspect its edits.
+The new session is told how much tool output the overflowing session received and
+which calls returned at least 10,000 characters (at most five), so it does not repeat
+them whole. Denial means the command is
 skipped; consider the operator's alternative. Format repair cannot request execution.
 
 Delivered output is cut at 24,000 characters. A stdout, stderr or Jenkins console

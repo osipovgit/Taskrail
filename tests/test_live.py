@@ -1,5 +1,6 @@
 import hashlib
 import json
+import re
 import subprocess
 import sys
 import tempfile
@@ -990,6 +991,11 @@ class LiveTests(unittest.TestCase):
         self.assertEqual(planner[1]["mode"], "research-recovery")
         request = (run / planner[1]["directory"] / "request.md").read_text()
         self.assertIn("EXCEEDED THE MODEL CONTEXT WINDOW", request)
+        target = json.dumps(dict(filePath=str(self.root / "hello.py")))
+        self.assertIn(f"the largest were: read {target} (30000 characters)", request)
+        index_end = int(re.search(r"First read lines 1-(\d+) of that file", request)[1])
+        evidence = (run / planner[1]["directory"] / "recovery.md").read_text().splitlines()
+        self.assertEqual(evidence[index_end : index_end + 2], ["", "## Tool result 1"])
 
     def test_failed_read_does_not_fail_the_stage(self):
         run, status, state = self.run_mode("failed-read")

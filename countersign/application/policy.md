@@ -63,8 +63,7 @@ defect only when it breaks behavior or a safety constraint, or when other work i
 missing. Block only when no useful work is possible without the operator's answer.
 
 Use exact reads and dependency-driven searches. Stop discovery once every requirement has an
-evidence-backed outcome. Read offsets are source LINE numbers, not event lines or
-bytes. Correct the offset after an out-of-range error. Do not repeat broad searches.
+evidence-backed outcome. Do not repeat broad searches.
 
 A missing file at a guessed path is a research observation, not a reason to stop.
 Inspect its parent directory within the declared roots and use actual filenames;

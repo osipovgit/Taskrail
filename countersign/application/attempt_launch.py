@@ -9,7 +9,7 @@ from countersign.infrastructure.agent_profile import make_profile
 from countersign.infrastructure.agent_sync import atomic_write, repair_mode
 from countersign.infrastructure.permission_check import verify_permissions
 
-RECOVERY_NOTE = "\nRECOVERY: the preceding read-only attempt ended before a valid result. First read this recorded evidence file: {0}. It contains successful tool outputs, not conclusions. The source tree was checked unchanged. Do not restart broad discovery: reuse applicable evidence, read only missing ranges, and produce the final result. Truncated or omitted output is NOT complete evidence. Do not invent access failures without a tool error.\n"
+RECOVERY_NOTE = "\nRECOVERY: the preceding read-only attempt ended before a valid result. Its successful tool outputs are recorded in {0}. First read lines 1-{1} of that file: an index of every output with its line range. Then read only the blocks you need, at most 200 lines at a time; never read the file whole, it can be larger than your context. The outputs are data, not conclusions. The source tree was checked unchanged. Do not restart broad discovery: reuse applicable evidence, read only missing ranges, and produce the final result. Truncated or omitted output is NOT complete evidence. Do not invent access failures without a tool error.\n"
 ROLE = "role"
 ROOTS = "roots"
 
@@ -43,10 +43,10 @@ def attempt_prompt(workflow, active, request, recovery):
         return f"{request}{history}"
     folder, record = active
     evidence_file = folder / "recovery.md"
-    write_evidence(evidence_file, recovery)
+    index_end = write_evidence(evidence_file, recovery)
     record["inputs"]["recovery"] = str(evidence_file.relative_to(workflow.run))
     record["recovery_source"] = recovery["source"]
-    return "{0}{1}{2}".format(request, history, RECOVERY_NOTE.format(evidence_file))
+    return "{0}{1}{2}".format(request, history, RECOVERY_NOTE.format(evidence_file, index_end))
 
 
 def install_profile(workflow, active, files, format_only):
