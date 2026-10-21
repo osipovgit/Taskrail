@@ -5,12 +5,18 @@ import subprocess
 
 from countersign.core.files import atomic_json
 from countersign.core.schema import require
-from countersign.git import policy, process, requests, scope
+from countersign.git import index_ownership, policy, process, requests, scope
 
 REQUEST = "request"
 STATUS = "status"
 ARGV = "argv"
 MUTATION = "mutation"
+REPOSITORY = "repository"
+FINGERPRINT = "fingerprint"
+INDEX_WRITES = frozenset(("add", "commit"))
+# A write whose outcome is not known is never repeated, even with changed content.
+UNCERTAIN = frozenset(("RUNNING", "UNKNOWN"))
+REPLAY = "Do not replay a Git write; inspect its saved result"
 
 
 def execute(entry, previous, role, environment):
@@ -38,6 +44,7 @@ def perform(entry, previous, role, environment):
         stdout=outcome.stdout,
         stderr=outcome.stderr,
     )
+    index_ownership.record(root, entry)
 
 
 def settings(root, argv):
@@ -58,24 +65,38 @@ def prepare(root, entry, previous, environment):
     payload = entry[REQUEST]
     if not entry[MUTATION]:
         return payload[ARGV]
-    require(
-        not any(replayed(record, payload) for record in previous),
-        "Do not replay a Git write; inspect its saved result",
-    )
+    same = [record for record in previous if identical(record, payload)]
+    require(not any(map(replayed, same)), REPLAY)
+    repo = scope.repository(root)
+    entry[REPOSITORY] = str(repo)
+    entry[FINGERPRINT] = index_ownership.fingerprint(repo, root, payload[ARGV])
+    acted_on = [record.get(FINGERPRINT) for record in same]
+    require(entry[FINGERPRINT] not in acted_on, REPLAY)
     context = dict(
+        repository=repo,
         allowed=environment["allowed_paths"],
         baseline=baseline(environment),
-        managed_index=managed_index(previous),
+        owned=index_ownership.owned(previous, repo),
     )
     return scope.preflight(root, payload[ARGV], context)
 
 
-def replayed(record, payload):
-    """Changing the reason does not authorize replay of an identical write."""
+def identical(record, payload):
+    """The same write to the same root; changing the reason does not make it new."""
     original = record[REQUEST]
-    same_root = original["root"] == payload["root"]
-    same = same_root and original[ARGV] == payload[ARGV]
-    return same and record[STATUS] != "REJECTED"
+    if record[STATUS] == "REJECTED" or original["root"] != payload["root"]:
+        return False
+    return original[ARGV] == payload[ARGV]
+
+
+def replayed(record):
+    """An identical write is a replay unless it is an add or commit with a known outcome.
+
+    Those act on current content: an add after further edits, or a commit of newly staged
+    content, is a new operation once its fingerprint differs.
+    """
+    command = record[REQUEST][ARGV][0]
+    return record[STATUS] in UNCERTAIN or command not in INDEX_WRITES
 
 
 def baseline(environment):
@@ -88,13 +109,3 @@ def baseline(environment):
         path = environment["roots"][parts[0]] / parts[1]
         originals[str(path)] = signature
     return originals
-
-
-def managed_index(previous):
-    """Only an index whose last controlled mutation was add may be committed."""
-    stages = [record for record in previous if record.get(MUTATION)]
-    if not stages:
-        return False
-    latest = stages[-1]
-    command = latest[REQUEST][ARGV][0]
-    return latest[STATUS] == "SUCCEEDED" and command == "add"

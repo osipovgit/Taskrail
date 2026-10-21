@@ -57,10 +57,27 @@ class GitExecutorTests(unittest.TestCase):
             reason="Test task",
         )
 
-    def execute(self, argv, role="planner", previous=()):
-        record = dict(request=self.payload(argv), status="RUNNING")
+    def execute(self, argv, role="planner", previous=(), root=None):
+        record = dict(request=self.payload(argv, root), status="RUNNING")
         execution.execute(record, list(previous), role, self.env)
         return record
+
+    def second_repository_with_user_staging(self):
+        other = self.base / "other"
+        other.mkdir()
+        process.checked(other, ["init", "-b", "main"])
+        process.checked(other, ["config", "user.name", "Test"])
+        process.checked(other, ["config", "user.email", "test@example.invalid"])
+        user_file = other / "value.txt"
+        user_file.write_text("1\n")
+        process.checked(other, ["add", "value.txt"])
+        process.checked(other, ["commit", "-m", "Initial"])
+        user_file.write_text("Staged by the user\n")
+        process.checked(other, ["add", "value.txt"])
+        self.roots["other"] = other
+        (self.run / "00-input/manifest.json").write_text(json.dumps(snapshot(self.roots)))
+        self.env["allowed_paths"] = [self.file, user_file]
+        return other
 
     def test_history_is_real_and_does_not_mutate_metadata(self):
         before = git_metadata(self.roots)
@@ -148,6 +165,54 @@ class GitExecutorTests(unittest.TestCase):
         self.assertEqual(committed["status"], "SUCCEEDED", committed)
         self.assertFalse(marker.exists())
         self.assertEqual(process.checked(self.root, ["show", "HEAD:value.txt"]), "4\n")
+
+    def test_an_add_in_one_repository_does_not_own_another_index(self):
+        other = self.second_repository_with_user_staging()
+        self.file.write_text("4\n")
+        staged = self.execute(["add", "--", "value.txt"], "implementer")
+        self.assertEqual(staged["status"], "SUCCEEDED", staged)
+        commit = ["commit", "-m", "Task change"]
+        stolen = self.execute(commit, "implementer", [staged], other)
+        self.assertEqual(stolen["status"], "REJECTED")
+        self.assertIn("Only an index staged by this run", stolen["stderr"])
+        added = self.execute(["add", "--", "value.txt"], "implementer", [staged], other)
+        self.assertEqual(added["status"], "REJECTED")
+        self.assertEqual(process.checked(other, ["log", "--format=%s"]), "Initial\n")
+        self.assertEqual(process.checked(other, ["show", ":value.txt"]), "Staged by the user\n")
+        committed = self.execute(commit, "implementer", [staged, stolen, added])
+        self.assertEqual(committed["status"], "SUCCEEDED", committed)
+
+    def test_a_changed_staged_entry_is_not_the_runs_to_commit(self):
+        self.file.write_text("4\n")
+        staged = self.execute(["add", "--", "value.txt"], "implementer")
+        self.assertEqual(staged["status"], "SUCCEEDED", staged)
+        self.file.write_text("Changed and staged by the user\n")
+        process.checked(self.root, ["add", "value.txt"])
+        commit = self.execute(["commit", "-m", "Task change"], "implementer", [staged])
+        self.assertEqual(commit["status"], "REJECTED")
+        self.assertEqual(process.checked(self.root, ["log", "-1", "--format=%s"]), "Change 3\n")
+
+    def test_a_new_add_after_edits_runs_but_a_replay_or_uncertain_write_does_not(self):
+        add = ["add", "--", "value.txt"]
+        self.file.write_text("4\n")
+        first = self.execute(add, "implementer")
+        self.assertEqual(first["status"], "SUCCEEDED", first)
+        replay = self.execute(add, "implementer", [first])
+        self.assertEqual(replay["status"], "REJECTED")
+        self.assertIn("Do not replay", replay["stderr"])
+        self.file.write_text("5\n")
+        second = self.execute(add, "implementer", [first, replay])
+        self.assertEqual(second["status"], "SUCCEEDED", second)
+        self.assertEqual(process.checked(self.root, ["show", ":value.txt"]), "5\n")
+        commit = self.execute(["commit", "-m", "Task change"], "implementer", [first, second])
+        self.assertEqual(commit["status"], "SUCCEEDED", commit)
+        self.assertEqual(process.checked(self.root, ["show", "HEAD:value.txt"]), "5\n")
+        uncertain = dict(first, status="UNKNOWN")
+        self.file.write_text("6\n")
+        with patch("countersign.git.process.invoke") as invoke:
+            again = self.execute(add, "implementer", [uncertain])
+            invoke.assert_not_called()
+        self.assertEqual(again["status"], "REJECTED")
 
     def test_existing_user_changes_cannot_be_staged(self):
         self.file.write_text("User work\n")

@@ -3,7 +3,7 @@
 from pathlib import Path
 
 from countersign.core.schema import require
-from countersign.git import process
+from countersign.git import index_ownership, process
 
 
 def repository(root):
@@ -51,7 +51,7 @@ def original_clean(repo, paths, baseline):
 
 def preflight(root, argv, context):
     """Predict changes before execution; a denial returns feedback without widening scope."""
-    repo = repository(root)
+    repo = context["repository"]
     allowed = context["allowed"]
     command = argv[0]
     if command in {"fetch", "push"}:
@@ -62,11 +62,15 @@ def preflight(root, argv, context):
         check_paths(paths, allowed)
         original_clean(repo, paths, context["baseline"])
         require(
-            not staged or context["managed_index"], "Existing staged changes belong to the user"
+            index_ownership.belongs(repo, staged, context["owned"]),
+            "Existing staged changes belong to the user",
         )
         check_paths(paths + staged, allowed)
     elif command == "commit":
-        require(context["managed_index"], "Only an index staged by this run can be committed")
+        require(
+            index_ownership.belongs(repo, staged, context["owned"]),
+            "Only an index staged by this run can be committed",
+        )
         check_paths(staged, allowed)
     else:
         require(
