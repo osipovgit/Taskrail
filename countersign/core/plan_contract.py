@@ -2,7 +2,7 @@
 
 from countersign.core.coverage import unique
 from countersign.core.schema import require
-from countersign.core.work_packages import validate as validate_packages
+from countersign.core.task_graph import order
 
 IDENTIFIER = "id"
 STEPS = "steps"
@@ -12,8 +12,8 @@ def validate_plan_steps(payload, requirements):
     """Require exact edit scope and an owning step for every planned criterion."""
     steps = payload[STEPS]
     unique(steps, "step ID")
-    validate_sequence(steps, {entry[IDENTIFIER] for entry in requirements})
-    validate_packages(steps)
+    validate_fields(steps, {entry[IDENTIFIER] for entry in requirements})
+    order(steps)
     paths = {path for step in steps for path in step["files"]}
     require(
         paths == set(payload["proposed_change_files"]), "Step files differ from authorized scope"
@@ -28,26 +28,20 @@ def validate_plan_steps(payload, requirements):
         require(not steps, "No-change plan cannot contain implementation steps")
 
 
-def splits(plan, forced, split_files):
-    """A forced split, or a multi-task plan touching more files than one review allows."""
+def splits(plan, forced):
+    """The planner split the work into task runs, or the run is a forced split."""
     if not plan["proposed_change_files"]:
         return False
-    if forced:
-        return True
-    several = len(plan[STEPS]) > 1
-    return several and len(plan["proposed_change_files"]) > split_files
+    return forced or plan.get("decision") == "split"
 
 
-def validate_sequence(steps, criteria):
-    """Dependencies must precede consumers; every step owns actual work."""
-    previous = set()
+def validate_fields(steps, criteria):
+    """Every step owns actual work: files, known criteria and checks."""
     for step in steps:
         require(bool(step["files"]), "Step needs concrete files")
         require(bool(step["criteria"]), "Step needs criteria")
         require(set(step["criteria"]) <= criteria, "Invalid step criteria")
-        require(set(step["depends_on"]) <= previous, "Unknown or forward dependency")
         require(bool(step["checks"]), "Step needs verification instructions")
-        previous.add(step[IDENTIFIER])
 
 
 def validate_completion(payload, plan, changed):

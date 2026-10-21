@@ -20,6 +20,7 @@ class TurnIO:
         self.session_id = options.get("session_id")
         self.token_budget = options.get("token_budget")
         self._allow = options.get("env_allow", ())
+        self._compact = options.get("autocompact", True)
         self._attachment = options.get("attachment", {})
         self.request = attempt / "request.md"
         self.path = attempt / "events.jsonl"
@@ -36,7 +37,7 @@ class TurnIO:
             argv += ["--model", model]
         if self.session_id:
             argv += ["--session", self.session_id]
-        environment = dict(opencode_cli.environment(self._allow), **self._attachment)
+        environment = dict(opencode_cli.environment(self._allow, self._compact), **self._attachment)
         environment[opencode_cli.RAW_EVENTS] = str(self.path.with_name("events.raw.jsonl"))
         return argv, environment
 

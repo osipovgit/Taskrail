@@ -94,7 +94,7 @@ class LiveTests(unittest.TestCase):
         from countersign.application.git_state import git_metadata
 
         self.assertEqual(checkpoint["git_before"], git_metadata({"project": self.root}))
-        self.assertIn("G0", (run / "01-plan/evidence-bindings.json").read_text())
+        self.assertIn("G0", (run / "05-review/evidence-bindings.json").read_text())
 
     def test_git_policy_rejection_returns_feedback_and_workflow_continues(self):
         run, status, state = self.run_mode("git-denied")
@@ -267,11 +267,16 @@ class LiveTests(unittest.TestCase):
 
     def test_live_prompt_has_complete_schema(self):
         run, status, state = self.run_mode()
-        prompt = (run / "01-plan/request.md").read_text()
+        prompt = (run / "02-plan-review/request.md").read_text()
         schema_text = prompt.split("Response schema:\n", 1)[1].split("\nContext:", 1)[0]
         schema = json.loads(schema_text)["oneOf"][0]
-        self.assertIn("files_read", schema["properties"])
-        self.assertIn("proposed_change_files", schema["properties"])
+        self.assertIn("findings", schema["properties"])
+        self.assertNotIn("quote", json.dumps(schema))
+        planning = (run / "01-plan/request.md").read_text()
+        self.assertIn(f"PLAN FILE: your result is the Markdown file {run / 'plan.md'}", planning)
+        self.assertIn("R1. Return 2", planning)
+        self.assertNotIn("proposed_change_files", planning.split("Request schemas:", 1)[1])
+        self.assertIn("Decision: single", (run / "01-plan/plan.md").read_text())
         self.assertNotIn("NEEDS_INFO", (run / "00-input/agents/planner.md").read_text())
 
     def test_full_long_task_reaches_all_roles(self):
@@ -424,22 +429,16 @@ class LiveTests(unittest.TestCase):
         self.assertIn("return 1", evidence)
         self.assertIn("original_chars", evidence)
 
-    def test_timeout_does_not_consume_format_repair(self):
-        run, status, state = self.run_mode("timeout-then-invalid", format_repair_tools="read")
+    def test_timeout_retry_corrects_the_plan_in_its_session(self):
+        run, status, state = self.run_mode("timeout-then-invalid")
         self.assertEqual(status, "READY_FOR_REVIEW")
-        self.assertEqual(
-            [a["status"] for a in state["attempts"][:3]], ["TIMEOUT", "INVALID_RESULT", "OK"]
-        )
-        self.assertEqual(len(state["attempts"]), 6)
-        self.assertIn("FORMAT REPAIR ONLY", (run / "03-plan/request.md").read_text())
-        # The repair may re-read the recovery evidence its saved response cites.
+        self.assertEqual([a["status"] for a in state["attempts"][:2]], ["TIMEOUT", "OK"])
+        self.assertEqual(state["stages"][1]["session_turns"], 2)
+        self.assertNotIn("FORMAT REPAIR ONLY", (run / "02-plan/request.md").read_text())
         recovery = run / "02-plan/recovery.md"
         self.assertTrue(recovery.is_file())
-        repair = json.loads((run / "03-plan/agent.md").read_text().split("---")[1])["permission"]
         first = json.loads((run / "02-plan/agent.md").read_text().split("---")[1])["permission"]
-        self.assertEqual(repair["read"].get(str(recovery)), "allow")
         self.assertEqual(first["read"].get(str(recovery)), "allow")
-        self.assertNotIn(str(run / "03-plan/recovery.md"), repair["read"])
 
     def test_imported_plan_is_revalidated_under_current_contract(self):
         self.run_mode()
@@ -494,14 +493,16 @@ class LiveTests(unittest.TestCase):
                 "evidence.json",
                 "observations.json",
                 "budgets.json",
+                "plan.md",
             },
         )
         for record in state["stages"]:
             directory = run / record["directory"]
             self.assertTrue((directory / "result.json").exists())
             if record["mode"] == "model":
+                names = {p.name for p in directory.iterdir()} - {"plan.md"}
                 self.assertEqual(
-                    {p.name for p in directory.iterdir()},
+                    names,
                     {
                         "stage.json",
                         "agent.md",
@@ -519,6 +520,7 @@ class LiveTests(unittest.TestCase):
                         "evidence-bindings.json",
                     },
                 )
+        self.assertTrue((run / "01-plan/plan.md").is_file())
         self.assertEqual(state["stages"][1]["inputs"]["plan"], "01-plan/result.json")
         self.assertEqual(state["stages"][1]["role"], "reviewer")
         self.assertEqual(state["stages"][1]["verdict"], "APPROVE")
@@ -597,18 +599,19 @@ class LiveTests(unittest.TestCase):
         self.assertEqual(status, "READY_FOR_REVIEW")
         self.assertEqual(len(state["attempts"]), 5)
 
-    def test_invalid_read_result_retry(self):
-        _, status, state = self.run_mode("invalid-once")
+    def test_invalid_plan_file_is_corrected_in_the_same_session(self):
+        run, status, state = self.run_mode("invalid-once")
         self.assertEqual(status, "READY_FOR_REVIEW")
-        self.assertEqual(state["attempts"][0]["status"], "INVALID_RESULT")
-        run = self.base / "result"
-        profile = (run / "02-plan/agent.md").read_text()
-        header = json.loads(profile.split("---")[1])
-        for tool in ("read", "glob", "grep", "list", "edit", "bash", "task"):
-            self.assertEqual(header["permission"][tool], "deny")
-        retry_prompt = (run / "02-plan/request.md").read_text()
-        self.assertIn("missing arrays", retry_prompt)
-        self.assertIn("FORMAT REPAIR ONLY", retry_prompt)
+        planner = state["stages"][0]
+        self.assertEqual((planner["status"], planner["session_turns"]), ("RESULT_VALID", 2))
+        feedback = (run / "01-plan/tool-result.md").read_text()
+        self.assertIn(
+            "plan.md: line 3: Decision must be split, single, no change or blocked", feedback
+        )
+        self.assertIn("line 7: R1 has no outcome", feedback)
+        header = json.loads((run / "01-plan/agent.md").read_text().split("---")[1])
+        self.assertEqual(header["permission"]["edit"][str(run / "plan.md")], "allow")
+        self.assertEqual(header["permission"]["edit"]["*"], "deny")
 
     def test_structured_steps_are_validated_without_model_retry(self):
         run, status, state = self.run_mode("structured-steps")
@@ -616,20 +619,20 @@ class LiveTests(unittest.TestCase):
         self.assertEqual(len(state["attempts"]), 4)
         plan = json.loads((run / "01-plan/result.json").read_text())
         self.assertIsInstance(plan["steps"][0], dict)
-        self.assertEqual(plan["steps"][0]["action"], "Return 2")
+        self.assertEqual(plan["steps"][0]["title"], "Return 2")
         self.assertEqual(plan["proposed_change_files"], [str(self.root / "hello.py")])
-        self.assertIn('"action"', (run / "01-plan/response.raw.txt").read_text())
+        self.assertIn("## T1: Return 2", (run / "01-plan/plan.md").read_text())
 
     def test_format_repair_rejected_unavailable_calls_keep_valid_conclusion(self):
         run, status, state = self.run_mode("format-unavailable")
         self.assertEqual(status, "READY_FOR_REVIEW")
-        repaired = state["stages"][1]
-        self.assertEqual(repaired["mode"], "format-repair")
+        repaired = next(stage for stage in state["stages"] if stage["mode"] == "format-repair")
+        self.assertEqual(repaired["stage"], "plan-reviewer")
         self.assertEqual(repaired["errors"], [])
         self.assertEqual(len(repaired["tool_errors"]), 2)
         self.assertEqual(len(repaired["warnings"]), 2)
         self.assertEqual(repaired["status"], "RESULT_VALID")
-        profile = (run / "02-plan/agent.md").read_text()
+        profile = (run / repaired["directory"] / "agent.md").read_text()
         self.assertIn("format converter", profile)
 
     def continue_with_ok_model(self, run):
@@ -861,18 +864,18 @@ class LiveTests(unittest.TestCase):
     def test_narration_without_a_request_continues_the_same_session(self):
         run, status, state = self.run_mode("narrate")
         self.assertEqual(status, "READY_FOR_REVIEW", state.get("summary"))
-        planner = [stage for stage in state["stages"] if stage["stage"] == "planner"]
-        self.assertEqual([stage["mode"] for stage in planner], ["model"])
-        self.assertEqual(planner[0]["session_turns"], 2)
-        prompt = (run / planner[0]["directory"] / "tool-result.md").read_text()
+        review = [stage for stage in state["stages"] if stage["stage"] == "plan-reviewer"]
+        self.assertEqual([stage["mode"] for stage in review], ["model"])
+        self.assertEqual(review[0]["session_turns"], 2)
+        prompt = (run / review[0]["directory"] / "tool-result.md").read_text()
         self.assertIn("not one JSON request or result", prompt)
-        self.assertIn("You are the planner stage", prompt)
-        self.assertIn(str(run / planner[0]["directory"] / "request.md"), prompt)
+        self.assertIn("You are the reviewer stage", prompt)
+        self.assertIn(str(run / review[0]["directory"] / "request.md"), prompt)
 
     def test_rejected_citation_is_corrected_in_the_same_session(self):
         run, status, state = self.run_mode("bad-citation")
         self.assertEqual(status, "READY_FOR_REVIEW", state.get("summary"))
-        planner = [stage for stage in state["stages"] if stage["stage"] == "planner"]
+        planner = [stage for stage in state["stages"] if stage["stage"] == "plan-reviewer"]
         self.assertEqual([stage["mode"] for stage in planner], ["model"])
         prompt = (run / planner[0]["directory"] / "tool-result.md").read_text()
         self.assertIn("Evidence E1", prompt)
@@ -881,7 +884,7 @@ class LiveTests(unittest.TestCase):
     def test_kept_wrong_citation_gets_a_full_attempt_instead_of_a_blind_repair(self):
         run, status, state = self.run_mode("bad-citation-kept")
         self.assertEqual(status, "READY_FOR_REVIEW", state.get("summary"))
-        planner = [stage for stage in state["stages"] if stage["stage"] == "planner"]
+        planner = [stage for stage in state["stages"] if stage["stage"] == "plan-reviewer"]
         self.assertEqual([stage["mode"] for stage in planner], ["model", "research-recovery"])
         self.assertEqual(planner[0]["session_turns"], 3)
         request = (run / planner[1]["directory"] / "request.md").read_text()
@@ -918,7 +921,7 @@ class LiveTests(unittest.TestCase):
     def test_blocked_format_repair_gets_one_full_attempt(self):
         run, status, state = self.run_mode("repair-blocked")
         self.assertEqual(status, "READY_FOR_REVIEW", state.get("summary"))
-        planner = [stage for stage in state["stages"] if stage["stage"] == "planner"]
+        planner = [stage for stage in state["stages"] if stage["stage"] == "plan-reviewer"]
         self.assertEqual(
             [stage["mode"] for stage in planner], ["model", "format-repair", "research-recovery"]
         )
@@ -978,8 +981,8 @@ class LiveTests(unittest.TestCase):
         plan = json.loads((run / state["results"]["plan"]).read_text())
         self.assertTrue(plan["steps"])
 
-    def test_plan_larger_than_one_review_becomes_task_runs(self):
-        run, status, state = self.run_mode("two-tasks", max_change_files=1)
+    def test_a_split_plan_becomes_task_runs(self):
+        run, status, state = self.run_mode("two-tasks")
         self.assertEqual(status, "TASKS_READY", state.get("summary"))
         self.assertEqual(
             [stage["stage"] for stage in state["stages"]], ["planner", "plan-reviewer"]
@@ -987,9 +990,8 @@ class LiveTests(unittest.TestCase):
         self.assertTrue(state["auto_continue"])
         self.assertIn("return 1", (self.root / "hello.py").read_text())
         request = (run / "01-plan/request.md").read_text()
-        self.assertIn(
-            "If all tasks together change at most 1 files, this run implements them", request
-        )
+        self.assertIn("Decide split when the work is several such tasks", request)
+        self.assertIn("Decision: split", (run / "plan.md").read_text())
 
     def test_design_discussion_leaves_a_reviewed_design_document(self):
         header = {"roots": {"project": str(self.root)}, "design": True}
@@ -1075,11 +1077,13 @@ class LiveTests(unittest.TestCase):
         )
         self.assertIn("return 2", (self.root / "hello.py").read_text())
 
-    def test_prose_with_explicit_block_stops_without_format_repair_or_writes(self):
+    def test_blocked_plan_stops_without_repair_or_writes(self):
         run, status, state = self.run_mode("prose-block")
         self.assertEqual(status, "BLOCKED")
         self.assertEqual(len(state["attempts"]), 1)
-        self.assertTrue((run / "01-plan/blocked-draft.json").exists())
+        self.assertIn("Decision: blocked", (run / "plan.md").read_text())
+        plan = json.loads((run / "01-plan/result.json").read_text())
+        self.assertEqual(plan["blocking_gaps"], ["Mandatory local commands unavailable"])
         self.assertIn("return 1", (self.root / "hello.py").read_text())
 
     def test_blocked_plan_continues_with_the_operator_answer(self):

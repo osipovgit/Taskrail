@@ -47,8 +47,9 @@ See [deployment](docs/deployment.md) before changing existing installations.
 Planning as decomposition → independent plan review → scoped implementation →
 built-in syntax checks and your [verification commands](docs/deployment.md#verification-commands)
 → independent result review → Jenkins validation, when the plan names Jenkins checks →
-your confirmation → server checks, only after it. A plan larger than one review becomes
-one run per task, started one after another ([delivery](docs/task-controls.md#delivery-of-a-code-change)).
+your confirmation → server checks, only after it. The planner writes its plan as a
+Markdown file; work it splits into independent tasks runs as one run per task, in
+dependency order ([delivery](docs/task-controls.md#delivery-of-a-code-change)).
 A change larger than the configured limit waits for your decision first. A reviewed no-change plan ends without implementation; **Design
 discussion** turns produce a reviewed design document instead of code.
 Failed checks/review may request bounded repairs. Interrupted writers are never

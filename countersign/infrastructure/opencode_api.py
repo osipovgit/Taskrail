@@ -51,12 +51,13 @@ def launch_command(command, version):
     return [sys.executable, "-I", "-c", ADAPTER, PACKAGE_ROOT, json.dumps(command)]
 
 
-def stage_server(command, workspace, allow):
+def stage_server(command, workspace, allow, compact=True):
     """2.x turns of one stage share a private server; 1.x launches need none."""
     if ADAPTER not in command:
         return contextlib.nullcontext()
     target = json.loads(command[-1])
-    return opencode_server.Server(target, str(workspace), env=opencode_cli.environment(allow))
+    environment = opencode_cli.environment(allow, compact)
+    return opencode_server.Server(target, str(workspace), env=environment)
 
 
 def relative_base(config, roots, files):

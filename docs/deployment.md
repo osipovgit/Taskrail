@@ -166,7 +166,8 @@ must not write inside declared roots (generated folders such as `__pycache__`,
 ## Change size limit
 
 `max_change_lines` (default 400 added or removed diff lines) and `max_change_files`
-(default 15 changed files) bound an implementation; `0` disables a limit. A larger
+(default 15 changed files) bound an implementation, not how work is split into tasks;
+`0` disables a limit. A larger
 change waits before checks and review: **Allow** continues (a later repair may grow
 up to the allowed size without asking again), **Deny** stops the run as
 `CHANGE_LIMIT_EXCEEDED` with the changes preserved (Continue asks again), and an
