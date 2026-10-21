@@ -88,4 +88,6 @@ model session. Follow-up goals inherit roots, entry points and constraints; the 
 Goal takes precedence and prior findings are rechecked. Server-generated
 `Conversation history` sections are reserved; do not add them to form fields. The
 task file is saved as `.submissions/<id>/task.md` and snapshotted into the run's
-`00-input/task.md`.
+`00-input/task.md`. History blocks never become requirements; a large history reaches
+the prompt through the indexed `00-input/history.md` (see
+[task controls](task-controls.md#conversation-context)).

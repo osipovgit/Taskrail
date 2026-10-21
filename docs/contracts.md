@@ -79,7 +79,10 @@ cannot fix it. Research recovery receives bounded observed source
 material and keeps unresolved requirements explicit. `recovery.md` starts with an
 index: each recorded call with its target, window, size and the line range of its
 block in the file. The recovery prompt names the index lines and asks for windows of
-at most 200 lines, because the whole file can be larger than the model context. A no-change completion still
+at most 200 lines, because the whole file can be larger than the model context. A
+follow-up history over 24,000 bytes reaches the prompt the same way: the latest turn
+inline and the indexed, readable `00-input/history.md`; `task.md` stays verbatim and
+`task_sha256` covers it whole. A no-change completion still
 needs independent review of all requirements. Text imported with `--plan-response`
 is only an untrusted draft for fresh planning.
 

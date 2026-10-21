@@ -32,7 +32,7 @@ def model_inputs(run, folder):
         run / "run.json",
     ]
     paths.extend(result_inputs(run))
-    for optional in (folder / "recovery.md", run / "changes.diff"):
+    for optional in (folder / "recovery.md", run / "00-input/history.md", run / "changes.diff"):
         if optional.is_file():
             paths.append(optional)
     return paths
