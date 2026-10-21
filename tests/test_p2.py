@@ -85,6 +85,7 @@ class P2Tests(unittest.TestCase):
         text = instruction_modules.render(self.run, execution, state)
         self.assertIn("python v1:", text)
         self.assertIn("verification v1:", text)
+        self.assertIn("reading v1:", text)
         self.assertNotIn("shell v1:", text)
         self.assertNotIn("ui v1:", text)
         with patch.object(instruction_modules, "CATALOG", self.run / "absent"):
@@ -102,8 +103,11 @@ class P2Tests(unittest.TestCase):
         plan = dict(proposed_change_files=[f"/repo/{index}.sh" for index in range(4)])
         selected = instruction_modules.select(catalog, ("plan-reviewer", plan), {})
         self.assertEqual(
-            {entry["id"] for entry in selected}, {"shell", "verification", "decomposition"}
+            {entry["id"] for entry in selected},
+            {"reading", "shell", "verification", "decomposition"},
         )
+        selected = instruction_modules.select(catalog, ("implementer", None), {})
+        self.assertEqual([entry["id"] for entry in selected], ["reading"])
 
     def test_shared_packages_need_transitive_dependencies(self):
         steps = [

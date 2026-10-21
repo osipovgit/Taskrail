@@ -8,6 +8,8 @@ from countersign.application.instruction_sources import fingerprint
 from countersign.core.files import atomic_json
 
 IDENTIFIER = "id"
+# Every stage reads; large inputs must not overflow the model context.
+READING = "reading"
 
 CATALOG = Path(__file__).with_name("instruction-modules.json")
 
@@ -38,7 +40,7 @@ def select(catalog, execution, state):
     """Omit irrelevant modules and resolve only declared bundled dependencies."""
     stage = execution[0]
     suffixes = source_suffixes(execution, state)
-    chosen = set() if stage == "implementer" else {"verification"}
+    chosen = {READING} if stage == "implementer" else {READING, "verification"}
     for module in catalog:
         if stage in module["stages"] and suffixes.intersection(module["suffixes"]):
             chosen.add(module[IDENTIFIER])

@@ -3,6 +3,8 @@
 import json
 from pathlib import Path
 
+from countersign.application.recovery_index import index_lines
+
 MAX_RECORDS = 60
 TOOLS = frozenset(("read", "glob", "grep", "list"))
 DECODE_ERRORS = (ValueError, TypeError, AttributeError, OSError)
@@ -15,6 +17,7 @@ HEADER = (
     "event_line identifies a JSONL event, NEVER a source-file line or a read offset.",
     "Input offset/limit refer only to the original filePath. For recovery.md itself, start reading at line 1.",
 )
+NO_RECORDS = "No reusable successful tool outputs were captured. Research is still required."
 PART = "part"
 STATE = "state"
 OUTPUT = "output"
@@ -111,20 +114,22 @@ def evidence_record(event, event_line, key, kept):
 
 
 def write_evidence(destination, evidence):
-    """recovery.md: untrusted tool data with its provenance."""
-    lines = [
+    """recovery.md: an index of the recorded outputs, then each output with its provenance.
+
+    Returns the last line of the index: a model reads lines 1 to that line first and
+    then only the blocks it needs, because the whole file can exceed its context.
+    """
+    head = [
         *HEADER,
         "Source events: {0}".format(evidence["source"]),
         "Omitted successful outputs due to size limit: {0}".format(evidence["omitted"]),
     ]
-    for index, record in enumerate(evidence["records"], 1):
-        lines.extend(evidence_block(index, record))
-    if not evidence["records"]:
-        lines.append(
-            "No reusable successful tool outputs were captured. Research is still required."
-        )
-    lines.append("")
-    Path(destination).write_text("\n".join(lines), encoding="utf-8")
+    blocks = [evidence_block(*numbered) for numbered in enumerate(evidence["records"], 1)]
+    index = index_lines(evidence["records"], blocks, len(head))
+    body = [line for block in blocks for line in block] or [NO_RECORDS]
+    text = "\n".join([*head, *index, *body, ""])
+    Path(destination).write_text(text, encoding="utf-8")
+    return len(head) + len(index)
 
 
 def evidence_block(index, record):
