@@ -68,10 +68,13 @@ returning a status alone. See [contracts](contracts.md).
 
 ## Curated instruction modules
 
-`application/instruction-modules.json` contains Python, shell, UI, verification and
-decomposition guidance. Selection uses validated plan paths and observed source
-reads. Initial planning starts with general verification guidance; later attempts
-and stages add matching language modules. Four or more proposed change files select
+`application/instruction-modules.json` contains reading, Python, shell, UI,
+verification and decomposition guidance. Every stage gets the reading module, which
+keeps large inputs within the model context: search first, map a large file by its
+landmarks, read windows of at most 200 lines, never re-read a range, and map diffs
+and long outputs before reading them. Selection of the others uses validated plan
+paths and observed source reads. Initial planning starts with general verification
+guidance; later attempts and stages add matching language modules. Four or more proposed change files select
 decomposition guidance for planning and plan review.
 
 The catalog is frozen in `00-input/modules.json`. Each stage records selected IDs,

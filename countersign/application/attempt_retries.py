@@ -11,6 +11,9 @@ TRANSPORT_KEY = "transport"
 FORMAT_KEY = "format"
 REBUILD_KEY = "rebuild"
 CONTEXT_NOTE = "\nTHE PREVIOUS SESSION EXCEEDED THE MODEL CONTEXT WINDOW. This is a new session: use the recorded evidence file instead of repeating research, read only the lines you need (targeted reads of large outputs, never whole logs), and return the next request or the final result as soon as the evidence allows.\n"
+OVERFLOW_OUTPUTS = "\nThe session that overflowed received {0} characters of tool output; the largest were: {1}. Do not repeat these calls whole: search their targets or read windows of at most 200 lines.\n"
+LARGE_OUTPUT = 10000
+NAMED_OUTPUTS = 5
 REBUILD_NOTE = "\nPREVIOUS FINAL RESPONSE WAS INVALID: {0}. Fixing it needs source reads that a repair without tools cannot make. Re-read only what you need and return one complete, valid final result or one complete executor request.\n"
 # Errors only a pass that can read sources again can fix.
 EVIDENCE_ERRORS = (
@@ -52,7 +55,7 @@ class Retries:
         if status == "BLOCKED_PERMISSION":
             return self.access_recovery(outcome)
         if status == context_overflow.STATUS:
-            return self.transport_retry(CONTEXT_NOTE)
+            return self.transport_retry(CONTEXT_NOTE, overflow_outputs(self.attempts.workflow))
         return status in TRANSPORT and self.transport_retry()
 
     def format_repair(self, outcome):
@@ -97,15 +100,16 @@ class Retries:
         say("  Access denied; continuing with allowed sources ({0}/2)".format(self.access.count))
         return True
 
-    def transport_retry(self, note=""):
+    def transport_retry(self, *notes):
         """Read-only stages retry interrupted transports in a new session with recorded evidence."""
         workflow = self.attempts.workflow
         limit = 0 if self.stage == IMPLEMENTER else workflow.config["read_retries"]
         if self.counts[TRANSPORT_KEY] >= limit or self.access.count:
             return False
         self.counts[TRANSPORT_KEY] += 1
-        if note not in self.attempts.request:
-            self.attempts.request = "{0}{1}".format(self.attempts.request, note)
+        for note in notes:
+            if note not in self.attempts.request:
+                self.attempts.request = "{0}{1}".format(self.attempts.request, note)
         if not self.attempts.format_only:
             self.attempts.recovery = evidence.load_index(workflow.run)
         return True
@@ -126,3 +130,15 @@ def full_attempt(retries):
     attempts.request = "{0}{1}".format(retries.repair["request"], note)
     attempts.recovery = evidence.load_index(attempts.workflow.run)
     return True
+
+
+def overflow_outputs(workflow):
+    """Name the largest tool outputs of the attempt that just overflowed the context."""
+    folder = workflow.run / workflow.state["stages"][-1]["directory"]
+    outputs = context_overflow.tool_outputs(folder / "events.jsonl")
+    ranked = sorted(outputs, reverse=True)[:NAMED_OUTPUTS]
+    largest = [entry for entry in ranked if entry[0] >= LARGE_OUTPUT]
+    if not largest:
+        return ""
+    named = "; ".join("{1} ({0} characters)".format(*entry) for entry in largest)
+    return OVERFLOW_OUTPUTS.format(sum(entry[0] for entry in outputs), named)
