@@ -10,6 +10,7 @@ from pathlib import Path
 from countersign.core.files import atomic_json
 from countersign.core.runtime import settings_path
 from countersign.web import history, lifecycle, requests, run_records
+from countersign.web.launch_records import LAUNCH_ERROR, LAUNCH_FILE, announce, recover_launches
 from countersign.web.run_activity import BusyError, require_idle, run_sources
 from countersign.web.task_form import build_task
 
@@ -30,6 +31,7 @@ class TaskLauncher:
         self.lock = threading.RLock()
         self.workers = {}
         self.stopping = False
+        recover_launches(self.base)
 
     def route(self, path, payload):
         """Keep authenticated task and approval routing in the application boundary."""
@@ -41,14 +43,19 @@ class TaskLauncher:
             return self.submit(payload)
         return self.action(payload)
 
-    def submit(self, payload):
-        """Start a new run unless one of its projects is busy."""
+    def submit(self, payload, before_start=None):
+        """Start a new run unless one of its projects is busy.
+
+        before_start(run ID) runs after the launch record exists and before the worker
+        starts, so a parent can link the run durably first.
+        """
         submission = requests.Submission(payload, self.base)
         text, title = build_task(submission.fields, self.base)
         sources = [
             Path(entry["path"]).expanduser().resolve() for entry in submission.fields["roots"]
         ]
         launch = dict(text=submission.decorate(text), title=title, restart_from=submission.parent)
+        launch["before_start"] = before_start
         return self.launch(launch, sources)
 
     def action(self, payload):
@@ -90,6 +97,7 @@ class TaskLauncher:
                 raise BusyError("The application is stopping. Try again later.")
             require_idle(self.live(), launch.get("resume_run"), sources)
             folder, manifest = create_submission(self.base, launch)
+            announce(folder, manifest, launch.get("before_start"))
             run = self.base / manifest[ID]
             extended = bool(launch.get("extend_budget"))
             process = start_worker(folder, manifest, run, (self.settings, extended))
@@ -127,7 +135,7 @@ def create_submission(base, launch):
         summary="Starting the task worker.",
         created_at=datetime.now(timezone.utc).isoformat(),
     )
-    atomic_json(folder / "launch.json", manifest)
+    atomic_json(folder / LAUNCH_FILE, manifest)
     return folder, manifest
 
 
@@ -147,8 +155,8 @@ def start_worker(folder, manifest, run, options):
                 start_new_session=True,
             )
     except OSError as error:
-        manifest.update(status="LAUNCH_ERROR", summary=str(error))
-        atomic_json(folder / "launch.json", manifest)
+        manifest.update(status=LAUNCH_ERROR, summary=str(error))
+        atomic_json(folder / LAUNCH_FILE, manifest)
         return None
     threading.Thread(target=process.wait, daemon=True).start()
     return process

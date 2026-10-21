@@ -3,6 +3,7 @@
 import json
 import sys
 import tempfile
+import threading
 import time
 import unittest
 from pathlib import Path
@@ -10,8 +11,9 @@ from unittest.mock import patch
 
 from countersign.application import mode_rules
 from countersign.application.live import execute_task
+from countersign.core.files import atomic_json
 from countersign.core.requirements import task_requirements
-from countersign.web import delivery_launch, requests, task_form
+from countersign.web import delivery_launch, requests, submissions, task_form
 from countersign.web.history import HISTORY, conversation, previous_messages, task_draft
 from countersign.web.lifecycle import trash_run
 from countersign.web.run_list import list_runs
@@ -257,6 +259,16 @@ class TaskControlTests(unittest.TestCase):
         (epic / "run.json").write_text(json.dumps(index))
         return epic
 
+    def launching(self, name):
+        """Stub the worker start; like a real launch, the parent links the run first."""
+
+        def launch(request, sources):
+            if request.get("before_start"):
+                request["before_start"](name)
+            return {"id": name}
+
+        return patch.object(self.launcher, "launch", side_effect=launch)
+
     def finish(self, name, status):
         child = self.runs / name
         (child / "00-input").mkdir(parents=True, exist_ok=True)
@@ -271,7 +283,7 @@ class TaskControlTests(unittest.TestCase):
         self.assertEqual(epic_entry["mode"], "decompose")
         view = run_view(self.runs, "epic")["delivery"]
         self.assertEqual(view["next"], "S-1")
-        with patch.object(self.launcher, "launch", return_value={"id": "child-1"}) as launch:
+        with self.launching("child-1") as launch:
             self.launcher.action(dict(id="epic", action="epic_next"))
             text = launch.call_args.args[0]["text"]
         self.assertIn("Change hello: return 2", text)
@@ -302,7 +314,7 @@ class TaskControlTests(unittest.TestCase):
         self.assertEqual(run_view(self.runs, "epic")["delivery"]["next"], "S-2")
         self.launcher.action(dict(id="child-1", action="reopen"))
         self.launcher.action(dict(id="epic", action="revoke_auto_approve"))
-        with patch.object(self.launcher, "launch", return_value={"id": "child-1b"}) as launch:
+        with self.launching("child-1b") as launch:
             self.launcher.action(dict(id="epic", action="epic_next"))
             text = launch.call_args.args[0]["text"]
         self.assertNotIn('"auto_approve"', text)
@@ -319,13 +331,82 @@ class TaskControlTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "task of the split"):
             self.launcher.action(dict(id="epic", action="epic_pause", task="../x"))
         self.launcher.action(dict(id="epic", action="epic_unpause", task="S-2"))
-        with patch.object(self.launcher, "launch", return_value={"id": "child-2"}) as launch:
+        with self.launching("child-2") as launch:
             delivery_launch.advance(self.launcher)
             text = launch.call_args.args[0]["text"]
         self.assertIn("S-1: Change hello (READY_FOR_REVIEW): child-1b summary", text)
         self.finish("child-2", "READY_FOR_REVIEW")
         epic_entry = next(run for run in list_runs(self.runs) if run["id"] == "epic")
         self.assertEqual((epic_entry["group"], epic_entry["progress"]), ("review", "2/2"))
+
+    def test_a_task_run_is_linked_before_its_worker_and_never_started_twice(self):
+        epic = self.make_epic()
+        record = epic / "epic.json"
+
+        def application_stops(*arguments):
+            self.assertIn("S-1", json.loads(record.read_text())["tasks"])
+            raise KeyboardInterrupt
+
+        with patch.object(submissions, "start_worker", side_effect=application_stops):
+            with self.assertRaises(KeyboardInterrupt):
+                self.launcher.action(dict(id="epic", action="epic_next"))
+        child = json.loads(record.read_text())["tasks"]["S-1"]
+        launch = self.runs / ".submissions" / child / "launch.json"
+        self.assertEqual(json.loads(launch.read_text())["status"], "STARTING")
+        restarted = TaskLauncher(self.runs, self.settings)
+        self.assertEqual(json.loads(launch.read_text())["status"], "LAUNCH_ERROR")
+        self.assertEqual(
+            run_view(self.runs, "epic")["delivery"]["tasks"][0]["status"], "LAUNCH_ERROR"
+        )
+        restarted.action(dict(id="epic", action="epic_auto_on"))
+        with patch.object(restarted, "launch") as launch_again:
+            delivery_launch.advance(restarted)
+        launch_again.assert_not_called()
+
+    def test_a_started_worker_survives_a_restart_without_a_second_run(self):
+        epic = self.make_epic()
+        self.launcher.action(dict(id="epic", action="epic_auto_on"))
+
+        def worker_starts(folder, manifest, run, options):
+            atomic_json(folder / "launch.json", dict(manifest, status="RUNNING", pid=1))
+
+        with patch.object(submissions, "start_worker", side_effect=worker_starts):
+            started = self.launcher.action(dict(id="epic", action="epic_next"))
+        restarted = TaskLauncher(self.runs, self.settings)
+        launch = self.runs / ".submissions" / started["id"] / "launch.json"
+        self.assertEqual(json.loads(launch.read_text())["status"], "RUNNING")
+        self.assertEqual(
+            json.loads((epic / "epic.json").read_text())["tasks"], {"S-1": started["id"]}
+        )
+        with patch.object(restarted, "launch") as launch_again:
+            delivery_launch.advance(restarted)
+        launch_again.assert_not_called()
+
+    def test_a_pause_set_while_a_task_starts_is_kept(self):
+        epic = self.make_epic()
+        starting, release = threading.Event(), threading.Event()
+
+        def slow_start(*arguments):
+            starting.set()
+            release.wait(5)
+
+        def act(payload):
+            return threading.Thread(target=self.launcher.action, args=(payload,))
+
+        with patch.object(submissions, "start_worker", side_effect=slow_start):
+            start = act(dict(id="epic", action="epic_next"))
+            start.start()
+            self.assertTrue(starting.wait(5))
+            pause = act(dict(id="epic", action="epic_pause", task="S-2"))
+            pause.start()
+            pause.join(0.3)
+            self.assertTrue(pause.is_alive())
+            release.set()
+            start.join(5)
+            pause.join(5)
+        record = json.loads((epic / "epic.json").read_text())
+        self.assertEqual(list(record["tasks"]), ["S-1"])
+        self.assertEqual(record["pause_before"], ["S-2"])
 
     def test_delivery_validates_waits_for_confirmation_then_checks_servers(self):
         unverified = [
@@ -358,7 +439,7 @@ class TaskControlTests(unittest.TestCase):
             self.launcher.action(dict(id="original", action="confirm"))
         with (
             patch.object(delivery_launch, "executor_offers", return_value=offers),
-            patch.object(self.launcher, "launch", return_value={"id": "validation-1"}) as launch,
+            self.launching("validation-1") as launch,
         ):
             delivery_launch.advance(self.launcher)
             delivery_launch.advance(self.launcher)
@@ -375,7 +456,7 @@ class TaskControlTests(unittest.TestCase):
         self.assertEqual(entry["group"], "review")
         with (
             patch.object(delivery_launch, "executor_offers", return_value=offers),
-            patch.object(self.launcher, "launch", return_value={"id": "server-1"}) as launch,
+            self.launching("server-1") as launch,
         ):
             self.launcher.action(dict(id="original", action="confirm"))
         text = launch.call_args.args[0]["text"]

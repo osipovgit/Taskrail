@@ -7,34 +7,36 @@ are its worktrees when the epic was isolated.
 """
 
 import json
+from functools import partial
 
 from countersign.application import worktree_isolation
-from countersign.core.files import atomic_json
 from countersign.interactions import approval_policy
-from countersign.web import epic_progress, epic_tasks, history
+from countersign.web import epic_progress, epic_record, epic_tasks, history
 
 TITLE_LIMIT = 160
 IDENTIFIER = "id"
 SCOPE = "This run is one task of a larger goal that was split into tasks. Do only the current task below; every other task has its own run. Finished tasks are already in the source."
 
 
-def start_next(launcher, run):
-    """Launch the next ready task and link its run to the epic."""
-    with launcher.lock:
+def start_next(launcher, run, automatic=False):
+    """Launch the next ready task; its run is linked to the epic before its worker starts.
+
+    automatic: only while auto-continue still applies when the epic lock is held.
+    """
+    with launcher.lock, epic_record.changing(run) as epic:
         state = json.loads(history.read_artifact(run, "run.json"))
         if state.get(epic_tasks.STATUS) != epic_tasks.READY:
             raise ValueError("Only a task split can start its tasks")
         entries = epic_tasks.tasks(run, state)
+        if automatic and not continues(epic, entries):
+            return None
         task = epic_progress.next_task(entries)
         if task is None:
             raise ValueError(
                 "No task is ready: one is running, failed or waits for its dependencies"
             )
-        started = launcher.submit(payload(run, state, entries, task))
-        epic = epic_tasks.record(run)
-        epic["tasks"][task[IDENTIFIER]] = started[IDENTIFIER]
-        atomic_json(run / epic_tasks.EPIC, epic)
-        return started
+        link = partial(epic_record.link, run, epic, ("tasks", task[IDENTIFIER]))
+        return launcher.submit(payload(run, state, entries, task), before_start=link)
 
 
 def payload(run, state, entries, task):
@@ -78,15 +80,13 @@ def task_line(task, current):
 def continue_quietly(launcher, run):
     """A failed or busy task waits for the operator; nothing is retried here."""
     try:
-        if continues(run):
-            start_next(launcher, run)
+        start_next(launcher, run, automatic=True)
     except (ValueError, OSError, KeyError):
         return
 
 
-def continues(run):
-    """Auto-continue is on and every started task succeeded."""
-    if not epic_tasks.record(run).get("auto_continue"):
+def continues(epic, entries):
+    """Auto-continue is on, every started task succeeded and the next is not paused."""
+    if not epic.get("auto_continue"):
         return False
-    state = json.loads(history.read_artifact(run, "run.json"))
-    return epic_progress.group(epic_tasks.tasks(run, state), True) == "running"
+    return epic_progress.group(entries, True) == "running"

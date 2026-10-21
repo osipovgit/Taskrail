@@ -65,6 +65,12 @@ instead of the whole conversation, so it stays within the model context. A stopp
 A step that cannot run because the executor lacks Jenkins or SSH targets is shown as
 skipped.
 
+A task or check run is linked to its parent before its worker starts, and every change
+of the parent's record (links, Pause, auto-continue, your confirmation) is serialized,
+so none is lost to a concurrent one. If the application stops after linking a run but
+before starting its worker, the next start marks that launch `LAUNCH_ERROR`; nothing
+starts it again automatically, and **Start S-n again** starts a new run.
+
 The run list puts a delivery under Running while code, validation or server checks run,
 Needs you when a task, a check or an approval waits for you or failed, Ready for review
 while it waits for your confirmation, and Done when it is confirmed and its server

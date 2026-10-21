@@ -9,8 +9,7 @@ import json
 from types import MappingProxyType
 
 from countersign.core import delivery_record
-from countersign.core.files import atomic_json
-from countersign.web import lifecycle, run_groups
+from countersign.web import lifecycle, run_groups, run_sources
 from countersign.web.history import read_artifact
 
 EPIC = delivery_record.EPIC
@@ -41,23 +40,6 @@ def record(run):
     return dict(tasks={}, auto_continue=state.get("auto_continue") is True, pause_before=[])
 
 
-def set_auto(run, enabled):
-    """Turn automatic continuation after each successful task on or off."""
-    epic = record(run)
-    epic["auto_continue"] = enabled
-    atomic_json(run / EPIC, epic)
-    return dict(id=run.name, status="AUTO_CONTINUE_ON" if enabled else "AUTO_CONTINUE_OFF")
-
-
-def set_pause(run, task, paused):
-    """Make auto-continue wait for the operator before one task, or stop waiting."""
-    epic = record(run)
-    waiting = set(epic.get(PAUSE, [])) - {task}
-    epic[PAUSE] = sorted(waiting | {task} if paused else waiting)
-    atomic_json(run / EPIC, epic)
-    return dict(id=run.name, status="PAUSE_SET" if paused else "PAUSE_CLEARED")
-
-
 def tasks(run, state):
     """Each planned task with the status and outcome of its run, if one was started."""
     plan = json.loads(read_artifact(run, state["results"]["plan"]))
@@ -84,13 +66,19 @@ def short_title(action):
 
 
 def outcome(child):
-    """Status, bounded summary and changed files of a task run; STARTING until it exists."""
+    """Status, bounded summary and changed files of a task run; its launch until it exists."""
     index = child / "run.json"
     if not index.is_file():
-        return {STATUS: "STARTING"}
+        return {STATUS: launch_status(child)}
     state = json.loads(index.read_text())
     summary = state.get("summary", "")[:SUMMARY_LIMIT]
     status = lifecycle.display_status(child, state)
     outcome = dict(status=status, summary=summary, done=run_groups.marked(child, state))
     outcome["changed_files"] = state.get("changed_files", [])
     return outcome
+
+
+def launch_status(child):
+    """STARTING while the worker starts; the launcher's record once the start failed."""
+    launch = run_sources.launch_record(child.parent / ".submissions" / child.name)
+    return launch.get(STATUS, "STARTING")
