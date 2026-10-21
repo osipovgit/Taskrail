@@ -24,14 +24,13 @@ command -v python3 >/dev/null
 command -v ssh >/dev/null
 command -v systemctl >/dev/null
 source_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
-# Refuse an update while remote effects may still be in flight.
-/usr/bin/python3 -I - <<'PY'
-import json
-from pathlib import Path
-for path in Path('/var/lib/countersign-executor').glob('*.json'):
-    if json.loads(path.read_text()).get('status') == 'RUNNING':
-        raise SystemExit('An executor action is running. Wait before updating.')
-PY
+# shellcheck source=deploy/executor-maintenance.sh
+source "$source_root/deploy/executor-maintenance.sh"
+release=/opt/countersign-executor
+config=/etc/countersign-executor
+state=/var/lib/countersign-executor
+unit_file=/etc/systemd/system/countersign-executor.service
+marker=$config/maintenance
 getent group countersign-executor >/dev/null || groupadd --system countersign-executor
 id countersign-executor >/dev/null 2>&1 || useradd --system --gid countersign-executor --home-dir /nonexistent --shell /usr/sbin/nologin countersign-executor
 getent group countersign-executor-clients >/dev/null || groupadd --system countersign-executor-clients
@@ -41,19 +40,35 @@ if [[ $client_user == countersign-executor ]] || id -nG -- "$client_user" | tr '
 fi
 usermod -a -G countersign-executor-clients "$client_user"
 usermod -a -G countersign-executor-clients countersign-executor
-systemctl stop countersign-executor.service 2>/dev/null || true
-install -d -m 0755 -o root -g root /opt/countersign-executor /opt/countersign-executor/deploy
-# The directory contains only this application's package, never target sources.
-rm -rf -- /opt/countersign-executor/countersign
-cp -R -- "$source_root/countersign" /opt/countersign-executor/
-chown -R root:root /opt/countersign-executor/countersign
-chmod -R go-w /opt/countersign-executor/countersign
+install -d -m 0755 -o root -g root "$release" "$release/deploy"
+install -d -m 0750 -o root -g countersign-executor "$config"
+# Prepare the new package before anything stops; the swap below is a rename. The
+# directory contains only this application's package, never target sources.
+staging=$(mktemp -d "$release/.countersign.XXXXXX")
+cleanup() {
+  leave_maintenance "$marker"
+  rm -rf -- "$staging"
+}
+trap cleanup EXIT
+cp -R -- "$source_root/countersign" "$staging/"
+chown -R root:root "$staging/countersign"
+chmod -R go-w "$staging/countersign"
+# No new submissions or approvals from here on; refuse while an action runs; the stop
+# must succeed, and the journal is checked again after it.
+begin_maintenance "$marker" "$state" "$unit_file" RUNNING
+if [[ -d $release/countersign ]]; then
+  mv -- "$release/countersign" "$staging/previous"
+fi
+if ! mv -- "$staging/countersign" "$release/countersign"; then
+  [[ -d $staging/previous ]] && mv -- "$staging/previous" "$release/countersign"
+  printf 'The new package could not be moved into place; the previous one was kept.\n' >&2
+  exit 1
+fi
 for name in executor-service ssh-askpass; do
-  install -m 0755 -o root -g root "$source_root/deploy/$name" "/opt/countersign-executor/deploy/$name"
+  install -m 0755 -o root -g root "$source_root/deploy/$name" "$release/deploy/$name"
 done
 install -m 0755 -o root -g root "$source_root/deploy/countersign-executor-approve" /usr/local/bin/countersign-executor-approve
-install -d -m 0750 -o root -g countersign-executor /etc/countersign-executor
-install -d -m 0700 -o countersign-executor -g countersign-executor /var/lib/countersign-executor
+install -d -m 0700 -o countersign-executor -g countersign-executor "$state"
 if [[ ! -f /etc/countersign-executor/hosts.json ]]; then
   install -m 0640 -o root -g countersign-executor "$source_root/deploy/executor-hosts.example.json" /etc/countersign-executor/hosts.json
 fi
@@ -71,8 +86,8 @@ for private_file in "${private_files[@]}"; do
   chown root:countersign-executor "$private_file"
   chmod 0640 "$private_file"
 done
-sed "s/@CLIENT_UID@/$client_uid/g" "$source_root/deploy/countersign-executor.service" > /etc/systemd/system/countersign-executor.service
-chmod 0644 /etc/systemd/system/countersign-executor.service
+sed "s/@CLIENT_UID@/$client_uid/g" "$source_root/deploy/countersign-executor.service" > "$unit_file"
+chmod 0644 "$unit_file"
 systemctl daemon-reload
 case "$autostart" in
   enable) systemctl enable countersign-executor.service ;;
