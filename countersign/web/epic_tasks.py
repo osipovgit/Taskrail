@@ -8,11 +8,12 @@ auto-continue choice. Everything else is read from those runs.
 import json
 from types import MappingProxyType
 
+from countersign.core import delivery_record
 from countersign.core.files import atomic_json
 from countersign.web import lifecycle, run_groups
 from countersign.web.history import read_artifact
 
-EPIC = "epic.json"
+EPIC = delivery_record.EPIC
 PAUSE = "pause_before"
 STATUS = "status"
 READY = "TASKS_READY"

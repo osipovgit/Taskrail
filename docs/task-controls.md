@@ -47,8 +47,9 @@ Every **Change code** task goes through the same steps:
 5. **Server checks.** Only after confirmation, and only when the plan named them
    (`Server check:` entries) or the task lists deferred runtime checks, a server-check
    run executes them through the SSH executor; every action still needs root approval.
-   Before confirmation, SSH actions may only inspect servers during planning and review;
-   the implementer cannot use them.
+   Before confirmation, SSH actions may only inspect servers during planning and review,
+   one listed read-only command each ([SSH executor](ssh-executor.md)); the
+   implementer cannot use them.
 
 The run page shows these steps in a **Delivery** panel. A split lists its tasks with the
 status of each task's run. The next task starts automatically after each successful
