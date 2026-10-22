@@ -329,7 +329,7 @@ elif role == "planner":
         value["proposed_change_files"].append("jenkins/pipeline.groovy")
     if mode == "badpath":
         value["proposed_change_files"] = ["project/.git/config"]
-    if mode in ("no-change", "no-change-rejected"):
+    if mode in ("no-change", "no-change-rejected", "wrapped-no-change"):
         value.update(proposed_change_files=[], steps=[], summary="Current source already returns 2")
 elif role == "implementer":
     if mode == "writer-timeout":
@@ -411,7 +411,9 @@ if mode == "format-unavailable" and role == "plan-reviewer" and "FORMAT REPAIR O
             )
         )
 
-value = enrich(value, context, target, prompt)
+value = enrich(value, context, target, prompt, read_wrapper=mode == "wrapped-no-change")
+if mode == "wrapped-no-change":
+    value["evidence"][0]["line_end"] = len(target.read_text().splitlines())
 if mode == "two-tasks" and role == "planner" and value["proposed_change_files"]:
     first, second = value["proposed_change_files"][0], str(root / "new.py")
     value["proposed_change_files"] = [first, second]

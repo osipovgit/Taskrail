@@ -147,6 +147,13 @@ the frozen input integrity guard covers it whole. A no-change completion still
 needs independent review of all requirements. Text imported with `--plan-response`
 is only an untrusted draft for fresh planning.
 
+Source citations recognize both plain numbered reads and the CLI's outer
+`<content>` or `<file>` envelope, including a first line directly after the opening
+tag. Literal tags inside numbered source lines remain text; tool footers do not
+supply source evidence. Clipped, duplicate, reordered or stale lines cannot validate
+a citation. A missing-read correction requires the cited source range, not a
+cosmetic edit to the saved plan or additional unrelated citations.
+
 An explicit structured blocker always prevents progression, even if the model
 labels it PLAN_READY or APPROVE. The draft is saved as `blocked-draft.json`; its
 source and completion claims are not accepted, and the server records a BLOCKED

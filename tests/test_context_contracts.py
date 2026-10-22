@@ -82,6 +82,10 @@ class ContextContractTests(unittest.TestCase):
             self.assertNotIn("corrected final JSON", text)
         self.assertNotIn("attached JSON contract", RUNTIME_RULES)
         self.assertIn("one JSON object", response_format.finish("reviewer"))
+        feedback = response_format.correction("planner", "no matching observed read")
+        self.assertIn("direct read of the cited source range", feedback)
+        self.assertIn("only if its content needs correction", feedback)
+        self.assertIn("not a cosmetic plan edit or unrelated citations", feedback)
 
     def test_requirements_exclude_navigation_but_task_keeps_all_context(self):
         text = (
