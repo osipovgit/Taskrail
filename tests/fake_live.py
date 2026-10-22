@@ -530,11 +530,22 @@ if mode == "narrate" and role == "plan-reviewer" and "did not follow" not in pro
 if mode == "markup-request" and role == "planner" and "did not follow" not in prompt:
     response = '<request type="LOCAL_REQUEST"><command>python3</command><arg>print(f"{len(fixed)}")</arg></request>'
 if mode == "context-overflow" and role == "planner" and "EXCEEDED THE MODEL" not in prompt:
+    plan.write_text(plan.read_text().replace("Decision: single", "Decision: unfinished"))
     whole = dict(status="completed", input=dict(filePath=str(target)), output="1: x\n" * 6000)
     print(json.dumps(dict(type="tool_use", part=dict(id="whole-read", tool="read", state=whole))))
     message = "litellm.ContextWindowExceededError: Context Window exceeded for given call. Max Input Tokens=94208, Got=96808"
     overflow = dict(type="error", error=dict(name="APIError", data=dict(message=message)))
     print(json.dumps(dict(overflow, sessionID="ses1")))
+    sys.exit(0)
+if mode in {"planned-overflow", "unobserved-planned-overflow"} and role == "planner":
+    if mode == "unobserved-planned-overflow":
+        plan.write_text(
+            "Decision: no change\nSummary: Assumed complete\n\n## Requirements\n"
+            f"- R1 → done: {root / 'unread.py'}:1-1\n"
+        )
+    finish = dict(reason="tool-calls", tokens=dict(input=100000, output=2))
+    print(json.dumps(dict(type="step_finish", part=finish)), flush=True)
+    time.sleep(5)
     sys.exit(0)
 if mode == "failed-read" and role == "planner":
     failed = dict(

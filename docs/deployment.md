@@ -145,6 +145,13 @@ turn and is not retried with the same oversized input. Source changes are preser
 writer is never automatically replayed. Replan into smaller atomic tasks or deliberately
 correct the model limit. `max_observed_tokens` remains a separate cumulative cost cap.
 
+After a planner context stop, the server first validates its saved `plan.md` against
+the same source evidence, requirement coverage, scope and dependency contracts.
+A valid ready proposal proceeds to independent plan review without another planner
+call; the original context-stop diagnostics remain recorded. An invalid proposal
+gets exact validation errors in its bounded recovery attempt. Admission refusals,
+permission failures, source violations and interrupted writers never use this path.
+
 Format repair runs with every tool denied by default. opencode's free Zen models
 reject such tool-less requests (`FreeTierError`); for them set `format_repair_tools`
 to `read`, which keeps read-only tools in format passes (edits stay denied) and
