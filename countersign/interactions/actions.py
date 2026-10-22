@@ -2,9 +2,9 @@
 
 import json
 import re
-import subprocess
 from pathlib import Path
 
+from countersign.application import response_format
 from countersign.core import json_response
 from countersign.git import dispatch, requests
 from countersign.git.deadline import Deadline
@@ -13,15 +13,16 @@ from countersign.interactions import (
     approval_policy,
     events,
     jenkins,
-    local,
+    local_actions,
     local_request,
     remote,
     transcripts,
 )
 from countersign.interactions.clock import ApprovalPause
+from countersign.interactions.local import extract
 
 MAX_CORRECTIONS = 2
-NARRATION = 'Your last message is not one JSON request or result, so nothing was executed and the stage cannot finish. Requests and results are plain JSON objects, not XML or tool-call markup. A local command is {{"schema_version": 1, "status": "LOCAL_REQUEST", "cwd": "...", "argv": ["..."], "reason": "..."}}; a Git command is {{"schema_version": 1, "status": "GIT_REQUEST", "root": "...", "argv": ["..."], "reason": "..."}}; the final stage result follows the response schema in {0}. Return exactly one of them as the entire message.'
+NARRATION = 'Your last message did not follow the advertised response format, so nothing was executed. Executor requests are JSON objects, not XML or tool-call markup. A local command is {{"schema_version": 1, "status": "LOCAL_REQUEST", "cwd": "...", "argv": ["..."], "reason": "..."}}; a Git command is {{"schema_version": 1, "status": "GIT_REQUEST", "root": "...", "argv": ["..."], "reason": "..."}}. Follow the instructions in {0}. {1}'
 MISSING_PROGRAM = "{0} is not installed on the orchestrator host. Install it, then Allow to run this exact command; or Deny."
 REQUEST_NAME = re.compile(r"(?:GIT|LOCAL|ACTION|JENKINS)_REQUEST")
 
@@ -45,7 +46,7 @@ class Actions:
         response = run_git(self, outcome)
         text = outcome["final_text"]
         if response is None:
-            payload = local.extract(text)
+            payload = extract(text)
             response = (
                 remote.consume(self.session, text) if payload is None else run_local(self, payload)
             )
@@ -85,18 +86,21 @@ class Actions:
             local_request.checked_request(payload, self.session.environment["roots"])
         except ValueError as error:
             return self.local_result(payload, dict(status="REJECTED", reason=str(error)))
+        answer = local_actions.previous(self.run, payload)
+        if answer is not None:
+            return self.local_result(payload, answer)
         decision = self.approve(dict(payload, **install_notice(payload)))
         if decision["decision"] != "allow":
-            return self.local_result(payload, dict(status="DECLINED", decision=decision))
-        if local_request.missing_executable(payload["argv"]):
+            answer = local_actions.execute(self.run, self.folder, payload, {}, decision)
+            return self.local_result(payload, answer)
+        context = dict(self.session.environment)
+        context["automatic_read"] = decision.get("rule") == "read_only"
+        if local_request.missing_executable(payload["argv"], context["automatic_read"]):
             reason = "Executable is still not installed on the orchestrator host"
             return self.local_result(payload, dict(status="REJECTED", reason=reason))
         self.session.check_sources()
-        context = dict(self.session.environment, timeout=self.session.clock.remaining())
-        try:
-            answer = local.execute(payload, context)
-        except (ValueError, OSError, subprocess.SubprocessError) as error:
-            answer = dict(status="UNKNOWN", reason=str(error))
+        context["timeout"] = self.session.clock.remaining()
+        answer = local_actions.execute(self.run, self.folder, payload, context, decision)
         response = self.local_result(payload, answer)
         self.session.check_sources()
         return response
@@ -126,7 +130,9 @@ def incomplete_request(actions, text):
     if local_request.incomplete(text):
         feedback = local_request.correction(text)
     elif not_json(text) and narrated(actions, text):
-        feedback = NARRATION.format(actions.folder / "request.md")
+        feedback = NARRATION.format(
+            actions.folder / "request.md", response_format.finish(actions.session.active[1]["role"])
+        )
     else:
         return None
     context["corrections"] += 1

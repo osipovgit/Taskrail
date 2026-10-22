@@ -6,8 +6,10 @@ from countersign.application import (
     access_recovery,
     attempt_context,
     evidence,
+    plan_file,
     prompts,
     result_preview,
+    session_budget,
 )
 from countersign.application.attempt_launch import (
     attempt_prompt,
@@ -67,18 +69,30 @@ class StageAttempts:
         """Open the record and store exactly what the model receives."""
         workflow = self.workflow
         workflow.guard.verify("Source/Git changed before retry; recorded evidence is stale")
-        active = open_record(workflow, self.retries.mode())
-        active[1]["writable_files"] = [str(path) for path in planned_files(workflow)]
+        folder, record = open_record(workflow, self.retries.mode())
+        record["writable_files"] = [str(path) for path in planned_files(workflow)]
+        plan_access(workflow, record)
         recovery = None if self.format_only else self.recovery
-        prompt = attempt_prompt(workflow, active, self.request, recovery)
-        attempt_context.save_request(active[0], active[1], prompt, workflow.state)
-        return active
+        prompt = attempt_prompt(workflow, (folder, record), self.request, recovery)
+        attempt_context.save_request(folder, record, prompt, workflow.state)
+        return folder, record
 
     def launch(self, active):
         """Run the stage session unless the observed token budget is spent."""
         workflow = self.workflow
         files = planned_files(workflow)
         profile = install_profile(workflow, active, files, self.format_only)
+        outcome = session_budget.admission(
+            workflow.config,
+            active,
+            session_budget.plan_inputs(
+                workflow.flow["plan"], workflow.config["roots"], active[1]["role"]
+            ),
+        )
+        if outcome:
+            active[0].joinpath("events.jsonl").touch(exist_ok=True)
+            self.settle(active, outcome)
+            return outcome
         announce(active[1])
         allowance = token_allowance(workflow)
         if allowance is not None and allowance <= 0:
@@ -163,3 +177,10 @@ def fail(state, record, outcome):
     detail = outcome.get("contract_error") or errors or outcome[STATUS]
     summary = "Stage {0} failed: {1}".format(record["directory"], detail)
     state.update(status=outcome[STATUS], summary=summary)
+
+
+def plan_access(workflow, record):
+    """Publish the planner artifact before saving the same access contract to disk."""
+    if record["stage"] == "planner":
+        target = plan_file.prepare(workflow.run, workflow.state["requirements"])
+        record["writable_files"].append(str(target))

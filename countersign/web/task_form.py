@@ -5,7 +5,7 @@ import re
 from pathlib import Path
 from types import MappingProxyType
 
-from countersign.web import history
+from countersign.web import history, task_input
 from countersign.web.form_roots import checked_roots
 
 TITLE = "title"
@@ -47,7 +47,7 @@ WORKFLOW_RULES = (
     "Remote actions require the isolated SSH executor and personal approval of exact scripts and targets.",
 )
 
-# Drafts of earlier runs copied the server rules into constraints; they are added once below.
+# Historical drafts can contain this exact block; preserve explicitly submitted user text.
 COPIED_RULES = "\n".join(("### Workflow rules", *WORKFLOW_RULES[2:]))
 
 
@@ -59,8 +59,7 @@ def build_task(payload, runs):
         raise ValueError("Unknown task fields; commands and settings cannot be submitted")
     form = form_text(payload)
     roots = checked_roots(payload.get("roots"), Path(runs).resolve())
-    checks = [line.strip() for line in form["verification"].splitlines()]
-    meta = dict(roots=roots, verification=[check for check in checks if check])
+    meta = task_input.metadata(payload, form, roots, task_markdown(form, ""))
     header = json.dumps(meta, ensure_ascii=False, indent=2)
     return task_markdown(form, header), form[TITLE]
 
@@ -72,7 +71,6 @@ def form_text(payload):
         raise ValueError("Required field: goal")
     form[TITLE] = form[TITLE] or default_title(form[GOAL])
     form[CRITERIA] = form[CRITERIA] or DEFAULT_CRITERIA
-    form[CONSTRAINTS] = form[CONSTRAINTS].replace(COPIED_RULES, "").strip()
     check_title(form[TITLE])
     check_reserved(form.values())
     return form

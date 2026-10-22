@@ -1,12 +1,12 @@
 """Validate one attempt without coupling versioned contracts to state transitions."""
 
 from countersign.application import execution_wait, result_validation
+from countersign.application.git_reference import git_reference as git_reference
 from countersign.core import schema
 from countersign.core.paths import tool_paths
 from countersign.git import requests
 
 ROOTS = "roots"
-GIT_DIRECTORY = ".git"
 
 
 def parse(outcome, record, state, environment):
@@ -23,6 +23,7 @@ def parse(outcome, record, state, environment):
             folder=environment["run"] / record["directory"],
             plan=environment["plan"],
             changed=tool_paths(state["changed_files"], environment[ROOTS]),
+            check_config=environment.get("check_config", {}),
         ),
     )
 
@@ -51,13 +52,3 @@ def execution_report(state):
 def git_directory(run):
     """Expose readable executor evidence without granting edit permission."""
     return requests.output_directory(run)
-
-
-def git_reference(root):
-    """Guard Git metadata even when a declared root is a repository subdirectory."""
-    if (root / GIT_DIRECTORY).exists():
-        return root / GIT_DIRECTORY
-    for parent in root.parents:
-        if (parent / GIT_DIRECTORY).exists():
-            return parent / GIT_DIRECTORY
-    return root / GIT_DIRECTORY

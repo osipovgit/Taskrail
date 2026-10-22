@@ -7,47 +7,9 @@ unknown option, still goes to the operator.
 
 from fnmatch import fnmatch
 from pathlib import Path
-from types import MappingProxyType
 
 from countersign.infrastructure.artifact_access import PROTECTED_READ_PATTERNS
-from countersign.interactions import access
-
-FOLLOW = ("-L", "--dereference")
-# Command -> options that execute, write, follow links outside, recurse into protected files or never end.
-COMMANDS = MappingProxyType(
-    {
-        "ls": FOLLOW,
-        "du": FOLLOW,
-        "stat": FOLLOW,
-        "wc": ("--files0-from",),
-        "cat": (),
-        "head": (),
-        "tail": ("-f", "-F", "--follow", "--retry"),
-        "grep": (
-            "-r",
-            "-R",
-            "-d",
-            "-f",
-            "--recursive",
-            "--dereference-recursive",
-            "--directories",
-            "--file",
-        ),
-        "find": (
-            "-exec",
-            "-execdir",
-            "-ok",
-            "-okdir",
-            "-delete",
-            "-fprint",
-            "-fprint0",
-            "-fprintf",
-            "-fls",
-            "-L",
-            "-follow",
-        ),
-    }
-)
+from countersign.interactions import access, read_grammar
 
 
 def request(payload, roots):
@@ -63,12 +25,13 @@ def request(payload, roots):
 def command(payload, roots):
     """A listed command whose options are safe and whose paths stay inside the roots."""
     argv = payload["argv"]
-    if argv[0] not in COMMANDS:
-        return False
-    options, paths = split(argv[1:])
-    if not all(allowed(argv[0], option) for option in options):
+    try:
+        paths = read_grammar.operands(argv[0], argv[1:])
+    except ValueError:
         return False
     cwd = Path(payload["cwd"])
+    if not inside(cwd, roots):
+        return False
     return all(inside(cwd / path, roots) for path in paths)
 
 
@@ -79,27 +42,6 @@ def reads(calls, roots):
     except ValueError:
         return False
     return bool(paths) and all(inside(path, roots) for path in paths)
-
-
-def split(arguments):
-    """(options, operands); everything after "--" is an operand."""
-    if "--" in arguments:
-        end = arguments.index("--")
-        options, operands = split(arguments[:end])
-        return options, [*operands, *arguments[end + 1 :]]
-    options = [argument for argument in arguments if argument.startswith("-")]
-    return options, [argument for argument in arguments if not argument.startswith("-")]
-
-
-def allowed(program, option):
-    """find predicates are whole words; other commands also bundle short letters."""
-    forbidden = COMMANDS[program]
-    if "/" in option.partition("=")[2]:
-        return False
-    if program == "find" or option.startswith("--"):
-        return option.split("=", 1)[0] not in forbidden
-    letters = {f"-{letter}" for letter in option[1:]}
-    return not letters.intersection(forbidden)
 
 
 def inside(candidate, roots):

@@ -31,15 +31,16 @@ Notes:
 ## After the change
 """
 FORMAT = """
-PLAN FILE: your result is the Markdown file {0}, which already holds a template. Edit it with your edit tool while you work: write the Decision and the requirement lines early and refine them, so the plan survives an interrupted session. When it is complete, end your turn with the single word DONE; the server reads the file and returns each problem with its line. An executor request (GIT_REQUEST, LOCAL_REQUEST, ACTION_REQUEST, JENKINS_REQUEST) is still one JSON object as your entire final message.
-- Decision: split (several independent tasks, each its own run), single (this run implements its tasks), no change (every requirement is already met) or blocked (a required input is missing).
-- Summary: one or two sentences. An answer or design document goes in a ## Answer section instead, written as Markdown.
+PLAN FILE: your result is the Markdown file {0}, which already holds a template. First read this exact file using the read tool in the current session, then edit it. A read by the server or an earlier session does not satisfy the tool's read-before-write rule. Write the Decision and requirement lines early and refine them, so the plan survives interruption. If an edit says the file must be read first, read it now and reapply the intended edit to the current contents. When complete, end with DONE; the server reads the file and returns each problem with its line. An executor request is still one JSON object as your entire final message.
+- Decision: split (several tasks, each its own run), single (exactly one task in this run), no change (every requirement is already met) or blocked (a required input is missing).
+- Summary: one or two sentences. An answer or design document goes in the final ## Answer section, whose entire remaining text is preserved as Markdown.
 - ## Requirements: one line per requirement, R<n> → its outcome: the tasks that deliver it (T2; parts of one requirement name their scope: T1 [roles/ntp], T2 [roles/web]), done: <path>:<from>-<to> (lines you read that already meet it), runtime: <check> (a runtime requirement checked later) or gap: <the missing input>.
 - One ## T<n>: <title> section per task: Depends on: (task IDs or none), Files: (paths it changes; mark new ones (new)), Done when: (observable results), Verify: (checks to run), optional Notes: (pointers for its implementer).
 - ## After the change: optional lines 'Jenkins check: <server>/<job>: <parameters and expected result>' and 'Server check: <what to run and the expected result>'.
+- ## Check selections: when a server recipe catalog is advertised, choose a recipe with one line '<recipe-id>: R<n>, R<m>' naming runtime requirements only. A selected local check may use 'R<n> → T1' to assign its verification to that task; remote checks remain runtime: deferrals. The server owns exact commands, parameters, phase and approval; do not invent recipe IDs or reinterpret prose checks as commands.
 Paths are absolute or start with a root alias. Never copy source or requirement texts into the file; the server derives coverage, files, order and task runs from it.
 PROJECT MAP: {1} lists every source file with its size and landmarks and points each requirement at the files that name it. Read its index first and start your research there instead of exploring.
-Requirements, verbatim (use their labels in the plan file):
+Use the R<n> labels attached to the task's requirement blocks above. Runtime requirements are marked kind=runtime.
 """
 
 
@@ -70,15 +71,8 @@ def instructions(run, roots, requirements):
 
     The map is written on the first request of the run.
     """
-    listed = [label(number, entry) for number, entry in enumerate(requirements, 1)]
     text = FORMAT.format(path(run), project_map.prepare(run, roots, requirements))
-    return "{0}{1}\n".format(text, "\n".join(listed))
-
-
-def label(number, requirement):
-    """R<n>. text, marked when it is checked at runtime."""
-    kind = " (runtime)" if requirement["kind"] == "runtime" else ""
-    return f"R{number}.{kind} {requirement['text']}"
+    return f"{text}\n"
 
 
 def read_plan(run, requirements, roots):

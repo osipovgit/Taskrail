@@ -30,9 +30,9 @@ class ContextEconomyTests(unittest.TestCase):
         )
         self.assertEqual(
             task_brief.requirements(PARENT, task),
-            "- Fix lint findings in roles (only this part: roles/ntp)\n"
-            "- Keep the variable names\n"
-            "- ansible-lint roles/ntp is clean",
+            "## Goal\n- Fix lint findings in roles\nOnly this assigned part: roles/ntp\n\n"
+            "Keep the variable names\n\n"
+            "ansible-lint roles/ntp is clean",
         )
         older = dict(requirements=[], scopes=[], done_when=[], checks=["hello returns 2"])
         self.assertEqual(task_brief.requirements(PARENT, older), "- hello returns 2")

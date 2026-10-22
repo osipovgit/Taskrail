@@ -4,7 +4,8 @@ import json
 import re
 from pathlib import Path
 
-from countersign.application import instruction_sources
+from countersign.application import instruction_sources, session_budget, task_scope
+from countersign.application.input_config import input_configuration
 from countersign.application.task_roots import ROOTS, declared_roots
 from countersign.application.verify_settings import parse_commands
 from countersign.application.worktree_isolation import isolation_settings
@@ -16,27 +17,32 @@ ROLES = ("planner", "implementer", "reviewer")
 BUNDLED_AGENTS = Path(__file__).resolve().parents[1] / "agents"
 VERIFICATION = "verification"
 DESIGN = "design"
-PHASES = frozenset(("task", "validation", "server"))
+PHASES = frozenset(("task", "integration", "validation", "server"))
 CHANGE_LINES = 400
 CHANGE_FILES = 15
 CHECK_LIST = "verification must list runtime acceptance checks as strings"
+PHASE = "phase"
 
 
-def configuration(task, settings=None, roots_override=None):
+def configuration(task, settings=None, roots_override=None, checks_override=None):
     """Validate the task header, roots, role sources and bounded limits."""
     path = Path(task).expanduser().resolve(strict=True)
     text = path.read_text(encoding="utf-8")
     source = settings_path(settings)
     options = json.loads(source.read_text()) if source.exists() else {}
     meta = task_header(text, options, roots_override)
+    if checks_override is not None:
+        options = dict(options, verify_commands=checks_override.get("verify_commands", []))
     return dict(
         launch_settings(options, source.parent),
         **limits(options),
+        **input_configuration(text, meta, options, checks_override),
         **isolation_settings(meta, options, run_storage(source)),
-        read_only=meta.get("read_only") is True or meta.get(DESIGN) is True,
+        read_only=answer_only(meta),
         design=meta.get(DESIGN) is True,
         decompose=meta.get("decompose") is True,
-        phase=meta.get("phase") if meta.get("phase") in PHASES else None,
+        phase=meta.get(PHASE) if meta.get(PHASE) in PHASES else None,
+        task_scope=task_scope.configured(meta, declared_roots(meta, path)),
         confirmed_change=meta.get("confirmed_change"),
         auto_approve=meta.get("auto_approve") is True,
         task=path,
@@ -48,6 +54,13 @@ def configuration(task, settings=None, roots_override=None):
         verify_commands=parse_commands(options),
         run_base=run_storage(source),
     )
+
+
+def answer_only(meta):
+    """Delivery review/check phases cannot enable a writer through a CLI task header."""
+    flags = (meta.get("read_only"), meta.get(DESIGN))
+    explicit = any(flag is True for flag in flags)
+    return explicit or meta.get(PHASE) in {"integration", "validation", "server"}
 
 
 def task_header(text, options, roots_override):
@@ -100,6 +113,7 @@ def permission_worktree(options):
 def limits(options):
     """Clamp numeric settings to their supported ranges."""
     return dict(
+        **session_budget.settings(options),
         stage_seconds=max(1, int(options.get("stage_timeout_seconds", DEFAULT_TIMEOUT * 4))),
         stage_attempts=max(1, int(options.get("max_stage_attempts", 6))),
         max_observed_tokens=max(0, int(options.get("max_observed_tokens", 0))),

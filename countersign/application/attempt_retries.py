@@ -48,6 +48,8 @@ class Retries:
 
     def allowed(self, outcome):
         """Return True after preparing the next attempt, False to stop the stage."""
+        if outcome.get("admission_blocked"):
+            return False
         status = outcome["status"]
         if status == "INVALID_RESULT":
             return self.format_repair(outcome)

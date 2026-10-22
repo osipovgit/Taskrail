@@ -1,4 +1,4 @@
-"""Verification commands in server settings; writing them approves each exact argv.
+"""Exact verification commands in server settings, subject to personal run approval.
 
 Task files, models and imported drafts cannot add commands.
 """

@@ -9,11 +9,8 @@ from pathlib import Path
 
 from countersign.core.schema import require
 
-DEFAULT_READ_LIMIT = 2000
-LINE_PREFIX = re.compile(r"(?m)^\d+: ?|^\d+\| ")
+LINE_PREFIX = re.compile(r"^(\d+)(?:: ?|\| )(.*)$")
 SHOWN_SOURCE = 600
-# Read tools cut long lines, so only the start of each cited line is compared.
-COMPARED_CHARACTERS = 200
 
 
 def validate_claim(claim, records):
@@ -43,23 +40,41 @@ def cited_lines(claim, label):
 
 
 def supports(record, claim, excerpt):
-    """The read covered the cited range and actually returned its lines."""
+    """Every cited position must be in the returned output, with the current text."""
     if record["input"]["filePath"] != claim["path"]:
         return False
-    start = record["input"].get("offset", 1)
-    end = start + record["input"].get("limit", DEFAULT_READ_LIMIT) - 1
-    covered = start <= claim["line_start"] and claim["line_end"] <= end
-    return covered and shown(LINE_PREFIX.sub("", record["output"]), excerpt)
+    lines = returned_lines(record)
+    expected = enumerate(excerpt.split("\n"), claim["line_start"])
+    matches = [shown(lines.get(number), line) for number, line in expected]
+    return all(matches)
+
+
+def returned_lines(record):
+    """Read tools carry source line numbers; executor snapshots carry exact raw text."""
+    output = record["output"]
+    rows = output.splitlines()
+    if record.get("output_clipped") and not output.endswith("\n"):
+        rows = rows[:-1]
+    if record.get("tool") == "executor":
+        return dict(enumerate(rows, record["input"].get("offset", 1)))
+    return numbered_lines(rows)
+
+
+def numbered_lines(rows):
+    """Reject duplicate or reordered source positions instead of guessing their meaning."""
+    numbered = []
+    for row in rows:
+        match = LINE_PREFIX.fullmatch(row)
+        if match:
+            numbered.append((int(match[1]), match[2]))
+    numbers = [number for number, _ in numbered]
+    if numbers != sorted(set(numbers)):
+        return {}
+    return dict(numbered)
 
 
 def shown(output, excerpt):
-    """Each cited line appears in the output, in order; whitespace is not significant."""
-    haystack = " ".join(output.split())
-    position = 0
-    for line in excerpt.splitlines():
-        fragment = " ".join(line.split())[:COMPARED_CHARACTERS]
-        position = haystack.find(fragment, position)
-        if position < 0:
-            return False
-        position += len(fragment)
-    return True
+    """Compare the whole observed line; repeated substrings are not source evidence."""
+    if output is None:
+        return False
+    return " ".join(output.split()) == " ".join(excerpt.split())

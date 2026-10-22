@@ -1,55 +1,84 @@
 """What a task run of a split receives: its requirements and a compact brief.
 
-Its requirements are the parent requirements its plan task owns, without their
-section headings and with the scope of a shared one, followed by the task's own
-results. The brief tells it what earlier tasks delivered and names later tasks by
-title only, so a long split stays within the model context.
+Its requirements retain the parent's exact text and separate ownership scope,
+followed by the task's own results. The brief includes the complete current
+contract and a bounded prerequisite index; the full parent remains available
+for specific lookups when needed.
 """
 
-import re
+from countersign.core import task_graph, task_lineage
 
-HEADING = re.compile(r"(?m)^#+\s.*$")
-BULLET = re.compile(r"^[-*+]\s+")
-CONTEXT_LIMIT = 600
+INDEX_BUDGET = 6000
+BRIEF_BUDGET = 14000
+CONTRACT_BUDGET = 8000
+IDENTIFIER = "id"
+REQUIREMENTS = "requirements"
 SCOPE = "This run is one task of a larger goal that was split into tasks. Do only the current task below; every other task has its own run. Finished tasks are already in the source."
 
 
 def requirements(state, task):
-    """One bullet per owned parent requirement, then one per result of the task."""
-    parent = state.get("requirements", [])
-    texts = {entry["id"]: entry["text"] for entry in parent}
-    scopes = {entry["id"]: entry["scope"] for entry in task["scopes"]}
-    owned = filter(texts.__contains__, task["requirements"])
+    """Literal owned parent requirements, separate scopes and the task's own results."""
+    parent = state.get(REQUIREMENTS, [])
+    texts = {entry[IDENTIFIER]: entry["text"] for entry in parent}
+    scopes = {entry[IDENTIFIER]: entry["scope"] for entry in task["scopes"]}
+    owned = filter(texts.__contains__, task[REQUIREMENTS])
     lines = [part(texts[name], scopes.get(name)) for name in owned]
     lines.extend(task["done_when"])
-    return "\n".join(f"- {line}" for line in lines or task["checks"])
+    if not lines:
+        return "\n".join(f"- {line}" for line in task["checks"])
+    return "\n\n".join(lines)
+
+
+def assigned_requirements(state, task):
+    """Pass parent IDs and literal text through the child without Markdown re-parsing."""
+    step = dict(task, criteria=task[REQUIREMENTS])
+    return task_lineage.for_step(state.get(REQUIREMENTS, []), step)
 
 
 def part(text, scope):
-    """A parent requirement on one line, limited to its scope when it is shared."""
-    flat = " ".join(HEADING.sub("", text).split())
-    plain = BULLET.sub("", flat)
-    return f"{plain} (only this part: {scope})" if scope else plain
+    """Preserve the requirement exactly; scope is separate server-owned metadata."""
+    return f"{text}\nOnly this assigned part: {scope}" if scope else text
 
 
 def brief(run, draft, entries, current):
-    """The scope rule, the overall goal, the other tasks and this task's checks."""
-    lines = [SCOPE, "", f"Overall goal (task split run {run.name}):", clipped(draft["goal"])]
-    lines.extend(["Overall acceptance criteria:", clipped(draft["criteria"])])
-    parent = run / "00-input/task.md"
-    listed = [task_line(task, current) for task in entries]
-    lines.extend([f"The complete parent task is {parent}.", "", "Tasks:", *listed])
-    lines.extend(
-        ["", "Checks to run for this task:", *(f"- {check}" for check in current["checks"])]
+    """A bounded index; the immutable artifact holds every full contract and outcome."""
+    lines = [SCOPE, "", f"Parent run: {run.name}. Current task: {current['id']}."]
+    lines.append(
+        "This run carries its complete assigned requirements, global constraints and current "
+        "contract. The sealed parent-task.md is reference data: consult only a specific missing "
+        "parent section or prerequisite, within the read budget; never read the whole snapshot. "
+        "If an essential dependency cannot be resolved within the budget, report the exact gap."
     )
-    if current["notes"]:
-        lines.extend(["", "Planner notes: {0}".format(current["notes"])])
+    lines.extend(["", current_contract(current), "", "Prerequisites:"])
+    needed = task_graph.ancestors(entries, current[IDENTIFIER])
+    remaining = min(INDEX_BUDGET, BRIEF_BUDGET - len("\n".join(lines)))
+    for task in entries:
+        if task[IDENTIFIER] in needed:
+            line = task_line(task, current)
+            if len(line) <= remaining:
+                lines.append(line)
+                remaining -= len(line)
+    lines.append("Other tasks are outside this run's scope; their full index is in parent-task.md.")
     return "\n".join(lines)
+
+
+def current_contract(task):
+    """Checks and notes are essential input and cannot silently become a truncated pointer."""
+    checks = "\n".join(task["checks"])
+    notes = task.get("notes", "")
+    text = "Current task:\n{0}\nAction: {1}\nChecks:\n{2}\nNotes:\n{3}".format(
+        task_line(task, task), task["goal"], checks, notes
+    )
+    if len(text) > CONTRACT_BUDGET:
+        raise ValueError(
+            "Child contract exceeds its input budget; narrow the parent task before launch"
+        )
+    return text
 
 
 def task_line(task, current):
     """One task: current, later by title only, or finished with its outcome."""
-    label = "{0}: {1}".format(task["id"], task["title"])
+    label = "{0}: {1}".format(task[IDENTIFIER], task["title"])
     if task is current:
         return f"- {label} (current task)"
     if task["status"] is None:
@@ -57,10 +86,3 @@ def task_line(task, current):
     state = "marked done" if task["done"] else task["status"]
     changed = ", ".join(task["changed_files"]) or "none"
     return f"- {label} ({state}): {task['summary']} Changed files: {changed}"
-
-
-def clipped(text):
-    """Context text bounded to CONTEXT_LIMIT characters."""
-    if len(text) <= CONTEXT_LIMIT:
-        return text
-    return "{0}…".format(text[:CONTEXT_LIMIT].rstrip())

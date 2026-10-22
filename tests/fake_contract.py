@@ -16,6 +16,9 @@ def enrich(value, context, target, prompt):
     evidence = []
     if "FORMAT REPAIR ONLY" not in prompt and "SYNTHESIS ONLY" not in prompt:
         content = target.read_text()
+        content = "\n".join(
+            f"{number}: {line}" for number, line in enumerate(content.splitlines(), 1)
+        )
         print(
             json.dumps(
                 {

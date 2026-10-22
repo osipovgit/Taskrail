@@ -6,7 +6,7 @@ must not change files inside declared roots.
 
 import shlex
 
-from countersign.interactions import local
+from countersign.application import check_runner, check_selection
 
 TAIL_CHARACTERS = 2000
 REASON = "Verification command from server settings"
@@ -14,19 +14,16 @@ LOG_NAME = "verify-{0:02d}.log"
 CWD = "cwd"
 ARGV = "argv"
 FAIL = "FAIL"
+RECIPE = "recipe"
 
 
 def run_commands(workflow, folder):
     """Run the commands whose cwd is a declared root of this run, in settings order."""
     locations = command_roots(workflow.config)
-    selected = [
-        dict(entry, cwd=locations[entry[CWD]])
-        for entry in workflow.config["verify_commands"]
-        if entry[CWD] in locations
-    ]
+    selected = check_selection.mapped_checks(check_runner.selected(workflow), locations)
     return [
-        run_command(workflow, folder / LOG_NAME.format(number), command)
-        for number, command in enumerate(selected, 1)
+        run_command(workflow, folder / LOG_NAME.format(number), chosen)
+        for number, chosen in enumerate(selected, 1)
     ]
 
 
@@ -39,21 +36,29 @@ def command_roots(config):
     return locations
 
 
-def run_command(workflow, log, command):
+def run_command(workflow, log, check):
     """Return a check record; the output is kept in the check stage folder."""
-    payload = dict(cwd=command[CWD], argv=command[ARGV], reason=REASON)
-    timeout = command["timeout_seconds"]
+    command = check[RECIPE]["request"]
     try:
-        outcome = local.execute(
-            payload, dict(timeout=timeout, roots=workflow.config["roots"], run=workflow.run)
-        )
+        outcome, recorded = check_runner.execute(workflow, log.parent, check)
     except (ValueError, OSError) as error:
         return check_record(command, FAIL, str(error))
-    log.write_text("{stdout}\n--- stderr ---\n{stderr}".format(**outcome), encoding="utf-8")
-    detail = "exit {0}; log {1}".format(outcome["exit_code"], log.name)
-    if outcome["exit_code"] == 0:
-        return check_record(command, "PASS", detail)
-    return check_record(command, FAIL, failure_detail(detail, outcome))
+    return outcome_record(command, outcome, recorded, log)
+
+
+def outcome_record(command, outcome, recorded, log):
+    """Readable legacy logs accompany the canonical immutable check evidence."""
+    output = {name: outcome.get(name, "") for name in ("stdout", "stderr")}
+    log.write_text("{stdout}\n--- stderr ---\n{stderr}".format(**output), encoding="utf-8")
+    detail = "exit {0}; evidence {1}".format(outcome.get("exit_code", "unknown"), recorded["path"])
+    status = "PASS" if recorded["assessment"]["status"] == "passed" else FAIL
+    if status == FAIL:
+        detail = failure_detail(detail, output)
+    return dict(
+        check_record(command, status, detail),
+        check_id=recorded["check_id"],
+        result_id=recorded["id"],
+    )
 
 
 def check_record(command, status, detail):

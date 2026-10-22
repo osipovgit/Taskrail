@@ -9,19 +9,26 @@ WAITING = "WAITING_APPROVAL"
 SKIPPED = "skipped"
 SERVER = "server"
 VALIDATION = "validation"
+INTEGRATION = "integration"
 RUNNING = "running"
 ATTENTION = "attention"
 DONE = "done"
 STATUS = "status"
-CHECK_KEYS = MappingProxyType({VALIDATION: "jenkins", SERVER: SERVER})
+CHECK_KEYS = MappingProxyType({INTEGRATION: INTEGRATION, VALIDATION: "jenkins", SERVER: SERVER})
 # Phase -> (step while it is pending or running, step after it failed).
 PHASE_STEPS = MappingProxyType(
-    {VALIDATION: ("validating", "validation_failed"), SERVER: (SERVER, "server_failed")}
+    {
+        INTEGRATION: ("integrating", "integration_failed"),
+        VALIDATION: ("validating", "validation_failed"),
+        SERVER: (SERVER, "server_failed"),
+    }
 )
 GROUPS = MappingProxyType(
     {
         "implementing": RUNNING,
         "needs_you": ATTENTION,
+        "integrating": RUNNING,
+        "integration_failed": ATTENTION,
         "validating": RUNNING,
         "validation_failed": ATTENTION,
         "approval": ATTENTION,
@@ -35,10 +42,12 @@ GROUPS = MappingProxyType(
 
 def step(delivery):
     """The current step of a delivery view; GROUPS maps it to the run list."""
+    if delivery.get("launch_error"):
+        return "needs_you"
     code = delivery["implementation"]
     if code != DONE:
         return "implementing" if code == RUNNING else "needs_you"
-    validation = phase_step(delivery, VALIDATION)
+    validation = phase_step(delivery, INTEGRATION) or phase_step(delivery, VALIDATION)
     if validation:
         return validation
     if not delivery["confirmed"]:
@@ -48,7 +57,7 @@ def step(delivery):
 
 def phase_step(delivery, name):
     """The step of a needed phase until it succeeded or was skipped; None after that."""
-    if not delivery["checks"][CHECK_KEYS[name]]:
+    if not required(delivery, name):
         return None
     pending, failed = PHASE_STEPS[name]
     record = delivery["phases"].get(name)
@@ -56,7 +65,8 @@ def phase_step(delivery, name):
         return pending
     if record[STATUS] == WAITING:
         return "approval"
-    if record[STATUS] in FINISHED or record[STATUS] == SKIPPED:
+    accepted = {"NO_CHANGES_REQUIRED"} if name == INTEGRATION else FINISHED | {SKIPPED}
+    if record[STATUS] in accepted:
         return None
     return failed
 
@@ -65,3 +75,10 @@ def needs_confirmation(delivery):
     """A change to confirm, or server checks that may only run after confirmation."""
     unchanged = delivery[STATUS] == "NO_CHANGES_REQUIRED"
     return not unchanged or bool(delivery["checks"][SERVER])
+
+
+def required(delivery, name):
+    """Every split needs an integration review; remote phases need explicit checks."""
+    if name == INTEGRATION:
+        return bool(delivery.get("tasks"))
+    return bool(delivery["checks"][CHECK_KEYS[name]])

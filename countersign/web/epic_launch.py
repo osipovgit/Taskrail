@@ -11,7 +11,15 @@ from functools import partial
 
 from countersign.application import worktree_isolation
 from countersign.interactions import approval_policy
-from countersign.web import epic_progress, epic_record, epic_tasks, history, task_brief
+from countersign.web import (
+    epic_progress,
+    epic_record,
+    epic_tasks,
+    history,
+    parent_context,
+    task_brief,
+)
+from countersign.web.run_activity import BusyError
 
 TITLE_LIMIT = 160
 IDENTIFIER = "id"
@@ -35,6 +43,7 @@ def start_next(launcher, run, automatic=False):
                 "No task is ready: one is running, failed or waits for its dependencies"
             )
         link = partial(epic_record.link, run, epic, ("tasks", task[IDENTIFIER]))
+        epic.pop("launch_error", None)
         return launcher.submit(payload(run, state, entries, task), before_start=link)
 
 
@@ -45,11 +54,15 @@ def payload(run, state, entries, task):
     done_when = "; ".join(task["done_when"])
     return dict(
         title=title[:TITLE_LIMIT],
-        goal="{0}: {1}".format(task["title"], done_when) if done_when else task["goal"],
+        goal=done_when or task["goal"],
         criteria=task_brief.requirements(state, task),
-        entry_points="\n".join(task["files"]),
+        entry_points=parent_context.field("\n".join(task["files"]), "current task files"),
         constraints=draft["constraints"],
         split_context=task_brief.brief(run, draft, entries, task),
+        parent_context=parent_context.snapshot(run, entries),
+        task_scope=task["files"],
+        assigned_contract=dict(parent_run=run.name, task_id=task[IDENTIFIER]),
+        assigned_requirements=task_brief.assigned_requirements(state, task),
         roots=worktree_isolation.root_entries(state["roots"]),
         auto_approve=approval_policy.at_start(run, draft),
         phase="task",
@@ -60,8 +73,11 @@ def continue_quietly(launcher, run):
     """A failed or busy task waits for the operator; nothing is retried here."""
     try:
         start_next(launcher, run, automatic=True)
-    except (ValueError, OSError, KeyError):
+    except BusyError:
         return
+    except (ValueError, OSError, KeyError) as error:
+        with epic_record.changing(run) as epic:
+            epic.update(auto_continue=False, launch_error=str(error))
 
 
 def continues(epic, entries):

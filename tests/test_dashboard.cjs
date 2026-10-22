@@ -305,7 +305,7 @@ async function main() {
   const panelButtons = all(panel).filter((n) => n.tagName === 'button');
   assert.deepEqual(
     panelButtons.map((n) => n.textContent),
-    ['Open run', 'Start S-2', 'Open run', 'Confirm changes'],
+    ['Open run', 'Start S-2', 'Repeat integration review', 'Open run', 'Confirm changes'],
   );
   panelButtons.forEach((button) => button.onclick());
   const toggle = all(panel)
@@ -319,6 +319,7 @@ async function main() {
   assert.deepEqual(acted, [
     'open child-1',
     'epic_next',
+    'integration_review',
     'open val-1',
     'confirm',
     'epic_auto_on',
@@ -328,6 +329,13 @@ async function main() {
   assert.ok(all(panel).some((n) => n.textContent.includes('each action needs root approval')));
   const quiet = { step: 'implementing', confirmed: false, checks: { jenkins: [], server: [] } };
   assert.equal(deliverySection(quiet, {}), null);
+  const blockedDelivery = deliverySection(
+    { ...delivery, step: 'integration_failed', launch_error: 'Child contract is too large' },
+    { act: () => {}, open: () => {} },
+  );
+  assert.ok(all(blockedDelivery).some((n) => n.textContent === 'Integration review'));
+  assert.ok(all(blockedDelivery).some((n) => n.textContent === 'Child contract is too large'));
+  assert.ok(!all(blockedDelivery).some((n) => n.textContent === 'Confirm changes'));
   console.log('Delivery panel passed.');
 
   // A budget-paused run exposes both continuation choices and reversible deletion.

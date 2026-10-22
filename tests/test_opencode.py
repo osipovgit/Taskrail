@@ -12,7 +12,7 @@ from countersign.infrastructure.agent_profile import make_profile
 from countersign.infrastructure.agent_sync import launch_settings
 from countersign.infrastructure.event_summary import parse_events
 from countersign.infrastructure.opencode_events import EventTranslator
-from countersign.infrastructure.permission_check import verify_permissions
+from countersign.infrastructure.permission_check import verify_launch, verify_permissions
 from countersign.infrastructure.profile_rules import permissions
 from countersign.infrastructure.runner import run_agent
 
@@ -109,7 +109,9 @@ class RepairToolTests(unittest.TestCase):
                 rules = json.loads(profile.read_text().split("---")[1])["permission"]
                 self.assertEqual(rules["edit"], "deny")
                 self.assertEqual(rules["glob"], read)
-            self.assertEqual(launch_settings({}, root)["format_repair_tools"], "none")
+            self.assertEqual(
+                launch_settings({"opencode_version": "1.x"}, root)["format_repair_tools"], "none"
+            )
             with self.assertRaisesRegex(ValueError, "format_repair_tools"):
                 launch_settings({"format_repair_tools": "all"}, root)
 
@@ -165,6 +167,42 @@ class LaunchTests(unittest.TestCase):
 
 
 class EnvironmentTests(unittest.TestCase):
+    def test_wrapper_receives_the_same_limited_environment_for_version_and_preflight(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            wrapper = root / "wrapper.py"
+            wrapper.write_text(
+                "import json, os, sys\n"
+                "from pathlib import Path\n"
+                "assert sys.argv[1:3] == ['--profile', 'test profile']\n"
+                "assert os.environ['WRAPPER_TOKEN'] == 'wrapper-test-token'\n"
+                "assert 'HOST_SECRET_TOKEN' not in os.environ\n"
+                "path = Path(__file__).with_name('seen.jsonl')\n"
+                "with path.open('a') as log: log.write(json.dumps(sys.argv[3:]) + '\\n')\n"
+                "if sys.argv[3:] == ['--version']: print('wrapper 1.19.3')\n"
+                "else:\n"
+                " assert sys.argv[3:] == ['agent', 'list']\n"
+                " print('managed (primary)')\n"
+                " print(json.dumps([dict(permission='*', pattern='*', action='deny')]))\n"
+            )
+            command = [sys.executable, str(wrapper), "--profile", "test profile"]
+            options = dict(
+                command=command, agent_directory="profiles", agent_env_allow=["WRAPPER_TOKEN"]
+            )
+            variables = dict(
+                WRAPPER_TOKEN="wrapper-test-token", HOST_SECRET_TOKEN="private-test-token"
+            )
+            with mock.patch.dict(os.environ, variables):
+                launch = launch_settings(options, root)
+                expected = [dict(permission="*", pattern="*", action="deny")]
+                self.assertEqual(
+                    verify_launch(launch, root, "managed", expected, root / "log"), expected
+                )
+                self.assertNotIn("WRAPPER_TOKEN", environment.filtered())
+            seen = [json.loads(line) for line in (root / "seen.jsonl").read_text().splitlines()]
+            self.assertEqual(seen, [["--version"], ["agent", "list"]])
+            self.assertEqual(launch["command"], command)
+
     def test_secret_shaped_names_are_dropped_unless_allowed(self):
         for name in (
             "GITHUB_TOKEN",
@@ -360,12 +398,33 @@ class CitationTests(unittest.TestCase):
         self.assertFalse(supports(dict(record, output="1: def f():"), claim, excerpt))
         self.assertFalse(supports(record, dict(claim, path="/b.py"), excerpt))
 
-    def test_long_lines_cut_by_the_read_tool_still_count(self):
+    def test_unseen_suffix_of_a_truncated_line_cannot_substantiate_a_citation(self):
         line = "x = '" + "a" * 3000 + "'"
         output = "1: " + line[:2000] + "... (line truncated to 2000 chars)"
         record = dict(input=dict(filePath="/a.py"), output=output)
         claim = dict(path="/a.py", line_start=1, line_end=1)
-        self.assertTrue(supports(record, claim, line))
+        self.assertFalse(supports(record, claim, line))
+
+    def test_returned_positions_and_complete_lines_control_citations(self):
+        claim = dict(path="/a.py", line_start=2, line_end=2)
+        record = dict(input=dict(filePath="/a.py", offset=1, limit=2000), output="1: same")
+        self.assertFalse(supports(record, claim, "same"))
+        self.assertFalse(supports(dict(record, output="2: prefix same suffix"), claim, "same"))
+        self.assertFalse(supports(dict(record, output="2: same\n2: same"), claim, "same"))
+        self.assertFalse(supports(dict(record, output="same\nsame"), claim, "same"))
+        self.assertTrue(supports(dict(record, output="2: same"), claim, "same"))
+        self.assertTrue(supports(dict(record, output="00002| same"), claim, "same"))
+        self.assertTrue(supports(dict(record, output="2: "), claim, ""))
+
+    def test_executor_evidence_is_the_exact_delivered_positional_text(self):
+        claim = dict(path="/snapshot.json", line_start=2, line_end=2)
+        record = dict(
+            tool="executor", input=dict(filePath=claim["path"]), output="header\n2: same\n"
+        )
+        self.assertTrue(supports(record, claim, "2: same"))
+        self.assertFalse(supports(record, claim, "same"))
+        clipped = dict(record, output="header\n2: same", output_clipped=True)
+        self.assertFalse(supports(clipped, claim, "2: same"))
 
 
 FIXTURES = Path(__file__).with_name("fixtures")
@@ -373,6 +432,30 @@ FIXTURES = Path(__file__).with_name("fixtures")
 
 class RealStreamTests(unittest.TestCase):
     """Recorded opencode streams keep the parsers honest about real event shapes."""
+
+    def test_recorded_read_positions_support_citations_in_both_cli_generations(self):
+        fixtures = (
+            (
+                "opencode-1.19.3-plan.jsonl",
+                "/fixture/shop/pricing.py",
+                4,
+                "def apply_discount(total, percent):",
+            ),
+            ("opencode-2.0.30-answer-plan.jsonl", "/fixture/notes/config.ini", 2, "timeout = 30"),
+        )
+        for filename, path, number, source in fixtures:
+            translator = EventTranslator("/fixture/notes")
+            for raw in (FIXTURES / filename).read_text().splitlines():
+                event = json.loads(translator.translate(raw) if "2.0" in filename else raw)
+                part = event.get("part", {})
+                state = part.get("state", {})
+                if part.get("tool") == "read" and state.get("input", {}).get("filePath") == path:
+                    claim = dict(path=path, line_start=number, line_end=number)
+                    self.assertTrue(supports(state, claim, source), filename)
+                    self.assertFalse(supports(state, dict(claim, line_start=number + 100), source))
+                    break
+            else:
+                self.fail(f"No recorded read for {path}")
 
     def test_opencode_1_plan_stream_parses_without_translation(self):
         result = parse_events(FIXTURES / "opencode-1.19.3-plan.jsonl")
@@ -410,7 +493,16 @@ class SelectionTests(unittest.TestCase):
         self.assertEqual(self.version("opencode v2.0.30"), "2.x")
         self.assertEqual(self.version("2.1.0"), "2.x")
         self.assertEqual(self.version("1.19.0"), "1.x")
-        self.assertEqual(self.version("GNU bash, version 5.2.21(1)-release"), "1.x")
+        self.assertEqual(self.version("wrapper v2.0.30"), "2.x")
+        self.assertEqual(self.version("WRAPPER 1.19.0"), "1.x")
+        for ambiguous in (
+            "GNU bash, version 5.2.21(1)-release",
+            "wrapper build 1.0 (opencode 2.0)",
+            "2.0.1\n1.0.0",
+            "wrapper 1.0.0(opencode2.0.0)",
+        ):
+            with self.subTest(output=ambiguous), self.assertRaisesRegex(ValueError, "explicitly"):
+                self.version(ambiguous)
         self.assertEqual(opencode_api.select("auto", ["/nonexistent/opencode"]), "1.x")
         self.assertEqual(opencode_api.select("2.x", ["/nonexistent/opencode"]), "2.x")
         with self.assertRaisesRegex(ValueError, "opencode_version"):

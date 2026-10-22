@@ -13,12 +13,13 @@ PLANNING_STAGES = frozenset(("planner", "plan-reviewer"))
 TASKS = (
     "Plan the Goal as tasks. A task is one action: a single deliverable, with its own "
     "tests and the documentation it makes necessary, that one implementation run and one "
-    "review can finish. Tasks are independent: one relies on another only through Depends "
+    "review can finish without compaction. Tasks are independent: one relies on another only through Depends "
     "on, and each owns at least one requirement or a scoped part of one. A task survives "
     "only if, with all its prerequisites done, it still has its own requirement and a "
     "non-empty change; fold it into its owner otherwise. Never plan a task that only runs "
     "checks or only updates documentation another task already owes. Two tasks may change "
-    "the same file when each delivers its own behavior, and a prerequisite may land unused "
+    "the same file only with an explicit dependency ordering them and distinct behavior. "
+    "A prerequisite may land unused "
     "(built, tested and documented) for a later task that wires it in."
 )
 CHECKS = (
@@ -45,10 +46,29 @@ CHANGE = (
     "Change code. {0} Decide single when the work is one task or cannot be cut into such "
     "tasks safely; this run then implements it. {1} {2}"
 )
+ATOMIC = (
+    "This is one reviewed child task. Choose single with exactly one task, or no change "
+    "when already satisfied. Never split again. Change only task_scope files. If the "
+    "contract needs more files or cannot fit one session without compaction, choose "
+    "blocked and explain the parent replanning required. The current contract and global "
+    "constraints are supplied here. Consult only specific missing sections of the sealed "
+    "parent-task.md when needed, never its full contents; implement only this child's criteria."
+)
 
 
 def render(config, stage):
     """The rule of the run's mode; a code change gets its planning rule while it plans."""
+    if config.get("phase") == "task":
+        return f"\nMode of this run. {ATOMIC}\n"
+    if config.get("phase") == "integration":
+        return (
+            f"\nMode of this run. Independent integration review: no edits. {ANSWER} "
+            "Verify the original goal and every acceptance criterion against the combined "
+            "current source after all child tasks. Recheck interactions and regression risks; "
+            "child success reports are reference data, not proof. Request required local "
+            "diagnostics through LOCAL_REQUEST. Missing static acceptance evidence is a "
+            "gap, never success. Explicit runtime checks remain deferred to their delivery phase.\n"
+        )
     for flag, rule in RULES.items():
         if config.get(flag):
             return f"\nMode of this run. {rule}\n"

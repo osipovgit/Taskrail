@@ -5,9 +5,9 @@ import os
 import time
 from pathlib import Path
 
+from countersign.application import check_configuration, child_inputs, run_state
 from countersign.application.artifacts import save_run
 from countersign.application.checkpoints import RESUMABLE, budget_paused
-from countersign.application.run_state import initial_state, stored_roots
 from countersign.application.task_config import configuration
 from countersign.application.worktree_isolation import adopt, isolate
 from countersign.core.files import atomic_json
@@ -20,6 +20,7 @@ STATUS = "status"
 ROOTS = "roots"
 WORKTREES = "worktrees"
 TOKENS = "max_observed_tokens"
+RUN_DIRECTORY = "run_dir"
 SETTINGS_SNAPSHOT = (
     "opencode_version",
     "models",
@@ -29,7 +30,11 @@ SETTINGS_SNAPSHOT = (
     "read_retries",
     "max_repairs",
     TOKENS,
+    "model_context_tokens",
+    "context_reserve_tokens",
     "verify_commands",
+    "check_recipes",
+    "check_specs",
     "isolation",
     "max_change_lines",
     "max_change_files",
@@ -39,17 +44,23 @@ SETTINGS_SNAPSHOT = (
 def configure(request):
     """The configuration and run directory; nothing is created yet."""
     restored = None
+    checks = None
     if request["resume"]:
-        restored = stored_index(request["run_dir"])[ROOTS]
-    config = configuration(request["task"], request["settings"], roots_override=restored)
-    return config, run_directory(request["run_dir"], config)
+        restored = stored_index(request[RUN_DIRECTORY])
+        run = Path(request[RUN_DIRECTORY]).expanduser().resolve()
+        checks = check_configuration.frozen(run, restored)
+        restored = restored[ROOTS]
+    config = configuration(
+        request["task"], request["settings"], roots_override=restored, checks_override=checks
+    )
+    return config, run_directory(request[RUN_DIRECTORY], config)
 
 
 def source_roots(config, request):
     """The project roots to lock; an isolated run locks the sources of its worktrees."""
     if not request["resume"]:
         return list(config[ROOTS].values())
-    index = stored_index(request["run_dir"])
+    index = stored_index(request[RUN_DIRECTORY])
     worktrees = index.get(WORKTREES) or {}
     if worktrees:
         return [entry["source"] for entry in worktrees.values()]
@@ -94,8 +105,9 @@ def resumed_state(run, config, request):
     state = json.loads(run.joinpath(RUN_INDEX).read_text())
     if state[STATUS] not in RESUMABLE and not budget_paused(state):
         raise ValueError("This run is not interrupted; use Restart instead")
-    if state[ROOTS] != stored_roots(config[ROOTS]):
+    if state[ROOTS] != run_state.stored_roots(config[ROOTS]):
         raise ValueError("Project roots changed; cannot continue")
+    check_configuration.restore(config, run, state)
     return state
 
 
@@ -109,7 +121,8 @@ def new_state(run, config, request):
     atomic_write(inputs / "task.md", config["task_text"].encode())
     if imported is not None:
         atomic_write(inputs / "imported-response.raw.txt", imported.encode())
-    state = initial_state(config)
+    state = check_configuration.capture(config, run_state.initial_state(config))
+    child_inputs.capture(config["task"], inputs, state)
     atomic_json(inputs / "settings.json", {key: config[key] for key in SETTINGS_SNAPSHOT})
     save_run(run, state)
     say(f"Run: {run}")

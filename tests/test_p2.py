@@ -85,7 +85,7 @@ class P2Tests(unittest.TestCase):
         text = instruction_modules.render(self.run, execution, state)
         self.assertIn("python v1:", text)
         self.assertIn("verification v2:", text)
-        self.assertIn("reading v2:", text)
+        self.assertIn("reading v4:", text)
         self.assertNotIn("shell v1:", text)
         self.assertNotIn("ui v1:", text)
         with patch.object(instruction_modules, "CATALOG", self.run / "absent"):
@@ -134,7 +134,7 @@ class P2Tests(unittest.TestCase):
 
     def test_failed_checks_repair_once_then_stop(self):
         state = dict(status="RUNNING", checks=[dict(status="FAIL")])
-        flow = dict(stage="check", repair_count=0)
+        flow = dict(stage="check", repair_count=0, allowed=["project/example.py"])
         transitions.checked(flow, state, 1)
         self.assertEqual(flow["stage"], "implementer")
         self.assertEqual(flow["repair_count"], 1)

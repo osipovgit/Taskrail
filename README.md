@@ -46,9 +46,10 @@ See [deployment](docs/deployment.md) before changing existing installations.
 
 Planning as decomposition → independent plan review → scoped implementation →
 built-in syntax checks and your [verification commands](docs/deployment.md#verification-commands)
-→ independent result review → Jenkins validation, when the plan names Jenkins checks →
+→ independent result review → combined integration review after a split →
+Jenkins validation, when the plan names Jenkins checks →
 your confirmation → server checks, only after it. The planner writes its plan as a
-Markdown file; work it splits into independent tasks runs as one run per task, in
+Markdown file; it chooses one atomic task or splits into independent tasks, one run per task, in
 dependency order ([delivery](docs/task-controls.md#delivery-of-a-code-change)).
 A change larger than the configured limit waits for your decision first. A reviewed no-change plan ends without implementation; **Design
 discussion** turns produce a reviewed design document instead of code.
@@ -64,7 +65,8 @@ automatically; agents may request local commands that you approve one by one or 
 per run, while read-only listings inside the projects run without asking. The optional
 [isolated SSH executor](docs/ssh-executor.md) runs exact remote scripts and Jenkins builds after personal
 root approval, with results returned to the same task. Deferred runtime checks
-remain visible. Every model result follows a strict JSON contract; source quotations
+remain visible. The planner writes Markdown and finishes with `DONE`; other results follow a strict
+JSON contract. Source quotations
 and per-requirement outcomes are checked before each transition.
 
 ## CLI

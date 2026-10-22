@@ -1,22 +1,20 @@
 """Continue executor turns through an explicit opencode session inside one stage."""
 
-from countersign.application import budgets
+from countersign.application import budgets, plan_write, response_format
 from countersign.application.artifacts import save_run
 from countersign.core import control
 from countersign.core.files import atomic_json, changed
 from countersign.infrastructure import opencode_api
 from countersign.infrastructure.runner import run_agent
-from countersign.interactions import events
+from countersign.interactions import events, request_limits
 from countersign.interactions.actions import Actions
 from countersign.interactions.clock import StageClock
 
 SESSION_ID = "session_id"
-# opencode may summarize a long session and drop the attached instructions, so every
-# continuation names the role and where its instructions and response schema are.
-CONTINUE = "\nContinue the SAME task using existing context. Do not restart research. You are the {role} stage; if earlier context was summarized, re-read your instructions and response schema in {request}. Planner and reviewer stages never change project files. Return exactly one JSON object as the entire message: the next executor request or the final stage result.\n"
 TOKENS = "tokens"
 MAX_RESULT_CORRECTIONS = 2
-RESULT_REJECTED = "Your final result was rejected, so the stage did not finish: {0}\nFix exactly this in the same session. Re-read cited lines if needed, keep the rest of the result, and return the complete corrected final JSON result as the entire message.\n"
+ROLE = "role"
+RESULT_CORRECTIONS = "result_corrections"
 
 
 class StageSession:
@@ -26,19 +24,19 @@ class StageSession:
         self.active = active
         self.state = state
         self.environment = dict(environment, inline=True)
-        if active[1]["role"] != "implementer":
+        if active[1][ROLE] != "implementer":
             self.environment["allowed"] = []
         self.launch = dict(launch)
         self.clock = StageClock(active[1]["budget"]["timeout"])
         self.context = dict(session_id=None, turns=0, tokens={}, attachment={})
         self.context["corrections"] = 0
-        self.context["result_corrections"] = 0
+        self.context[RESULT_CORRECTIONS] = 0
 
     def run(self):
         """One stage server serves every turn and stops with the stage."""
         launch = self.launch
         runtime = launch.get("runtime", {})
-        allow = (runtime.get("env_allow", ()), runtime.get("autocompact", True))
+        allow = (runtime.get("env_allow", ()), runtime.get("autocompact", False))
         command = launch.get("command", ())
         with opencode_api.stage_server(command, launch.get("workspace"), *allow) as server:
             self.context["attachment"] = server.attachment() if server else {}
@@ -48,6 +46,8 @@ class StageSession:
         """Only intermediate responses continue; final validation stays independent."""
         while self.clock.remaining() > 0:
             outcome = self.turn()
+            if request_limits.check(self, outcome):
+                return self.finished(outcome)
             response = Actions(self).route(outcome) or result_feedback(self, outcome)
             if response is None:
                 return self.finished(outcome)
@@ -105,7 +105,7 @@ class StageSession:
         folder, record = self.active
         prompt = folder / "tool-result.md"
         prompt.write_text(
-            response + CONTINUE.format(role=record["role"], request=folder / "request.md")
+            response + response_format.continuation(record[ROLE], folder / "request.md")
         )
         self.launch["prompt"] = prompt
         record.update(
@@ -134,16 +134,33 @@ def result_feedback(session, outcome):
     """
     check = session.environment.get("check_result")
     context = session.context
+    correction = plan_feedback(session, outcome)
+    if correction is not None:
+        return correction
     if check is None or session.environment["format_only"] or outcome["status"] != "OK":
         return None
-    if context["result_corrections"] >= MAX_RESULT_CORRECTIONS:
+    if context[RESULT_CORRECTIONS] >= MAX_RESULT_CORRECTIONS:
         return None
     error = check(outcome)
     if error is None:
         return None
-    context["result_corrections"] += 1
-    feedback = RESULT_REJECTED.format(error)
+    context[RESULT_CORRECTIONS] += 1
+    feedback = response_format.correction(session.active[1][ROLE], error)
     events.append(session.active[0], "correction", dict(response="final result"), feedback)
+    return feedback
+
+
+def plan_feedback(session, outcome):
+    """Recover a rejected plan edit without restarting or asserting a fictitious read."""
+    context = session.context
+    eligible = session.active[1][ROLE] == "planner"
+    eligible = eligible and not session.environment["format_only"]
+    if not eligible or context[RESULT_CORRECTIONS] >= MAX_RESULT_CORRECTIONS:
+        return None
+    feedback = plan_write.read_before_write(outcome, session.environment["run"])
+    if feedback is not None:
+        context[RESULT_CORRECTIONS] += 1
+        events.append(session.active[0], "correction", dict(response="unread plan"), feedback)
     return feedback
 
 

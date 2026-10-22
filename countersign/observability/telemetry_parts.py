@@ -79,7 +79,7 @@ class Steps:
         if number(usage.get("total")) is not None:
             self.counts["usage_steps"] += 1
         self.add_usage(usage)
-        incoming = number(usage.get(INPUT))
+        incoming = self.context_input(usage)
         if incoming is not None:
             peak = max(self.inputs["peak"] or 0, incoming)
             self.inputs.update(last=incoming, peak=peak)
@@ -94,6 +94,16 @@ class Steps:
         reported.update(cache_read=cache.get("read"), cache_write=cache.get("write"))
         for name, amount in reported.items():
             self.tokens[name] += number(amount) or 0
+
+    def context_input(self, usage):
+        """Reported input includes uncached tokens and both provider cache categories."""
+        cache = usage.get("cache") or {}
+        reported = [number(usage.get(INPUT))]
+        for name in ("read", "write"):
+            reported.append(number(cache.get(name)))
+        if all(amount is None for amount in reported):
+            return None
+        return sum(amount or 0 for amount in reported)
 
     def summary(self):
         """Usage totals with their coverage."""

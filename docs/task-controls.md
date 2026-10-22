@@ -11,7 +11,7 @@
 | Send a follow-up Goal | Previous run stopped, no active run on its projects | Snapshot prior public evidence and start a new run from planning |
 | Answer only | New or follow-up submission | Research and independent review, no implementation |
 | Design discussion | New or follow-up submission | Like Answer only, but the reviewed summary is a design document, saved as `design.md`; follow-ups refine it, a **Change code** follow-up implements it |
-| Confirm changes | A finished code change, after any Jenkins validation | Accept the change; server checks, if any, start only now |
+| Confirm changes | A finished code change, after integration review for a split and any Jenkins validation | Accept the change; server checks, if any, start only now |
 | Mark as done / Move back from Done | Stopped run | Move the run to the Done group, or return it to its computed group; nothing else changes |
 | Delete from history | Stopped/completed run | Move run and launcher artifacts to local trash; leave source files untouched |
 
@@ -32,27 +32,31 @@ The run list groups runs by what they need:
 
 Every **Change code** task goes through the same steps:
 
-1. **Planning is decomposition.** The planner writes `plan.md`: independent tasks,
-   each one action that one implementation run and one review can finish, owning at
-   least one requirement (or a scoped part of one) with its files, results, checks and
-   dependencies. There is no size limit; a task survives only if it keeps its own
-   requirement once its prerequisites are done. Plan review checks the plan.
-2. **Implementation and review.** With **Decision: single** this run implements and
-   reviews the tasks. With **Decision: split** the run stops as **Tasks ready** and
-   each task runs as its own run with its own planning, implementation and review
-   rounds, in dependency order, in the same projects (the same worktrees if the task
-   was isolated). A task run receives the parent requirements it owns, its results
-   and checks, and the other tasks by title.
-3. **Jenkins validation.** When the plan names Jenkins checks (`Jenkins check:` entries)
-   and the executor offers Jenkins, a validation run starts once the code is done. It
-   starts the listed builds (each needs root approval) and reports their results.
-4. **Your confirmation.** **Confirm changes** accepts the finished change.
-5. **Server checks.** Only after confirmation, and only when the plan named them
-   (`Server check:` entries) or the task lists deferred runtime checks, a server-check
-   run executes them through the SSH executor; every action still needs root approval.
-   Before confirmation, SSH actions may only inspect servers during planning and review,
-   one listed read-only command each ([SSH executor](ssh-executor.md)); the
-   implementer cannot use them.
+1. **Planning.** The planner chooses one atomic task (`single`) or several (`split`).
+   Each task owns a deliverable, exact files, requirements or scoped parts, acceptance
+   results, checks and dependencies. It must fit one implementation session without
+   compaction. Plan review checks completeness, independence and ordering.
+2. **Implementation and review.** A single task runs here. A split finishes planning
+   as **Tasks ready**; the service starts child runs in dependency order, using the
+   same roots or worktrees. A child starts directly at implementation after the server
+   authenticates the approved parent plan, criteria, file scope and prerequisite
+   source/Git snapshots; independent result review still follows. Unsealed historical
+   parents retain child planning. Each child may refine its implementation, but cannot split
+   again or expand its parent's reviewed file scope. A contract that cannot be met
+   reports the required parent replanning instead of launching nested tasks.
+3. **Integration review for a split.** A separate read-only run checks the original
+   goal and every acceptance criterion against the combined source, including
+   interactions between tasks. The server prepares its scope and starts one independent
+   reviewer, preceded by configured local checks when present.
+   Child success reports and manual done marks cannot bypass this phase. It runs
+   even without an SSH/Jenkins executor and must finish `NO_CHANGES_REQUIRED`.
+4. **Jenkins validation.** Planned `Jenkins check:` entries run when Jenkins is
+   configured. Starting each build requires root approval.
+5. **Your confirmation.** **Confirm changes** accepts the result. For a split, the
+   source and Git state must still match the integration review's checkpoint.
+6. **Server checks.** Planned `Server check:` entries and deferred runtime checks
+   run only after confirmation, through the isolated executor and root approval.
+   Before confirmation, SSH requests may only inspect ([SSH executor](ssh-executor.md)).
 
 The run page shows these steps in a **Delivery** panel. A split lists its tasks with the
 status of each task's run. The next task starts automatically after each successful
@@ -61,12 +65,19 @@ at the first task that does not finish successfully, and before a task marked **
 before this task**, for example when you want to review the code before a task that
 checks it on a server. **Start S-n** starts the next task by hand; a task whose run
 failed can be started again with **Start S-n again**, and marking a task's run done
-counts it as finished. A task run gets the overall goal and acceptance criteria, every
-task with its outcome so far and its own step in a **Task split context** section,
-instead of the whole conversation, so it stays within the model context. A stopped
-**Allow all actions** on the parent also applies to the tasks and checks started after it.
-A step that cannot run because the executor lacks Jenkins or SSH targets is shown as
-skipped.
+counts it as finished for scheduling. Reusing an approved child contract additionally
+requires actual accepted prerequisite results; a done mark cannot supply that proof.
+Each child gets its complete current contract and a bounded index of its
+prerequisites and an immutable `00-input/parent-task.md` containing the complete
+parent input, reviewed task contracts, checks, notes and recorded outcomes. The
+artifact manifest grants read access; parent deletion does not remove this context.
+Required acceptance text is never replaced by a truncated summary. An oversized
+submission fails visibly and pauses auto-continue instead of looping silently.
+**Allow all actions** on the parent applies to subsequently started children and checks
+unless revoked. Unconfigured Jenkins/SSH phases are shown as skipped; integration
+review is never skipped. **Repeat integration review** starts a new read-only review
+when the earlier one stopped or its evidence is stale; it also invalidates later
+validation and confirmation. Earlier phase links remain in the parent's history.
 
 A task or check run is linked to its parent before its worker starts, and every change
 of the parent's record (links, Pause, auto-continue, your confirmation) is serialized,
@@ -74,11 +85,11 @@ so none is lost to a concurrent one. If the application stops after linking a ru
 before starting its worker, the next start marks that launch `LAUNCH_ERROR`; nothing
 starts it again automatically, and **Start S-n again** starts a new run.
 
-The run list puts a delivery under Running while code, validation or server checks run,
+The run list puts a delivery under Running while code, integration review, validation or server checks run,
 Needs you when a task, a check or an approval waits for you or failed, Ready for review
 while it waits for your confirmation, and Done when it is confirmed and its server
 checks finished. A split shows its progress (`Tasks 1/3`). A task header with
-`"decompose": true` always splits, even a small plan.
+`"decompose": true` requests child execution even for one task; children cannot inherit it.
 
 A done mark belongs to the outcome it was given for: if a continuation ends with a
 different result, the run leaves Done again.
@@ -103,7 +114,9 @@ so instead of rejecting the request. Install the program, then **Allow** the sam
 command, or **Deny**.
 
 Resume retains frozen task/agent snapshots, approved scope and original preimages.
-If source or Git metadata changed after the checkpoint, continuation refuses to
+A historical child without a recorded `task_scope` must be started again from its
+parent plan; its old artifacts are preserved. If source or Git metadata changed after
+the checkpoint, continuation refuses to
 proceed. Restart and follow-up establish a new baseline from current sources; they
 never revert earlier changes.
 
@@ -187,6 +200,13 @@ Git and approved local actions resume the same opencode session inside one stage
 missing/changed session ID stops continuation rather than starting fresh research.
 Continue from a saved checkpoint still checks source and Git integrity; it never
 blindly repeats an interrupted write. See [access](access.md).
+
+Local commands are recorded before execution in `local-actions.json`, including exact
+argv, approval, source snapshot and an environment fingerprint. An interrupted or
+uncertain action remains `UNKNOWN`; rephrasing its reason or continuing the run cannot
+execute it again. Intermediate requests are bounded per stage: 64 total and at most
+three identical local/Git requests against unchanged sources. `NO_PROGRESS` stops
+before another request runs; continuation retains these counters.
 
 ## Exhausted allowances
 

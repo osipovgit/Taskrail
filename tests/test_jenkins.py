@@ -67,7 +67,7 @@ class FakeJenkins(BaseHTTPRequestHandler):
             return self.document(dict(number=7, result="SUCCESS", building=False))
         if path == job + "/7/consoleText":
             return self.reply(200, b"x" * 100000 + b"DONE\n")
-        if path == job + "/lastBuild/testReport/api/json":
+        if path in {job + "/7/testReport/api/json", job + "/8/testReport/api/json"}:
             cases = [
                 dict(className="a", name="ok", status="PASSED"),
                 dict(className="a", name="broken", status="FAILED"),
@@ -175,6 +175,10 @@ class JenkinsTest(unittest.TestCase):
         self.assertEqual(outcome["status"], "FAILED")
         self.assertEqual(outcome["build"]["result"], "FAILURE")
         self.assertIn("tests failed", outcome["console"])
+        self.assertEqual(outcome["tests_status"], "available")
+        self.assertEqual(outcome["tests"]["failCount"], 1)
+        self.assertTrue(any("/8/testReport/" in entry[1] for entry in FakeJenkins.log))
+        self.assertFalse(any("/lastBuild/" in entry[1] for entry in FakeJenkins.log))
         posts = [entry for entry in FakeJenkins.log if entry[0] == "POST"]
         self.assertEqual(len(posts), 1)
         self.assertEqual(posts[0][3], {"BRANCH": ["main"]})
