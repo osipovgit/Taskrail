@@ -313,6 +313,127 @@ summary:hover {
   color: var(--fg);
 }
 
+.task-fold {
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.task-fold-summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 12px 14px;
+  color: var(--fg);
+}
+
+.task-fold-summary:hover {
+  background: var(--hover);
+}
+
+.task-fold-summary::before {
+  flex: 0 0 1em;
+  color: var(--muted);
+}
+
+.task-fold-title {
+  font-weight: 600;
+}
+
+.task-fold-hint {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 12px;
+  text-align: right;
+}
+
+.task-fold-body {
+  display: grid;
+  gap: 16px;
+  padding: 16px;
+  border-top: 1px solid var(--border);
+}
+
+.task-fold-body > .task-fold,
+.task-fold-body > p,
+.task-fold-body > pre {
+  margin: 0;
+}
+
+.task-field h4,
+.task-roots-title {
+  margin: 0 0 6px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.task-field .text {
+  font-size: 14px;
+}
+
+.task-requirements {
+  margin: 0;
+  padding: 0 16px;
+  border-top: 1px solid var(--border);
+  list-style: none;
+}
+
+.task-requirement {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  margin: 0;
+  padding: 12px 0;
+  font-size: 13px;
+}
+
+.task-requirement + .task-requirement {
+  border-top: 1px solid var(--border);
+}
+
+.task-requirement-id {
+  flex: 0 0 auto;
+  padding: 2px 7px;
+  border-radius: 5px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font: 12px/1.5 var(--mono);
+}
+
+.task-requirements .text {
+  min-width: 0;
+}
+
+.task-roots-title {
+  margin-top: 16px;
+}
+
+.task-roots {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  font-size: 12px;
+}
+
+.task-root {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+}
+
+.task-roots dt {
+  color: var(--muted);
+}
+
+.task-roots dd {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+  font-family: var(--mono);
+}
+
 ul {
   margin: 4px 0 8px;
   padding-left: 20px;
@@ -708,6 +829,10 @@ select:focus-visible,
 summary:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
+}
+
+.task-fold-summary:focus-visible {
+  outline-offset: -3px;
 }
 
 /* Task list */

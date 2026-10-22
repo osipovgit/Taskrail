@@ -20,7 +20,7 @@ SCRIPTS = frozenset(
     ("/dashboard.js", "/theme.js")
     + tuple(
         f"/modules/{name}.js"
-        for name in ("analytics", "app", "dom", "epic", "monitor", "stages", "state")
+        for name in ("analytics", "app", "dom", "epic", "monitor", "stages", "state", "task")
     )
 )
 JAVASCRIPT = "text/javascript; charset=utf-8"

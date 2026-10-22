@@ -66,6 +66,7 @@ class DashboardTests(unittest.TestCase):
         self.assertIn("./modules/app.js", self.get("/dashboard.js"))
         self.assertIn("textContent", self.get("/modules/dom.js"))
         self.assertIn("showAnalytics", self.get("/modules/analytics.js"))
+        self.assertIn("taskSection", self.get("/modules/task.js"))
         totals = json.loads(self.get("/api/analytics"))
         self.assertEqual(totals["runs"]["count"], 1)
         self.assertEqual(totals["stages"]["planner"]["attempts"], 1)

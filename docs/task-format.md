@@ -25,6 +25,15 @@ image bypasses cache; services reuse the fresh image from their current suite; a
 failed build stops execution." See [`examples/live`](../examples/live) for complete
 task files.
 
+The run's **Task** panel starts with a collapsed **Original task** card showing
+the submitted goal, acceptance criteria, constraints and deferred checks as labeled
+text. **Initial context** holds starting behavior and suggested files as historical
+input, not current project state. The nested **Source file** retains the original
+text, including generated metadata and workflow rules. **Requirement IDs** is a
+separate collapsed list immediately after the original task. Expanding a panel
+survives polling within the same run. These views do not change the saved task or
+the agents' input.
+
 ## Header
 
 ```countersign-task

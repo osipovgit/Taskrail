@@ -3,6 +3,7 @@ import { renderMonitor } from './monitor.js';
 import { executionCard, stageCard, tickStageTimers } from './stages.js';
 import { deliverySection } from './epic.js';
 import { preserveSelection, state } from './state.js';
+import { taskSection } from './task.js';
 
 const approvalDrafts = new Map();
 
@@ -268,24 +269,6 @@ function actionButtons(data) {
     actions.append(note);
   }
   return actions;
-}
-
-function taskSection(data) {
-  const task = el('section');
-  task.append(el('h3', 'Task'));
-  detail(
-    task,
-    'Original task' + (data.task.truncated ? ' (end of file shown)' : ''),
-    data.task.text,
-  );
-  for (const [alias, path] of Object.entries(data.roots))
-    task.append(el('p', alias + ': ' + path, 'text muted'));
-  list(
-    task,
-    'Requirement IDs',
-    (data.requirements || []).map((entry) => entry.id + ' · ' + entry.text),
-  );
-  return task;
 }
 
 function materialsSection(data) {

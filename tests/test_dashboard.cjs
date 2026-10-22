@@ -411,6 +411,94 @@ async function main() {
   assert.equal(nodes.chat.children[0], afterSelection);
   console.log('Selection survives polling; updates resume after selection clears.');
 
+  const taskView = {
+    id: 'task-preview',
+    status: 'RUNNING',
+    actions: {},
+    task: { text: '```countersign-task\n{"task_spec": {}}\n```\n## Workflow rules\nKeep scope.' },
+    draft: {
+      goal: '<script>literal goal</script>',
+      criteria: 'Existing checks pass.',
+      constraints: 'Keep compatibility.',
+      verification: 'Run the scenario in staging.',
+      current_behavior: 'Original error log',
+      entry_points: 'project/src/main.py',
+    },
+    roots: { project: '/workspace/project' },
+    requirements: [{ id: 'R1', text: '<img src=x onerror=alert(1)>' }],
+    stages: [],
+    diff: { text: '' },
+    report: { text: '' },
+  };
+  app.render(taskView);
+  const taskPanel = all(nodes.chat).find((node) => node.className === 'task-overview');
+  const folds = taskPanel.children.filter((node) => node.tagName === 'details');
+  assert.deepEqual(
+    folds.map((node) => node.querySelector('summary').children[0].textContent),
+    ['Original task', 'Requirement IDs'],
+  );
+  assert.ok(
+    all(taskPanel)
+      .filter((node) => node.tagName === 'details')
+      .every((node) => !node.open),
+  );
+  const originalBody = folds[0].children[1];
+  assert.deepEqual(
+    originalBody.children
+      .filter((node) => node.className === 'task-field')
+      .map((node) => node.children[0].textContent),
+    ['Goal', 'Acceptance criteria', 'Constraints', 'Deferred runtime checks'],
+  );
+  assert.equal(all(taskPanel).filter((node) => node.textContent === taskView.draft.goal).length, 1);
+  assert.equal(
+    all(taskPanel).find((node) => node.textContent === taskView.draft.goal).tagName,
+    'div',
+  );
+  const context = all(taskPanel).find((node) => node.csKey === 'task-context:task-preview');
+  assert.ok(all(context).some((node) => node.textContent === 'Original error log'));
+  assert.ok(all(context).some((node) => node.textContent === 'project/src/main.py'));
+  const source = all(taskPanel).find((node) => node.csKey === 'task-source:task-preview');
+  assert.equal(source.querySelector('pre').textContent, taskView.task.text);
+  assert.equal(
+    all(folds[1]).find((node) => node.textContent === taskView.requirements[0].text).tagName,
+    'div',
+  );
+  folds[0].open = true;
+  folds[1].open = true;
+  context.open = true;
+  app.render({
+    ...taskView,
+    requirements: [...taskView.requirements, { id: 'R2', text: 'New criterion' }],
+  });
+  for (const key of ['task', 'task-requirements', 'task-context'])
+    assert.equal(all(nodes.chat).find((node) => node.csKey === key + ':task-preview').open, true);
+  app.render({ ...taskView, id: 'another-task' });
+  assert.ok(
+    all(nodes.chat)
+      .filter((node) => node.csKey?.startsWith('task'))
+      .every((node) => !node.open),
+  );
+  app.render({
+    ...taskView,
+    id: 'legacy-task',
+    draft: null,
+    requirements: [],
+    task: { text: 'Legacy task text', truncated: true },
+  });
+  assert.ok(
+    all(nodes.chat).some(
+      (node) => node.textContent === 'Only the end of the source file is shown.',
+    ),
+  );
+  assert.equal(
+    all(nodes.chat).find((node) => node.tagName === 'pre').textContent,
+    'Legacy task text',
+  );
+  assert.ok(!all(nodes.chat).some((node) => node.textContent === 'Requirement IDs'));
+  console.log(
+    'Task preview: structured text, collapsed IDs, historical context, source fallback and polling passed.',
+  );
+
   const sshCard = stages.executionCard({
     id: 'ticket-123',
     status: 'PENDING_APPROVAL',
