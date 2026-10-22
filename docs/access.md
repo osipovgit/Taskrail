@@ -3,7 +3,8 @@
 The current attempt's `access.json` is the model input manifest. It is generated
 from the same input list as the runtime profile. Read canonical absolute paths:
 project roots, listed task/history/preimages/results/recovery inputs and executor snapshots.
-Only the approved implementer paths are editable. Source roots are declarations of
+Only the approved implementer paths and the planner's `plan.md` are editable by
+their respective roles. Source roots are declarations of
 scope, not OS privileges; Unix permissions, network routing and authentication still apply.
 
 | Operation | Route | Boundary |
@@ -21,8 +22,9 @@ Executor requests are JSON **assistant responses**, not function calls. End the
 turn after emitting one. Their absence from the model's tool list is normal. The
 server executes the request or waits for approval, then resumes the same opencode
 session with `--session`. The UI records these as tool calls inside one stage, not
-as additional stages. The advertised response schema includes both final results
-and executor requests. Format repair accepts final results only.
+as additional stages. The advertised contracts include executor requests and the
+role's final result: a Markdown plan followed by `DONE` for the planner, JSON for
+other roles. Continuations and result repair retain that role's format.
 
 Internal `evidence.json`, `observations.json` and `00-input/git-metadata.json` are
 not model inputs. The latter contains integrity hashes, not commit history. Reuse
@@ -68,9 +70,17 @@ Read-only requests are approved without asking and recorded in the same ledger w
   `.env` files;
 - Jenkins status, console and test reads;
 - `ls`, `find`, `du`, `stat`, `wc`, `cat`, `head`, `tail` and `grep` when the program is
-  named without a path, every operand resolves inside a declared root and is not a
-  protected file, and no option executes, writes, follows links, recurses into files
-  (`grep -r`), never ends (`tail -f`) or carries a path value (`--file=/...`).
+  named without a path, its working directory and path operands resolve inside a
+  declared root and are not protected files, and every option belongs to its explicit
+  read grammar. Pattern and option values are parsed separately from paths. Unknown
+  flags, link following, recursive content reads and continuous reads require approval.
+  Local options must precede operands, so environment-dependent option permutation
+  cannot hide a path. Optional `--color` values use the `--color=value` form.
+  Automatically approved listings resolve executables from the fixed system search
+  path and recheck the read scope immediately before execution.
+  `find` accepts only name/path/type/depth tests and printing; `--` does not bypass
+  predicate validation. The same bounded grammar protects remote inspection before
+  change confirmation, with additional explicit remote diagnostic options.
 
 Everything else is asked as before. **Allow all
 actions** ([task controls](task-controls.md)) approves this run's local commands, read

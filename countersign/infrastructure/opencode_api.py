@@ -14,7 +14,9 @@ ONE_X = "1.x"
 TWO_X = "2.x"
 AUTO = "auto"
 VERSION_SECONDS = 30
-VERSION = re.compile(r"\s*(?:opencode\s+)?v?(\d+)\.\d+\.\d+\S*\s*")
+VERSION = re.compile(
+    r"\s*(?:[a-z][a-z0-9_.-]*\s+)?v?(\d+)\.\d+\.\d+(?:-[\w.-]+)?(?:\+[\w.-]+)?\s*", re.I
+)
 # Runs from the project directory, so the package root is passed explicitly.
 PACKAGE_ROOT = str(Path(__file__).resolve().parents[2])
 ADAPTER = (
@@ -23,7 +25,7 @@ ADAPTER = (
 )
 
 
-def select(setting, command):
+def select(setting, command, allow=()):
     """An explicit generation wins; auto trusts only an exact version line."""
     if setting in {ONE_X, TWO_X}:
         return setting
@@ -32,7 +34,7 @@ def select(setting, command):
     try:
         completed = subprocess.run(
             [*command, "--version"],
-            env=opencode_cli.environment(),
+            env=opencode_cli.environment(allow),
             stdin=subprocess.DEVNULL,
             capture_output=True,
             text=True,
@@ -41,8 +43,12 @@ def select(setting, command):
         )
     except (OSError, subprocess.TimeoutExpired):
         return ONE_X
-    match = VERSION.fullmatch(completed.stdout.strip().partition("\n")[0])
-    return TWO_X if match and int(match.group(1)) >= 2 else ONE_X
+    match = VERSION.fullmatch(completed.stdout.strip())
+    if completed.returncode or match is None:
+        raise ValueError(
+            "Cannot detect opencode interface; set settings.opencode_version explicitly"
+        )
+    return TWO_X if int(match.group(1)) >= 2 else ONE_X
 
 
 def launch_command(command, version):

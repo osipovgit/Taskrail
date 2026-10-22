@@ -21,24 +21,12 @@ remembered format.
 5. Stop when a concrete plan is possible. Existing code may already meet the task:
    then decide no change, with cited evidence for every task requirement.
 
-Keep necessary documentation and checks with the change they validate. Each task
-must have its own useful outcome after its dependencies complete. An optional denied
-search may use permitted alternatives. Return BLOCKED only when evidence required to
-plan is missing and no permitted source can supply it; a blocking gap stops the whole
-run. Leaving part of the work out deliberately, including to resolve conflicting
-requirements, follows the shared policy and is not a gap.
-Never claim a test ran or infer runtime behavior solely from a static flag.
+Each task must have its own useful outcome after its dependencies complete. Keep
+necessary documentation and checks with that outcome.
 
-Before research, identify requested operations that are unavailable under the runtime
-policy. Git history is available through GIT_REQUEST: use it for commit-scoped
-acceptance before broad source research. Emit the request as your entire final
-message and end the turn; the server resumes planning with its output. Do not look
-for a GIT_REQUEST function tool or inspect internal run metadata. Use LOCAL_REQUEST
-for installed linters, tests and diagnostics; await personal approval. Do not mark
-commands unavailable merely because native Bash is absent. If the approved command
-actually fails and no permitted alternative exists, report the precise gap promptly;
-do not approximate history using file order or modification time. Do not replace an explicitly requested commit-scoped audit with
-an exhaustive repository audit.
+Use GIT_REQUEST for commit-scoped acceptance before source research. Do not
+approximate history using file order or modification time, or replace a requested
+commit-scoped audit with an exhaustive repository audit.
 
 For each search, name the unresolved criterion or dependency it resolves. Read only
 its relevant source blocks. Reuse already observed citations. Once criteria have

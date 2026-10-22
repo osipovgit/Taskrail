@@ -52,7 +52,7 @@ class PlanDocumentTests(unittest.TestCase):
         self.assertEqual((plan["status"], plan["decision"]), ("PLAN_READY", "split"))
         self.assertEqual([step["id"] for step in plan["steps"]], ["T1", "T2"])
         first, second = plan["steps"]
-        self.assertEqual(first["title"], "Fix ntp")
+        self.assertEqual(first["title"], "Fix `ntp`")
         self.assertEqual(
             first["files"],
             ["/repo/roles/ntp/tasks/main.yml", "/repo/roles/ntp/defaults/main.yml"],
@@ -105,7 +105,8 @@ class PlanDocumentTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "cycle: T1 -> T2 -> T1"):
             payload(cyclic, REQUIREMENTS, ROOTS)
         single = PLAN.replace("**Decision:** split", "Decision: single")
-        self.assertEqual(payload(single, REQUIREMENTS, ROOTS)["decision"], "single")
+        with self.assertRaisesRegex(ValueError, "single needs exactly one task"):
+            payload(single, REQUIREMENTS, ROOTS)
 
     def test_a_gap_needs_a_blocked_decision_and_blocks_all_work(self):
         gap = PLAN.replace(
@@ -153,7 +154,7 @@ class PlanFileTests(unittest.TestCase):
             instructions = plan_file.instructions(run, dict(project=source), REQUIREMENTS)
             self.assertIn(f"PROJECT MAP: {run / '00-input/project-map.md'}", instructions)
             self.assertIn(f"the Markdown file {target}", instructions)
-            self.assertIn("R3. (runtime) Playbook check passes", instructions)
+            self.assertIn("R<n> labels attached to the task", instructions)
 
     def test_messages_name_requirements_by_label(self):
         message = plan_file.labelled("Planned requirement R-bbb has no owner", REQUIREMENTS)

@@ -9,18 +9,29 @@
 | `core/result-schemas.json` | Exact machine-readable response shape |
 | `00-input/` | Frozen task, role sources and effective contract for this run |
 
-Every response carries `"schema_version": 1`; any other value is rejected, and a
-run or checkpoint with another contract version cannot continue. Models must return
-one JSON object. The parser also accepts one unambiguous JSON object surrounded by
+Implementers and reviewers author compact decisions with `"schema_version": 2`.
+The server derives canonical stored results with version 1; an explicit adapter also
+accepts historical version 1 model responses under the original validation gates.
+Executor requests retain version 1. Unknown wire versions and unsupported run or
+checkpoint versions are rejected. These responses contain one JSON object. The planner writes
+`plan.md` and ends with `DONE`; its executor requests still use JSON. Continuations
+and validation feedback retain the stage's original format. The JSON parser also
+accepts one unambiguous object surrounded by
 prose or Markdown; the surrounding text is neither evidence nor instructions.
 Multiple objects, incomplete JSON, unknown fields and duplicate keys are invalid.
 All result and tool paths are canonical absolute paths. Root aliases in task
 metadata are labels; the engine resolves them.
 
-Every final result contains status, summary, coverage, evidence, unverified and
-blocking_gaps. Requirement IDs belong to verbatim task blocks and are assigned by
-the server. The server-generated sections Workflow rules, Current turn, Task split
-context and, in older tasks, Turn control are instructions without IDs. Each ID needs one outcome: satisfied, planned, contradicted, gap,
+Every stored final result contains status, summary, coverage, evidence, unverified
+and blocking_gaps. Requirement IDs belong to substantive task blocks and are
+assigned by the server. Titles, standard section headings, current behavior and
+known entry points remain context rather than separate acceptance obligations.
+The prompt shows the task once, with labels before its requirement blocks;
+the original task snapshot remains verbatim. Typed fields provide the requirement
+boundaries; their Markdown headings cannot change authority. Only authenticated
+server context supplies workflow instructions. A reviewed child receives its sealed
+task projection, while untrusted original task and history files remain archival
+artifacts outside the model's readable inputs. Each ID needs one outcome: satisfied, planned, contradicted, gap,
 deferred or not_evaluated. `not_evaluated` is allowed only in BLOCKED results, when
 a shared blocker prevented validation. Only runtime requirements may be deferred.
 Required missing evidence means BLOCKED, even when the JSON is valid. A plan names
@@ -36,17 +47,52 @@ reviewers accept that recorded choice.
   server derives the stored plan result from it: coverage, evidence, steps (one per
   task, with its files, owned requirements and scopes, dependencies, results and
   checks), files_read from observed reads and proposed_change_files from the tasks.
-- Implementer: completed_steps and changed_files, checked against the approved
-  scope and observed source changes. IMPLEMENTED cannot leave planned requirements.
-- Reviewer: input_complete and findings. Plan review can approve future work;
-  result and no-change review cannot. An approval cannot contain defects or
-  required gaps.
+- Implementer: semantic outcomes for every assigned criterion and required missing
+  inputs. The server derives changed_files from the source scan and completed_steps
+  from the accepted approved contract. IMPLEMENTED cannot retain unfinished work.
+- Reviewer: semantic outcomes, findings grounded in observed references, and missing
+  inputs. The server derives input completeness and aggregate verdict. Plan review
+  can approve planned work; result and no-change review cannot. An approval cannot
+  contain defects or required gaps.
 
-Evidence supplies an ID, an absolute path and a source line range, never the text: the
+The primary authored result is small:
+
+```json
+{"schema_version":2,"outcomes":[{"requirement":"R1","result":"satisfied","evidence":["S1:10-12"]}],"findings":[],"missing_inputs":[]}
+```
+
+Each outcome uses the assigned label or stable ID. `reason` is required for
+contradicted, gap, not_evaluated and deferred outcomes; routine satisfied/planned
+outcomes need no repeated explanation. Findings contain `requirement`, `evidence`
+and `problem`; the server derives their IDs and file locations. `summary` is
+optional. Models cannot override observed changes, granted scope, check records or
+aggregate status through these fields. Runtime deferrals retain the original check
+text rather than a model paraphrase.
+
+Compact evidence references use `S1:10-12` for a delivered source handle or
+`/absolute/path:10-12` for a new observed read. The server assigns canonical evidence
+IDs and resolves handles to their path, source version and exact delivered range.
+A handle from another stage or changed source is invalid. The
 server takes the cited lines from the current file, binds them to a successful read
-event that returned them and to the current source hash, and records the excerpt in
-`evidence-bindings.json`. Whitespace is not significant, and only the start of very
-long lines, which read tools cut, is compared.
+or delivered packet and to the current source hash, and records the excerpt in
+`evidence-bindings.json`. Whitespace is not significant; each complete cited line
+must have reached the model. A clipped prefix cannot prove an unseen suffix.
+
+Stage prompts can carry a source packet of at most 4,000 serialized UTF-8 bytes,
+with at most 80 previously observed numbered lines per range. Before a model runs,
+the server can also read windows of at most 40 lines from exact Known entry point
+paths and approved plan citations or change paths. Entry points accept canonical
+absolute paths, root aliases or unambiguous single-root relative paths, optionally
+with `:from-to`. Prose is not guessed as a path. Missing, protected, symlinked,
+binary and oversized files are skipped; ordinary controlled reads remain available.
+Only lines actually delivered within the packet budget become observations.
+Only current, canonical source inside declared roots is eligible. The packet shares bytes, never another role's
+conclusions, so independent semantic review remains necessary. The server keeps its
+version/handle registry separately from model-visible input. Approved plan context
+contains decisions and task contracts, omitting repeated coverage, read lists and
+prior verdicts. Empty optional context fields are omitted.
+Operator notes, interrupted-writer instructions and actionable earlier feedback
+remain available when a run continues.
 `observations.json` keeps the complete validation ledger; `evidence.json` is a
 bounded recovery subset of at most 60 records that never removes observations
 needed for validation. Changed or unseen content cannot justify approval. A
@@ -63,9 +109,20 @@ and does not waive required evidence. Permission denials, failed writes, and err
 after or without a final answer keep their safeguards.
 
 A final result that fails validation first goes back to the same session, at most
-twice per stage, with the error: the evidence ID and the actual text of the cited
-range for a citation, the missing or unknown IDs for coverage. The session still has its
-context and tools, so it can re-read and correct the result.
+twice per stage. Schema failures identify a stable error code and JSON pointer;
+provenance errors identify the evidence, file and range. The session keeps its
+context and tools. For a rejected V2 decision it may replace only the erroneous
+field instead of regenerating every outcome:
+
+```json
+{"schema_version":2,"corrections":[{"path":"/outcomes/0/result","value":"satisfied"}]}
+```
+
+Corrections target the saved unvalidated `decision-draft.json`, at most 20 fields
+per message. Only semantic decision fields are addressable. Existing array slots
+may be replaced, or a whole array supplied; arbitrary insertion and deletion are
+not inferred. The complete merged candidate passes every normal gate again before
+it can advance the workflow. A correction has no execution or permission effects.
 
 Format repair receives the saved response, the validation error, the schema and the
 server-assigned requirements. Each stage gets at most one. It has no tools (or
@@ -84,7 +141,7 @@ block in the file. The recovery prompt names the index lines and asks for window
 at most 200 lines, because the whole file can be larger than the model context. A
 follow-up history over 24,000 bytes reaches the prompt the same way: the latest turn
 inline and the indexed, readable `00-input/history.md`; `task.md` stays verbatim and
-`task_sha256` covers it whole. A no-change completion still
+the frozen input integrity guard covers it whole. A no-change completion still
 needs independent review of all requirements. Text imported with `--plan-response`
 is only an untrusted draft for fresh planning.
 
@@ -100,7 +157,7 @@ untouched response.
 The planner's only writable file is `<run>/plan.md`. The server writes its template on
 the first attempt (one `R<n> →` line per requirement) and reads it when the session
 ends; the file survives an interrupted or overflowing session, and the next attempt
-continues it. The request lists the requirements verbatim with their `R<n>` labels and
+continues it. The request labels the task's requirement blocks with `R<n>` and
 names the project map. The format:
 
 ```markdown
@@ -127,12 +184,17 @@ Notes: optional pointers for the implementer
 - Server check: run ansible-playbook --check site.yml on the controller
 ```
 
-Keys, emphasis, backticks and bullet styles are read leniently. Every problem is
+Keys accept Markdown emphasis and list fields accept bullet styles. Field values
+retain literal underscores, backticks and command text; a complete code wrapper
+around a file path is removed without changing its contents. Dependencies accept
+`T1` or `Task 1`, separated by commas, semicolons, `and`, or list bullets. Every token
+must parse; unknown text cannot silently remove a dependency. Duplicate fields are
+rejected. Every problem is
 reported at once with its line, back to the same session: an unknown or missing
 requirement line, a task without files, requirements, results or checks, an unknown,
 self or cyclic dependency, a requirement split between tasks without a distinct
 `[scope]` for each part, a gap under any decision but blocked, or a task count the
-decision rules out (split needs two tasks, single one, no change none). A blocked plan
+decision rules out (split needs two tasks, single exactly one, no change none). A blocked plan
 authorizes nothing. A planner result that still fails goes to one full attempt with
 tools, never to a tool-less format repair. Error messages name requirements by label.
 
@@ -166,12 +228,12 @@ argument is changed. Multiple objects, duplicate keys, arrays and malformed JSON
 are rejected. `cwd` is a declared root or an existing directory inside one. A
 response with `cwd` and `argv` but without `"status": "LOCAL_REQUEST"` or
 `schema_version` executes nothing; the same session is told what is missing, at most
-twice per stage. A turn that ends without one JSON object (for
-example, only announcing its next step, or a request written as XML or tool-call
-markup) gets a reminder with the exact JSON formats in the same session, within the
-same limit, before a format repair is tried. Every continuation also names the stage
-role and its `request.md`, so a model whose session was summarized can re-read its
-instructions and response schema. When the provider rejects a
+twice per stage. A turn that ends without its valid stage result or an executor
+request (for example, only announcing its next step or using tool-call markup) gets
+a reminder of the stage-specific format in the same session, within the same limit,
+before repair is tried. Every continuation also names the stage
+role and its `request.md`, and preserves the planner's Markdown or other roles' JSON
+format. When the provider rejects a
 turn because the session exceeded the model context window, the stage status is
 `CONTEXT_EXCEEDED` and a read-only stage continues in a new session from its recorded
 evidence (within `read_retries`); the implementer stops so Continue can inspect its edits.
@@ -180,11 +242,39 @@ which calls returned at least 10,000 characters (at most five), so it does not r
 them whole. Denial means the command is
 skipped; consider the operator's alternative. Format repair cannot request execution.
 
-Delivered output is cut at 24,000 characters. A stdout, stderr or Jenkins console
-longer than 2,000 characters is also saved as plain text beside its snapshot, and then
-only the first 8,000 characters are delivered inline
-(`00-input/local/<stage>-<n>.stdout.txt`), named in the clipping notice, readable line
-by line and citable as evidence while it matches the recorded output.
+All roles disable automatic compaction. `model_context_tokens` defaults to 32,768
+and `context_reserve_tokens` to 8,192; the reserve must be positive and smaller than
+the window. Before starting any role, admission counts one token per UTF-8 byte
+of its actual frozen request and role instruction body, plus 1,024 framing tokens.
+Writers also reserve bytes for every distinct approved read/edit input, subtracting
+only exact current line bytes already delivered in the packet. A partial window
+does not exempt its unread suffix or other approved files. This remains conservative
+until an explicit narrower source contract is available. Reaching capacity returns `CONTEXT_EXCEEDED`
+without starting the model and cannot consume automatic retries of the same oversized
+request. Split or narrow the task; configure a larger window only
+when the selected model supports it.
+
+During execution, the latest reported provider input, including read/write cache,
+is checked against that capacity separately from cumulative token usage. A boundary
+or compaction marker stops the session, including on continuation startup and the
+final event drain. Unknown tool envelopes and provider behavior prevent admission
+from guaranteeing that arbitrary later work fits. Missing usage reports remain
+unknown; a provider overflow still stops the stage. Writers are never retried
+automatically after a context failure.
+
+Short local and Git outputs are delivered inline, capped at 24,000 characters.
+Long local output is delivered as status, exit code, independent stream previews and
+a digest. A stdout, stderr or Jenkins console longer than 2,000 characters is also
+saved as plain text beside its snapshot (`00-input/local/<stage>-<n>.stdout.txt`).
+Short stderr remains visible beside long stdout. Read exact saved lines before
+citing a summary. Output copies remain citable only while they match their ledger.
+
+SSH and Jenkins build continuations show only the latest ticket, with bounded
+previews and output-file references. Each ticket has a write-once snapshot and
+separate long-stream text files under `00-input/ssh`; repeated observation verifies
+their integrity without rewriting them. Earlier tickets stay in the durable ledger
+and are not replayed into each model turn. Older cumulative snapshots remain valid
+historical artifacts and are never rewritten into the newer representation.
 
 ```json
 {"schema_version":1,"status":"ACTION_REQUEST","action":{"targets":["qa-node-1"],"script":"uname -a\n","files":{},"reason":"Inspect kernel version","timeout_seconds":30}}
@@ -203,7 +293,35 @@ A JENKINS_REQUEST is available only when the executor has a Jenkins configuratio
 their results are snapshots under `00-input/local`. `build` uses `"build": "new"`,
 only configured parameter names, and a root-approved ticket in `execution.json`.
 
-Runtime requirements may be marked satisfied only with cited, observed local,
-SSH or Jenkins output snapshots that match successful executor results in the server ledger;
-otherwise they stay deferred. Review must confirm that the recorded command and
-output establish the requirement; exit code zero alone is insufficient.
+Configured checks can run without model-authored execution requests. Server
+settings own `check_recipes`, each with `kind`, `phase`, an exact `request`, an output
+`adapter` and an optional short `description`. Planner context exposes only recipe
+IDs, descriptions, kinds, phases and adapters. It never includes command arguments
+or server configuration values. Plan review receives the selected recipe-to-criterion
+bindings, existing configured checks, and only their relevant catalog entries.
+The planner selects existing recipes with:
+
+```markdown
+## Check selections
+- lint: R3
+- integration-tests: R4, R5
+```
+
+These bindings are reviewed with the plan. The engine materializes a closed
+`check_specs` record per selection: `id`, `recipe_id`, assigned runtime `criteria`,
+`phase` and empty `parameters`. Task headers may supply the same typed records.
+Tasks cannot introduce recipes, override commands or supply parameter overrides.
+Legacy free-text verification remains explicit deferred work where no configured
+recipe is selected. The existing approval route still decides whether an exact
+configured request may execute; selection grants no permission. Local checks run
+after edits, Jenkins validation uses its delivery phase, and server checks require
+the operator's confirmation of the changes.
+See [configured checks](checks.md) for operator settings and examples.
+
+Runtime evidence must belong to the assigned check and criterion, its exact
+request digest and the source/Git snapshot it verified. Check results separate
+execution status from passed, failed or unknown assessment. A matching failed
+check may substantiate contradiction; an unrelated successful command or stale
+result cannot establish satisfaction. Generic historical execution snapshots remain
+readable evidence, but are not silently upgraded to checked runtime acceptance.
+Review still determines semantic sufficiency; exit code zero alone is insufficient.

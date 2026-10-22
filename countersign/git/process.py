@@ -30,6 +30,12 @@ OPTIONS = (
     "diff.external=",
     "commit.gpgSign=false",
     "tag.gpgSign=false",
+    "log.showSignature=false",
+    "format.pretty=medium",
+    f"gpg.program={os.devnull}",
+    f"gpg.openpgp.program={os.devnull}",
+    f"gpg.x509.program={os.devnull}",
+    f"gpg.ssh.program={os.devnull}",
     "credential.helper=",
     "core.sshCommand=ssh -oBatchMode=yes -oStrictHostKeyChecking=yes",
 )

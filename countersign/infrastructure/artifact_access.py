@@ -24,23 +24,38 @@ def model_inputs(run, folder):
         folder / "request.md",
         folder / "tool-result.md",
         folder / "access.json",
-        run / "00-input/task.md",
+        *task_inputs(run),
         run / "00-input/preimages",
         run / "00-input/git",
         run / "00-input/ssh",
         run / "00-input/local",
+        run / "00-input/checks",
         run / "run.json",
     ]
     paths.extend(result_inputs(run))
     optional_files = (
+        run / "plan.md",
+        run / "00-input/parent-task.md",
+        run / "00-input/reviewed-plan.json",
         folder / "recovery.md",
-        run / "00-input/history.md",
         run / "00-input/project-map.md",
         run / "changes.diff",
     )
     for optional in optional_files:
-        if optional.is_file():
+        if optional.is_file() and not optional.is_symlink():
             paths.append(optional)
+    return paths
+
+
+def task_inputs(run):
+    """A reviewed child exposes authenticated input, not its untrusted display archive."""
+    canonical = run / "00-input/reviewed-task-spec.json"
+    if canonical.exists():
+        return [canonical] if canonical.is_file() and not canonical.is_symlink() else []
+    paths = [run / "00-input/task.md"]
+    history = run / "00-input/history.md"
+    if history.is_file() and not history.is_symlink():
+        paths.append(history)
     return paths
 
 
@@ -65,5 +80,5 @@ def manifest(run, folder, roots, writable=()):
         "git": "Return GIT_REQUEST as the entire final message. It is not a tool call.",
         "remote": "Use ACTION_REQUEST only when advertised; personal approval is required.",
         "local_commands": "Use LOCAL_REQUEST; the operator approves exact commands.",
-        "search": "Search source roots only; never search run directories or protected files.",
+        "search": "Search declared roots and exact listed artifact files; never search run directories or protected files.",
     }

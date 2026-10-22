@@ -1,8 +1,10 @@
 """Bind runtime claims to completed, server-recorded local or SSH execution."""
 
 import json
+from pathlib import Path
 
-from countersign.interactions import transcripts
+from countersign.application import check_results
+from countersign.interactions import output_preview, transcripts
 
 
 def confirmed_paths(run):
@@ -17,13 +19,29 @@ def confirmed_paths(run):
         path = run / "00-input" / "ssh" / "{}.json".format(entry["id"])
         if matches(path, entry):
             confirmed.add(str(path))
+            confirmed.update(confirmed_outputs(path, entry))
     return confirmed
 
 
+def confirmed_outputs(path, entry):
+    """Plain-text copies count only while they match this successful ticket."""
+    streams = output_preview.ticket_streams(entry)
+    return {
+        target
+        for name, target in output_preview.ticket_outputs(path, entry).items()
+        if transcripts.unchanged(Path(target), streams[name])
+    }
+
+
 def claim_ids(run, claims):
-    """The regular quotation validator still verifies every referenced source read."""
-    trusted = confirmed_paths(run) | transcripts.confirmed_paths(run)
-    return {claim["id"] for claim in claims if claim["path"] in trusted}
+    """Only current, criterion-bound checks can substantiate runtime acceptance."""
+    trusted = check_results.trusted(run)
+    bound = {}
+    for claim in claims:
+        recorded = trusted.get(claim["path"])
+        if recorded:
+            bound[claim["id"]] = recorded
+    return bound
 
 
 def matches(path, entry):

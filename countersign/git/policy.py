@@ -24,6 +24,8 @@ READ_FLAGS = MappingProxyType(
 VALUE_FLAGS = frozenset(("--format", "--pretty", "--max-count", "-n", "--since", "--until", "-L"))
 REFLOG_WRITES = frozenset(("expire", "delete", "drop", "write"))
 WRITERS = frozenset(("add", "commit", "revert", "cherry-pick", "merge", "fetch", "push"))
+PRETTY_NAMES = frozenset(("oneline", "short", "medium", "full", "fuller", "reference", "raw"))
+PRETTY_FLAGS = frozenset(("--format", "--pretty"))
 
 
 def validate(argv, role):
@@ -48,11 +50,12 @@ def validate(argv, role):
 def read_arguments(argv):
     """Only explicitly listed read options may reach Git."""
     flags = READ_FLAGS[argv[0]].split()
-    pending = False
+    pending = ""
     for argument in argv[1:]:
         if pending:
             require(not argument.startswith("-"), "Missing Git option value")
-            pending = False
+            read_value(pending, argument)
+            pending = ""
         elif argument == "--":
             flags = []
         else:
@@ -69,11 +72,23 @@ def read_option(argument, flags, command):
     """Do not admit output destinations, external programs or abbreviated flags."""
     if not argument.startswith("-"):
         return False
-    flag, separator, _ = argument.partition("=")
+    flag, separator, text = argument.partition("=")
     numeric = bool(re.fullmatch(r"-\d+", argument))
     numeric = numeric and command in {"log", "reflog"}
     require(flag in flags or numeric, f"Unsupported Git read option: {argument}")
-    return flag in VALUE_FLAGS and not separator
+    if separator:
+        read_value(flag, text)
+    return flag if flag in VALUE_FLAGS and not separator else ""
+
+
+def read_value(flag, text):
+    """Pretty aliases and signature directives can start configured verifier programs."""
+    if flag not in PRETTY_FLAGS:
+        return
+    require(bool(text), "Missing Git pretty format")
+    literal = text.startswith(("format:", "tformat:")) or "%" in text
+    require(text in PRETTY_NAMES or literal, "Configured Git pretty aliases are forbidden")
+    require(not re.search(r"%[ +\-]?G", text), "Git signature verification formats are forbidden")
 
 
 def write_arguments(argv):

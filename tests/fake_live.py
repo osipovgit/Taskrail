@@ -59,17 +59,6 @@ if "Context:\n" in prompt:
 else:
     context = json.loads(saved_context.read_text())
 header = json.loads((profiles / (agent + ".md")).read_text().split("---")[1])
-if context["stage"] == "planner" and not context["requirements"] and "PLAN FILE:" in prompt:
-    listed = prompt.split("(use their labels in the plan file):\n", 1)[1]
-    kinds = [
-        "runtime" if line.split(".", 1)[1].startswith(" (runtime)") else "task"
-        for line in listed.splitlines()
-        if line[:1] == "R" and "." in line[:6]
-    ]
-    context["requirements"] = [
-        dict(id=name, kind=kind) for name, kind in zip(context["requirement_ids"], kinds)
-    ]
-    saved_context.write_text(json.dumps(context))
 if "FORMAT REPAIR ONLY" not in prompt and "SYNTHESIS ONLY" not in prompt:
     for file in [Path(args[args.index("--file") + 1]), Path(context["task_file"])] + (
         [Path(context["diff_file"])] if context.get("diff_file") else []
@@ -107,7 +96,7 @@ if mode in {"git-actions", "git-denied"}:
             part.update(messageID="msg1", id=event)
             print(json.dumps(dict(type=event, part=part, sessionID="ses1")))
         sys.exit(0)
-if mode == "ssh-action" and role == "planner" and "Executor results" not in prompt:
+if mode == "ssh-action" and role == "planner" and "Ticket " not in prompt:
     action = dict(
         targets=["server-a"],
         script="uname -a\n",
@@ -247,7 +236,8 @@ if mode == "offset-recovered" and role == "planner":
         flush=True,
     )
 if role == "plan-reviewer":
-    for name in context["plan"]["files_read"]:
+    for entry in context.get("source_packet", []):
+        name = entry["path"]
         assert Path(name).is_absolute(), name
         Path(name).read_bytes()
 if role == "implementer" and "FORMAT REPAIR ONLY" in prompt:
@@ -293,7 +283,12 @@ if mode in ("read-retry", "timeout-then-invalid", "timeout-evidence") and role =
                             state=dict(
                                 status="completed",
                                 input=dict(filePath=str(target)),
-                                output=target.read_text(),
+                                output="\n".join(
+                                    f"{number}: {line}"
+                                    for number, line in enumerate(
+                                        target.read_text().splitlines(), 1
+                                    )
+                                ),
                                 metadata=dict(truncated=False),
                             ),
                         ),
@@ -347,9 +342,9 @@ elif role == "implementer":
         (root / "new.py").write_text("VALUE = 2\n")
     if mode == "git":
         (root / ".git/HEAD").write_text("corrupted")
-    if mode == "syntax" and not context["feedback"]:
+    if mode == "syntax" and not context.get("feedback"):
         target.write_text("def broken(\n")
-    if mode == "syntax" and context["feedback"]:
+    if mode == "syntax" and context.get("feedback"):
         target.write_text("# user comment\ndef hello():\n    return 2\n")
     if mode == "jenkins":
         target.write_text(target.read_text().replace("pytest -q || true", "pytest -q"))
@@ -360,14 +355,14 @@ elif role == "implementer":
 else:
     reject = (
         mode == "review-repair" and role == "reviewer" and "marker" not in target.read_text()
-    ) or (mode == "plan-repair" and role == "plan-reviewer" and not context["feedback"])
+    ) or (mode == "plan-repair" and role == "plan-reviewer" and not context.get("feedback"))
     value = dict(
         status="REQUEST_CHANGES" if reject else "APPROVE",
         summary="review",
         unverified=["Runtime not run"],
         input_complete=True,
         blocking_gaps=[],
-        findings=[dict(id="R1", file="project/hello.py", criterion="marker", evidence="absent")]
+        findings=[dict(id="R1", file=str(target), criterion="marker", evidence="absent")]
         if reject
         else [],
     )
@@ -383,7 +378,7 @@ else:
             blocking_gaps=["Task was truncated"],
             status="BLOCKED" if "FORMAT REPAIR ONLY" in prompt else "APPROVE",
         )
-if mode == "review-repair" and role == "implementer" and context["feedback"]:
+if mode == "review-repair" and role == "implementer" and context.get("feedback"):
     target.write_text(target.read_text() + "# marker\n")
 if mode == "readonly-write" and role == "planner":
     target.write_text("bad")
@@ -439,6 +434,9 @@ if mode == "git-actions":
         output_path = Path(job["output_file"])
         assert header["permission"]["read"].get(str(output_path.parent) + "/*") == "allow"
         output = output_path.read_text()
+        output = "\n".join(
+            f"{number}: {line}" for number, line in enumerate(output.splitlines(), 1)
+        )
         print(
             json.dumps(
                 dict(
@@ -479,6 +477,24 @@ bad_citation = bad_citation or (
 )
 if bad_citation and role == "plan-reviewer":
     value["evidence"][0].update(line_start=9, line_end=9)
+if mode in {"compact", "compact-correction"} and role != "planner":
+    value = dict(
+        schema_version=2,
+        outcomes=[
+            dict(requirement=entry["id"], result=entry["outcome"], evidence=[f"{target}:1"])
+            for entry in value["coverage"]
+        ],
+        findings=[],
+        missing_inputs=[],
+    )
+    if mode == "compact-correction" and role == "plan-reviewer":
+        if "Your final result was rejected" in prompt:
+            value = dict(
+                schema_version=2,
+                corrections=[dict(path="/outcomes/0/result", value="planned")],
+            )
+        else:
+            value["outcomes"][0]["result"] = "typo"
 response = json.dumps(value)
 plan_broken = mode in ("invalid-once", "timeout-then-invalid")
 plan_broken = plan_broken and "PREVIOUS FINAL RESPONSE" not in prompt
@@ -488,7 +504,20 @@ if mode == "prose-block" and role == "planner":
 plan = Path(context["task_file"]).parent.parent / "plan.md"
 if role == "planner" and header["permission"]["edit"].get(str(plan)) == "allow":
     assert "PLAN FILE:" in prompt or "--session" in args
-    if not plan_broken:
+    unread = mode == "plan-unread" and "--session" not in args
+    if unread:
+        failure = dict(
+            status="error",
+            input=dict(filePath=str(plan), content="must not be written"),
+            error=f"You must read the file {plan} before overwriting it.",
+        )
+        print(
+            json.dumps(dict(type="tool_use", part=dict(id="unread", tool="write", state=failure)))
+        )
+    if not plan_broken and not unread:
+        if mode == "plan-unread":
+            assert "in THIS session" in prompt
+            plan.read_text()
         plan.write_text(plan_text(value, context))
     response = "DONE"
 writer_prose = mode == "writer-prose-always" or (
@@ -496,9 +525,9 @@ writer_prose = mode == "writer-prose-always" or (
 )
 if writer_prose and role == "implementer":
     response = "I changed hello.py; the work is done."
-if mode == "narrate" and role == "plan-reviewer" and "not one JSON request" not in prompt:
+if mode == "narrate" and role == "plan-reviewer" and "did not follow" not in prompt:
     response = "Let me run ansible-lint through bash -c to capture the full output."
-if mode == "markup-request" and role == "planner" and "not one JSON request" not in prompt:
+if mode == "markup-request" and role == "planner" and "did not follow" not in prompt:
     response = '<request type="LOCAL_REQUEST"><command>python3</command><arg>print(f"{len(fixed)}")</arg></request>'
 if mode == "context-overflow" and role == "planner" and "EXCEEDED THE MODEL" not in prompt:
     whole = dict(status="completed", input=dict(filePath=str(target)), output="1: x\n" * 6000)

@@ -9,6 +9,7 @@ config_dir="$HOME/.config/countersign"
 state_dir="$HOME/.local/state/countersign"
 unit_dir="$HOME/.config/systemd/user"
 service=countersign.service
+# shellcheck source=deploy/options.sh
 source "$source_dir/deploy/options.sh"
 systemctl --user show-environment >/dev/null
 "$python_bin" -c 'import sys; assert sys.version_info >= (3, 10), "Python 3.10+ is required"'
@@ -19,6 +20,7 @@ flock -n 8 || { echo 'Another installation is running' >&2; exit 1; }
 exec 9>"$state_dir/live.lock"
 echo "Waiting up to $wait_seconds seconds for the active workflow to finish..."
 flock -w "$wait_seconds" 9 || { echo 'Stop the active task in the UI and wait before updating' >&2; exit 1; }
+# shellcheck source=deploy/fresh.sh
 source "$source_dir/deploy/fresh.sh"
 version=$(PYTHONPATH="$source_dir" "$python_bin" -c 'from countersign.core.version import VERSION; print(VERSION)')
 release=$(mktemp -d "$app_dir/releases/$version-XXXXXXXX")

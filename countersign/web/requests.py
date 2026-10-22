@@ -4,8 +4,8 @@ import json
 import re
 from types import MappingProxyType
 
-from countersign.application import worktree_isolation
-from countersign.core import control, delivery_record
+from countersign.application import check_parents, child_inputs, worktree_isolation
+from countersign.core import control, delivery_record, schema, task_spec
 from countersign.web import history, task_form
 
 DESIGN = "design"
@@ -28,11 +28,17 @@ HEADER_OPTIONS = MappingProxyType(
 RESUMES = frozenset(("resume", "resume_budget"))
 ACTION = "action"
 PHASE = "phase"
+TASK = "task"
+SCOPE = "task_scope"
+ASSIGNED_CONTRACT = "assigned_contract"
+ASSIGNED_REQUIREMENTS = "assigned_requirements"
+CHECK_SPECS = "check_specs"
+CONTEXT = "context"
 # The run whose confirmed change a server check run checks.
 CHANGE = "confirmed_change"
 # A split's task run, Jenkins validation and the server checks after confirmation.
-PHASES = frozenset(("", "task", "validation", "server"))
-CHECK_PHASES = frozenset(("validation", "server"))
+PHASES = frozenset(("", TASK, "integration", "validation", "server"))
+CHECK_PHASES = frozenset(("integration", "validation", "server"))
 TASK_ACTIONS = frozenset(("epic_pause", "epic_unpause"))
 RECORDED = (
     frozenset(
@@ -44,6 +50,7 @@ RECORDED = (
             "epic_auto_on",
             "epic_auto_off",
             "confirm",
+            "integration_review",
         )
     )
     | TASK_ACTIONS
@@ -66,8 +73,18 @@ class Submission:
         self.parent = self.fields.pop("parent_run", None)
         self.mode = self.fields.pop("submission_mode", "new")
         context = split_context(self.fields.pop("split_context", ""))
-        self.delivery = {"context": context, PHASE: self.fields.pop(PHASE, "")}
+        self.delivery = {CONTEXT: context, PHASE: self.fields.pop(PHASE, "")}
         self.delivery[CHANGE] = self.fields.pop(CHANGE, "")
+        self.delivery["parent_context"] = child_inputs.checked(
+            self.fields.pop("parent_context", "")
+        )
+        self.delivery[SCOPE] = self.fields.pop(SCOPE, None)
+        self.delivery[ASSIGNED_CONTRACT] = self.fields.pop(ASSIGNED_CONTRACT, None)
+        self.delivery[ASSIGNED_REQUIREMENTS] = task_spec.checked_assignments(
+            self.fields.pop(ASSIGNED_REQUIREMENTS, [])
+        )
+        self.delivery[CHECK_SPECS] = self.fields.pop(CHECK_SPECS, [])
+        self.delivery[check_parents.PARENT] = self.fields.pop(check_parents.PARENT, None)
         self.validate()
         self.previous = history.checked_run(base, self.parent) if self.parent else None
         if self.previous:
@@ -92,6 +109,8 @@ class Submission:
         self.flags[READ_ONLY] = self.flags[READ_ONLY] or self.mode == "answer"
         self.check_phase()
         self.check_decompose()
+        check_scope(self.delivery)
+        check_assignment(self.delivery)
 
     def check_phase(self):
         """A server-set delivery phase; checks after a change never edit files."""
@@ -99,6 +118,7 @@ class Submission:
         if phase not in PHASES:
             raise ValueError("Unknown delivery phase")
         self.flags[READ_ONLY] = self.flags[READ_ONLY] or phase in CHECK_PHASES
+        check_parents.reference(self.delivery)
         change = self.delivery[CHANGE]
         if change and (phase != "server" or not delivery_record.RUN_NAME.fullmatch(change)):
             raise ValueError("Only a server check names the confirmed change it checks")
@@ -124,13 +144,22 @@ class Submission:
         options = [HEADER_OPTIONS[flag] for flag in FLAGS if self.flags[flag]]
         if self.flags[DESIGN] and not self.flags[READ_ONLY]:
             options.append(HEADER_OPTIONS[READ_ONLY])
-        for name in (PHASE, CHANGE):
+        for name in (PHASE, CHANGE, check_parents.PARENT):
             if self.delivery[name]:
                 options.append('"{0}": "{1}"'.format(name, self.delivery[name]))
+        if self.delivery[SCOPE] is not None:
+            options.append('"task_scope": {0}'.format(json.dumps(self.delivery[SCOPE])))
+        if self.delivery[ASSIGNED_CONTRACT] is not None:
+            options.append(
+                '"assigned_contract": {0}'.format(json.dumps(self.delivery[ASSIGNED_CONTRACT]))
+            )
+        if self.delivery[CHECK_SPECS]:
+            options.append('"check_specs": {0}'.format(json.dumps(self.delivery[CHECK_SPECS])))
         header = ", ".join([*options, ROOTS_KEY])
         sections = [text.replace(ROOTS_KEY, header, 1)]
-        if self.delivery["context"]:
-            sections.append("\n## Task split context\n{0}\n".format(self.delivery["context"]))
+        sections[0] = assign_requirements(sections[0], self.delivery)
+        if self.delivery[CONTEXT]:
+            sections.append("\n## Task split context\n{0}\n".format(self.delivery[CONTEXT]))
         if self.mode in CONTINUING:
             sections.extend([HISTORY_RULE, history.conversation(self.previous)])
         return "".join(sections)
@@ -145,10 +174,10 @@ def split_context(text):
 
 def check_task(payload):
     """The task ID a split action names; returns the field name."""
-    task = payload.get("task")
+    task = payload.get(TASK)
     if not isinstance(task, str) or not TASK_ID.fullmatch(task):
         raise ValueError("Expected the ID of a task of the split")
-    return "task"
+    return TASK
 
 
 def validate_action(payload):
@@ -163,3 +192,44 @@ def validate_action(payload):
     if fields != {"id", ACTION}:
         raise ValueError("Expected id and a supported task action")
     control.check_note(payload.get("note"))
+
+
+def check_scope(delivery):
+    """Only a child task carries the parent's reviewed file boundary."""
+    scope = delivery[SCOPE]
+    valid = delivery[PHASE] == TASK and isinstance(scope, list)
+    if scope is not None and not valid:
+        raise ValueError("task_scope is only a list on a task phase")
+
+
+def check_assignment(delivery):
+    """A child's claimed lineage is validated against the real parent before execution."""
+    contract = delivery[ASSIGNED_CONTRACT]
+    if contract is None:
+        allowed = not delivery[ASSIGNED_REQUIREMENTS] or delivery[PHASE] in CHECK_PHASES
+        schema.require(allowed, "Assigned requirements need a parent contract")
+        return
+    valid = delivery[PHASE] == TASK and isinstance(contract, dict)
+    schema.require(valid, "Invalid assigned parent contract")
+    schema.require(set(contract) == {"parent_run", "task_id"}, "Invalid assigned parent fields")
+    parent = contract["parent_run"]
+    task = contract["task_id"]
+    schema.require(
+        isinstance(parent, str) and bool(delivery_record.RUN_NAME.fullmatch(parent)),
+        "Invalid assigned parent run",
+    )
+    schema.require(
+        isinstance(task, str) and bool(TASK_ID.fullmatch(task)), "Invalid assigned task ID"
+    )
+
+
+def assign_requirements(text, delivery):
+    """Keep child inputs structured; displayed Markdown is an artifact, not a parser input."""
+    if not delivery[ASSIGNED_REQUIREMENTS] and not delivery[CONTEXT]:
+        return text
+    start, encoded = text.split("\n", 1)
+    header, rest = encoded.split("\n```", 1)
+    meta = json.loads(header)
+    meta["task_spec"][ASSIGNED_REQUIREMENTS] = delivery[ASSIGNED_REQUIREMENTS]
+    meta["task_spec"][CONTEXT] = delivery[CONTEXT]
+    return "{0}\n{1}\n```{2}".format(start, json.dumps(meta, ensure_ascii=False, indent=2), rest)

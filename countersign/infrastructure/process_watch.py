@@ -37,6 +37,9 @@ class TurnWatch:
     def launch(self, argv, env, workspace, timeout):
         """Return (status, exit code); the process group is always stopped."""
         with self.turn.open() as output, self.turn.error_stream() as errors:
+            status = turn_status(self.telemetry, self.turn.budgets, [])
+            if status != SUCCESS:
+                return status, None
             try:
                 process = subprocess.Popen(
                     argv,
@@ -70,7 +73,7 @@ class TurnWatch:
         """Poll events until exit, a budget stop, a denial or the deadline."""
         while True:
             check_stop(self.attempt.parent)
-            status = turn_status(self.telemetry, self.turn.token_budget, self.read())
+            status = turn_status(self.telemetry, self.turn.budgets, self.read())
             if status != SUCCESS:
                 stop_group(process.pid)
                 return status, process.wait()
@@ -118,9 +121,9 @@ def announce(watch):
     watch.clock["next"] = now + PROGRESS_SECONDS
 
 
-def turn_status(telemetry, budget, lines):
+def turn_status(telemetry, budgets, lines):
     """Stop on an exceeded token budget or a denied tool call."""
-    status = usage_limits.exceeded(telemetry, budget)
+    status = usage_limits.exceeded(telemetry, **budgets)
     if status == SUCCESS and any(permission_denied_event(line) for line in lines):
         return "BLOCKED_PERMISSION"
     return status

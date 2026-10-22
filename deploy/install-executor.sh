@@ -23,9 +23,11 @@ command -v python3 >/dev/null
 /usr/bin/python3 -c 'import sys; assert sys.version_info >= (3, 10), "Python 3.10+ is required"'
 command -v ssh >/dev/null
 command -v systemctl >/dev/null
+command -v runuser >/dev/null
 source_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 # shellcheck source=deploy/executor-maintenance.sh
 source "$source_root/deploy/executor-maintenance.sh"
+lock_executor_maintenance /run/countersign-executor-maintenance.lock
 release=/opt/countersign-executor
 config=/etc/countersign-executor
 state=/var/lib/countersign-executor
@@ -50,9 +52,7 @@ cleanup() {
   rm -rf -- "$staging"
 }
 trap cleanup EXIT
-cp -R -- "$source_root/countersign" "$staging/"
-chown -R root:root "$staging/countersign"
-chmod -R go-w "$staging/countersign"
+prepare_executor_package "$source_root/countersign" "$staging"
 # No new submissions or approvals from here on; refuse while an action runs; the stop
 # must succeed, and the journal is checked again after it.
 begin_maintenance "$marker" "$state" "$unit_file" RUNNING

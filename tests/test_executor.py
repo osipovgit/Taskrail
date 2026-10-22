@@ -18,7 +18,7 @@ from countersign.application import execution_requests, execution_wait
 from countersign.executor import action_schema, client, hosts, protocol, streams, transport, worker
 from countersign.executor.service import ExecutorServer
 from countersign.executor.store import TicketStore
-from countersign.interactions import remote
+from countersign.interactions import remote, remote_inspection
 
 INVENTORY = {
     "server-a": dict(
@@ -34,6 +34,30 @@ ACTION = dict(
 
 
 class ExecutorTest(unittest.TestCase):
+    def test_inspection_uses_known_command_options_even_after_find_separator(self):
+        for script in (
+            "find -- . -delete",
+            "find -- . -exec touch marker ';'",
+            "find -- . -fprint result.txt",
+            "find . -unknown",
+            "journalctl --unknown",
+            "ss --kill",
+            "systemctl -- status nginx --now",
+            "docker logs --follow app",
+            "head --unknown file",
+        ):
+            with self.subTest(script=script), self.assertRaises(ValueError):
+                remote_inspection.inspection(dict(ACTION, script=script))
+        for script in (
+            "find -- . -maxdepth 2 -name '*.log' -print",
+            "sudo -n systemctl status nginx --no-pager",
+            "journalctl -u nginx --since yesterday --no-pager",
+            "docker logs --tail 20 app",
+            "ps -eo pid,args",
+        ):
+            with self.subTest(script=script):
+                self.assertTrue(remote_inspection.inspection(dict(ACTION, script=script)))
+
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory()
         self.addCleanup(self.temporary.cleanup)
@@ -387,7 +411,7 @@ class ExecutorTest(unittest.TestCase):
             with self.subTest(key=key), self.assertRaises(ValueError):
                 hosts.validate(dict(INVENTORY["server-a"], **{key: value}))
 
-    def test_runtime_evidence_requires_successful_matching_ticket_and_source_read(self):
+    def test_unbound_successful_ticket_cannot_prove_a_runtime_criterion(self):
         from countersign.application.execution_evidence import claim_ids
         from countersign.core.coverage import validate_outcome
 
@@ -399,13 +423,14 @@ class ExecutorTest(unittest.TestCase):
         path = directory / "ticket.json"
         path.write_text(json.dumps([entry]))
         claims = [{"id": "E1", "path": str(path)}]
-        self.assertEqual(claim_ids(run, claims), {"E1"})
+        self.assertEqual(claim_ids(run, claims), {})
         outcome = {"outcome": "satisfied", "evidence_ids": ["E1"]}
         with self.assertRaises(ValueError):
             validate_outcome(outcome, {"kind": "runtime"}, {"E1": {}}, ())
-        validate_outcome(outcome, {"kind": "runtime"}, {"E1": {}}, {"E1"})
+        with self.assertRaises(ValueError):
+            validate_outcome(outcome, {"kind": "runtime"}, {"E1": {}}, {"E1"})
         path.write_text(json.dumps([{**entry, "results": [{"output": "forged"}]}]))
-        self.assertEqual(claim_ids(run, claims), set())
+        self.assertEqual(claim_ids(run, claims), {})
 
 
 if __name__ == "__main__":

@@ -62,8 +62,20 @@ class PlanningRegressions(unittest.TestCase):
         self.assertIn('"id": "R7"', request)
         self.assertIn("Do not research", request)
         self.assertIn("Missing evidence requires gap/BLOCKED", request)
+        self.assertIn("schema_version=1", request)
+        self.assertIn("coverage and step criteria", request)
+        self.assertNotIn("schema_version=2", request)
+        self.assertNotIn("Author semantic decisions", request)
         self.assertNotIn("source research", request)
         self.assertNotIn("at most 60", prompts.INSTRUCTIONS["planner"])
+        for role in ("implementer", "reviewer"):
+            request = prompts.repair("{}", "Missing outcomes", role, 1, requirements)
+            self.assertIn('"id": "R7"', request)
+            self.assertIn("Do not research", request)
+            self.assertIn("schema_version=2", request)
+            self.assertNotIn("coverage and step criteria", request)
+            contract = request.split("\nSchema:\n", 1)[1].split("\nAssigned requirements:", 1)[0]
+            self.assertEqual(json.loads(contract), schema.SCHEMAS["decision"])
 
     def test_explicit_keep_does_not_prompt_on_terminal(self):
         for arguments, prompts_expected, expected in (

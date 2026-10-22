@@ -15,7 +15,11 @@ def build_url(server, request):
     """The job URL plus lastBuild or an explicit build number."""
     build = request["build"]
     reference = "lastBuild" if build == "last" else str(build)
-    return "{0}/{1}".format(jenkins_http.job_url(server, request["job"]), reference)
+    url = "{0}/{1}".format(jenkins_http.job_url(server, request["job"]), reference)
+    if build == "last" and request["operation"] != "status":
+        number = status(server, url)["build"]["number"]
+        return build_url(server, dict(request, build=number))
+    return url
 
 
 def read(servers, request):
@@ -50,7 +54,21 @@ def tests(server, url):
     query = f"{url}/testReport/api/json?tree={TEST_TREE}"
     report = jenkins_http.get_json(server, query, READ_TIMEOUT)
     counts = {key: report.get(key) for key in ("passCount", "failCount", "skipCount")}
-    return dict(tests=dict(counts, failed_cases=failed_cases(report)[:MAX_CASES]))
+    failures = failed_cases(report)
+    omitted = max(0, len(failures) - MAX_CASES)
+    return dict(tests=dict(counts, failed_cases=failures[:MAX_CASES], omitted=omitted))
+
+
+def verification(server, url):
+    """Fetch console and test facts for the exact completed build without another model turn."""
+    outcome = console(server, url)
+    try:
+        outcome.update(tests(server, url), tests_status="available")
+    except (OSError, ValueError) as error:
+        if isinstance(error, HTTPError):
+            error.close()
+        outcome.update(tests_status="unavailable", tests_detail=str(error))
+    return outcome
 
 
 def failed_cases(report):

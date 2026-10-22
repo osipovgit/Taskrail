@@ -14,7 +14,7 @@ from countersign.application.live import execute_task
 from countersign.core.files import atomic_json
 from countersign.core.requirements import task_requirements
 from countersign.web import delivery_launch, requests, submissions, task_form
-from countersign.web.history import HISTORY, conversation, previous_messages, task_draft
+from countersign.web.history import HISTORY, TaskDraft, conversation, previous_messages, task_draft
 from countersign.web.lifecycle import trash_run
 from countersign.web.run_list import list_runs
 from countersign.web.run_view import run_view
@@ -216,13 +216,14 @@ class TaskControlTests(unittest.TestCase):
         self.assertIn('"design": true', followup)
         self.assertIn("Conversation history", followup)
 
-    def test_restart_drafts_keep_server_sections_out_of_constraints(self):
+    def test_restart_drafts_keep_policy_separate_and_preserve_explicit_user_text(self):
         draft = task_draft(self.run)
         self.assertNotIn("Workflow rules", draft["constraints"])
         legacy = dict(draft, constraints="Keep X\n\n" + task_form.COPIED_RULES)
         fields = {key: legacy[key] for key in task_form.FIELDS}
         text, _ = build_task(dict(fields, roots=legacy["roots"]), self.runs)
-        self.assertEqual(text.count("Workflow rules"), 1)
+        self.assertEqual(TaskDraft(text).fields()["constraints"], legacy["constraints"])
+        self.assertEqual(sum(line == "## Workflow rules" for line in text.splitlines()), 1)
         self.assertIn("## Additional constraints\nKeep X\n", text)
 
     def make_epic(self):
@@ -288,14 +289,17 @@ class TaskControlTests(unittest.TestCase):
             text = launch.call_args.args[0]["text"]
         self.assertIn("Change hello: return 2", text)
         self.assertIn("S-1: Change hello (current task)", text)
-        self.assertIn("S-2: Document hello (later; not part of this run)", text)
+        self.assertNotIn("S-2: Document hello", text)
+        snapshot = launch.call_args.args[0]["parent_context"]
+        self.assertIn("Document hello", snapshot)
         self.assertIn('"auto_approve": true', text)
         self.assertNotIn('"decompose"', text)
         self.assertNotIn("Conversation history", text)
         ids = [entry["text"] for entry in task_requirements(text, [])]
         self.assertFalse(any("S-2" in entry or "Workflow rules" in entry for entry in ids))
         self.assertIn("## Task split context", text)
-        self.assertIn("Overall acceptance criteria:\n" + self.payload["criteria"], text)
+        self.assertIn(self.payload["criteria"], snapshot)
+        self.assertIn("parent-task.md", text)
         self.assertIn("## Acceptance criteria\n- hello returns 2", text)
         self.assertEqual(json.loads((epic / "epic.json").read_text())["tasks"], {"S-1": "child-1"})
         with self.assertRaisesRegex(ValueError, "No task is ready"):
@@ -335,7 +339,81 @@ class TaskControlTests(unittest.TestCase):
         self.assertIn("S-1: Change hello (READY_FOR_REVIEW): child-1b summary", text)
         self.finish("child-2", "READY_FOR_REVIEW")
         epic_entry = next(run for run in list_runs(self.runs) if run["id"] == "epic")
-        self.assertEqual((epic_entry["group"], epic_entry["progress"]), ("review", "2/2"))
+        self.assertEqual((epic_entry["group"], epic_entry["progress"]), ("running", "2/2"))
+
+    def test_split_requires_independent_combined_review_and_fresh_source(self):
+        self.make_epic()
+        with self.launching("child-1"):
+            self.launcher.action(dict(id="epic", action="epic_next"))
+        self.finish("child-1", "READY_FOR_REVIEW")
+        with self.launching("child-2"):
+            self.launcher.action(dict(id="epic", action="epic_next"))
+        self.finish("child-2", "READY_FOR_REVIEW")
+        self.assertEqual(run_view(self.runs, "epic")["delivery"]["step"], "integrating")
+        with self.assertRaisesRegex(ValueError, "waits for confirmation"):
+            self.launcher.action(dict(id="epic", action="confirm"))
+        with self.launching("integrated") as launch:
+            delivery_launch.advance(self.launcher)
+            delivery_launch.advance(self.launcher)
+        self.assertEqual(launch.call_count, 1)
+        submitted = launch.call_args.args[0]
+        self.assertIn('"phase": "integration"', submitted["text"])
+        self.assertIn("Return 2 and document it", submitted["text"])
+        self.assertIn(self.payload["criteria"], submitted["text"])
+        self.assertIn('"read_only": true', submitted["text"])
+        self.configure("no-change")
+        task = self.base / "integration.md"
+        task.write_text(submitted["text"])
+        (self.base / "parent-task.md").write_text(submitted["parent_context"])
+        run, status = execute_task(task, self.settings, run_dir=self.runs / "integrated")
+        self.assertEqual(status, "NO_CHANGES_REQUIRED")
+        state = json.loads((run / "run.json").read_text())
+        self.assertEqual([record["stage"] for record in state["stages"]], ["reviewer"])
+        self.assertEqual(run_view(self.runs, "epic")["delivery"]["step"], "confirm")
+        source = self.repo / "hello.py"
+        original = source.read_text()
+        source.write_text("changed after review\n")
+        with self.assertRaisesRegex(ValueError, "Source changed since integration"):
+            self.launcher.action(dict(id="epic", action="confirm"))
+        source.write_text(original)
+        with patch.object(delivery_launch, "executor_offers", return_value={}):
+            self.launcher.action(dict(id="epic", action="confirm"))
+        self.assertEqual(run_view(self.runs, "epic")["delivery"]["step"], "done")
+        self.finish("child-2", "TOOL_ERROR")
+        self.assertEqual(run_view(self.runs, "epic")["delivery"]["step"], "needs_you")
+
+    def test_repeat_review_keeps_active_phases_and_archives_stopped_links(self):
+        epic = self.make_epic()
+        for name in ("child-1", "child-2"):
+            self.finish(name, "READY_FOR_REVIEW")
+        self.finish("old-review", "NO_CHANGES_REQUIRED")
+        self.finish("old-validation", "RUNNING")
+        phases = dict(integration="old-review", validation="old-validation")
+        record = dict(tasks={"S-1": "child-1", "S-2": "child-2"}, phases=phases, confirmed=1)
+        atomic_json(epic / "epic.json", record)
+        with self.assertRaisesRegex(ValueError, "Stop active delivery phases"):
+            self.launcher.action(dict(id="epic", action="integration_review"))
+        self.assertEqual(json.loads((epic / "epic.json").read_text()), record)
+        self.finish("old-validation", "TOOL_ERROR")
+        with self.launching("new-review"):
+            self.launcher.action(dict(id="epic", action="integration_review"))
+        updated = json.loads((epic / "epic.json").read_text())
+        self.assertEqual(updated["phases"], dict(integration="new-review"))
+        self.assertEqual(updated["phase_history"], [phases])
+        self.assertNotIn("confirmed", updated)
+
+    def test_invalid_child_submission_pauses_automatic_launch_visibly(self):
+        epic = self.make_epic()
+        self.launcher.action(dict(id="epic", action="epic_auto_on"))
+        with patch.object(self.launcher, "submit", side_effect=ValueError("Contract too large")):
+            delivery_launch.proceed(self.launcher, epic)
+        view = run_view(self.runs, "epic")["delivery"]
+        self.assertEqual(view["launch_error"], "Contract too large")
+        self.assertEqual(view["step"], "needs_you")
+        self.assertFalse(view["auto_continue"])
+        with patch.object(self.launcher, "submit") as submit:
+            delivery_launch.proceed(self.launcher, epic)
+        submit.assert_not_called()
 
     def test_a_task_run_is_linked_before_its_worker_and_never_started_twice(self):
         epic = self.make_epic()
@@ -458,7 +536,9 @@ class TaskControlTests(unittest.TestCase):
         ):
             self.launcher.action(dict(id="original", action="confirm"))
         text = launch.call_args.args[0]["text"]
-        self.assertIn('"phase": "server", "confirmed_change": "original"', text)
+        metadata = TaskDraft(text).metadata
+        self.assertEqual(metadata["phase"], "server")
+        self.assertEqual(metadata["confirmed_change"], "original")
         self.assertIn('"health returns 200"', text)
         self.assertEqual(delivery()["step"], "server")
         self.finish("server-1", "RUNNING")

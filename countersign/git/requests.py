@@ -7,6 +7,9 @@ from countersign.core import schema
 from countersign.git import envelopes
 
 STATUS = "GIT_REQUEST"
+STATUS_KEY = "status"
+ROOT = "root"
+RECENT_ACTIONS = 8
 
 
 def extract(text):
@@ -15,10 +18,10 @@ def extract(text):
         payload = json.loads(text, object_pairs_hook=schema.unique_fields)
     except ValueError:
         payload = envelopes.read_request(text)
-    if not isinstance(payload, dict) or payload.get("status") != STATUS:
+    if not isinstance(payload, dict) or payload.get(STATUS_KEY) != STATUS:
         return None
     schema.require(
-        set(payload) == {"schema_version", "status", "root", "argv", "reason"},
+        set(payload) == {"schema_version", STATUS_KEY, ROOT, "argv", "reason"},
         "Invalid Git request fields",
     )
     schema.contract_version(payload["schema_version"])
@@ -76,21 +79,35 @@ def context(run):
     """Snapshots contain untrusted command output, not instructions."""
     entries = history(run)
     schema.require(
-        not any(entry["status"] in {"RUNNING", "UNKNOWN"} for entry in entries),
+        not any(entry[STATUS_KEY] in {"RUNNING", "UNKNOWN"} for entry in entries),
         "Git outcome unknown; inspect the recorded operation before continuing. No automatic replay.",
     )
     if not entries:
         return ""
+    recent = list(map(brief, entries[-RECENT_ACTIONS:]))
+    index = dict(total_actions=len(entries), recent=recent)
     return (
-        "\nGit request history (read output files; never repeat completed writes):\n"
-        + json.dumps(entries)
+        "\nGit action index (completed writes remain replay-protected; read outputs for detail):\n"
+        + json.dumps(index)
+    )
+
+
+def brief(entry):
+    """Send bounded action identities instead of repeating complete requests and metadata."""
+    request = entry["request"]
+    return dict(
+        id=entry.get("id"),
+        operation=request["argv"][0],
+        root=request[ROOT],
+        status=entry[STATUS_KEY],
+        output_file=entry.get("output_file"),
     )
 
 
 def root_path(payload, roots):
     """Do not grant access to a guessed path or a repository's parent directory."""
-    schema.require(isinstance(payload["root"], str), "Git root must be text")
-    root = Path(payload["root"])
+    schema.require(isinstance(payload[ROOT], str), "Git root must be text")
+    root = Path(payload[ROOT])
     schema.require(
         root in roots.values() and root.resolve() == root,
         "Git root must exactly match a declared root",

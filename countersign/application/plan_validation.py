@@ -2,6 +2,7 @@
 
 from pathlib import Path
 
+from countersign.application import planned_checks, task_scope
 from countersign.application.planned_paths import safe_file
 from countersign.core import control
 from countersign.core.paths import readable_source
@@ -35,6 +36,8 @@ def validate_plan(plan, roots, task, config=None):
     if plan["status"] != "PLAN_READY":
         return
     control.check_plan(plan, config or {})
+    task_scope.check(plan, config or {})
+    planned_checks.validate(plan, config or {})
     proposed = unique_names(plan.get("proposed_change_files"))
     control.check_reads(plan.get("files_read"), plan.get("evidence"))
     targets = [safe_file(name, roots) for name in proposed]

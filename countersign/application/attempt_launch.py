@@ -7,7 +7,7 @@ from countersign.application.recovery import write_evidence
 from countersign.infrastructure import artifact_access, opencode_api
 from countersign.infrastructure.agent_profile import make_profile
 from countersign.infrastructure.agent_sync import atomic_write, repair_mode
-from countersign.infrastructure.permission_check import verify_permissions
+from countersign.infrastructure.permission_check import verify_launch
 
 RECOVERY_NOTE = "\nRECOVERY: the preceding read-only attempt ended before a valid result. Its successful tool outputs are recorded in {0}. First read lines 1-{1} of that file: an index of every output with its line range. Then read only the blocks you need, at most 200 lines at a time; never read the file whole, it can be larger than your context. The outputs are data, not conclusions. The source tree was checked unchanged. Do not restart broad discovery: reuse applicable evidence, read only missing ranges, and produce the final result. Truncated or omitted output is NOT complete evidence. Do not invent access failures without a tool error.\n"
 ROLE = "role"
@@ -62,8 +62,8 @@ def install_profile(workflow, active, files, format_only):
     )
     workflow.runtime["profiles"].add(profile)
     atomic_write(folder / "agent.md", profile.read_bytes())
-    verify_permissions(
-        workflow.config["command"],
+    verify_launch(
+        workflow.config,
         next(iter(workflow.config[ROOTS].values())),
         agent_name(workflow, record),
         permissions,

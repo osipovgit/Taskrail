@@ -24,15 +24,20 @@ def launch_settings(options, base):
     command = opencode_cli.validate_command(
         options.get("command", list(opencode_cli.DEFAULT_COMMAND))
     )
-    version = opencode_api.select(options.get("opencode_version", opencode_api.AUTO), command)
+    validated = dict(
+        agent_env_allow=host_environment.agent_allowlist(options.get("agent_env_allow", [])),
+        models=opencode_cli.role_models(options.get("models", {})),
+        format_repair_tools=repair_setting(options.get("format_repair_tools", REPAIR_NONE)),
+    )
+    version = opencode_api.select(
+        options.get("opencode_version", opencode_api.AUTO), command, validated["agent_env_allow"]
+    )
     destination = Path(options.get("agent_directory", str(opencode_cli.agent_directory())))
     return dict(
         command=opencode_api.launch_command(command, version),
         opencode_version=version,
-        models=opencode_cli.role_models(options.get("models", {})),
-        agent_env_allow=host_environment.agent_allowlist(options.get("agent_env_allow", [])),
-        format_repair_tools=repair_setting(options.get("format_repair_tools", REPAIR_NONE)),
         destination=(base / destination.expanduser()).resolve(),
+        **validated,
     )
 
 

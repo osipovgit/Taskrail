@@ -8,6 +8,7 @@ import math
 import re
 from types import MappingProxyType
 
+from countersign.core.plan_keys import uncode
 from countersign.core.plan_markdown import FIELDS, LINE, TASKS
 from countersign.core.plan_outcomes import PLACEHOLDER, absolute
 from countersign.core.plan_ownership import problems as ownership_problems
@@ -16,6 +17,8 @@ from countersign.core.task_graph import order
 IDENTIFIER = "id"
 NEW_FILE = re.compile(r"\s*\((?:new|new file)\)\s*$", re.IGNORECASE)
 NONE_WORDS = frozenset(("", "none", "-", "n/a", "no"))
+DEPENDENCY = re.compile(r"(?:T|Task\s*)(\d+)", re.IGNORECASE)
+SEPARATOR = re.compile(r"\s*(?:[,;]|\band\b)\s*", re.IGNORECASE)
 STEP_FIELDS = MappingProxyType(
     {
         "files": "line {line}: {id} has no Files",
@@ -28,7 +31,7 @@ REQUIRED = tuple(STEP_FIELDS.items())
 TASK_COUNTS = MappingProxyType(
     {
         "split": (2, math.inf, "Decision split needs at least two tasks; use single for one"),
-        "single": (1, math.inf, "Decision single needs a task; use no change for none"),
+        "single": (1, 1, "Decision single needs exactly one task; use split for several"),
         "none": (0, 0, "Decision no change cannot have tasks"),
     }
 )
@@ -36,14 +39,20 @@ TASK_COUNTS = MappingProxyType(
 
 def steps(document, coverage):
     """Every task section as a plan step, in the plan's order."""
-    return [step(task, coverage) for task in document[TASKS]]
+    planned = []
+    for task in document[TASKS]:
+        try:
+            planned.append(step(task, coverage))
+        except ValueError as error:
+            coverage.problems.append(str(error))
+    return planned
 
 
 def step(task, coverage):
     """One task section."""
     owned = coverage.owners.get(task[IDENTIFIER], [])
     done = listed(task, "done")
-    files = [NEW_FILE.sub("", name) for name in listed(task, "files")]
+    files = listed(task, "files")
     title = task["title"]
     return dict(
         id=task[IDENTIFIER],
@@ -65,15 +74,21 @@ def listed(task, key):
     entries = task[FIELDS].get(key, ([], 0))[0]
     if key == "files":
         entries = [name.strip() for entry in entries for name in entry.split(",")]
+        entries = map(uncode, (NEW_FILE.sub("", name) for name in entries))
     return [entry for entry in entries if entry and not PLACEHOLDER.match(entry)]
 
 
 def dependencies(task):
     """Task IDs after `Depends on:`; none is empty."""
-    named = task[FIELDS].get("depends", ("", 0))[0]
-    if named.strip().casefold() in NONE_WORDS:
+    entries, line = task[FIELDS].get("depends", ([], 0))
+    named = ", ".join(entries)
+    if named.casefold() in NONE_WORDS:
         return []
-    return [name.upper() for name in re.findall(r"T\d+", named, re.IGNORECASE)]
+    parts = [uncode(part.strip()) for part in SEPARATOR.split(named)]
+    matches = [DEPENDENCY.fullmatch(part) for part in parts]
+    if not all(matches):
+        raise ValueError(f"line {line}: invalid Depends on; use task IDs separated by commas")
+    return list(dict.fromkeys(f"T{match[1]}" for match in matches))
 
 
 def check(decision, planned, coverage):

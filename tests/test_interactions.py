@@ -1,6 +1,7 @@
 """Exercise approval lifetime, local execution and stage clock without real models."""
 
 import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -17,6 +18,7 @@ from countersign.interactions import (
     approval_policy,
     approvals,
     local,
+    local_request,
     read_only,
     transcripts,
 )
@@ -91,8 +93,15 @@ class InteractionTests(unittest.TestCase):
         allowed = [
             ["ls", "-la", "roles"],
             ["find", ".", "-name", "*.yml", "-type", "f"],
+            ["find", "--", ".", "-maxdepth", "2", "-name", "*.yml", "-print"],
             ["head", "-n", "20", "roles/main.yml"],
+            ["head", "-n20", "roles/main.yml"],
             ["grep", "-n", "name", "roles/main.yml"],
+            ["grep", "-e", "/etc/passwd", "roles/main.yml"],
+            ["grep", "--color", "name", "roles/main.yml"],
+            ["grep", "--color=never", "name", "roles/main.yml"],
+            ["ls", "--color", "roles"],
+            ["ls", "--color=never", "roles"],
             ["wc", "-l", "--", "roles/main.yml"],
             ["du", "-sh"],
         ]
@@ -102,6 +111,16 @@ class InteractionTests(unittest.TestCase):
             ["ls", "outside"],
             ["find", ".", "-exec", "rm", "{}", ";"],
             ["find", ".", "-delete"],
+            ["find", "--", ".", "-delete"],
+            ["find", "--", ".", "-fprint", "output"],
+            ["find", "--", ".", "-exec", "touch", "marker", ";"],
+            ["find", ".", "-name", "*.yml", "-unknown"],
+            ["head", "--unknown", "roles/main.yml"],
+            ["wc", "--files0-from", "roles/main.yml"],
+            ["ls", "--dereference-command-line", "outside"],
+            ["ls", "--color", "/etc"],
+            ["grep", "--color", "name", "/etc/passwd"],
+            ["grep", "--color=never", "name", "/etc/passwd"],
             ["grep", "-rn", "TOKEN", "."],
             ["grep", "--file=/etc/shadow", "roles/main.yml"],
             ["tail", "-f", "roles/main.yml"],
@@ -137,6 +156,37 @@ class InteractionTests(unittest.TestCase):
         self.assertEqual(wait.call_count, 1)
         self.assertTrue(approval_policy.active(self.run, state))
 
+    def test_optional_color_argument_cannot_hide_an_outside_path(self):
+        outside = self.run / "outside.txt"
+        outside.write_text("test-marker\n")
+        for argv in (
+            ["grep", "--color", "test-marker", str(outside)],
+            ["ls", "--color", str(outside)],
+        ):
+            with self.subTest(argv=argv):
+                self.assertFalse(read_only.command(self.request(argv), self.context["roots"]))
+                # Demonstrate the actual optional-argument semantics only on disposable data.
+                observed = subprocess.run(
+                    argv, cwd=self.root, capture_output=True, text=True, check=True
+                )
+                self.assertTrue(observed.stdout)
+        self.assertEqual(outside.read_text(), "test-marker\n")
+
+    def test_path_check_does_not_depend_on_gnu_option_permutation(self):
+        outside = self.run / "outside.txt"
+        outside.write_text("test-marker\n")
+        (self.root / "inside.txt").write_text("inside\n")
+        argv = ["grep", "test-marker", "inside.txt", "-e", str(outside)]
+        self.assertFalse(read_only.command(self.request(argv), self.context["roots"]))
+        observed = subprocess.run(
+            argv,
+            cwd=self.root,
+            env={"POSIXLY_CORRECT": "1"},
+            capture_output=True,
+            text=True,
+        )
+        self.assertIn(str(outside) + ":test-marker", observed.stdout)
+
     def test_allow_all_needs_an_allow_decision_and_a_boolean(self):
         payload = dict(id="run", ticket="t", decision="deny", alternative="", allow_all=True)
         state = {}
@@ -162,6 +212,33 @@ class InteractionTests(unittest.TestCase):
         self.assertEqual(outcome["status"], "FAILED")
         self.assertEqual(outcome["stdout"].strip(), "$(touch forbidden)")
         self.assertFalse((self.root / "forbidden").exists())
+
+    def test_automatic_listings_ignore_path_shadowing_and_recheck_read_scope(self):
+        shadow = self.run / "bin"
+        shadow.mkdir()
+        fake = shadow / "ls"
+        fake.write_text("#!/bin/sh\nprintf shadow-executed\n")
+        fake.chmod(0o755)
+        target = self.root / "listed.txt"
+        target.write_text("safe\n")
+        request = self.request(["ls", "listed.txt"])
+        with patch.dict(os.environ, {"PATH": str(shadow)}):
+            decision = approval_policy.decision(self.run, request, {}, self.context["roots"])
+            self.assertEqual(decision["rule"], "read_only")
+            context = dict(self.context, automatic_read=True)
+            result = local.execute(request, context)
+            self.assertEqual(result["stdout"], "listed.txt\n")
+            self.assertEqual(
+                local.validate(self.request(["ls", "--unknown"]), self.context["roots"])[0],
+                str(fake),
+            )
+            target.unlink()
+            target.symlink_to(self.run / "outside.txt")
+            with self.assertRaisesRegex(ValueError, "no longer qualifies"):
+                local.execute(request, context)
+            fake.unlink()
+            self.assertEqual(local_request.missing_executable(["ls"]), "ls")
+            self.assertIsNone(local_request.missing_executable(["ls"], automatic=True))
 
     def test_timeout_reaps_process_and_never_reports_success(self):
         self.context["timeout"] = 0.05
@@ -231,7 +308,7 @@ class InteractionTests(unittest.TestCase):
         response = transcripts.local_snapshot(self.run, stage, self.request(["lint"]), outcome)
         text_file = self.run / "00-input/local/01-plan-0.stdout.txt"
         self.assertEqual(text_file.read_text(), lines)
-        self.assertIn(f"read omitted lines from the full text files: {text_file}", response)
+        self.assertIn(f"Full output files: {text_file}", response)
         self.assertFalse((self.run / "00-input/local/01-plan-0.stderr.txt").exists())
         self.assertIn(str(text_file), transcripts.confirmed_paths(self.run))
         text_file.write_text("edited\n")
@@ -243,8 +320,12 @@ class InteractionTests(unittest.TestCase):
                 with self.subTest(role=role, decision=decision):
                     folder = self.run / f"{role}-{decision}"
                     folder.mkdir()
+                    (self.run / "local-actions.json").unlink(missing_ok=True)
+                    (self.run / "request-counts.json").unlink(missing_ok=True)
                     (folder / "events.jsonl").touch()
-                    record = dict(role=role, directory=folder.name, budget=dict(timeout=60))
+                    record = dict(
+                        stage=role, role=role, directory=folder.name, budget=dict(timeout=60)
+                    )
                     state = dict(stages=[record])
                     environment = dict(
                         self.context,
@@ -317,7 +398,12 @@ class InteractionTests(unittest.TestCase):
                 folder = self.run / f"missing-{installed}"
                 folder.mkdir()
                 (folder / "events.jsonl").touch()
-                record = dict(role="implementer", directory=folder.name, budget=dict(timeout=60))
+                record = dict(
+                    stage="implementer",
+                    role="implementer",
+                    directory=folder.name,
+                    budget=dict(timeout=60),
+                )
                 environment = dict(
                     self.context,
                     format_only=False,
@@ -332,6 +418,7 @@ class InteractionTests(unittest.TestCase):
                     "{}",
                 ]
                 requests = []
+                installed_now = [False]
 
                 def invoke(_options):
                     text = responses.pop(0)
@@ -339,9 +426,12 @@ class InteractionTests(unittest.TestCase):
 
                 def decide(_run, request):
                     requests.append(request)
+                    installed_now[0] = installed
                     return dict(decision="allow", alternative="")
 
-                found = [None, "/usr/bin/countersign-missing-tool" if installed else None]
+                def found(*_args, **_kwargs):
+                    return "/usr/bin/countersign-missing-tool" if installed_now[0] else None
+
                 with ExitStack() as stack:
                     stack.enter_context(patch("countersign.interactions.clock.save_run"))
                     stack.enter_context(patch("countersign.interactions.session.save_run"))
@@ -373,7 +463,9 @@ class InteractionTests(unittest.TestCase):
         folder = self.run / "incomplete"
         folder.mkdir()
         (folder / "events.jsonl").touch()
-        record = dict(role="planner", directory=folder.name, budget=dict(timeout=60))
+        record = dict(
+            stage="planner", role="planner", directory=folder.name, budget=dict(timeout=60)
+        )
         environment = dict(
             self.context,
             format_only=False,

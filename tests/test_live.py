@@ -38,7 +38,7 @@ class LiveTests(unittest.TestCase):
         self.settings = self.base / "settings.json"
         self.profiles = self.base / "profiles"
 
-    def run_mode(self, mode="ok", **overrides):
+    def configure_mode(self, mode="ok", **overrides):
         settings = dict(
             command=[
                 sys.executable,
@@ -63,6 +63,9 @@ class LiveTests(unittest.TestCase):
         )
         settings.update(overrides)
         self.settings.write_text(json.dumps(settings))
+
+    def run_mode(self, mode="ok", **overrides):
+        self.configure_mode(mode, **overrides)
         with patch(
             "countersign.interactions.approvals.wait",
             return_value=dict(decision="deny", alternative="Use permitted source paths"),
@@ -275,7 +278,8 @@ class LiveTests(unittest.TestCase):
         self.assertNotIn("quote", json.dumps(schema))
         planning = (run / "01-plan/request.md").read_text()
         self.assertIn(f"PLAN FILE: your result is the Markdown file {run / 'plan.md'}", planning)
-        self.assertIn("R1. Return 2", planning)
+        self.assertRegex(planning, r"\[R1; R-[a-f0-9]+; kind=task\]\nReturn 2")
+        self.assertEqual(planning.count("Return 2"), 1)
         requests = planning.split("Request schemas, one per line:\n", 1)[1].split("\nContext:")[0]
         self.assertEqual(
             [json.loads(line)["properties"]["status"]["const"] for line in requests.splitlines()],
@@ -292,16 +296,15 @@ class LiveTests(unittest.TestCase):
             + "\nFINAL_REQUIREMENT_7"
         )
         self.task.write_text(text)
-        run, status, state = self.run_mode()
+        run, status, state = self.run_mode(model_context_tokens=100000)
         self.assertEqual(status, "READY_FOR_REVIEW")
         for stage in ("01-plan", "02-plan-review", "03-implement", "05-review"):
             request = (run / stage / "request.md").read_text()
             context = json.loads(request.split("Context:\n", 1)[1])
-            self.assertTrue(
-                request.startswith(
-                    "# Task (verbatim)\n" + text + "\n\n# Orchestrator instructions\n"
-                )
-            )
+            labelled = request.split("\n\n# Orchestrator instructions\n", 1)[0].split("\n", 1)[1]
+            unlabelled = re.sub(r"(?m)^\[R\d+; R-[a-f0-9]+; kind=task\]\n", "", labelled)
+            self.assertEqual(unlabelled, text.split("\n```\n", 1)[1])
+            self.assertEqual((run / "00-input/task.md").read_text(), text)
             self.assertNotIn("task_chunks", context)
             self.assertLess(max(map(len, request.splitlines())), 2000)
             header = json.loads((run / stage / "agent.md").read_text().split("---")[1])
@@ -309,7 +312,7 @@ class LiveTests(unittest.TestCase):
             self.assertNotIn(str(run / stage) + "/*", header["permission"]["read"])
             if stage != "01-plan":
                 saved = str(run / "01-plan/result.json")
-                self.assertIn(saved, context["saved_results"])
+                self.assertNotIn("saved_results", context)
                 self.assertEqual(header["permission"]["read"][saved], "allow")
 
     def test_large_followup_history_is_read_from_an_indexed_file(self):
@@ -350,7 +353,7 @@ class LiveTests(unittest.TestCase):
         self.assertIn("Review limitations: 05-review", report)
         request = (run / "05-review/request.md").read_text()
         context = json.loads(request.split("Context:\n", 1)[1])
-        self.assertEqual(context["prior_plan_review"]["unverified"], ["Runtime not run"])
+        self.assertNotIn("prior_plan_review", context)
         self.assertEqual(context["diff_file"], str(run / "changes.diff"))
 
     def test_already_satisfied_task_needs_no_writer(self):
@@ -446,7 +449,8 @@ class LiveTests(unittest.TestCase):
         self.assertEqual(first["read"].get(str(recovery)), "allow")
 
     def test_imported_plan_is_revalidated_under_current_contract(self):
-        self.run_mode()
+        self.configure_mode()
+        self.assertIn("return 1", (self.root / "hello.py").read_text())
         plan = dict(
             status="PLAN_READY",
             summary="fix",
@@ -459,14 +463,24 @@ class LiveTests(unittest.TestCase):
         run, status = execute_task(
             self.task, self.settings, run_dir=self.base / "parsed-import", plan_response=saved
         )
-        self.assertEqual(status, "READY_FOR_REVIEW")
         state = json.loads((run / "run.json").read_text())
+        self.assertEqual(status, "READY_FOR_REVIEW", state.get("summary"))
+        self.assertIn("return 2", (self.root / "hello.py").read_text())
         self.assertEqual(
             [a["stage"] for a in state["attempts"]],
             ["planner", "plan-reviewer", "implementer", "reviewer"],
         )
         self.assertEqual(state["contract_version"], 1)
         self.assertIn("imported_draft", (run / "01-plan/request.md").read_text())
+
+    def test_plan_read_before_write_rejection_stays_in_the_same_session(self):
+        run, status, state = self.run_mode("plan-unread")
+        self.assertEqual(status, "READY_FOR_REVIEW", state.get("summary"))
+        self.assertEqual(state["stages"][0]["session_turns"], 2)
+        correction = (run / "01-plan/tool-result.md").read_text()
+        self.assertIn("in THIS session", correction)
+        self.assertIn(str(run / "plan.md"), correction)
+        self.assertEqual([stage["stage"] for stage in state["attempts"]].count("planner"), 1)
 
     def test_permission_denied_retains_tool_input_after_operator_declines(self):
         run, status, state = self.run_mode("denied", read_retries=0, timeout_seconds=1)
@@ -499,6 +513,10 @@ class LiveTests(unittest.TestCase):
                 "observations.json",
                 "budgets.json",
                 "plan.md",
+                "source-packet-planner.json",
+                "source-packet-plan-reviewer.json",
+                "source-packet-implementer.json",
+                "source-packet-reviewer.json",
             },
         )
         for record in state["stages"]:
@@ -732,6 +750,18 @@ class LiveTests(unittest.TestCase):
         self.assertEqual(status, "READY_FOR_REVIEW")
         self.assertEqual(len(state["attempts"]), 6)
 
+    def test_compact_decisions_and_addressed_correction_complete_the_workflow(self):
+        run, status, state = self.run_mode("compact-correction")
+        self.assertEqual(status, "READY_FOR_REVIEW", state.get("summary"))
+        self.assertEqual(state["stages"][1]["session_turns"], 2)
+        saved = json.loads((run / "03-implement/result.json").read_text())
+        self.assertEqual(saved["schema_version"], 1)
+        self.assertEqual(saved["completed_steps"], ["T1"])
+        self.assertEqual(saved["changed_files"], [str(self.root / "hello.py")])
+        self.assertEqual(saved["status"], "IMPLEMENTED")
+        correction = (run / "02-plan-review/tool-result.md").read_text()
+        self.assertIn("FIELD_ENUM at /outcomes/0/result", correction)
+
     def test_plan_repair(self):
         _, status, state = self.run_mode("plan-repair")
         self.assertEqual(status, "READY_FOR_REVIEW")
@@ -745,7 +775,12 @@ class LiveTests(unittest.TestCase):
     def verify_command(self, code, **options):
         return dict(cwd=str(self.root), argv=[sys.executable, "-c", code], **options)
 
+    def allow_all_actions(self):
+        text = self.task.read_text()
+        self.task.write_text(text.replace('"roots":', '"auto_approve": true, "roots":', 1))
+
     def test_settings_verify_command_passes_and_keeps_output(self):
+        self.allow_all_actions()
         code = "print('verified', open('hello.py').read().count('return 2'))"
         run, status, state = self.run_mode("ok", verify_commands=[self.verify_command(code)])
         self.assertEqual(status, "READY_FOR_REVIEW", state.get("summary"))
@@ -758,6 +793,7 @@ class LiveTests(unittest.TestCase):
         self.assertEqual(frozen["verify_commands"][0]["timeout_seconds"], 600)
 
     def test_failed_verify_command_returns_output_to_bounded_repair(self):
+        self.allow_all_actions()
         failing = self.verify_command("import sys; print('boom'); sys.exit(3)")
         run, status, state = self.run_mode("ok", verify_commands=[failing], max_repairs=1)
         self.assertEqual(status, "CHECK_FAILED")
@@ -766,6 +802,7 @@ class LiveTests(unittest.TestCase):
         self.assertIn("boom", state["checks"][-1]["detail"])
 
     def test_verify_command_writing_sources_stops_the_run(self):
+        self.allow_all_actions()
         writer = self.verify_command("open('generated.txt', 'w').write('x')")
         _, status, state = self.run_mode("ok", verify_commands=[writer])
         self.assertEqual(status, "BLOCKED")
@@ -798,6 +835,7 @@ class LiveTests(unittest.TestCase):
 
     def test_worktree_isolation_leaves_the_source_checkout_untouched(self):
         process = self.isolated_repository()
+        self.allow_all_actions()
         probe = self.verify_command("import os; print('cwd', os.getcwd())")
         run, status, state = self.run_mode(
             "ok", worktree_base=str(self.base / "worktrees"), verify_commands=[probe]
@@ -873,7 +911,7 @@ class LiveTests(unittest.TestCase):
         self.assertEqual([stage["mode"] for stage in review], ["model"])
         self.assertEqual(review[0]["session_turns"], 2)
         prompt = (run / review[0]["directory"] / "tool-result.md").read_text()
-        self.assertIn("not one JSON request or result", prompt)
+        self.assertIn("did not follow the advertised response format", prompt)
         self.assertIn("You are the reviewer stage", prompt)
         self.assertIn(str(run / review[0]["directory"] / "request.md"), prompt)
 
@@ -931,7 +969,9 @@ class LiveTests(unittest.TestCase):
             [stage["mode"] for stage in planner], ["model", "format-repair", "research-recovery"]
         )
         request = (run / planner[-1]["directory"] / "request.md").read_text()
-        self.assertIn("PREVIOUS FINAL RESPONSE WAS INVALID: Missing fields", request)
+        self.assertIn(
+            "PREVIOUS FINAL RESPONSE WAS INVALID: FIELD_KEYS at /: Missing fields", request
+        )
 
     def test_large_change_waits_for_the_operator(self):
         run, status, state = self.run_mode("ok", max_change_lines=1)

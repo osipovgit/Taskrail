@@ -1,5 +1,6 @@
 """Personally approved local diagnostics; no implicit shell expansion."""
 
+import os
 import shutil
 import subprocess
 import tempfile
@@ -9,7 +10,7 @@ from countersign.core import control, json_response, schema
 from countersign.git import transport
 from countersign.infrastructure import environment as host_environment
 from countersign.infrastructure.process_group import stop_group
-from countersign.interactions import local_request
+from countersign.interactions import local_request, read_only
 
 MAX_TIMEOUT = 3600
 POLL_SECONDS = 0.1
@@ -31,10 +32,13 @@ def extract(text):
     return payload
 
 
-def validate(payload, roots):
+def validate(payload, roots, automatic=False):
     """A valid request whose executable is installed; returns argv with its absolute path."""
     argv = local_request.checked_request(payload, roots)
-    executable = shutil.which(argv[0])
+    if automatic:
+        schema.require(read_only.command(payload, roots), "Automatic read no longer qualifies")
+    search_path = os.defpath if automatic else None
+    executable = shutil.which(argv[0], path=search_path)
     schema.require(bool(executable), "Executable not installed on the orchestrator host")
     return [executable, *argv[1:]]
 
@@ -42,12 +46,14 @@ def validate(payload, roots):
 def execute(payload, context):
     """Approval authorizes exact argv; execution still has a finite remaining deadline."""
     schema.require(context["timeout"] > 0, "Stage active time exhausted")
-    argv = validate(payload, context["roots"])
+    argv = context.get("effective_argv") or validate(
+        payload, context["roots"], context.get("automatic_read", False)
+    )
     with tempfile.TemporaryFile() as output, tempfile.TemporaryFile() as errors:
         process = subprocess.Popen(
             argv,
             cwd=payload["cwd"],
-            env=host_environment.filtered(),
+            env=context.get("execution_env", host_environment.filtered()),
             stdin=subprocess.DEVNULL,
             stdout=output,
             stderr=errors,

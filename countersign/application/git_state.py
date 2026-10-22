@@ -1,6 +1,6 @@
 """Fingerprint small Git control files; never read objects or invoke Git."""
 
-from countersign.application.result_context import git_reference
+from countersign.application.git_reference import git_reference
 from countersign.core.files import digest
 
 CONTROL_FILES = ("HEAD", "index", "config", "packed-refs", "ORIG_HEAD", "commondir")

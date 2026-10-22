@@ -62,8 +62,10 @@ for inspection. An unknown outcome blocks continuation pending operator
 reconciliation; start a new task after inspecting the repository.
 
 Hooks, external diffs, text conversion, process filters, custom merge drivers, automatic signatures,
-credential helpers and interactive credential prompts are disabled. Git must be
-installed on the server PATH. Commits require a configured user name/email.
+credential helpers and interactive credential prompts are disabled.
+Signature verification helpers are disabled for reads. Pretty formats accept built-in
+names or literal formats; configured aliases and `%G` signature directives are rejected.
+Git must be installed on the server PATH. Commits require a configured user name/email.
 SSH authentication must already work noninteractively with a known host key.
 Each Git subprocess has a 60-second timeout and a 4 MiB output limit per stream;
 exhaustion is explicit, never silently truncated. Normal pushes are explicit, non-forced branch pushes; fetch uses explicit,

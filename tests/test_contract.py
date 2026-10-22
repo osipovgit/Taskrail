@@ -61,7 +61,7 @@ class ContractTests(unittest.TestCase):
             plan=None,
             changed=[],
         )
-        self.observe(self.stage, "def hello():\n    return 2\n")
+        self.observe(self.stage, "1: def hello():\n2:     return 2\n")
 
     def observe(self, folder, output, **inputs):
         folder.mkdir(exist_ok=True)
@@ -99,6 +99,15 @@ class ContractTests(unittest.TestCase):
         self.observe(self.stage, "1:def hello():", offset=1, limit=1)
         with self.assertRaisesRegex(ValueError, "matching observed"):
             self.validate()
+
+    def test_duplicate_source_text_must_be_observed_at_the_cited_position(self):
+        self.source.write_text("same\nhidden\nsame\n")
+        self.observe(self.stage, "1: same", offset=1, limit=2000)
+        self.payload["evidence"][0].update(line_start=3, line_end=3)
+        with self.assertRaisesRegex(ValueError, "matching observed"):
+            self.validate()
+        self.observe(self.stage, "3: same", offset=1, limit=2000)
+        self.validate()
 
     def test_stale_evidence_is_rejected_even_if_cited_line_still_exists(self):
         self.source.write_text(self.source.read_text() + "\n# Changed source\n")
@@ -164,11 +173,11 @@ class ContractTests(unittest.TestCase):
             with self.subTest(invalid=invalid[:50]), self.assertRaises(ValueError):
                 schema.decode(invalid, "planner")
 
-    def test_server_sections_are_instructions_and_splits_stay_small(self):
+    def test_legacy_user_sections_are_preserved_and_splits_stay_small(self):
         task = "# Title\n\n## Goal\nShip it\n\n## Workflow rules\nUse English\n\n## Turn control\nSplit\n"
         self.assertEqual(
             [entry["text"] for entry in task_requirements(task, [])],
-            ["# Title", "## Goal\nShip it"],
+            ["Ship it", "## Workflow rules\nUse English", "## Turn control\nSplit"],
         )
         steps = [dict(id=f"T{number}") for number in range(30)]
         plan = dict(steps=steps, proposed_change_files=["a"])

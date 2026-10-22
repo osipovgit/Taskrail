@@ -14,4 +14,8 @@ class ArchitectureTests(unittest.TestCase):
                 if isinstance(node, ast.ImportFrom) and (node.module or "").startswith(
                     "countersign."
                 ):
-                    self.assertTrue(node.module.startswith("countersign.core."), path)
+                    self.assertTrue(
+                        node.module == "countersign.core"
+                        or node.module.startswith("countersign.core."),
+                        path,
+                    )

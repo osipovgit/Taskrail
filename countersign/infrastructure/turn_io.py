@@ -18,9 +18,9 @@ class TurnIO:
     def __init__(self, attempt, runtime):
         options = runtime or {}
         self.session_id = options.get("session_id")
-        self.token_budget = options.get("token_budget")
+        self.budgets = {key: options.get(key) for key in ("token_budget", "context_budget")}
         self._allow = options.get("env_allow", ())
-        self._compact = options.get("autocompact", True)
+        self._compact = options.get("autocompact", False)
         self._attachment = options.get("attachment", {})
         self.request = attempt / "request.md"
         self.path = attempt / "events.jsonl"

@@ -2,7 +2,16 @@
 
 import subprocess
 
-from countersign.application import attempt_context, run_setup, transitions, workflow_start
+from countersign.application import (
+    attempt_context,
+    check_batches,
+    check_parents,
+    planned_checks,
+    reviewed_artifacts,
+    run_setup,
+    transitions,
+    workflow_start,
+)
 from countersign.application.changes import capture_preimages, write_diff
 from countersign.application.check_stage import run_checks
 from countersign.application.run_locks import run_locks
@@ -48,7 +57,7 @@ def supervise(workflow, resume):
 
 def run_stages(workflow, resume):
     """Advance stages until a terminal status; every stage starts from verified sources."""
-    workflow_start.start(workflow, resume)
+    prepare_stages(workflow, resume)
     while workflow.state[STATUS] == RUNNING:
         control.check_stop(workflow.run)
         control.check_stage(workflow.flow[STAGE], workflow.config)
@@ -58,6 +67,13 @@ def run_stages(workflow, resume):
             run_checks(workflow)
         else:
             model_stage(workflow)
+
+
+def prepare_stages(workflow, resume):
+    """Authenticate inherited inputs before executing a fixed batch or launching models."""
+    workflow_start.start(workflow, resume)
+    check_parents.adopt(workflow, resume)
+    check_batches.run_configured(workflow)
 
 
 def model_stage(workflow):
@@ -70,6 +86,9 @@ def model_stage(workflow):
     transitions.advance(
         workflow.flow, workflow.state, verdict, reference, workflow.config["max_repairs"]
     )
+    if record["stage"] == "plan-reviewer":
+        planned_checks.activate(workflow)
+        reviewed_artifacts.seal(workflow)
     effect = workflow.flow.pop("effect", None)
     if workflow.state[STATUS] == RUNNING:
         apply_effect(workflow, effect)

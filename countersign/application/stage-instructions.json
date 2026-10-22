@@ -1,6 +1,6 @@
 {
-  "planner": "Find necessary related files within roots and write the plan file. A task lists only the files it changes; put verification in that task's Verify, never in a separate verification task. If source already meets the task, decide no change, cite evidence for every requirement and list runtime checks as runtime:; never invent edits. Stop once evidence suffices; follow the effective runtime allowance. Do not execute the plan.",
-  "plan-reviewer": "Review the PLAN against the COMPLETE task and current source. Existing source may already include earlier changes. Check every requirement, not just the plan summary, and judge whether each task is one independent action with its own deliverable. Use the absolute paths in plan.files_read. If proposed_change_files is empty, independently confirm no edits are needed: APPROVE will finish this run without implementation or final review. Preserve deferred runtime checks in unverified. Return specific defects or APPROVE.",
-  "implementer": "Implement the approved plan only in allowed_files. Preserve unrelated user changes. Return BLOCKED if new paths are necessary.",
-  "reviewer": "Review actual changed source against the COMPLETE task, plan, diff, preimages and checks. Check every requirement. Reuse prior plan-review evidence only when still applicable; research again only for a concrete gap. Do not trust implementation claims. Record unexecuted runtime checks as unverified, with concrete verification steps."
+  "planner": "\nCurrent stage: planning.\n",
+  "plan-reviewer": "\nCurrent stage: plan review, including independent no-change validation when proposed_change_files is empty.\n",
+  "implementer": "\nCurrent stage: implementation.\n",
+  "reviewer": "\nCurrent stage: final implementation review.\n"
 }

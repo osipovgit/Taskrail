@@ -32,7 +32,11 @@ def perform(servers, request):
     try:
         return followed(server, queue, job, deadline)
     except (OSError, ValueError):
-        return dict(status=UNKNOWN, detail="Lost contact after queueing; check Jenkins first")
+        return dict(
+            status=UNKNOWN,
+            queue=queue,
+            detail="Lost contact after queueing; inspect this queue item before any new build",
+        )
 
 
 def trigger(server, request, job):
@@ -57,7 +61,11 @@ def followed(server, queue, job, deadline):
         number = (queued.get("executable") or {}).get("number")
         time.sleep(0 if number else POLL_SECONDS)
     if number is None:
-        return dict(status=UNKNOWN, detail="Still queued at the timeout; Jenkins may run it later")
+        return dict(
+            status=UNKNOWN,
+            queue=queue,
+            detail="Still queued at the timeout; Jenkins may run it later",
+        )
     return finished(server, f"{job}/{number}", deadline)
 
 
@@ -69,6 +77,6 @@ def finished(server, url, deadline):
         record = jenkins_reads.status(server, url)["build"]
     if record.get("building"):
         detail = "Still running at the timeout; check it with a status request"
-        return dict(status=FAILED, build=record, detail=detail)
+        return dict(status=UNKNOWN, build=record, detail=detail)
     status = "SUCCEEDED" if record.get("result") == "SUCCESS" else FAILED
-    return dict(status=status, build=record, **jenkins_reads.console(server, url))
+    return dict(status=status, build=record, **jenkins_reads.verification(server, url))

@@ -4,14 +4,14 @@ from types import MappingProxyType
 
 from countersign.application import worktree_isolation
 from countersign.interactions import approval_policy
-from countersign.web import epic_tasks, history
+from countersign.web import delivery_checks, epic_tasks, history
 from countersign.web.delivery_steps import CHECK_KEYS, SERVER, VALIDATION
 
 TITLE_LIMIT = 160
 TITLES = MappingProxyType({VALIDATION: "Jenkins validation", SERVER: "Server checks"})
 GOALS = MappingProxyType(
     {
-        VALIDATION: "Validate the finished change with the Jenkins checks below. Start each build through JENKINS_REQUEST, then read its status, console and test results, and report whether the change passed. Do not change files.",
+        VALIDATION: "Validate the finished change with the Jenkins checks below. Use existing CheckResults first. A JENKINS_REQUEST build already waits and returns the pinned build, console and test report. Do not request those same reads again unless evidence is missing. Report whether the change passed. Do not change files.",
         SERVER: "The operator confirmed the finished change. Run the server checks below through ACTION_REQUEST, one exact action per check, and report what each observed. Change server state only as far as a check requires. Do not change files.",
     }
 )
@@ -27,7 +27,7 @@ def payload(run, state, name, checks):
         title=title[:TITLE_LIMIT],
         goal=GOALS[name],
         criteria=CRITERIA,
-        verification="\n".join(checks[CHECK_KEYS[name]]),
+        verification="\n".join(legacy_verification(run, state, name, checks)),
         constraints=draft["constraints"],
         split_context=brief(run, state, draft),
         roots=worktree_isolation.root_entries(state["roots"]),
@@ -36,7 +36,28 @@ def payload(run, state, name, checks):
     )
     if name == SERVER:
         fields["confirmed_change"] = run.name
+    fields.update(typed_checks(run, state, name))
     return fields
+
+
+def typed_checks(run, state, name):
+    """Phase checks keep parent runtime identities instead of extracting labels again."""
+    selected = []
+    for spec in delivery_checks.typed(run, state):
+        if spec["phase"] == name:
+            selected.append(spec)
+    if not selected:
+        return {}
+    criteria = {criterion for entry in selected for criterion in entry["criteria"]}
+    assigned = [entry for entry in state["requirements"] if entry["id"] in criteria]
+    return dict(check_specs=selected, assigned_requirements=assigned, check_parent=run.name)
+
+
+def legacy_verification(run, state, name, checks):
+    """Display labels never create extra requirements beside typed criterion IDs."""
+    selected = typed_checks(run, state, name).get("check_specs", [])
+    labels = {"{id}: {recipe_id}".format(**spec) for spec in selected}
+    return [entry for entry in checks[CHECK_KEYS[name]] if entry not in labels]
 
 
 def brief(run, state, draft):

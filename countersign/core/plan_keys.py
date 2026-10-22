@@ -3,7 +3,10 @@
 import re
 from types import MappingProxyType
 
-KEY = re.compile(r"^([A-Za-z][A-Za-z ]*?)\s*:\s*(.*)$")
+KEY = re.compile(r"^[A-Za-z][A-Za-z ]*$")
+BACKTICK = "`"
+MARKERS = ("**", "__", BACKTICK)
+DEPENDS = "depends"
 NOTES = "notes"
 VERIFY = "verify"
 KEYS = MappingProxyType(
@@ -11,9 +14,9 @@ KEYS = MappingProxyType(
         "decision": "decision",
         "summary": "summary",
         "reason": "summary",
-        "depends on": "depends",
-        "dependencies": "depends",
-        "after": "depends",
+        "depends on": DEPENDS,
+        "dependencies": DEPENDS,
+        "after": DEPENDS,
         "files": "files",
         "done when": "done",
         "acceptance": "done",
@@ -23,17 +26,33 @@ KEYS = MappingProxyType(
         NOTES: NOTES,
     }
 )
-LISTS = frozenset(("files", "done", VERIFY))
+LISTS = frozenset(("files", "done", VERIFY, DEPENDS))
 CONTINUED = LISTS | {"notes"}
 
 
 def key_line(line):
     """(known key, text) of a `Key: value` line, or (None, "")."""
-    found = KEY.match(line)
-    if not found:
+    name, separator, text = line.partition(":")
+    if not separator:
         return None, ""
-    name = found.group(1).strip().casefold()
-    return KEYS.get(name), found.group(2).strip()
+    name, text = name.strip(), text.strip()
+    for marker in MARKERS:
+        if name.startswith(marker):
+            name = name.removeprefix(marker)
+            if name.endswith(marker):
+                name = name.removesuffix(marker)
+            else:
+                text = text.removeprefix(marker).strip()
+    selected = KEYS.get(name.casefold()) if KEY.fullmatch(name) else None
+    return selected, text
+
+
+def uncode(text):
+    """Remove one complete Markdown code wrapper, preserving the literal contents."""
+    wrapped = text.startswith(BACKTICK) and text.endswith(BACKTICK)
+    if wrapped and text.count(BACKTICK) == 2:
+        return text[1:-1]
+    return text
 
 
 def stored(key, text, number):
