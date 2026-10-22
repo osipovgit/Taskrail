@@ -7,6 +7,7 @@ from countersign.application import (
     attempt_context,
     evidence,
     plan_file,
+    plan_recovery,
     prompts,
     result_preview,
     session_budget,
@@ -127,6 +128,10 @@ class StageAttempts:
         """Return a valid verdict or finish the record with its failure."""
         workflow = self.workflow
         if outcome[STATUS] != "OK":
+            recovered = plan_recovery.recover(workflow, record, outcome)
+            if recovered is not None:
+                workflow.finish_active("RESULT_VALID", recovered, outcome)
+                return recovered
             workflow.finish_active(outcome[STATUS], diagnostics=outcome)
             return None
         try:

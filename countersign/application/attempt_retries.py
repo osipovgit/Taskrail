@@ -1,6 +1,6 @@
 """Bounded retry policy of one stage: format repair, access and transport recovery."""
 
-from countersign.application import access_recovery, evidence, prompts
+from countersign.application import access_recovery, evidence, plan_recovery, prompts
 from countersign.application.attempt_launch import role_of
 from countersign.infrastructure import context_overflow
 from countersign.observability.progress import say
@@ -56,7 +56,11 @@ class Retries:
         if status == "BLOCKED_PERMISSION":
             return self.access_recovery(outcome)
         if status == context_overflow.STATUS:
-            return self.transport_retry(CONTEXT_NOTE, overflow_outputs(self.attempts.workflow))
+            return self.transport_retry(
+                CONTEXT_NOTE,
+                overflow_outputs(self.attempts.workflow),
+                plan_recovery.feedback(outcome),
+            )
         return status in TRANSPORT and self.transport_retry()
 
     def format_repair(self, outcome):
