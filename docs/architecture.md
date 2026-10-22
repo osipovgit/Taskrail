@@ -64,7 +64,9 @@ The browser has no runtime
 dependencies; Node packages are only linting and formatting tools. The runtime needs
 Python 3.10+ for both the runtime and development tools, and Node 24.19+ for UI linting.
 
-The response contract lives in `core/result-schemas.json` (`schema_version` 1).
+The response contract lives in `core/result-schemas.json`: compact model decisions
+use version 2; the server materializes canonical version 1 artifacts and accepts
+historical version 1 responses through an explicit adapter.
 Application helpers compose prompts, bind source evidence, freeze instructions and
 account for durable budgets. The engine owns requirement IDs and the actual
 changed-file and check records; a model cannot claim successful execution by
@@ -90,11 +92,19 @@ and no global skill loading is enabled.
 Plan tasks form a dependency graph (`core/task_graph.py`): the server rejects unknown,
 self and cyclic dependencies, runs tasks in topological order (plan order breaks
 ties) and gives reviewers that order. Every task owns concrete files, requirements
-or scoped parts of them, results and checks; two tasks may change one file when each
-delivers its own behavior. Independent review checks semantic overlap and the
+or scoped parts of them, results and checks; tasks sharing a file require an explicit dependency chain and distinct behavior. Independent review checks semantic overlap and the
 remaining deliverable after dependencies finish. There are no parallel writers;
 checkpoints keep the approved plan, and an interrupted writer inspects current files
 before it continues.
+
+Child task headers carry the parent's immutable file scope; no nested split or scope
+expansion can reach implementation. The server authenticates the reviewed plan digest,
+requirement lineage and accepted prerequisite source/Git snapshots before starting a
+child directly at implementation. Legacy unsealed parents retain child planning.
+A bounded prerequisite index points to a sealed full parent snapshot. After all children finish, a read-only integration run reviews
+the complete original goal and criteria through the same execution engine and
+independent reviewer. Confirmation rechecks its source/Git fingerprint, and changed
+child completion records invalidate the approval.
 
 Before the first planning request the server writes `00-input/project-map.md`
 (`application/project_map.py`): an index, every source file of each root with its line
@@ -103,9 +113,12 @@ requirement the first lines that name its distinctive words. Long command output
 comes with a digest of its severities, most mentioned files and rules
 (`interactions/output_digest.py`). Response schemas are compact JSON, one alternative
 per line, and the SSH and Jenkins request schemas appear only when the executor is
-installed (`application/response_format.py`). Read-only stages run with opencode's automatic
-compaction off: an overflowing session fails and continues in a fresh session from
-recorded evidence, while the plan file keeps the planner's progress.
+installed (`application/response_format.py`). All roles run with automatic compaction disabled. Admission measures each role's
+request, frozen role and approved source inputs against the configured context
+capacity and reserve; usage monitoring separately checks provider input including
+cache and explicit compaction events. A writer is never retried automatically after
+context exhaustion. Read-only recovery may start a bounded fresh session from
+recorded evidence while retaining the plan file. See [context limits](deployment.md#context-limits).
 
 The optional SSH executor owns its private credentials and queue under a separate
 OS user. The application submits requests through a Unix socket; only a root peer

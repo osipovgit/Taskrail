@@ -1,77 +1,61 @@
-"""Read-only SSH inspection before the operator confirms a change.
-
-Until then an SSH action runs exactly one listed command that only reads server state,
-optionally through sudo. The script is parsed into arguments and rebuilt with every
-argument quoted, so shell syntax in it stays literal and cannot start another command.
-"""
+"""Rebuild one explicitly supported inspection command before remote approval."""
 
 import shlex
 from types import MappingProxyType
 
 from countersign.core.schema import require
+from countersign.interactions import read_grammar
 
-NONE = frozenset()
-FOLLOW = frozenset(("-f", "--follow"))
-REMOTE_HOST = frozenset(("-H", "--host", "-M", "--machine"))
-# Command -> options that write, execute, follow forever or reach other hosts.
+# Exact switches and valued options, using the same parser as local inspection.
 COMMANDS = MappingProxyType(
     {
-        "cat": NONE,
-        "head": NONE,
-        "tail": FOLLOW | {"-F", "--retry"},
-        "ls": NONE,
-        "stat": NONE,
-        "du": NONE,
-        "df": NONE,
-        "wc": NONE,
-        "grep": NONE,
-        "find": frozenset(
-            ("-exec", "-execdir", "-ok", "-okdir", "-delete", "-fprint", "-fprint0")
-            + ("-fprintf", "-fls")
+        "df": ("-h -H -i -k -m -P -T -a --human-readable --local", "-t -x --type --exclude-type"),
+        "journalctl": (
+            "-b -r -q -x --no-pager --utc --system --user --list-boots --disk-usage",
+            "-n -u -p -o --lines --unit --priority --output --since --until --boot",
         ),
-        "journalctl": FOLLOW
-        | REMOTE_HOST
-        | {"--rotate", "--flush", "--sync", "--relinquish-var", "--smart-relinquish-var"}
-        | {"--vacuum-size", "--vacuum-time", "--vacuum-files", "--setup-keys"}
-        | {"--update-catalog"},
-        "ss": frozenset(("-K", "--kill", "-D", "--diag")),
-        "ps": NONE,
-        "uptime": NONE,
-        "uname": NONE,
-        "id": NONE,
-        "whoami": NONE,
-        "free": NONE,
-        "nproc": NONE,
-        "lscpu": NONE,
-        "lsblk": NONE,
-        "getent": NONE,
-        "readlink": NONE,
-        "realpath": NONE,
-        "sha256sum": NONE,
-        "md5sum": NONE,
-        "dpkg-query": NONE,
+        "ss": (
+            "-a -l -t -u -x -n -p -r -s -e -i -4 -6 --all --listening --numeric --processes",
+            "",
+        ),
+        "ps": ("-e -A -a -f -F -l -w -H --forest", "-p -u -U -o --pid --user --format --sort"),
+        "uptime": ("-p -s --pretty --since", ""),
+        "uname": ("-a -s -n -r -v -m -p -i -o --all", ""),
+        "id": ("-u -g -G -n -r --user --group --groups --name --real", ""),
+        "whoami": ("", ""),
+        "free": ("-b -k -m -g -h -w -t --bytes --kibi --mebi --gibi --human --wide --total", ""),
+        "nproc": ("--all", "--ignore"),
+        "lscpu": ("-a -b -c -e -J --all --online --offline --json", ""),
+        "lsblk": ("-a -b -f -l -n -p -r -J --all --bytes --fs --list --json", "-o --output"),
+        "getent": ("", ""),
+        "readlink": ("-e -f -m -n -q -s -v --canonicalize --canonicalize-existing", ""),
+        "realpath": (
+            "-e -m -s -q --canonicalize-existing --canonicalize-missing",
+            "--relative-to --relative-base",
+        ),
+        "sha256sum": ("-b -t --binary --text", ""),
+        "md5sum": ("-b -t --binary --text", ""),
+        "dpkg-query": ("-W -l -s -L --show --list --status --listfiles", "-f --showformat"),
     }
 )
-# Command -> (options forbidden with any operation, operation -> its forbidden options).
 OPERATIONS = MappingProxyType(
     {
         "systemctl": (
-            REMOTE_HOST,
-            dict.fromkeys(
-                ("status", "show", "is-active", "is-enabled", "is-failed", "cat")
-                + ("list-units", "list-unit-files", "list-timers"),
-                NONE,
+            "status show is-active is-enabled is-failed cat list-units list-unit-files list-timers",
+            (
+                "--no-pager --plain --all --full --failed --no-legend -a -l",
+                "-p --property --type --state",
             ),
         ),
         "docker": (
-            frozenset(("-H", "--host", "-c", "--context", "--config")),
-            dict(ps=NONE, images=NONE, inspect=NONE, version=NONE, info=NONE, logs=FOLLOW),
+            "ps images inspect version info logs",
+            (
+                "-a -q --all --quiet --no-trunc --timestamps --details --size",
+                "--format --filter --tail --since --until",
+            ),
         ),
     }
 )
-# Commands that change state when given arguments.
-BARE = frozenset(("hostname",))
-SUDO = "sudo"
 OPERATOR_CHARACTERS = frozenset("();<>|&")
 LISTED = "{0}; {1}; optionally prefixed by sudo or sudo -n"
 
@@ -87,7 +71,7 @@ def inspection(action):
 
 
 def arguments_of(script):
-    """Split like a shell, but refuse unquoted operators that would chain or redirect."""
+    """Split like a shell, refusing operators that would chain or redirect."""
     lexer = shlex.shlex(script, posix=True, punctuation_chars=True)
     lexer.whitespace_split = True
     try:
@@ -100,50 +84,44 @@ def arguments_of(script):
 
 
 def check(argv):
-    """A listed command whose options only read."""
+    """Unknown commands, options and operation syntax fail before ticket creation."""
     require(bool(argv), "name the command to run")
     program, arguments = argv[0], argv[1:]
-    if program == SUDO:
+    if program == "sudo":
         non_interactive = arguments[:1] == ["-n"]
         check(arguments[int(non_interactive) :])
-        return
-    if program in BARE:
-        require(not arguments, f"{program} takes no arguments here")
-        return
-    forbidden = forbidden_options(program, arguments)
-    for option in options(arguments):
-        require(not blocked(program, option, forbidden), f"{program} {option} is not read-only")
+    elif program == "hostname":
+        require(not arguments, "hostname takes no arguments here")
+    elif program in OPERATIONS:
+        operation(program, arguments)
+    else:
+        command(program, arguments)
 
 
-def forbidden_options(program, arguments):
-    """The options a listed command or operation must not use."""
-    if program not in OPERATIONS:
-        require(program in COMMANDS, f"{program} is not a listed read-only command")
-        return COMMANDS[program]
-    general, operations = OPERATIONS[program]
-    operation = next((name for name in arguments if not name.startswith("-")), "")
-    require(operation in operations, f"{program} {operation} is not a listed read-only operation")
-    return general | operations[operation]
+def command(program, arguments):
+    """Shared file reads and explicitly specified remote diagnostics."""
+    grammar = COMMANDS.get(program)
+    if grammar is None:
+        read_grammar.operands(program, arguments)
+    else:
+        read_grammar.parse(arguments, grammar, options_after_paths=True)
 
 
-def options(arguments):
-    """Arguments before "--" that start with a dash."""
-    end = arguments.index("--") if "--" in arguments else len(arguments)
-    return [argument for argument in arguments[:end] if argument.startswith("-")]
-
-
-def blocked(program, option, forbidden):
-    """find predicates are whole words; other commands also bundle short letters."""
-    name = option.split("=", 1)[0]
-    if program == "find" or name.startswith("--"):
-        return name in forbidden
-    return bool({f"-{letter}" for letter in name[1:]} & forbidden)
+def operation(program, arguments):
+    """Subcommands are literal operands after global options have been validated."""
+    names, grammar = OPERATIONS[program]
+    _, operands = read_grammar.parse(arguments, grammar, options_after_paths=True)
+    require(bool(operands), "Missing inspection operation")
+    require(operands[0] in names.split(), "Unsupported inspection operation")
+    # Neither CLI treats -- before an operation as authorization for new options.
+    require("--" not in arguments, "Inspection operations do not accept --")
 
 
 def listed():
     """The listed commands and operations, as instructions and refusals name them."""
     operations = []
-    for name, (_, names) in OPERATIONS.items():
-        operations.append("{0} {1}".format(name, "|".join(names)))
-    commands = ", ".join(sorted([*COMMANDS, *BARE]))
-    return LISTED.format(commands, "; ".join(operations))
+    for name, spec in OPERATIONS.items():
+        names = "|".join(spec[0].split())
+        operations.append(f"{name} {names}")
+    programs = [*COMMANDS, *read_grammar.COMMANDS, "find", "hostname"]
+    return LISTED.format(", ".join(sorted(programs)), "; ".join(operations))

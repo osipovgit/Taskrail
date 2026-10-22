@@ -8,8 +8,9 @@ import re
 from pathlib import Path
 from types import MappingProxyType
 
-CITATION = re.compile(r"([^\s,;]+):(\d+)(?:\s*-\s*(\d+))?")
-TASK_REFERENCE = re.compile(r"(T\d+)\s*(?:[\[(]([^\])]*)[\])])?", re.IGNORECASE)
+CITATION = re.compile(r"`?([^`\s,;]+):(\d+)(?:\s*-\s*(\d+))?`?")
+TASK_REFERENCE = re.compile(r"(T\d+)\s*(?:\[([^\]]*)\]|\(([^)]*)\))?\s*", re.IGNORECASE)
+TASK_SEPARATOR = re.compile(r"\s*[,;]\s*")
 PLACEHOLDER = re.compile(r"^<.*>$")
 PLANNED = "planned"
 LINE = "line"
@@ -80,9 +81,9 @@ class Coverage:
 
     def assign(self, requirement, entry):
         """`T1, T2 [scope]`: the tasks that deliver the requirement or a part of it."""
-        references = TASK_REFERENCE.findall(entry["text"])
+        references = task_references(entry["text"])
         if not references:
-            message = "line {line}: {label} names no task, done:, runtime: or gap:"
+            message = "line {line}: {label} needs only task IDs with optional [scope], or done:, runtime:, gap:"
             self.problems.append(message.format(**entry))
         for task, scope in references:
             owned = self.owners.setdefault(task.upper(), [])
@@ -109,6 +110,31 @@ def missing_labels(count, seen):
     """The labels R1..R<count> that have no line, comma-separated."""
     labels = ["R{0}".format(number) for number in range(1, count + 1)]
     return ", ".join(label for label in labels if label not in seen)
+
+
+def task_references(text):
+    """Consume every character; a valid task ID cannot hide unparsed instructions."""
+    found = []
+    position = 0
+    while position < len(text):
+        match = TASK_REFERENCE.match(text, position)
+        if match is None:
+            return []
+        found.append(reference(match))
+        position = match.end()
+        if position < len(text):
+            separator = TASK_SEPARATOR.match(text, position)
+            if separator is None or separator.end() == len(text):
+                return []
+            position = separator.end()
+    names = [entry[0].upper() for entry in found]
+    return found if len(set(names)) == len(names) else []
+
+
+def reference(match):
+    """Matching square brackets or parentheses delimit one optional ownership scope."""
+    scope = match[2] or match[3] or ""
+    return match[1], scope
 
 
 def classify(text):

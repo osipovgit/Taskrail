@@ -4,22 +4,25 @@ from countersign.core.schema import require
 
 OUTCOME = "outcome"
 STATUS = "status"
+IDENTIFIER = "id"
+PLANNING = frozenset(("planner", "plan-reviewer"))
 
 
 def unique(entries, label):
     """Return indexed records while rejecting duplicate identifiers."""
-    indexed = {entry["id"]: entry for entry in entries}
+    indexed = {entry[IDENTIFIER]: entry for entry in entries}
     require(len(indexed) == len(entries), f"Duplicate {label}")
     return indexed
 
 
-def validate_coverage(payload, requirements, stage, executed_evidence=()):
+def validate_coverage(payload, requirements, stage, executed_evidence=(), planned_runtime=()):
     """Every supplied requirement must have a justified, stage-appropriate outcome."""
     outcomes = unique(payload["coverage"], "coverage ID")
-    check_ids(set(outcomes), {entry["id"] for entry in requirements})
+    check_ids(set(outcomes), {entry[IDENTIFIER] for entry in requirements})
     evidence = unique(payload["evidence"], "evidence ID")
+    permitted = planned_runtime if stage in PLANNING else ()
     for entry in requirements:
-        validate_outcome(outcomes[entry["id"]], entry, evidence, executed_evidence)
+        validate_outcome(outcomes[entry[IDENTIFIER]], entry, evidence, executed_evidence, permitted)
     validate_findings(payload.get("findings", []), outcomes)
     verdicts(payload, stage)
 
@@ -34,19 +37,34 @@ def check_ids(covered, expected):
     )
 
 
-def validate_outcome(outcome, requirement, evidence, executed_evidence=()):
+def validate_outcome(outcome, requirement, evidence, executed_evidence=(), planned_runtime=()):
     """A reference is necessary for source claims; runtime deferrals stay explicit."""
     require(set(outcome["evidence_ids"]) <= set(evidence), "Unknown evidence ID")
     if outcome[OUTCOME] in {"satisfied", "contradicted"}:
         require(bool(outcome["evidence_ids"]), "Source claim needs observed evidence")
     if requirement["kind"] == "runtime":
-        require(
-            outcome[OUTCOME] in {"deferred", "not_evaluated"}
-            or bool(set(outcome["evidence_ids"]) & set(executed_evidence)),
-            "Runtime verification was not executed",
-        )
+        runtime_outcome(outcome, requirement, executed_evidence, planned_runtime)
     else:
         require(outcome[OUTCOME] != "deferred", "Required task evidence cannot be deferred")
+
+
+def runtime_outcome(outcome, requirement, executed_evidence, planned_runtime):
+    """Runtime acceptance needs this criterion's matching, current check assessment."""
+    if outcome[OUTCOME] in {"deferred", "not_evaluated", "gap"}:
+        return
+    if outcome[OUTCOME] == "planned":
+        require(
+            requirement[IDENTIFIER] in planned_runtime,
+            "Runtime planning needs an owned local check recipe",
+        )
+        return
+    expected = "passed" if outcome[OUTCOME] == "satisfied" else "failed"
+    matched = []
+    for reference in outcome["evidence_ids"]:
+        record = executed_evidence.get(reference) if isinstance(executed_evidence, dict) else None
+        if record and requirement[IDENTIFIER] in record["criteria"]:
+            matched.append(record["assessment"]["status"])
+    require(expected in matched, "Runtime verification needs a matching current CheckResult")
 
 
 def verdicts(payload, stage):

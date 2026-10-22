@@ -1,6 +1,7 @@
 """Shape checks of a local command request before approval."""
 
 import json
+import os
 import shutil
 from pathlib import Path
 
@@ -55,9 +56,10 @@ def correction(text):
     return INCOMPLETE.format(shown)
 
 
-def missing_executable(argv):
+def missing_executable(argv, automatic=False):
     """The program name when it is not installed on the host, else None."""
-    return None if shutil.which(argv[0]) else argv[0]
+    search_path = os.defpath if automatic else None
+    return None if shutil.which(argv[0], path=search_path) else argv[0]
 
 
 def valid_argument(argument):

@@ -2,6 +2,7 @@
 
 from countersign.core.coverage import unique
 from countersign.core.schema import require
+from countersign.core.task_conflicts import ordered_writes
 from countersign.core.task_graph import order
 
 IDENTIFIER = "id"
@@ -14,6 +15,7 @@ def validate_plan_steps(payload, requirements):
     unique(steps, "step ID")
     validate_fields(steps, {entry[IDENTIFIER] for entry in requirements})
     order(steps)
+    ordered_writes(steps)
     paths = {path for step in steps for path in step["files"]}
     require(
         paths == set(payload["proposed_change_files"]), "Step files differ from authorized scope"

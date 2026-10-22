@@ -111,6 +111,10 @@ class GitExecutorTests(unittest.TestCase):
             ["reflog", "expire", "--all"],
             ["reflog", "delete", "HEAD@{0}"],
             ["log", "--output=/tmp/forbidden"],
+            ["log", "--format=%G?"],
+            ["log", "--pretty", "%+GS"],
+            ["show", "--format=tformat:%GG"],
+            ["reflog", "--format", "signature-alias"],
             ["show", "--textconv", "HEAD:value.txt"],
             ["diff", "--no-index", "/etc/passwd", "value.txt"],
             ["branch", "-f", "main", "HEAD~1"],
@@ -122,6 +126,44 @@ class GitExecutorTests(unittest.TestCase):
                 with self.subTest(argv=argv):
                     self.assertEqual(self.execute(argv, "implementer")["status"], "REJECTED")
             invoke.assert_not_called()
+
+    def test_configured_signature_verifiers_do_not_run_during_reads(self):
+        marker = self.base / "verifier-ran"
+        helper = self.base / "verifier"
+        helper.write_text(f"#!/bin/sh\ntouch '{marker}'\nexit 1\n")
+        helper.chmod(0o755)
+        for setting in (
+            "gpg.program",
+            "gpg.openpgp.program",
+            "gpg.x509.program",
+            "gpg.ssh.program",
+        ):
+            process.checked(self.root, ["config", setting, str(helper)])
+        process.checked(self.root, ["config", "log.showSignature", "true"])
+        process.checked(self.root, ["config", "pretty.signed", "%G?"])
+        process.checked(self.root, ["config", "format.pretty", "signed"])
+        tree = process.checked(self.root, ["rev-parse", "HEAD^{tree}"]).strip()
+        signed = (
+            f"tree {tree}\nauthor Test <test@example.invalid> 1 +0000\n"
+            "committer Test <test@example.invalid> 1 +0000\n"
+            "gpgsig -----BEGIN PGP SIGNATURE-----\n fake-signature\n"
+            " -----END PGP SIGNATURE-----\n\nSigned fixture\n"
+        )
+        digest = subprocess.run(
+            ["git", "hash-object", "-t", "commit", "-w", "--stdin"],
+            cwd=self.root,
+            input=signed,
+            text=True,
+            capture_output=True,
+            check=True,
+        ).stdout.strip()
+        for argv in (["log", "-1", digest], ["show", "--format=fuller", digest]):
+            with self.subTest(argv=argv):
+                self.assertFalse(policy.validate(argv, "planner"))
+                self.assertIn("Signed fixture", process.checked(self.root, argv))
+        # Even an internal signature probe cannot run the repository's helper.
+        process.invoke(self.root, ["show", "--format=%G?", digest])
+        self.assertFalse(marker.exists())
 
     def test_reviewers_cannot_write(self):
         for role in ["planner", "reviewer"]:
@@ -329,7 +371,11 @@ class GitExecutorTests(unittest.TestCase):
         folder = self.run / "01-plan"
         folder.mkdir()
         record = dict(
-            directory=folder.name, role="planner", status="RUNNING", budget=dict(timeout=3600)
+            directory=folder.name,
+            stage="planner",
+            role="planner",
+            status="RUNNING",
+            budget=dict(timeout=3600),
         )
         state = dict(attempts=[], stages=[record], roots={"project": str(self.root)})
         (self.run / "checkpoint.json").write_text(

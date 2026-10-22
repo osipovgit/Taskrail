@@ -41,6 +41,7 @@ class MaintenanceStepsTests(unittest.TestCase):
         self.config.mkdir()
         self.state.mkdir()
         self.marker = self.config / "maintenance"
+        self.lock = base / "maintenance.lock"
         self.unit = base / "countersign-executor.service"
         self.unit.write_text("[Unit]\n")
         self.log = base / "systemctl.log"
@@ -57,8 +58,18 @@ class MaintenanceStepsTests(unittest.TestCase):
         )
 
     def maintain(self, *statuses, **environment):
-        script = 'set -euo pipefail; source "$1"; shift; begin_maintenance "$@"'
-        arguments = [str(LIBRARY), str(self.marker), str(self.state), str(self.unit), *statuses]
+        script = (
+            'set -euo pipefail; source "$1"; lock_executor_maintenance "$2"; shift 2; '
+            'marker=$1; trap \'leave_maintenance "$marker"\' EXIT; begin_maintenance "$@"'
+        )
+        arguments = [
+            str(LIBRARY),
+            str(self.lock),
+            str(self.marker),
+            str(self.state),
+            str(self.unit),
+            *statuses,
+        ]
         return subprocess.run(
             ["bash", "-c", script, "maintenance", *arguments],
             env=dict(self.environment, **environment),
@@ -74,7 +85,7 @@ class MaintenanceStepsTests(unittest.TestCase):
         done = self.maintain("RUNNING")
         self.assertEqual(done.returncode, 0, done.stderr)
         self.assertIn("stop countersign-executor.service marker=yes", self.calls())
-        self.assertTrue(self.marker.exists())
+        self.assertFalse(self.marker.exists())
 
     def test_a_running_action_stops_maintenance_before_the_service_stops(self):
         (self.state / "ticket.json").write_text(json.dumps(dict(status="RUNNING")))
@@ -98,13 +109,64 @@ class MaintenanceStepsTests(unittest.TestCase):
         self.assertEqual(self.maintain("RUNNING").returncode, 0)
         self.assertEqual(self.calls(), [])
 
+    def test_an_existing_marker_is_neither_claimed_nor_removed(self):
+        self.marker.write_text("interrupted owner")
+        refused = self.maintain("RUNNING")
+        self.assertNotEqual(refused.returncode, 0)
+        self.assertIn("inspect the interrupted maintenance", refused.stderr)
+        self.assertEqual(self.marker.read_text(), "interrupted owner")
+        self.assertEqual(self.calls(), [])
+
+    def test_a_second_maintenance_process_cannot_clear_the_owners_marker(self):
+        script = (
+            'set -euo pipefail; source "$1"; lock_executor_maintenance "$2"; '
+            "marker=$3; trap 'leave_maintenance \"$marker\"' EXIT; "
+            'enter_maintenance "$marker"; echo ready; read -r finish'
+        )
+        with subprocess.Popen(
+            ["bash", "-c", script, "owner", str(LIBRARY), str(self.lock), str(self.marker)],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        ) as owner:
+            self.assertEqual(owner.stdout.readline(), "ready\n")
+            self.assertTrue(self.marker.exists())
+            refused = self.maintain("RUNNING")
+            self.assertNotEqual(refused.returncode, 0)
+            self.assertIn("Another executor installation or reset", refused.stderr)
+            self.assertTrue(self.marker.exists())
+            _, error = owner.communicate("finish\n", timeout=5)
+            self.assertEqual(owner.returncode, 0, error)
+        self.assertFalse(self.marker.exists())
+
+    def test_cleanup_after_preparation_failure_preserves_unowned_marker(self):
+        self.marker.write_text("previous owner")
+        script = (
+            'set -euo pipefail; source "$1"; marker=$2; '
+            "trap 'leave_maintenance \"$marker\"' EXIT; false"
+        )
+        failed = subprocess.run(
+            ["bash", "-c", script, "prepare", str(LIBRARY), str(self.marker)],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        self.assertNotEqual(failed.returncode, 0)
+        self.assertEqual(self.marker.read_text(), "previous owner")
+
 
 class MaintenanceScriptTests(unittest.TestCase):
     """The installer and reset take every step before they replace or delete anything."""
 
     def test_the_installer_swaps_a_prepared_package_only_after_maintenance(self):
         script = (BASE / "deploy/install-executor.sh").read_text()
-        steps = ['cp -R -- "$source_root/countersign"', "begin_maintenance", 'mv -- "$staging']
+        steps = [
+            "lock_executor_maintenance",
+            "prepare_executor_package",
+            "begin_maintenance",
+            'mv -- "$staging',
+        ]
         positions = [script.index(step) for step in steps]
         self.assertEqual(positions, sorted(positions))
         self.assertIn("trap cleanup EXIT", script)
@@ -117,6 +179,72 @@ class MaintenanceScriptTests(unittest.TestCase):
         self.assertIn("RUNNING UNKNOWN", script[maintenance : script.index("\n", maintenance)])
         self.assertLess(maintenance, script.index("rm -rf --"))
         self.assertIn("trap 'leave_maintenance", script)
+
+
+class ExecutorPackageTests(unittest.TestCase):
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.base = Path(temporary.name)
+        self.source = self.base / "source/countersign"
+        (self.source / "executor").mkdir(parents=True)
+        for name in (
+            "__init__.py",
+            "executor/__init__.py",
+            "executor/service.py",
+            "executor/approval.py",
+        ):
+            (self.source / name).write_text('"""Import fixture."""\n')
+        self.staging = self.base / "staging"
+        self.staging.mkdir(mode=0o700)
+        binaries = self.base / "bin"
+        binaries.mkdir()
+        (binaries / "chown").write_text("#!/bin/sh\nexit 0\n")
+        (binaries / "runuser").write_text(
+            '#!/bin/sh\nprintf "%s\\n" "$*" > "$PREFLIGHT_LOG"\nshift 3\nexec "$@"\n'
+        )
+        for binary in binaries.iterdir():
+            binary.chmod(0o755)
+        self.environment = dict(
+            os.environ,
+            PATH=str(binaries) + os.pathsep + os.environ["PATH"],
+            PREFLIGHT_LOG=str(self.base / "preflight.log"),
+        )
+
+    def prepare_package(self):
+        script = 'set -euo pipefail; source "$1"; prepare_executor_package "$2" "$3"'
+        return subprocess.run(
+            ["bash", "-c", script, "package", str(LIBRARY), str(self.source), str(self.staging)],
+            env=self.environment,
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+
+    def test_private_source_modes_become_readable_without_write_access(self):
+        for path in [self.source, *self.source.rglob("*")]:
+            path.chmod(0o700 if path.is_dir() else 0o600)
+        prepared = self.prepare_package()
+        self.assertEqual(prepared.returncode, 0, prepared.stderr)
+        for path in [self.staging, *self.staging.rglob("*")]:
+            self.assertEqual(path.stat().st_mode & 0o777, 0o755 if path.is_dir() else 0o644)
+        self.assertIn("-u countersign-executor --", (self.base / "preflight.log").read_text())
+
+    def test_broken_package_fails_the_import_preflight(self):
+        (self.source / "executor/service.py").write_text("raise ImportError('broken package')\n")
+        failed = self.prepare_package()
+        self.assertNotEqual(failed.returncode, 0)
+        self.assertIn("broken package", failed.stderr)
+
+    def test_package_symlinks_are_refused_before_changing_their_targets(self):
+        target = self.base / "outside.py"
+        target.write_text("preserved")
+        target.chmod(0o600)
+        (self.source / "outside.py").symlink_to(target)
+        failed = self.prepare_package()
+        self.assertNotEqual(failed.returncode, 0)
+        self.assertEqual(target.stat().st_mode & 0o777, 0o600)
+        self.assertFalse((self.base / "preflight.log").exists())
 
 
 class MaintenanceServiceTests(unittest.TestCase):

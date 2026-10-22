@@ -12,7 +12,7 @@ from countersign.core.runtime import run_storage, settings_path
 from countersign.infrastructure import opencode_cli
 from countersign.infrastructure.agent_profile import make_profile
 from countersign.infrastructure.agent_sync import launch_settings
-from countersign.infrastructure.permission_check import verify_permissions
+from countersign.infrastructure.permission_check import verify_launch
 
 ROLES = ("planner", "implementer", "reviewer")
 PROBE = "countersign-check"
@@ -39,17 +39,17 @@ def check(explicit=None):
     command = options.get(COMMAND, list(opencode_cli.DEFAULT_COMMAND))
     return [
         found,
-        version_result(command, launch["opencode_version"]),
+        version_result(command, launch["opencode_version"], launch["agent_env_allow"]),
         permission_result(launch),
         storage_result(explicit),
     ]
 
 
-def version_result(command, version):
+def version_result(command, version, allow=()):
     try:
         completed = subprocess.run(
             [*command, "--version"],
-            env=opencode_cli.environment(),
+            env=opencode_cli.environment(allow),
             stdin=subprocess.DEVNULL,
             capture_output=True,
             text=True,
@@ -71,7 +71,7 @@ def permission_result(launch):
         access = dict(roots=[workspace], readable=[], writable=[])
         profile, rules = make_profile(workspace / "role.md", launch["destination"], PROBE, access)
         try:
-            verify_permissions(launch[COMMAND], workspace, PROBE, rules, workspace / "log")
+            verify_launch(launch, workspace, PROBE, rules, workspace / "log")
         except (OSError, ValueError) as error:
             return False, f"Permission enforcement could not be verified: {error}"
         finally:

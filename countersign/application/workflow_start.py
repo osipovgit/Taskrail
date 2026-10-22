@@ -2,7 +2,13 @@
 
 import json
 
-from countersign.application import instruction_sources, resume_inputs
+from countersign.application import (
+    child_inputs,
+    instruction_sources,
+    resume_inputs,
+    reviewed_input,
+    reviewed_start,
+)
 from countersign.application.artifacts import save_run
 from countersign.application.checkpoints import load_checkpoint
 from countersign.application.workflow_state import FLOW_KEYS, STAGE
@@ -43,8 +49,10 @@ def begin(workflow):
     inputs = workflow.run / INPUTS
     instruction_sources.capture(workflow.run, workflow.state, workflow.config["source"])
     workflow.guard.capture()
+    workflow.state["phase"] = workflow.config.get("phase")
     atomic_json(inputs / "manifest.json", workflow.guard.before)
     atomic_json(inputs / "git-metadata.json", workflow.guard.git_before)
+    reviewed_start.begin(workflow)
 
 
 def validated_checkpoint(workflow):
@@ -59,7 +67,9 @@ def validated_checkpoint(workflow):
     task_hash = checkpoint.get("task_hash")
     if task_hash and digest(workflow.config["task_text"].encode()) != task_hash:
         raise ValueError("Task changed since checkpoint; continuation refused")
+    reviewed_input.restore(workflow)
     instruction_sources.verify(run, workflow.state)
+    child_inputs.verify(run, workflow.state)
     resume_inputs.verify_preimages(run, workflow.state, workflow.guard.before)
     return checkpoint
 

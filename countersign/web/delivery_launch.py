@@ -18,10 +18,13 @@ from countersign.web import (
     epic_launch,
     epic_record,
     history,
+    integration_launch,
+    integration_review,
 )
-from countersign.web.delivery_steps import SERVER, VALIDATION
+from countersign.web.delivery_steps import INTEGRATION, SERVER, VALIDATION
+from countersign.web.run_activity import BusyError
 
-PENDING = MappingProxyType({"validating": VALIDATION, SERVER: SERVER})
+PENDING = MappingProxyType({"integrating": INTEGRATION, "validating": VALIDATION, SERVER: SERVER})
 OFFERS = MappingProxyType({VALIDATION: "jenkins", SERVER: "hosts"})
 UNAVAILABLE = MappingProxyType(
     {
@@ -44,8 +47,11 @@ def proceed_quietly(launcher, run):
     """A busy project or an unreadable run waits for the next round."""
     try:
         proceed(launcher, run)
-    except (ValueError, OSError, KeyError):
+    except BusyError:
         return
+    except (ValueError, OSError, KeyError) as error:
+        with epic_record.changing(run) as epic:
+            epic["launch_error"] = str(error)
 
 
 def proceed(launcher, run):
@@ -64,6 +70,8 @@ def proceed(launcher, run):
 
 def start_phase(launcher, run, name):
     """Start one phase run, linked before its worker starts, or record why it cannot run."""
+    if name == INTEGRATION:
+        return integration_launch.start(launcher, run)
     offers = executor_offers()
     if offers is None:
         return None
@@ -88,7 +96,8 @@ def confirm(launcher, run):
         delivery = delivery_state.view(run, state)
         if delivery is None or delivery["step"] != "confirm":
             raise ValueError("Only a finished change that waits for confirmation can be confirmed")
-        epic["confirmed"] = time.time()
+        with integration_review.confirmation_lock(run, delivery):
+            epic["confirmed"] = time.time()
     proceed_quietly(launcher, run)
     return dict(id=run.name, status="CONFIRMED")
 

@@ -12,6 +12,7 @@ from countersign.web import (
     epic_progress,
     epic_tasks,
     history,
+    integration_review,
     lifecycle,
 )
 
@@ -27,6 +28,8 @@ def view(run, state):
     split = epic_progress.view(run, state)
     delivery = dict(split or {}, status=lifecycle.display_status(run, state))
     delivery["phases"] = phases(run, epic)
+    integration_review.invalidate(delivery, epic)
+    delivery["launch_error"] = epic.get("launch_error")
     delivery["checks"] = delivery_checks.checks(run, state)
     delivery["confirmed"] = bool(epic.get("confirmed"))
     delivery["implementation"] = implementation(delivery["status"], split)

@@ -5,6 +5,8 @@ import { badge, el } from './dom.js';
 const STEP_TEXT = {
   implementing: 'Implementing',
   needs_you: 'Implementation needs you',
+  integrating: 'Integration review',
+  integration_failed: 'Integration review needs you',
   validating: 'Jenkins validation',
   approval: 'A check waits for root approval',
   validation_failed: 'Jenkins validation failed',
@@ -124,7 +126,26 @@ export function deliverySection(delivery, actions) {
   if (!shown && !delivery.confirmed) return null;
   const section = el('section', undefined, 'delivery');
   section.append(el('h3', 'Delivery · ' + (STEP_TEXT[delivery.step] || delivery.step)));
+  if (delivery.launch_error) section.append(el('p', delivery.launch_error));
   if (delivery.tasks) section.append(tasksBlock(delivery, actions));
+  if (delivery.tasks) {
+    const criteria = ['Original goal, acceptance criteria and interactions between tasks'];
+    const waiting = 'Starts after every child task finishes.';
+    const block = phaseBlock(
+      'Integration review',
+      criteria,
+      delivery.phases.integration,
+      waiting,
+      actions,
+    );
+    if (['integration_failed', 'confirm'].includes(delivery.step)) {
+      const repeat = el('button', 'Repeat integration review');
+      repeat.type = 'button';
+      repeat.onclick = () => actions.act('integration_review');
+      block.append(repeat);
+    }
+    section.append(block);
+  }
   if (checks.jenkins.length) {
     const waiting = 'Starts when the code is done.';
     const record = delivery.phases.validation;

@@ -99,7 +99,7 @@ source templates. See [instruction contracts](contracts.md).
 | Setting | Default | Meaning |
 |---|---|---|
 | `command` | `["opencode"]` | opencode argv prefix; the installer resolves it to an absolute path. A wrapper for a compatible build also works |
-| `opencode_version` | `auto` | `1.x` or `2.x`; `auto` selects `2.x` only for an exact `--version` line of 2.0.0 or later |
+| `opencode_version` | `auto` | `1.x` or `2.x`; `auto` accepts an exact bare or single-name-prefixed semantic version; ambiguous or failed probes require an explicit version |
 | `models` | `{}` | Role to `provider/model`; a missing role uses opencode's configured default model |
 | `agent_directory` | opencode agent directory | Where managed role profiles are written; relative to the settings file |
 | `agent_env_allow` | `[]` | Extra environment variables opencode may receive despite their secret-shaped names; common provider keys are always allowed |
@@ -122,10 +122,28 @@ Managed profiles default to `$OPENCODE_CONFIG_DIR/agent`, else
 to one base directory: the Git worktree for 1.x, the first root (the run directory)
 for 2.x. Profiles allow every declared path in both forms and deny everything else.
 
-opencode compacts a long session only when it knows the model's context size. For a
-custom or self-hosted provider, declare it in the opencode configuration, for example
-`"limit": {"context": 94208, "output": 8192}` on the model entry; otherwise a long stage
-grows until the provider refuses it (`CONTEXT_EXCEEDED`).
+## Context limits
+
+Automatic compaction is disabled for every role, including the implementer. Set
+`model_context_tokens` (default `32768`) no higher than the smallest context window
+of the configured role models; `context_reserve_tokens` (default `8192`) must be
+positive and smaller than that window. Keep the provider's own model limits accurate.
+
+Before any role starts, the server counts the request and frozen role instructions;
+writer admission also counts approved read/edit input files. Exact source lines already
+delivered in the request are counted once. The estimate uses one UTF-8 byte per token,
+plus 1024 tokens for framing. The
+reviewable estimate must fit below context minus reserve. This conservative admission
+check can reject a large file even if only a small part would be needed: narrow the
+task or adjust capacity to a verified model limit. Unknown future tool output and
+provider envelopes cannot be predicted. Runtime monitoring stops on reported input
+(including cached input) reaching the same boundary, or any explicit compaction
+marker. Usage events can arrive after a provider has consumed tokens.
+
+A refusal or overflow is `CONTEXT_EXCEEDED`; an admission refusal consumes no model
+turn and is not retried with the same oversized input. Source changes are preserved and a
+writer is never automatically replayed. Replan into smaller atomic tasks or deliberately
+correct the model limit. `max_observed_tokens` remains a separate cumulative cost cap.
 
 Format repair runs with every tool denied by default. opencode's free Zen models
 reject such tool-less requests (`FreeTierError`); for them set `format_repair_tools`
@@ -141,6 +159,9 @@ removed automatically. See [task format](task-format.md#worktree-isolation).
 
 ## Verification commands
 
+For criterion-bound recipes, structured reports and model-free check batches, see
+[deterministic verification](checks.md).
+
 `verify_commands` lists project checks that run in the check stage after every
 implementation whose changed files pass the built-in syntax checks:
 
@@ -152,8 +173,9 @@ implementation whose changed files pass the built-in syntax checks:
 }
 ```
 
-Writing a command into server settings is the operator's personal approval of that
-exact argv; task files, imported drafts and models cannot add commands. A command
+Settings define the exact argv; task files, imported drafts and models cannot add
+commands. Execution requires personal approval per command or the operator's
+Allow all actions for the run; only built-in read-only listings are exempt. A command
 runs only for runs whose declared roots include its `cwd`; in a
 [worktree-isolated](task-format.md#worktree-isolation) run it runs in that root's worktree. It runs without a shell,
 as the service user, with the filtered environment and the local command policy (no
@@ -220,8 +242,11 @@ bash deploy/install.sh --fresh --wait=3600 --autostart=keep --agents=bundled
 service, removes installed releases, settings, imported roles, history/trash,
 managed profiles, cache, the unit/drop-ins and launcher, then installs fresh defaults.
 A configured custom history directory is removed only after its contents and
-recorded project roots pass ownership checks; mixed or unsafe directories abort
-before deletion. Keep source projects and the extracted release outside those paths.
+recorded project roots pass ownership checks. Live runs, archived runs and launcher
+records all protect their declared roots. The same inventory covers cache, unit
+drop-ins, launcher and generated profile files; mixed, redirected or overlapping
+paths abort before deletion. Keep source projects and the extracted release outside
+those paths.
 Locked files retain their inodes during installation to prevent concurrent writers.
 The underlying opencode application, provider credentials and unrelated profiles
 are not owned by this application and are preserved. Old unmanaged directories that

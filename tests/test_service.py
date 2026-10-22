@@ -15,6 +15,8 @@ from pathlib import Path
 from unittest.mock import patch
 from urllib.request import ProxyHandler, Request, build_opener
 
+from deployment_fixture import DeploymentFixture
+
 from countersign.application.task_config import configuration
 from countersign.core.runtime import run_storage, settings_path
 from countersign.web.config_watch import ConfigurationWatch
@@ -77,6 +79,8 @@ class ServiceTests(unittest.TestCase):
         )
         self.environment = dict(os.environ, HOME=str(self.home), PYTHONPATH=str(BASE))
         self.environment.pop("COUNTERSIGN_SETTINGS", None)
+        self.deployment = DeploymentFixture(self.home)
+        self.environment = self.deployment.environment(self.environment)
 
     def test_configuration_defaults_to_one_hour_and_explicit_override_works(self):
         task = self.home / "task.md"
@@ -171,7 +175,7 @@ class ServiceTests(unittest.TestCase):
 
     def installer(self, *arguments):
         return subprocess.run(
-            ["bash", str(BASE / "deploy/install.sh"), *arguments],
+            ["bash", str(self.deployment.source() / "deploy/install.sh"), *arguments],
             env=self.environment,
             cwd=BASE,
             capture_output=True,
@@ -188,7 +192,7 @@ class ServiceTests(unittest.TestCase):
         loginctl = binaries / "loginctl"
         loginctl.write_text('#!/bin/sh\nprintf "%s\\n" "$*" >> "$HOME/loginctl.log"\n')
         loginctl.chmod(0o755)
-        self.environment["PATH"] = str(binaries) + os.pathsep + os.environ["PATH"]
+        self.environment["PATH"] = str(binaries) + os.pathsep + self.environment["PATH"]
         self.environment["PYTHON"] = sys.executable
         installed = self.installer(str(self.settings), "--autostart=yes")
         self.assertEqual(installed.returncode, 0, installed.stderr)
@@ -247,7 +251,7 @@ class ServiceTests(unittest.TestCase):
             self.assertNotEqual(rejected.returncode, 0)
             self.assertIn("Stop the active task", rejected.stderr)
             with subprocess.Popen(
-                ["bash", str(BASE / "deploy/install.sh"), "--wait=10"],
+                ["bash", str(self.deployment.source() / "deploy/install.sh"), "--wait=10"],
                 env=self.environment,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
@@ -275,7 +279,7 @@ class ServiceTests(unittest.TestCase):
             executable = binaries / name
             executable.write_text("#!/bin/sh\nexit 0\n")
             executable.chmod(0o755)
-        self.environment["PATH"] = str(binaries) + os.pathsep + os.environ["PATH"]
+        self.environment["PATH"] = str(binaries) + os.pathsep + self.environment["PATH"]
         self.environment["PYTHON"] = sys.executable
         initial = self.installer(str(self.settings), "--autostart=no")
         self.assertEqual(initial.returncode, 0, initial.stderr)
@@ -311,7 +315,7 @@ class ServiceTests(unittest.TestCase):
         systemctl = binaries / "systemctl"
         systemctl.write_text("#!/bin/sh\nexit 0\n")
         systemctl.chmod(0o755)
-        self.environment["PATH"] = str(binaries) + os.pathsep + os.environ["PATH"]
+        self.environment["PATH"] = str(binaries) + os.pathsep + self.environment["PATH"]
         config = self.home / ".config/countersign"
         config.mkdir(parents=True)
         (config / "settings.json").write_text(json.dumps({"run_base": str(self.repo)}))
@@ -320,3 +324,40 @@ class ServiceTests(unittest.TestCase):
         self.assertIn("unrecognized", result.stderr)
         self.assertTrue((self.repo / "hello.py").exists())
         self.assertTrue((config / "settings.json").exists())
+
+    def test_fresh_executor_reset_uses_only_private_host_paths_and_privilege_stubs(self):
+        installed_executor = self.deployment.system / "opt/countersign-executor"
+        installed_executor.mkdir(parents=True)
+        sentinel = installed_executor / "preserved-by-sudo-stub"
+        sentinel.write_text("fixture")
+        self.environment["PYTHON"] = sys.executable
+        initial = self.installer(str(self.settings), "--autostart=no")
+        self.assertEqual(initial.returncode, 0, initial.stderr)
+        # Fresh defaults require a resolvable CLI, never the developer's real opencode.
+        opencode = self.deployment.binaries / "opencode"
+        opencode.write_text("#!/bin/sh\nexit 0\n")
+        opencode.chmod(0o755)
+        fresh = self.installer("--fresh", "--autostart=keep")
+        self.assertEqual(fresh.returncode, 0, fresh.stderr)
+        log = (self.home / "privilege.log").read_text()
+        self.assertIn("reset-executor.sh", log)
+        self.assertIn("install-executor.sh", log)
+        self.assertTrue(sentinel.is_file())
+
+    def test_fresh_refuses_archived_source_overlap_before_stopping_services(self):
+        config = self.home / ".config/countersign"
+        config.mkdir(parents=True)
+        history = self.home / "history"
+        record = history / ".trash/old/run/run.json"
+        record.parent.mkdir(parents=True)
+        source = config / "source"
+        source.mkdir()
+        (source / "keep.py").write_text("original code")
+        (config / "settings.json").write_text(json.dumps(dict(run_base=str(history))))
+        record.write_text(json.dumps(dict(roots=dict(project=str(source)))))
+        self.environment["PYTHON"] = sys.executable
+        refused = self.installer("--fresh", "--autostart=keep")
+        self.assertNotEqual(refused.returncode, 0)
+        self.assertIn("overlap a declared project", refused.stderr)
+        self.assertNotIn(" stop ", (self.home / "privilege.log").read_text())
+        self.assertEqual((source / "keep.py").read_text(), "original code")

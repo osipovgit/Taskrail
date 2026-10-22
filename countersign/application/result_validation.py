@@ -3,13 +3,20 @@
 from pathlib import Path
 
 from countersign.application import (
+    check_planning,
+    decision_adapter,
     declared_block,
     evidence,
     execution_evidence,
     plan_file,
     plan_result,
 )
-from countersign.core import coverage, plan_contract, schema, source_claims
+from countersign.core import (
+    coverage,
+    plan_contract,
+    schema,
+    source_claims,
+)
 from countersign.core.files import atomic_json
 from countersign.git.requests import output_directory
 
@@ -23,7 +30,7 @@ def validate(response, context):
     A planner's problems name requirements by their plan labels.
     """
     if context["stage"] != plan_result.PLANNER:
-        return checked(schema.decode(response, context["role"]), context)
+        return checked(decision_adapter.stage_decision(response, context), context)
     try:
         return checked(plan_result.stage_result(context), context)
     except ValueError as error:
@@ -40,6 +47,7 @@ def checked(payload, context):
         context["requirements"],
         context["stage"],
         execution_evidence.claim_ids(context["run"], payload["evidence"]),
+        check_planning.criteria(payload, context),
     )
     run = context["run"]
     records = [record for record in evidence.validation_records(run) if evidence.current(record)]
@@ -52,6 +60,7 @@ def checked(payload, context):
                 git_evidence=output_directory(run),
                 ssh_evidence=run / "00-input/ssh",
                 local_evidence=run / "00-input/local",
+                check_evidence=run / "00-input/checks",
             ),
             EVIDENCE_FILES,
         )
@@ -106,3 +115,6 @@ def validate_review(payload, plan):
             all(entry["outcome"] in {"satisfied", "deferred"} for entry in payload["coverage"]),
             "No-change approval cannot contain future work",
         )
+    observed = {claim["path"] for claim in payload["evidence"]}
+    for finding in payload["findings"]:
+        schema.require(finding["file"] in observed, "Finding needs observed source evidence")

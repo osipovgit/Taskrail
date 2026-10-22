@@ -9,7 +9,7 @@ from pathlib import Path
 
 from countersign.core.files import atomic_json
 from countersign.core.runtime import settings_path
-from countersign.web import history, lifecycle, requests, run_records
+from countersign.web import history, lifecycle, parent_context, requests, run_records
 from countersign.web.launch_records import LAUNCH_ERROR, LAUNCH_FILE, announce, recover_launches
 from countersign.web.run_activity import BusyError, require_idle, run_sources
 from countersign.web.task_form import build_task
@@ -56,6 +56,7 @@ class TaskLauncher:
         ]
         launch = dict(text=submission.decorate(text), title=title, restart_from=submission.parent)
         launch["before_start"] = before_start
+        launch["parent_context"] = submission.delivery["parent_context"]
         return self.launch(launch, sources)
 
     def action(self, payload):
@@ -122,6 +123,7 @@ def create_submission(base, launch):
     folder = base / ".submissions" / name
     folder.mkdir(parents=True, exist_ok=False)
     folder.joinpath(TASK_FILE).write_text(launch["text"], encoding="utf-8")
+    parent_context.write(folder, launch.get("parent_context"))
     if launch.get("note"):
         folder.joinpath("note.md").write_text(launch["note"], encoding="utf-8")
     resumed = launch.get("resume_run")

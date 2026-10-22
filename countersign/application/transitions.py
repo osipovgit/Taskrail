@@ -2,6 +2,7 @@
 
 from types import MappingProxyType
 
+from countersign.application import review_outcome
 from countersign.core import plan_contract
 
 PLAN_REVIEW = "plan-reviewer"
@@ -12,6 +13,8 @@ ALLOWED = "allowed"
 IMPLEMENTER = "implementer"
 REPAIRS = "repair_count"
 REVIEWER = "reviewer"
+INTEGRATION = "integration"
+PHASE = "phase"
 # Runs started before automatic splitting never split on their own.
 
 
@@ -32,13 +35,13 @@ def plan_review(flow, state, verdict, limit):
         return
     flow[ALLOWED] = flow["plan"]["proposed_change_files"]
     state["no_changes_needed"] = not bool(flow[ALLOWED])
+    state["review_outcome"] = review_outcome.describe(verdict, state.get("changed_files", []))
     if plan_contract.splits(flow["plan"], state.get("decompose")):
         state.update(status="TASKS_READY", summary=verdict[SUMMARY])
     elif flow[ALLOWED]:
         flow.update(stage=IMPLEMENTER, feedback=None, effect="capture_preimages")
     else:
-        terminal = "READY_FOR_REVIEW" if state.get("execution_jobs") else "NO_CHANGES_REQUIRED"
-        state.update(status=terminal, summary=verdict[SUMMARY])
+        state.update(status=review_outcome.accepted_status(flow, state), summary=verdict[SUMMARY])
 
 
 def implementation(flow, state, verdict, limit):
@@ -48,12 +51,14 @@ def implementation(flow, state, verdict, limit):
 
 def result_review(flow, state, verdict, limit):
     """Stop on approval or request only the missing approved work."""
+    state["review_outcome"] = review_outcome.describe(verdict, state.get("changed_files", []))
     if verdict[STATUS] == "APPROVE":
-        state.update(status="READY_FOR_REVIEW", summary=verdict[SUMMARY])
+        state.update(status=review_outcome.accepted_status(flow, state), summary=verdict[SUMMARY])
     elif flow[REPAIRS] >= limit:
         state.update(status="CHANGES_REQUESTED", summary=verdict[SUMMARY])
     else:
-        flow.update(feedback=verdict, stage=IMPLEMENTER if flow[ALLOWED] else PLANNER)
+        fallback = REVIEWER if state.get(PHASE) == INTEGRATION else PLANNER
+        flow.update(feedback=verdict, stage=IMPLEMENTER if flow[ALLOWED] else fallback)
         flow[REPAIRS] += 1
 
 
@@ -97,7 +102,7 @@ def checked(flow, state, limit):
     """Route failed built-in checks to bounded repair, never to approval."""
     failed = any(check[STATUS] == "FAIL" for check in state["checks"])
     if failed:
-        if flow[REPAIRS] >= limit:
+        if not flow[ALLOWED] or flow[REPAIRS] >= limit:
             state.update(status="CHECK_FAILED", summary="Checks failed after the last repair")
         else:
             flow.update(stage=IMPLEMENTER, feedback={"checks": state["checks"]})

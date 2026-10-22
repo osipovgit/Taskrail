@@ -16,20 +16,25 @@ RESET = MappingProxyType(dict(permission="*", pattern="*", action="deny"))
 
 def verify_permissions(command, cwd, name, expected, log):
     """Only a verified closed policy can authorize a live write; rights are never approximated."""
-    code = run_listing(command, cwd, log)
+    return verify_launch(dict(command=command, agent_env_allow=()), cwd, name, expected, log)
+
+
+def verify_launch(launch, cwd, name, expected, log):
+    """Permission probes use the same limited wrapper environment as the model launch."""
+    code = run_listing(launch["command"], cwd, log, launch["agent_env_allow"])
     text = ANSI.sub("", log.read_text(errors="replace"))
     actual = listed_rules(text, name, code, log)
     check_closed(actual, expected, log)
     return actual
 
 
-def run_listing(command, cwd, log):
+def run_listing(command, cwd, log, allow=()):
     """`opencode agent list` with its output in log; the process group is always stopped."""
     with log.open("wb") as output:
         process = subprocess.Popen(
             [*command, "agent", "list"],
             cwd=cwd,
-            env=opencode_cli.environment(),
+            env=opencode_cli.environment(allow),
             stdin=subprocess.DEVNULL,
             stdout=output,
             stderr=subprocess.STDOUT,

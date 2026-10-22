@@ -42,10 +42,14 @@ task files.
 | `verification` | Deferred runtime checks to report, not commands to execute |
 | `read_only` | `true` for an answer-only task (the browser's **Answer only**) |
 | `decompose` | `true` always splits the Goal into task runs, even a small plan; see [delivery](task-controls.md#delivery-of-a-code-change) |
-| `phase` | Server-generated for the runs of a delivery (`task`, `validation`, `server`); do not set it by hand |
+| `phase` | Server-generated for the runs of a delivery (`task`, `integration`, `validation`, `server`); do not set it by hand |
+| `task_scope` | Required for server-generated `task` phases: exact reviewed file paths; child planning cannot widen them or create another split |
 | `design` | `true` for a design discussion (the browser's **Design discussion**); implies `read_only` |
 | `auto_approve` | `true` approves local commands, read access and the change limit of this run without asking (the browser's **Allow all actions**); SSH keeps its root-only approval |
 | `isolation` | `in_place` (default) edits the roots; `worktree` edits new linked Git worktrees (the browser's **Isolated Git worktree**), see below |
+| `task_spec` | Generated typed input: version 1, literal named fields, a display integrity reference and optional child context/requirement lineage; do not edit only its Markdown display |
+| `assigned_contract` | Generated child reference (`parent_run`, `task_id`); the workflow authenticates it against the sealed reviewed parent before skipping child planning |
+| `check_specs` | Selected server recipe IDs and runtime criterion IDs; commands and approval policy remain server-owned |
 
 Without `roots`, the CLI uses the repository that contains the task file (found
 through `.git` without running Git); a task outside a repository needs explicit
@@ -53,6 +57,31 @@ roots. The browser always requires roots and rejects filesystem roots, overlap w
 the run store, duplicate names and unknown request fields. Names use Latin
 letters, digits, underscores and hyphens. The CLI does not apply the browser's form
 validation to arbitrary Markdown, so fill in or remove all template placeholders.
+
+The browser passes field boundaries directly to `task_spec`; Markdown headings in
+user text cannot change those boundaries. Original field text and the complete
+submitted file remain stored verbatim. Requirements retain stable content IDs and
+source character ranges. A scoped child requirement retains its parent ID and exact
+text; global constraints apply unchanged to every child. Task prompts contain user
+fields once, without the JSON transport or copied server policy. Restart drafts use
+the typed fields directly. Legacy Markdown remains supported: unknown user sections
+and code fences are preserved, while standard context sections do not become goals.
+Legacy parent requirements without typed field provenance retain full child planning;
+the workflow cannot infer which old text was a global constraint. Authenticated typed
+children use a sealed `00-input/reviewed-task-spec.json` projection on first launch and
+Continue; the original submission remains unchanged in `00-input/task.md`.
+Continue resolves check IDs against the run's sealed recipe catalog, so removing
+a recipe from current settings cannot replace or lose an
+already approved check. A changed frozen catalog stops continuation.
+
+The planner must read `plan.md` in its current agent session before writing it.
+Unknown plan sections, unparsed ownership text and mismatched scope delimiters are
+errors, with line numbers. Put `## Answer` last: its remaining Markdown is the answer.
+Optional `## Check selections` lines have the form `recipe-id: R2, R4`; only advertised
+recipes and runtime requirements are accepted. This selects existing server actions,
+not model-authored commands. A write-before-read rejection for this exact plan file
+gets bounded same-session feedback to read it; source writers are never retried by
+this correction.
 
 ## Worktree isolation
 

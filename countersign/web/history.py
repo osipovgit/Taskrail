@@ -5,7 +5,7 @@ import re
 from types import MappingProxyType
 
 from countersign.application import worktree_isolation
-from countersign.core import requirements
+from countersign.core import requirements, task_spec
 
 FIELDS = MappingProxyType(
     {
@@ -48,6 +48,9 @@ class TaskDraft:
     def __init__(self, original):
         header = re.search(r"(?ms)^```countersign-task\s*\n(.*?)^```\s*$", original)
         self.metadata = json.loads(header[1]) if header else {}
+        self.typed = None
+        if "task_spec" in self.metadata:
+            self.typed = task_spec.resolve(original, self.metadata)
         self.body = original[header.end() :] if header else original
         fragments = re.split(r"(?m)^## ([^\n]+)\n", self.body)
         titles = fragments[1::2]
@@ -57,6 +60,8 @@ class TaskDraft:
 
     def fields(self):
         """Preserve unknown sections as additional constraints."""
+        if self.typed is not None:
+            return {field["name"]: field["text"] for field in self.typed["fields"]}
         draft = {}
         for key, title in FIELDS.items():
             draft[key] = self.sections.get(title, "").strip()
@@ -77,6 +82,8 @@ class TaskDraft:
 
     def title(self, fallback):
         """Find the original title without interpreting its content."""
+        if self.typed is not None:
+            return self.fields().get("title") or fallback
         for line in self.body.splitlines():
             if line.startswith("# "):
                 return line[2:].strip()

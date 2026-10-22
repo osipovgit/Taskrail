@@ -4,7 +4,9 @@ import json
 from pathlib import Path
 from types import MappingProxyType
 
+from countersign.core import schema_fields
 from countersign.core.json_response import extract
+from countersign.core.schema_fields import ContractError as ContractError
 
 KINDS = MappingProxyType(
     {"object": dict, "array": list, "string": str, "integer": int, "boolean": bool}
@@ -19,40 +21,44 @@ def require(condition, message):
         raise ValueError(message)
 
 
-def validate(payload, specification):
+def validate(payload, specification, path=""):
     """Recursively enforce types, exact keys, scalar bounds and enum values."""
     expected = KINDS[specification["type"]]
-    require(isinstance(payload, expected), "Invalid JSON field type")
-    require(expected is not int or not isinstance(payload, bool), "Boolean is not an integer")
+    valid = isinstance(payload, expected)
+    valid = valid and (expected is not int or not isinstance(payload, bool))
+    message = "Invalid JSON field type: expected {type}".format(**specification)
+    schema_fields.require(valid, "FIELD_TYPE", path, message)
     choices = specification.get("enum")
     if choices is not None:
-        require(payload in choices, "Invalid enum value")
+        schema_fields.require(
+            payload in choices, "FIELD_ENUM", path, f"Invalid enum value; expected {choices}"
+        )
     if isinstance(payload, dict):
-        validate_object(payload, specification)
+        validate_object(payload, specification, path)
     elif isinstance(payload, list):
-        for entry in payload:
-            validate(entry, specification["items"])
+        schema_fields.array(payload, specification, path, validate)
     else:
-        validate_scalar(payload, specification)
+        validate_scalar(payload, specification, path)
 
 
-def validate_object(payload, specification):
+def validate_object(payload, specification, path=""):
     """Require all declared keys; reject unknown keys instead of ignoring them."""
-    fields = specification["properties"]
-    missing = sorted(set(fields) - set(payload))
-    unknown = sorted(set(payload) - set(fields))
-    require(not missing and not unknown, f"Missing fields: {missing}; unknown fields: {unknown}")
+    fields = schema_fields.object_fields(payload, specification, path)
     for name, entry in payload.items():
-        validate(entry, fields[name])
+        validate(entry, fields[name], schema_fields.pointer(path, name))
 
 
-def validate_scalar(payload, specification):
+def validate_scalar(payload, specification, path=""):
     """Reject blank text and invalid source line numbers."""
     if "minLength" in specification:
-        require(bool(payload.strip()), "Empty text field")
+        schema_fields.require(bool(payload.strip()), "FIELD_EMPTY", path, "Empty text field")
+    maximum = specification.get("maxLength")
+    schema_fields.require(
+        maximum is None or len(payload) <= maximum, "FIELD_SIZE", path, "Text is too long"
+    )
     minimum = specification.get("minimum")
     if minimum is not None:
-        require(payload >= minimum, "Number below minimum")
+        schema_fields.require(payload >= minimum, "FIELD_MINIMUM", path, "Number below minimum")
 
 
 def decode(response, role):
