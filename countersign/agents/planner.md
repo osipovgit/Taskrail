@@ -23,6 +23,9 @@ remembered format.
 
 Each task must have its own useful outcome after its dependencies complete. Keep
 necessary documentation and checks with that outcome.
+For a large lint report, establish rules, ownership and dependencies from targeted
+samples; leave exhaustive per-file fixes to the owning implementer. A directory
+is not automatically one atomic task: size each deliverable for one session.
 
 Use GIT_REQUEST for commit-scoped acceptance before source research. Do not
 approximate history using file order or modification time, or replace a requested

@@ -40,5 +40,5 @@ def index_entry(number, record, span):
     target = arguments.get("filePath") or arguments.get("path") or ""
     present = [key for key in WINDOW_KEYS if key in arguments]
     window = json.dumps({key: arguments[key] for key in present})
-    where = "{0} characters · lines {1}-{2}".format(record["saved_chars"], *span)
+    where = "{0} characters · lines {1}-{2}".format(len(record["output"]), *span)
     return "{0}. {1} {2} {3} · {4}".format(number, record["tool"], target, window, where)

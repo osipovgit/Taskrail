@@ -138,7 +138,9 @@ cannot fix it. Research recovery receives bounded observed source
 material and keeps unresolved requirements explicit. `recovery.md` starts with an
 index: each recorded call with its target, window, size and the line range of its
 block in the file. The recovery prompt names the index lines and asks for windows of
-at most 200 lines, because the whole file can be larger than the model context. A
+at most 200 lines, because the whole file can be larger than the model context.
+Index sizes are derived from the saved output; older observations need no
+`saved_chars` field. Original truncation and source provenance remain unchanged. A
 follow-up history over 24,000 bytes reaches the prompt the same way: the latest turn
 inline and the indexed, readable `00-input/history.md`; `task.md` stays verbatim and
 the frozen input integrity guard covers it whole. A no-change completion still
@@ -156,8 +158,10 @@ untouched response.
 
 The planner's only writable file is `<run>/plan.md`. The server writes its template on
 the first attempt (one `R<n> →` line per requirement) and reads it when the session
-ends; the file survives an interrupted or overflowing session, and the next attempt
-continues it. The request labels the task's requirement blocks with `R<n>` and
+ends; the file survives an interrupted or overflowing session. After a context
+stop, a fully validated ready proposal advances to independent plan review; an
+invalid one supplies exact validation errors to the bounded recovery attempt.
+No source, coverage or scope check is relaxed. The request labels requirement blocks with `R<n>` and
 names the project map. The format:
 
 ```markdown
@@ -236,7 +240,9 @@ role and its `request.md`, and preserves the planner's Markdown or other roles' 
 format. When the provider rejects a
 turn because the session exceeded the model context window, the stage status is
 `CONTEXT_EXCEEDED` and a read-only stage continues in a new session from its recorded
-evidence (within `read_retries`); the implementer stops so Continue can inspect its edits.
+evidence (within `read_retries`), unless the planner's saved proposal passes the full
+plan validator and can proceed directly to plan review. The implementer stops so
+Continue can inspect its edits.
 The new session is told how much tool output the overflowing session received and
 which calls returned at least 10,000 characters (at most five), so it does not repeat
 them whole. Denial means the command is

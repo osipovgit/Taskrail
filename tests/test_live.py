@@ -1058,11 +1058,38 @@ class LiveTests(unittest.TestCase):
         self.assertEqual(planner[1]["mode"], "research-recovery")
         request = (run / planner[1]["directory"] / "request.md").read_text()
         self.assertIn("EXCEEDED THE MODEL CONTEXT WINDOW", request)
+        self.assertIn("The saved plan.md failed server validation", request)
+        self.assertIn("Decision must be", request)
         target = json.dumps(dict(filePath=str(self.root / "hello.py")))
         self.assertIn(f"the largest were: read {target} (30000 characters)", request)
         index_end = int(re.search(r"First read lines 1-(\d+) of that file", request)[1])
         evidence = (run / planner[1]["directory"] / "recovery.md").read_text().splitlines()
         self.assertEqual(evidence[index_end : index_end + 2], ["", "## Tool result 1"])
+
+    def test_completed_plan_survives_context_stop_and_still_receives_independent_review(self):
+        run, status, state = self.run_mode("planned-overflow", read_retries=0)
+        self.assertEqual(status, "READY_FOR_REVIEW", state.get("summary"))
+        stages = state["stages"]
+        self.assertEqual(
+            [stage["stage"] for stage in stages],
+            ["planner", "plan-reviewer", "implementer", "check", "reviewer"],
+        )
+        self.assertEqual(stages[0]["status"], "RESULT_VALID")
+        self.assertEqual(stages[0]["plan_recovery"]["status"], "validated")
+        self.assertEqual(state["attempts"][0]["status"], "CONTEXT_EXCEEDED")
+        self.assertIn("Session reached", stages[0]["errors"][0])
+        self.assertEqual((run / "01-plan/plan.md").read_text(), (run / "plan.md").read_text())
+        self.assertIn("return 2", (self.root / "hello.py").read_text())
+
+    def test_context_stopped_plan_cannot_claim_unobserved_source(self):
+        self.root.joinpath("unread.py").write_text("value = 2\n")
+        _, status, state = self.run_mode("unobserved-planned-overflow", read_retries=0)
+        self.assertEqual(status, "CONTEXT_EXCEEDED", state.get("summary"))
+        self.assertEqual(len(state["stages"]), 1)
+        failure = state["stages"][0]["plan_recovery"]
+        self.assertEqual(failure["status"], "rejected")
+        self.assertIn("no matching observed read", failure["reason"])
+        self.assertIn("return 1", (self.root / "hello.py").read_text())
 
     def test_failed_read_does_not_fail_the_stage(self):
         run, status, state = self.run_mode("failed-read")

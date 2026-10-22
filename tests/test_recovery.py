@@ -82,6 +82,24 @@ class RecoveryTests(unittest.TestCase):
         write_evidence(output, collect_evidence(self.events, [self.root]))
         self.assertIn("Research is still required", output.read_text())
 
+    def test_legacy_size_metadata_is_optional_and_never_overrides_saved_output(self):
+        self.write([self.event("old", "1: exact source\n")])
+        evidence = collect_evidence(self.events, [self.root])
+        record = evidence["records"][0]
+        record.pop("saved_chars")
+        record.pop("original_chars")
+        record["upstream_truncated"] = True
+        for size in (None, 999999):
+            with self.subTest(size=size):
+                if size is not None:
+                    record["saved_chars"] = size
+                output = self.root / "recovery.md"
+                end = write_evidence(output, evidence)
+                lines = output.read_text().splitlines()
+                self.assertIn("16 characters", lines[end - 1])
+                self.assertIn('"upstream_truncated": true', output.read_text())
+                self.assertIn("1: exact source", output.read_text())
+
     def test_upstream_truncation_is_preserved(self):
         event = self.event("one")
         event["part"]["state"]["metadata"]["truncated"] = True
