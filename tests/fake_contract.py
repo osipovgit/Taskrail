@@ -11,7 +11,7 @@ def absolute(name, roots):
     return str(Path(roots[alias]) / relative)
 
 
-def enrich(value, context, target, prompt):
+def enrich(value, context, target, prompt, read_wrapper=False):
     role = context["stage"]
     evidence = []
     if "FORMAT REPAIR ONLY" not in prompt and "SYNTHESIS ONLY" not in prompt:
@@ -19,6 +19,8 @@ def enrich(value, context, target, prompt):
         content = "\n".join(
             f"{number}: {line}" for number, line in enumerate(content.splitlines(), 1)
         )
+        if read_wrapper:
+            content = f"<path>{target}</path>\n<type>file</type>\n<content>{content}\n</content>"
         print(
             json.dumps(
                 {

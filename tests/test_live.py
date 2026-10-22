@@ -448,6 +448,22 @@ class LiveTests(unittest.TestCase):
         first = json.loads((run / "02-plan/agent.md").read_text().split("---")[1])["permission"]
         self.assertEqual(first["read"].get(str(recovery)), "allow")
 
+    def test_inline_wrapped_read_validates_whole_file_without_research_retry(self):
+        source = self.root / "hello.py"
+        source.write_text(
+            "".join(f"# Setup step {n}\n" for n in range(11)) + "def hello():\n    return 2\n"
+        )
+        run, status, state = self.run_mode("wrapped-no-change")
+        self.assertEqual(status, "NO_CHANGES_REQUIRED", state.get("summary"))
+        self.assertEqual(
+            [stage["stage"] for stage in state["stages"]], ["planner", "plan-reviewer"]
+        )
+        self.assertTrue(all(stage["session_turns"] == 1 for stage in state["stages"]))
+        proof = json.loads((run / "01-plan/evidence-bindings.json").read_text())[0]
+        self.assertEqual(proof["excerpt"], source.read_text().rstrip("\n"))
+        self.assertEqual(proof["source_sha256"], hashlib.sha256(source.read_bytes()).hexdigest())
+        self.assertEqual(len(state["attempts"]), 2)
+
     def test_imported_plan_is_revalidated_under_current_contract(self):
         self.configure_mode()
         self.assertIn("return 1", (self.root / "hello.py").read_text())

@@ -29,7 +29,11 @@ PLAN_ROUTING = (
     "turn; it is not a tool call. Request schemas, one per line:\n"
 )
 JSON_FINISH = "Return the complete final stage result as one JSON object, with no prose or fences."
-PLAN_FINISH = "Edit the plan.md file named in your request, then end with DONE. Do not return a JSON stage result."
+PLAN_FINISH = (
+    "Update the plan.md file named in your request only if its content needs correction. "
+    "Missing observed evidence needs a direct read of the cited source range, not a cosmetic "
+    "plan edit or unrelated citations. Then end with DONE. Do not return a JSON stage result."
+)
 DECISIONS = (
     "\nAuthor semantic decisions only using schema_version=2. Cover every assigned requirement "
     "once; use its short R<n> label or stable ID. Evidence references are absolute path:from-to "

@@ -10,6 +10,7 @@ from pathlib import Path
 from countersign.core.schema import require
 
 LINE_PREFIX = re.compile(r"^(\d+)(?:: ?|\| )(.*)$")
+READ_HEADER = re.compile(r"(?:<path>[^\r\n]*</path>\r?\n<type>file</type>\r?\n)?<(content|file)>")
 SHOWN_SOURCE = 600
 
 
@@ -57,7 +58,20 @@ def returned_lines(record):
         rows = rows[:-1]
     if record.get("tool") == "executor":
         return dict(enumerate(rows, record["input"].get("offset", 1)))
-    return numbered_lines(rows)
+    return numbered_lines(read_body("\n".join(rows)).splitlines())
+
+
+def read_body(output):
+    """Remove only the outer read envelope, including a tag adjacent to line one.
+
+    Source text is not XML: numbered lines can themselves contain literal tags.
+    The last closing envelope separates the body from any tool footer.
+    """
+    opening = READ_HEADER.match(output)
+    if opening is None:
+        return output
+    body = output[opening.end() :]
+    return body.rsplit(f"</{opening[1]}>", 1)[0]
 
 
 def numbered_lines(rows):

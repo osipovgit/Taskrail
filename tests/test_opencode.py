@@ -384,6 +384,41 @@ class TranslationTests(unittest.TestCase):
 
 
 class CitationTests(unittest.TestCase):
+    def test_inline_read_envelopes_preserve_first_last_and_literal_source_lines(self):
+        claim = dict(path="/readme.md", line_start=1, line_end=3)
+        excerpt = "# Setup\n<content>literal source</content>\n"
+        numbered = "1:# Setup\n2:<content>literal source</content>\n3:"
+        wrappers = (
+            "<content>{0}</content>",
+            "<file>{0}</file>",
+            "<path>/readme.md</path>\n<type>file</type>\n<content>{0}\n"
+            "\n(End of file - total 3 lines)\n</content>",
+            "<path>/readme.md</path>\r\n<type>file</type>\r\n<content>\r\n{0}\r\n</content>",
+        )
+        for wrapper in wrappers:
+            with self.subTest(wrapper=wrapper):
+                record = dict(input=dict(filePath=claim["path"]), output=wrapper.format(numbered))
+                self.assertTrue(supports(record, claim, excerpt))
+                self.assertFalse(supports(record, claim, excerpt + "unseen"))
+
+    def test_wrapped_reads_do_not_accept_footer_lines_or_clipped_and_reordered_content(self):
+        claim = dict(path="/readme.md", line_start=1, line_end=2)
+        for output in (
+            "<content>1: one</content>\n2: two",
+            "<content>1: one\n1: one\n2: two</content>",
+            "<content>2: two\n1: one</content>",
+        ):
+            with self.subTest(output=output):
+                record = dict(input=dict(filePath=claim["path"]), output=output)
+                self.assertFalse(supports(record, claim, "one\ntwo"))
+        record = dict(
+            input=dict(filePath=claim["path"]),
+            output="<content>1: one\n2: two",
+            output_clipped=True,
+        )
+        self.assertFalse(supports(record, claim, "one\ntwo"))
+        self.assertTrue(supports(record, dict(claim, line_end=1), "one"))
+
     def test_cited_lines_must_reach_the_model_through_the_read(self):
         record = dict(
             input=dict(filePath="/a.py"),
