@@ -30,6 +30,7 @@ def model_inputs(run, folder):
         run / "00-input/ssh",
         run / "00-input/local",
         run / "00-input/checks",
+        run / "00-input/source-views",
         run / "run.json",
     ]
     paths.extend(result_inputs(run))
@@ -76,7 +77,12 @@ def manifest(run, folder, roots, writable=()):
         "writable_files": list(writable),
         "readable_artifacts": list(map(str, model_inputs(run, folder))),
         "protected_read_patterns": list(PROTECTED_READ_PATTERNS),
-        "internal_not_inputs": ["evidence.json", "observations.json", "00-input/git-metadata.json"],
+        "internal_not_inputs": [
+            "evidence.json",
+            "observations.json",
+            "source-views.json",
+            "00-input/git-metadata.json",
+        ],
         "git": "Return GIT_REQUEST as the entire final message. It is not a tool call.",
         "remote": "Use ACTION_REQUEST only when advertised; personal approval is required.",
         "local_commands": "Use LOCAL_REQUEST; the operator approves exact commands.",

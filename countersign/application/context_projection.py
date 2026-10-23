@@ -6,6 +6,7 @@ from countersign.application import (
     instruction_sources,
     session_budget,
     source_delivery,
+    source_guidance,
     source_packet,
     source_windows,
 )
@@ -31,31 +32,32 @@ def task_text(config, run):
 def request_context(config, execution, state, run):
     """Resolve server-owned roots and inputs once for all role prompts."""
     roots = config["roots"]
-    stage = execution[0]
+    plan = execution[1]
     context = dict(
         schema_version=state.get("contract_version"),
         context_limits=session_budget.settings(config),
         requirements=list(map(requirement_metadata, state.get("requirements", []))),
-        stage=stage,
+        stage=execution[0],
         roots=state["roots"],
         task_file=str(run / "00-input/task.md"),
-        plan=plan_context(tool_paths(execution[1], roots)),
-        imported_draft=instruction_sources.imported_draft(run, stage),
-        allowed_files=tool_paths(execution[2], roots) if stage == "implementer" else [],
+        plan=plan_context(tool_paths(plan, roots)),
+        imported_draft=instruction_sources.imported_draft(run, execution[0]),
+        allowed_files=tool_paths(execution[2], roots) if execution[0] == "implementer" else [],
         feedback=feedback_context(execution[3], roots),
         checks=tool_paths(state["checks"], roots),
-        no_changes_needed=bool(
-            execution[1] is not None and not execution[1]["proposed_change_files"]
-        ),
+        no_changes_needed=bool(plan is not None and not plan["proposed_change_files"]),
         diff_file=str(run / "changes.diff") if (run / "changes.diff").exists() else None,
         preimages=preimage_context(state["preimages"], roots, run),
     )
     context["source_packet"] = source_delivery.public(
-        source_packet.prepare(run, stage, roots, source_windows.observations(config, execution[1]))
+        source_packet.prepare(
+            run, context["stage"], roots, source_windows.observations(config, plan)
+        )
     )
+    context["source_views"] = source_guidance.inputs(config, plan, run)
     if config.get("reviewed_input"):
         context["task_file"] = str(run / "00-input/reviewed-task-spec.json")
-    context.update(check_catalog.context(config, stage, context["plan"]))
+    context.update(check_catalog.context(config, context["stage"], context["plan"]))
     return {key: entry for key, entry in context.items() if included(entry)}
 
 

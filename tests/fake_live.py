@@ -9,6 +9,7 @@ import uuid
 from pathlib import Path
 
 from fake_contract import enrich, plan_text
+from fake_report_repair import report_result
 
 args = sys.argv[1:]
 if "--version" in args:
@@ -70,6 +71,9 @@ if "FORMAT REPAIR ONLY" not in prompt and "SYNTHESIS ONLY" not in prompt:
 root = Path(context["roots"]["project"])
 target = root / ("Jenkinsfile" if mode == "jenkins" else "hello.py")
 role = context["stage"]
+if mode == "report-repair":
+    report_result(context, prompt, header, print)
+    sys.exit(0)
 if mode in {"git-actions", "git-denied"}:
     journal = Path(context["task_file"]).parent.parent / "git-execution.json"
     git_jobs = json.loads(journal.read_text()) if journal.exists() else []
@@ -506,16 +510,22 @@ if mode == "prose-block" and role == "planner":
 plan = Path(context["task_file"]).parent.parent / "plan.md"
 if role == "planner" and header["permission"]["edit"].get(str(plan)) == "allow":
     assert "PLAN FILE:" in prompt or "--session" in args
-    unread = mode == "plan-unread" and "--session" not in args
+    unread = mode in {"plan-unread", "plan-unread-resolved"} and "--session" not in args
     if unread:
         failure = dict(
             status="error",
             input=dict(filePath=str(plan), content="must not be written"),
-            error=f"You must read the file {plan} before overwriting it.",
+            error=f"You must read file {plan} before overwriting it. Use the Read tool first",
         )
         print(
             json.dumps(dict(type="tool_use", part=dict(id="unread", tool="write", state=failure)))
         )
+    if mode == "plan-unread-resolved":
+        for tool, output in (("read", plan.read_text()), ("write", "File written successfully")):
+            state = dict(status="completed", input=dict(filePath=str(plan)), output=output)
+            part = dict(id="plan-" + tool, callID="plan-" + tool, tool=tool, state=state)
+            print(json.dumps(dict(type="tool_use", part=part)))
+        unread = False
     if not plan_broken and not unread:
         if mode == "plan-unread":
             assert "in THIS session" in prompt

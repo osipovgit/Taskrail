@@ -173,6 +173,7 @@ def evidence_roots(workflow):
         git_directory(run),
         inputs / "ssh",
         inputs / "local",
+        inputs / "source-views",
     ]
 
 

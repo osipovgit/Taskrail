@@ -77,6 +77,17 @@ server takes the cited lines from the current file, binds them to a successful r
 or delivered packet and to the current source hash, and records the excerpt in
 `evidence-bindings.json`. Whitespace is not significant; each complete cited line
 must have reached the model. A clipped prefix cannot prove an unseen suffix.
+One citation may combine several windows of the same current source version. The
+binding records every contributing observation and its exact line ranges, retaining
+the primary event fields for compatibility. Repeated partial reads do not erase
+earlier complete observations.
+
+Oversized JSON can have a server-created `source_views` entry: a losslessly formatted
+copy under `00-input/source-views`. Search and read only relevant view windows and cite
+the view path and line numbers. Source and view hashes bind the copy to its original;
+changed originals or modified views invalidate its evidence. Creating a view does not
+make its contents observed. Raw and formatted values remain untrusted data, and
+neither proves runtime success. Independent semantic review remains required.
 
 Stage prompts can carry a source packet of at most 4,000 serialized UTF-8 bytes,
 with at most 80 previously observed numbered lines per range. Before a model runs,
@@ -95,7 +106,8 @@ Operator notes, interrupted-writer instructions and actionable earlier feedback
 remain available when a run continues.
 `observations.json` keeps the complete validation ledger; `evidence.json` is a
 bounded recovery subset of at most 60 records that never removes observations
-needed for validation. Changed or unseen content cannot justify approval. A
+needed for validation. An oversized record is skipped without dropping other useful
+records. Changed or unseen content cannot justify approval. A
 matching citation proves provenance, not the model's interpretation, so independent
 review remains necessary. Only server records prove executed checks. The exact
 schema is supplied in each request; do not copy it into custom roles.
@@ -110,8 +122,10 @@ after or without a final answer keep their safeguards.
 
 A final result that fails validation first goes back to the same session, at most
 twice per stage. Schema failures identify a stable error code and JSON pointer;
-provenance errors identify the evidence, file and range. The session keeps its
-context and tools. For a rejected V2 decision it may replace only the erroneous
+provenance errors identify up to five failing citations and bounded missing windows,
+so existing observations need not be reread. Repeated identical planner rejection
+after same-session correction stops automatic fresh research retries. The session
+keeps its context and tools. For a rejected V2 decision it may replace only the erroneous
 field instead of regenerating every outcome:
 
 ```json
@@ -168,6 +182,9 @@ the first attempt (one `R<n> →` line per requirement) and reads it when the se
 ends; the file survives an interrupted or overflowing session. After a context
 stop, a fully validated ready proposal advances to independent plan review; an
 invalid one supplies exact validation errors to the bounded recovery attempt.
+An exact native read-before-overwrite error becomes a warning only after a later
+successful native read and write of that plan in the same session. The saved plan
+still passes full validation and independent review.
 No source, coverage or scope check is relaxed. The request labels requirement blocks with `R<n>` and
 names the project map. The format:
 

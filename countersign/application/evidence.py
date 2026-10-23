@@ -50,7 +50,16 @@ def refresh(run, events, roots):
     batch = complete_evidence(events, roots)
     records = [record for record in index[RECORDS] if current(record)]
     records.extend(observed_reads(batch, events))
-    unique = {json.dumps(record["input"], sort_keys=True): record for record in records}
+    unique = {
+        (
+            json.dumps(record["input"], sort_keys=True),
+            record["source_sha256"],
+            record["tool"],
+            hashlib.sha256(record["output"].encode()).digest(),
+            record.get("output_clipped", False),
+        ): record
+        for record in records
+    }
     index[RECORDS] = list(unique.values())
     atomic_json(run / OBSERVATIONS, index)
     retained = bounded(list(unique.values()))
@@ -74,8 +83,10 @@ def bounded(records):
     retained = []
     remaining = MAX_CHARACTERS
     for record in reversed(records):
-        remaining -= len(record["output"])
-        if remaining < 0 or len(retained) >= MAX_RECORDS:
+        if len(retained) >= MAX_RECORDS:
             break
+        if len(record["output"]) > remaining:
+            continue
+        remaining -= len(record["output"])
         retained.append(record)
     return list(reversed(retained))

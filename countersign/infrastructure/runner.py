@@ -50,7 +50,11 @@ def summarize(watch, process, options):
     turn = watch.turn
     if status == SUCCESS:
         status = usage_limits.exceeded(watch.telemetry, **turn.budgets)
-    outcome = parse_events(turn.path, len(turn.previous.splitlines()))
+    outcome = parse_events(
+        turn.path,
+        len(turn.previous.splitlines()),
+        plan_file=(options["runtime"] or {}).get("plan_file"),
+    )
     usage_limits.explain(outcome, watch.telemetry, turn.budgets["context_budget"])
     stderr = turn.error_text()
     if options["format_only"] and status == SUCCESS and code == 0 and AUTO_REJECT not in stderr:
