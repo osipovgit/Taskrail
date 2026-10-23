@@ -5,7 +5,7 @@ import os
 import re
 from collections import defaultdict
 
-from countersign.infrastructure import opencode_cli, read_warnings, turn_io
+from countersign.infrastructure import opencode_cli, plan_warnings, read_warnings, turn_io
 
 END_OF_FILE = re.compile(r"\(End of file - total (\d+) lines\)")
 LINE_NUMBER = re.compile(r"^\s*(\d+):", re.MULTILINE)
@@ -20,14 +20,18 @@ INPUT = "input"
 FILE_PATH = "filePath"
 
 
-def parse_events(path, start=0):
+def parse_events(path, start=0, plan_file=None):
     """Usage, sessions, errors and the final text of events after line `start`."""
     summary = EventSummary()
+    writes = plan_warnings.PlanWrites(plan_file)
     for event_line, line in turn_io.event_lines(path, start):
         event = decoded(line)
         if event is not None:
             summary.observe(event_line, event)
-    return read_warnings.classify_missing_reads(summary.outcome())
+            writes.observe(event_line, event)
+    return writes.recover(
+        read_warnings.classify_missing_reads(summary.outcome()), summary.identity["final_line"]
+    )
 
 
 def decoded(line):
@@ -65,7 +69,7 @@ class EventSummary:
             message = self.texts[part.get("messageID")]
             message.append(part["text"])
         elif kind == "tool_use":
-            self.tool(event_line, part)
+            self.tool(event_line, part, event.get("sessionID"))
         elif kind == ERROR:
             error = str(event.get(ERROR, event))
             self.fail(error)
@@ -84,7 +88,7 @@ class EventSummary:
             self.identity["sessions"].add(event["sessionID"])
         return True
 
-    def tool(self, event_line, part):
+    def tool(self, event_line, part, session_id):
         """Count a call; record failures and complete first-line reads."""
         self.counts["tool_calls"] += 1
         state = part.get("state", {})
@@ -95,6 +99,7 @@ class EventSummary:
             self.fail(error)
             failure = dict(tool=part.get(TOOL), call_id=call["call_id"])
             failure.update(input=state.get(INPUT, {}), error=error, event_line=event_line)
+            failure["session_id"] = session_id
             self.failures["tool_errors"].append(failure)
         elif part.get(TOOL) == "read" and full_read(state):
             call["source"] = state.get(INPUT, {}).get(FILE_PATH)

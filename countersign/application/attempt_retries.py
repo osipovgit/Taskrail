@@ -10,6 +10,7 @@ TRANSPORT = frozenset(("TIMEOUT", "INCOMPLETE", "PROCESS_ERROR"))
 TRANSPORT_KEY = "transport"
 FORMAT_KEY = "format"
 REBUILD_KEY = "rebuild"
+CONTRACT_ERROR = "contract_error"
 CONTEXT_NOTE = "\nTHE PREVIOUS SESSION EXCEEDED THE MODEL CONTEXT WINDOW. This is a new session: use the recorded evidence file instead of repeating research, read only the lines you need (targeted reads of large outputs, never whole logs), and return the next request or the final result as soon as the evidence allows.\n"
 OVERFLOW_OUTPUTS = "\nThe session that overflowed received {0} characters of tool output; the largest were: {1}. Do not repeat these calls whole: search their targets or read windows of at most 200 lines.\n"
 LARGE_OUTPUT = 10000
@@ -48,7 +49,7 @@ class Retries:
 
     def allowed(self, outcome):
         """Return True after preparing the next attempt, False to stop the stage."""
-        if outcome.get("admission_blocked"):
+        if outcome.get("admission_blocked") or already_corrected(self.stage, outcome):
             return False
         status = outcome["status"]
         if status == "INVALID_RESULT":
@@ -72,14 +73,14 @@ class Retries:
             return False
         self.counts[FORMAT_KEY] += 1
         state = self.attempts.workflow.state
-        self.repair = dict(request=self.attempts.request, error=outcome["contract_error"])
+        self.repair = dict(request=self.attempts.request, error=outcome[CONTRACT_ERROR])
         config = self.attempts.workflow.config
-        if self.stage == "planner" or needs_sources(outcome["contract_error"], config):
+        if self.stage == "planner" or needs_sources(outcome[CONTRACT_ERROR], config):
             return full_attempt(self)
         self.attempts.format_only = True
         self.attempts.request = prompts.repair(
             outcome["final_text"],
-            outcome["contract_error"],
+            outcome[CONTRACT_ERROR],
             role_of(self.stage),
             state.get("contract_version"),
             state["requirements"],
@@ -122,6 +123,12 @@ class Retries:
         if not self.attempts.format_only:
             self.attempts.recovery = evidence.load_index(workflow.run)
         return True
+
+
+def already_corrected(stage, outcome):
+    """Do not spend another full session on a planner error already returned for repair."""
+    eligible = stage == "planner" and outcome["status"] == "INVALID_RESULT"
+    return eligible and outcome.get(CONTRACT_ERROR) in outcome.get("validation_errors", [])
 
 
 def needs_sources(error, config):

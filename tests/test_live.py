@@ -74,6 +74,27 @@ class LiveTests(unittest.TestCase):
         state = json.loads((run / "run.json").read_text())
         return run, status, state
 
+    def test_large_reports_repair_together_without_a_new_planner_session(self):
+        text = self.root / "issues.txt"
+        text.write_text("".join(f"Finding {number}\n" for number in range(1, 1046)))
+        report = self.root / "report.json"
+        report.write_text(json.dumps([dict(rule="test", line=number) for number in range(300)]))
+        original = report.read_bytes()
+        run, status, state = self.run_mode("report-repair")
+        self.assertEqual(status, "NO_CHANGES_REQUIRED", state.get("summary"))
+        planner = [entry for entry in state["stages"] if entry["stage"] == "planner"]
+        self.assertEqual(len(planner), 1)
+        self.assertEqual(planner[0]["session_turns"], 2)
+        self.assertEqual(state["stages"][-1]["stage"], "plan-reviewer")
+        correction = (run / "01-plan/tool-result.md").read_text()
+        self.assertIn("Evidence E1", correction)
+        self.assertIn("Evidence E2", correction)
+        self.assertIn("source-views", correction)
+        proofs = json.loads((run / "01-plan/evidence-bindings.json").read_text())
+        self.assertGreater(len(proofs[0]["observations"]), 1)
+        self.assertEqual(proofs[1]["source_view"]["source_path"], str(report))
+        self.assertEqual(report.read_bytes(), original)
+
     def test_git_history_and_revert_complete_the_workflow(self):
         from countersign.git import process
 
@@ -497,6 +518,20 @@ class LiveTests(unittest.TestCase):
         self.assertIn("in THIS session", correction)
         self.assertIn(str(run / "plan.md"), correction)
         self.assertEqual([stage["stage"] for stage in state["attempts"]].count("planner"), 1)
+
+    def test_resolved_plan_read_before_write_needs_no_extra_model_turn(self):
+        run, status, state = self.run_mode("plan-unread-resolved")
+        self.assertEqual(status, "READY_FOR_REVIEW", state.get("summary"))
+        planner = state["stages"][0]
+        self.assertEqual(planner["session_turns"], 1)
+        self.assertEqual(planner["status"], "RESULT_VALID")
+        self.assertEqual(state["stages"][1]["stage"], "plan-reviewer")
+        proof = planner["warnings"][0]["recovered_by"]
+        self.assertTrue(proof["read"]["call_id"].endswith("plan-read"))
+        self.assertTrue(proof["call_id"].endswith("plan-write"))
+        self.assertIn(
+            "Recovered by a later read and successful write", (run / "report.md").read_text()
+        )
 
     def test_permission_denied_retains_tool_input_after_operator_declines(self):
         run, status, state = self.run_mode("denied", read_retries=0, timeout_seconds=1)
@@ -1139,7 +1174,10 @@ class LiveTests(unittest.TestCase):
     def test_forbidden_plan(self):
         _, status, state = self.run_mode("badpath")
         self.assertEqual(status, "INVALID_RESULT")
-        self.assertEqual(len(state["attempts"]), 2)
+        self.assertEqual(len(state["attempts"]), 1)
+        self.assertEqual(state["stages"][0]["session_turns"], 3)
+        self.assertEqual(len(state["attempts"][0]["validation_errors"]), 2)
+        self.assertIn("return 1", (self.root / "hello.py").read_text())
 
     def test_symlink_and_metadata_paths_rejected(self):
         (self.root / "link").symlink_to(self.base, target_is_directory=True)

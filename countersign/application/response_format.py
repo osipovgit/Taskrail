@@ -31,8 +31,9 @@ PLAN_ROUTING = (
 JSON_FINISH = "Return the complete final stage result as one JSON object, with no prose or fences."
 PLAN_FINISH = (
     "Update the plan.md file named in your request only if its content needs correction. "
-    "Missing observed evidence needs a direct read of the cited source range, not a cosmetic "
-    "plan edit or unrelated citations. Then end with DONE. Do not return a JSON stage result."
+    "For missing observed evidence, read only the missing windows named in the feedback. "
+    "If a formatted source view is provided, read and cite its relevant ranges instead of "
+    "the clipped raw line. Keep other decisions. Then end with DONE. Do not return a JSON stage result."
 )
 DECISIONS = (
     "\nAuthor semantic decisions only using schema_version=2. Cover every assigned requirement "

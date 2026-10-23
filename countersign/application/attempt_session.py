@@ -68,6 +68,9 @@ def launch_options(workflow, active, allowance, format_only):
             context_budget=session_budget.capacity(config),
             env_allow=config["agent_env_allow"],
             autocompact=False,
+            plan_file=str(workflow.run / "plan.md")
+            if record["stage"] == "planner" and not format_only
+            else None,
         ),
     )
 
