@@ -15,6 +15,7 @@ TOKENS = "tokens"
 MAX_RESULT_CORRECTIONS = 2
 ROLE = "role"
 RESULT_CORRECTIONS = "result_corrections"
+VALIDATION_ERRORS = "validation_errors"
 
 
 class StageSession:
@@ -31,6 +32,7 @@ class StageSession:
         self.context = dict(session_id=None, turns=0, tokens={}, attachment={})
         self.context["corrections"] = 0
         self.context[RESULT_CORRECTIONS] = 0
+        self.context[VALIDATION_ERRORS] = []
 
     def run(self):
         """One stage server serves every turn and stops with the stage."""
@@ -122,6 +124,7 @@ class StageSession:
         """Charge all turns once and exclude the operator's waiting time."""
         elapsed = round(self.clock.elapsed(), 3)
         outcome.update(elapsed_seconds=elapsed, tokens=self.context[TOKENS])
+        outcome[VALIDATION_ERRORS] = self.context[VALIDATION_ERRORS]
         record = self.active[1]
         record.update(session_turns=self.context["turns"], paused_seconds=self.clock.paused)
         return outcome
@@ -145,6 +148,7 @@ def result_feedback(session, outcome):
     if error is None:
         return None
     context[RESULT_CORRECTIONS] += 1
+    context[VALIDATION_ERRORS].append(error)
     feedback = response_format.correction(session.active[1][ROLE], error)
     events.append(session.active[0], "correction", dict(response="final result"), feedback)
     return feedback

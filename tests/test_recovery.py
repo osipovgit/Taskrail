@@ -6,6 +6,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from countersign.application.attempt_retries import overflow_outputs
+from countersign.application.evidence import MAX_CHARACTERS, bounded
 from countersign.application.recovery import collect_evidence, write_evidence
 from countersign.infrastructure.context_overflow import tool_outputs
 
@@ -107,6 +108,18 @@ class RecoveryTests(unittest.TestCase):
         self.assertTrue(
             collect_evidence(self.events, [self.root])["records"][0]["upstream_truncated"]
         )
+
+    def test_oversized_observation_does_not_hide_older_useful_evidence(self):
+        older = dict(output="older useful lines")
+        newest = dict(output="newest useful lines")
+        oversized = dict(output="x" * (MAX_CHARACTERS + 1))
+        for records, expected in (
+            ([older, oversized], [older]),
+            ([older, oversized, newest], [older, newest]),
+            ([older, dict(output="x" * MAX_CHARACTERS), newest], [older, newest]),
+        ):
+            with self.subTest(record_count=len(records)):
+                self.assertEqual(bounded(records), expected)
 
 
 class OverflowOutputTests(unittest.TestCase):

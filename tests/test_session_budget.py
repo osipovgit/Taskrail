@@ -113,17 +113,23 @@ class SessionBudgetTests(unittest.TestCase):
 
     def test_every_role_disables_compaction_and_receives_context_headroom(self):
         workflow = SimpleNamespace(
+            run=self.root,
             config=dict(
                 command=["opencode"], roots=dict(repo=self.root), models={}, agent_env_allow=[]
             ),
             runtime=dict(debug=False, profile_suffix="test"),
         )
         for role in ("planner", "implementer", "reviewer"):
-            with self.subTest(role=role):
-                launch = launch_options(workflow, (self.root, dict(role=role)), 100000, False)
-                self.assertIs(launch["runtime"]["autocompact"], False)
-                self.assertEqual(launch["runtime"]["context_budget"], 24576)
-                self.assertEqual(launch["runtime"]["token_budget"], 100000)
+            for format_only in (False, True):
+                with self.subTest(role=role, format_only=format_only):
+                    active = (self.root, dict(role=role, stage=role))
+                    launch = launch_options(workflow, active, 100000, format_only)
+                    self.assertIs(launch["runtime"]["autocompact"], False)
+                    self.assertEqual(launch["runtime"]["context_budget"], 24576)
+                    self.assertEqual(launch["runtime"]["token_budget"], 100000)
+                    plan_file = str(self.root / "plan.md")
+                    expected = plan_file if role == "planner" and not format_only else None
+                    self.assertEqual(launch["runtime"]["plan_file"], expected)
 
     def test_context_uses_latest_input_and_both_cache_categories(self):
         telemetry = Telemetry()

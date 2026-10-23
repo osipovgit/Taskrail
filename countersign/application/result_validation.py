@@ -4,6 +4,7 @@ from pathlib import Path
 
 from countersign.application import (
     check_planning,
+    citation_review,
     decision_adapter,
     declared_block,
     evidence,
@@ -15,13 +16,13 @@ from countersign.core import (
     coverage,
     plan_contract,
     schema,
-    source_claims,
 )
 from countersign.core.files import atomic_json
 from countersign.git.requests import output_directory
 
-EVIDENCE_FILES = "declared roots or executor snapshots (cite the source file itself, not run artifacts such as changes.diff or recovery.md)"
+EVIDENCE_FILES = "declared roots, verified source views or executor snapshots (not run artifacts such as changes.diff or recovery.md)"
 PLAN_FILES = "declared roots (files_read and proposed_change_files name project files; cite executor snapshots only in evidence)"
+EVIDENCE = "evidence"
 
 
 def validate(response, context):
@@ -46,13 +47,12 @@ def checked(payload, context):
         payload,
         context["requirements"],
         context["stage"],
-        execution_evidence.claim_ids(context["run"], payload["evidence"]),
+        execution_evidence.claim_ids(context["run"], payload[EVIDENCE]),
         check_planning.criteria(payload, context),
     )
     run = context["run"]
     records = [record for record in evidence.validation_records(run) if evidence.current(record)]
-    proofs = []
-    for claim in payload["evidence"]:
+    for claim in payload[EVIDENCE]:
         approved_path(
             claim["path"],
             dict(
@@ -61,10 +61,11 @@ def checked(payload, context):
                 ssh_evidence=run / "00-input/ssh",
                 local_evidence=run / "00-input/local",
                 check_evidence=run / "00-input/checks",
+                source_views=run / "00-input/source-views",
             ),
             EVIDENCE_FILES,
         )
-        proofs.append(source_claims.validate_claim(claim, records))
+    proofs = citation_review.validate(payload[EVIDENCE], records, context)
     validate_role(payload, context)
     atomic_json(context["folder"] / "evidence-bindings.json", proofs)
     return payload
@@ -115,6 +116,6 @@ def validate_review(payload, plan):
             all(entry["outcome"] in {"satisfied", "deferred"} for entry in payload["coverage"]),
             "No-change approval cannot contain future work",
         )
-    observed = {claim["path"] for claim in payload["evidence"]}
+    observed = {claim["path"] for claim in payload[EVIDENCE]}
     for finding in payload["findings"]:
         schema.require(finding["file"] in observed, "Finding needs observed source evidence")

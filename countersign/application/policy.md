@@ -75,8 +75,9 @@ unavailable, return BLOCKED with the specific gap; never invent missing contents
 The response format in the request (the plan file for the planner, the JSON schema
 otherwise) is the only output contract and overrides older role format instructions.
 Use the assigned requirement IDs or plan labels and source citations.
-Evidence cites a file read in this run and a line range that one read returned; the
-server takes the text from the file, so never copy source text into the response.
+Evidence cites current source lines delivered in full in this run. A range may join
+observed windows of the same unchanged source; never infer an unseen gap or clipped suffix.
+The server takes the text from the file, so never copy source text into the response.
 A citation confirms source content, not runtime correctness. Never invent check results.
 Runtime claims require observed, ledger-verified successful local, SSH
 or Jenkins execution evidence; source citations or requests alone cannot establish runtime
