@@ -12,6 +12,10 @@ URL = "url"
 USERNAME = "username"
 JOBS = "jobs"
 PATH = "path"
+APPROVAL = "approval"
+# root: every build waits for root approval (the default); none: root allowed this
+# job's builds in advance by configuring it, for jobs that change nothing outside CI.
+APPROVALS = frozenset(("root", "none"))
 CA_FILE = "ca_file"
 SERVER_FIELDS = frozenset((URL, USERNAME, "token", JOBS))
 URL_PATTERN = re.compile(r"https?://[A-Za-z0-9.-]+(:[0-9]{1,5})?(/[A-Za-z0-9._~/-]*)?")
@@ -46,12 +50,13 @@ def check_server(server):
 
 
 def check_jobs(jobs):
-    """Job aliases map to folder paths and the build parameters agents may set."""
+    """Job aliases map to folder paths, the build parameters agents may set and approval."""
     require(isinstance(jobs, dict) and bool(jobs), "Configure at least one Jenkins job")
     for alias, job in jobs.items():
         protocol.label(alias)
         fields = set(job) if isinstance(job, dict) else set()
-        require(fields == {PATH, "parameters"}, "Each job needs path and parameters")
+        require(fields - {APPROVAL} == {PATH, "parameters"}, "Each job needs path and parameters")
+        require(job.get(APPROVAL, "root") in APPROVALS, 'Job approval is "root" or "none"')
         require(matches(JOB_PATH, job[PATH]), "Job path: folder/name segments")
         names = job["parameters"]
         require(isinstance(names, list), "Job parameters must be a list of names")

@@ -57,7 +57,8 @@ Every **Develop** task goes through the same steps:
    Child success reports and manual done marks cannot bypass this phase. It runs
    even without an SSH/Jenkins executor and must finish `NO_CHANGES_REQUIRED`.
 4. **Jenkins validation.** Planned `Jenkins check:` entries run when Jenkins is
-   configured. Starting each build requires root approval.
+   configured. A build needs root approval unless its job is configured with
+   `"approval": "none"` ([Jenkins jobs](ssh-executor.md)).
 5. **Your confirmation, only before server checks.** Tasks of a split run one after
    another without waiting for you; a finished task is **Completed**, not a review
    point. When server checks are planned, **Confirm changes** lets them start; for a

@@ -201,6 +201,7 @@ class JenkinsTest(unittest.TestCase):
         store = TicketStore(self.root / "tickets")
         server = object.__new__(ExecutorServer)
         server.client_uid = 1000
+        self.servers["ci"]["jobs"]["shop-tests"]["approval"] = "root"
         server.configs = {"ssh": {}, "jenkins": self.servers}
         server.store = store
         catalog = server.dispatch(dict(operation="catalog"), 1000)
@@ -222,6 +223,29 @@ class JenkinsTest(unittest.TestCase):
             worker.perform(store, store.get(ticket["id"]), self.servers)
         perform.assert_called_once_with(self.servers, BUILD)
         self.assertEqual(store.get(ticket["id"])["status"], "SUCCEEDED")
+
+    def test_a_job_root_preapproved_in_the_configuration_builds_without_a_ticket_wait(self):
+        servers = copy.deepcopy(self.servers)
+        self.assertEqual(servers["ci"]["jobs"]["shop-tests"]["approval"], "none")
+        jenkins_config.check_server(servers["ci"])
+        server = object.__new__(ExecutorServer)
+        server.client_uid = 1000
+        server.configs = {"ssh": {}, "jenkins": servers}
+        server.store = TicketStore(self.root / "tickets")
+        with patch.object(threading.Thread, "start") as start:
+            started = server.dispatch(dict(operation="submit", key="k1", jenkins=BUILD), 1000)
+            repeated = server.dispatch(dict(operation="submit", key="k1", jenkins=BUILD), 1000)
+        self.assertEqual(started["status"], "RUNNING")
+        self.assertEqual(start.call_count, 1)
+        self.assertEqual(repeated["status"], "RUNNING")
+        catalog = server.dispatch(dict(operation="catalog"), 1000)
+        self.assertEqual(catalog["jenkins"]["ci"]["jobs"]["shop-tests"]["approval"], "none")
+        deploy = dict(BUILD, job="shop-deploy-staging", parameters={"VERSION": "1"})
+        ticket = server.dispatch(dict(operation="submit", key="k2", jenkins=deploy), 1000)
+        self.assertEqual(ticket["status"], "PENDING_APPROVAL")
+        servers["ci"]["jobs"]["shop-tests"]["approval"] = "always"
+        with self.assertRaisesRegex(ValueError, "root"):
+            jenkins_config.check_server(servers["ci"])
 
     def test_stage_reads_need_ui_approval_and_builds_become_tickets(self):
         run = self.root / "run"
