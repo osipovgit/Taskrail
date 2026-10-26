@@ -163,7 +163,7 @@ async function main() {
   nodes['task-form'].elements = { namedItem: (name) => fields[name] };
   nodes['task-form'].reset = () => {
     for (const field of Object.values(fields)) field.value = '';
-    nodes['task-mode'].value = 'change';
+    nodes['task-mode'].value = 'develop';
     nodes['task-worktree'].checked = false;
     nodes['task-auto-approve'].checked = false;
   };
@@ -195,7 +195,7 @@ async function main() {
   assert.equal(fields.goal.value, 'Edited before launch');
   app.openComposer();
   assert.equal(fields.goal.value, '');
-  assert.equal(nodes['task-mode'].value, 'change');
+  assert.equal(nodes['task-mode'].value, 'develop');
   assert.equal(nodes['task-worktree'].checked, false);
   assert.equal(nodes['task-auto-approve'].checked, false);
   assert.equal(nodes['project-roots'].children.length, 1);

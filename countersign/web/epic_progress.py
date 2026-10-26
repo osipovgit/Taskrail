@@ -3,6 +3,8 @@
 from countersign.web import epic_tasks
 
 ACTIVE = epic_tasks.ACTIVE
+# A task whose run waits for your decision is still in progress: nothing else starts.
+BUSY = ACTIVE | {"WAITING_APPROVAL"}
 FINISHED = epic_tasks.FINISHED
 STATUS = epic_tasks.STATUS
 
@@ -18,7 +20,7 @@ def next_task(entries):
     A task whose run failed may be started again by the operator; auto-continue never
     does, because the epic then needs the operator (see group).
     """
-    if any(task[STATUS] in ACTIVE for task in entries):
+    if any(task[STATUS] in BUSY for task in entries):
         return None
     done = {task["id"] for task in entries if finished(task)}
     for task in entries:

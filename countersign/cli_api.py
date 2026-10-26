@@ -62,7 +62,7 @@ def submit_parser():
     for field in (*cli_requests.FIELDS, "verification"):
         option = "--{}".format(field.replace("_", "-"))
         parser.add_argument(option, help="Text, or @FILE to read it from a file")
-    parser.add_argument("--mode", choices=tuple(cli_requests.MODES), default="change")
+    parser.add_argument("--mode", choices=tuple(cli_requests.MODES), default="develop")
     parser.add_argument("--allow-all", action="store_true", help="Allow all actions of the run")
     parser.add_argument("--worktree", action="store_true", help="Work in new Git worktrees")
     parser.add_argument("--followup", metavar="RUN", help="Continue the conversation of RUN")

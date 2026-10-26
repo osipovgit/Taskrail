@@ -34,7 +34,7 @@ Any other `#` or `##` heading, a repeated section, and text outside the sections
 | Projects | Required. One to eight existing absolute directories; `~` is supported. An empty name becomes the directory name (numbered on a clash) |
 | Goal | Required. Expected behavior and its purpose |
 | Acceptance criteria | Observable conditions for a satisfactory result; empty means the Goal itself, with verification limits reported |
-| Mode | **Change code** (large work is split into tasks), **Answer only** or **Design discussion** |
+| Mode | **Develop** (large work is split into tasks), **Answer only** or **Design discussion** |
 | Title | Under **More details**; one line, up to 160 characters, default the Goal's first line |
 
 **More details** also holds current behavior and errors, known entry points,

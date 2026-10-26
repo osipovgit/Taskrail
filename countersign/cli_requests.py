@@ -10,7 +10,7 @@ ANSWER = "answer"
 DESIGN = "design"
 MODES = MappingProxyType(
     {
-        "change": {},
+        "develop": {},
         ANSWER: {"read_only": True},
         DESIGN: {DESIGN: True},
         "split": {"decompose": True},

@@ -79,7 +79,7 @@ class EvidenceRepairTests(unittest.TestCase):
         self.assertEqual(source_guidance.inputs(config, None, self.run), [])
 
     def test_repeated_planner_error_does_not_start_fresh_research(self):
-        workflow = SimpleNamespace(flow=dict(stage="planner"), state=dict(stages=[]))
+        workflow = SimpleNamespace(flow=dict(stage="planner"), state=dict(stages=[]), config={})
         retries = Retries(SimpleNamespace(workflow=workflow))
         outcome = dict(status="INVALID_RESULT", contract_error="Missing evidence")
         with patch.object(retries, "format_repair", return_value=True) as repair:

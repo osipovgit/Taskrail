@@ -46,7 +46,7 @@ class Retries:
 
     def allowed(self, outcome):
         """Return True after preparing the next attempt, False to stop the stage."""
-        if final(self.stage, outcome):
+        if final(self.stage, outcome, self.attempts.workflow.config):
             return False
         status = outcome["status"]
         if status == "INVALID_RESULT":
@@ -123,10 +123,10 @@ class Retries:
         return True
 
 
-def final(stage, outcome):
-    """An outcome no retry can change: blocked admission, a provider limit, or a planner
-    error already returned for repair (another full session would repeat it)."""
-    if outcome.get("provider_limit"):
+def final(stage, outcome, config):
+    """An outcome no retry should repeat: blocked admission, a planner error already
+    returned for repair, or, when stop_on_provider_limit is set, a provider limit."""
+    if outcome.get("provider_limit") and config.get("stop_on_provider_limit"):
         say("  Provider quota or billing limit reached; no retry until it resets")
         return True
     repaired = stage == "planner" and outcome["status"] == "INVALID_RESULT"

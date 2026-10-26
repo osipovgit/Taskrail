@@ -28,6 +28,7 @@ SETTINGS_SNAPSHOT = (
     "stage_seconds",
     "stage_attempts",
     "read_retries",
+    "stop_on_provider_limit",
     "max_repairs",
     TOKENS,
     "model_context_tokens",

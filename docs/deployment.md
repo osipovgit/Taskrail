@@ -108,6 +108,7 @@ source templates. See [instruction contracts](contracts.md).
 | `format_repair_tools` | `none` | `read` keeps read-only tools in format repair passes, for providers that reject tool-less requests |
 | `permission_worktree` | inferred | Base directory for relative permission names (Git worktree for 1.x, first root for 2.x); required when `.git` is a file or symlink |
 | `tool_output_dir` | opencode location | Absolute directory (`~` allowed) where a compatible CLI keeps truncated tool output; its automatic `external_directory` allow rule is accepted only for this directory |
+| `stop_on_provider_limit` | `false` | `true` stops a stage at the first exhausted provider quota or billing limit instead of spending its retries ([contracts](contracts.md)) |
 | `protected_paths` | credentials list | Patterns models never read or edit, besides `.env` files; setting it replaces the defaults ([access](access.md#protected-paths)) |
 
 opencode 1.x is called as `opencode run --session --dir --agent --format json --file`

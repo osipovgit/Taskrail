@@ -344,6 +344,34 @@ class TaskControlTests(unittest.TestCase):
         epic_entry = next(run for run in list_runs(self.runs) if run["id"] == "epic")
         self.assertEqual((epic_entry["group"], epic_entry["progress"]), ("running", "2/2"))
 
+    def test_a_running_or_waiting_task_keeps_auto_continue_and_shows_the_right_group(self):
+        epic = self.make_epic()
+        self.launcher.action(dict(id="epic", action="epic_auto_on"))
+        with self.launching("child-1"):
+            delivery_launch.advance(self.launcher)
+        self.finish("child-1", "RUNNING")
+
+        def unchanged_by_service_ticks():
+            with patch.object(self.launcher, "launch") as launch:
+                delivery_launch.advance(self.launcher)
+                delivery_launch.advance(self.launcher)
+            launch.assert_not_called()
+            record = json.loads((epic / "epic.json").read_text())
+            self.assertTrue(record["auto_continue"])
+            self.assertNotIn("launch_error", record)
+
+        unchanged_by_service_ticks()
+        entry = next(run for run in list_runs(self.runs) if run["id"] == "epic")
+        self.assertEqual(entry["group"], "running")
+        self.assertEqual(run_view(self.runs, "epic")["delivery"]["step"], "implementing")
+        request = dict(status="LOCAL_REQUEST", argv=["make"], cwd=str(self.repo))
+        atomic_json(self.runs / "child-1/pending-approval.json", dict(ticket="t", request=request))
+        unchanged_by_service_ticks()
+        delivery = run_view(self.runs, "epic")["delivery"]
+        self.assertEqual((delivery["next"], delivery["step"]), (None, "needs_you"))
+        entry = next(run for run in list_runs(self.runs) if run["id"] == "epic")
+        self.assertEqual(entry["group"], "attention")
+
     def test_split_requires_independent_combined_review_and_fresh_source(self):
         self.make_epic()
         with self.launching("child-1"):
@@ -653,7 +681,7 @@ class TaskControlTests(unittest.TestCase):
         index = self.run / "run.json"
         state = json.loads(index.read_text())
         self.assertEqual(group(), "review")
-        self.assertEqual(list_runs(self.runs)[0]["mode"], "change")
+        self.assertEqual(list_runs(self.runs)[0]["mode"], "develop")
         self.launcher.action(dict(id="original", action="done"))
         self.assertEqual(group(), "done")
         self.assertTrue(run_view(self.runs, "original")["actions"]["reopen"])
