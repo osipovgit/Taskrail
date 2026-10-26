@@ -29,7 +29,14 @@ const PHASE_LABELS = {
   skipped: 'SKIPPED',
 };
 const TONES = {
-  good: ['READY_FOR_REVIEW', 'NO_CHANGES_REQUIRED', 'CHECK_COMPLETED', 'CONFIRMED', 'SKIPPED'],
+  good: [
+    'READY_FOR_REVIEW',
+    'NO_CHANGES_REQUIRED',
+    'CHECK_COMPLETED',
+    'COMPLETED',
+    'CONFIRMED',
+    'SKIPPED',
+  ],
   active: ['STARTING', 'RUNNING'],
   attention: ['WAITING_APPROVAL', 'NEXT', 'CONFIRM'],
   pending: ['NOT_STARTED', 'WAITING'],
@@ -60,6 +67,14 @@ function phaseStatus(delivery, name) {
   return PHASE_LABELS[record.status] || record.status;
 }
 
+// A finished task is completed; only the whole delivery waits for your review.
+const TASK_LABELS = { READY_FOR_REVIEW: 'COMPLETED' };
+
+function taskStatus(task, delivery) {
+  if (task.status) return TASK_LABELS[task.status] || task.status;
+  return task.id === delivery.next ? 'NEXT' : 'NOT_STARTED';
+}
+
 function taskNodes(delivery) {
   const tasks = delivery.tasks || [];
   const byId = new Map(tasks.map((task) => [task.id, task]));
@@ -77,7 +92,7 @@ function taskNodes(delivery) {
     kind: 'task',
     id: task.id,
     label: task.id + ' · ' + task.title,
-    status: task.status || (task.id === delivery.next ? 'NEXT' : 'NOT_STARTED'),
+    status: taskStatus(task, delivery),
     column: level(task),
     after: (task.depends_on || []).filter((id) => byId.has(id)),
     run: task.run,

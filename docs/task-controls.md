@@ -13,7 +13,7 @@
 | Send a follow-up Goal | Previous standalone run stopped, no active run on its projects | Snapshot prior public evidence and start a new run from planning; a task or phase run has no follow-up, use Continue with a note or a follow-up of its parent |
 | Answer only | New or follow-up submission | Research and independent review, no implementation; the reviewed answer opens the report and is the `answer` of `countersign status` |
 | Design discussion | New or follow-up submission | Like Answer only, but the reviewed summary is a design document, saved as `design.md`; follow-ups refine it, a **Develop** follow-up implements it |
-| Confirm changes | A finished code change, after integration review for a split and any Jenkins validation | Accept the change; server checks, if any, start only now |
+| Confirm changes | A finished code change with planned server checks, after integration review for a split and any Jenkins validation | Accept the change; the server checks start only now |
 | Mark as done / Move back from Done | Stopped run | Move the run to the Done group, or return it to its computed group; nothing else changes |
 | Delete from history | Stopped/completed run | Move run and launcher artifacts to local trash; leave source files untouched |
 
@@ -27,7 +27,7 @@ The run list groups runs by what they need:
 |---|---|
 | Running | Starting or running, not waiting for you |
 | Needs you | A pending UI decision, an SSH or Jenkins ticket waiting for root approval, or a stop without a successful result (errors, budgets, interruptions); highlighted in yellow |
-| Ready for review | A finished change waiting for your confirmation |
+| Ready for review | A finished change: waiting for your review, or for your confirmation before server checks |
 | Done | Confirmed with its server checks finished, finished without changes, or marked done; collapsed until opened or searched |
 
 ## Delivery of a code change
@@ -58,8 +58,12 @@ Every **Develop** task goes through the same steps:
    even without an SSH/Jenkins executor and must finish `NO_CHANGES_REQUIRED`.
 4. **Jenkins validation.** Planned `Jenkins check:` entries run when Jenkins is
    configured. Starting each build requires root approval.
-5. **Your confirmation.** **Confirm changes** accepts the result. For a split, the
-   source and Git state must still match the integration review's checkpoint.
+5. **Your confirmation, only before server checks.** Tasks of a split run one after
+   another without waiting for you; a finished task is **Completed**, not a review
+   point. When server checks are planned, **Confirm changes** lets them start; for a
+   split, the source and Git state must still match the integration review's
+   checkpoint. Without server checks nothing waits for a confirmation: a finished
+   change is **Ready for review**, and **Mark as done** files it away.
 6. **Server checks.** Planned `Server check:` entries and deferred runtime checks
    run only after confirmation, through the isolated executor and root approval.
    Before confirmation, SSH requests may only inspect ([SSH executor](ssh-executor.md)).
@@ -111,8 +115,8 @@ starts it again automatically, and **Start S-n again** starts a new run.
 
 The run list puts a delivery under Running while code, integration review, validation or server checks run,
 Needs you when a task, a check or an approval waits for you or failed, Ready for review
-while it waits for your confirmation, and Done when it is confirmed and its server
-checks finished. A split shows its progress (`Tasks 1/3`). Task and phase runs are not
+when the change is finished (and, with server checks, waits for your confirmation), and
+Done when you mark it done or its confirmed server checks finished. A split shows its progress (`Tasks 1/3`). Task and phase runs are not
 listed separately: they open in their parent's card, and searching for their run ID
 finds the parent. A task header with
 `"decompose": true` requests child execution even for one task; children cannot inherit it.

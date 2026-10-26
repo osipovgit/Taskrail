@@ -13,6 +13,7 @@ INTEGRATION = "integration"
 RUNNING = "running"
 ATTENTION = "attention"
 DONE = "done"
+REVIEW = "review"
 STATUS = "status"
 CHECK_KEYS = MappingProxyType({INTEGRATION: INTEGRATION, VALIDATION: "jenkins", SERVER: SERVER})
 # Phase -> (step while it is pending or running, step after it failed).
@@ -33,6 +34,7 @@ GROUPS = MappingProxyType(
         "validation_failed": ATTENTION,
         "approval": ATTENTION,
         "confirm": "review",
+        "review": "review",
         SERVER: RUNNING,
         "server_failed": ATTENTION,
         DONE: DONE,
@@ -51,7 +53,7 @@ def step(delivery):
     if validation:
         return validation
     if not delivery["confirmed"]:
-        return "confirm" if needs_confirmation(delivery) else DONE
+        return final_step(delivery)
     return phase_step(delivery, SERVER) or DONE
 
 
@@ -71,10 +73,15 @@ def phase_step(delivery, name):
     return failed
 
 
-def needs_confirmation(delivery):
-    """A change to confirm, or server checks that may only run after confirmation."""
-    unchanged = delivery[STATUS] == "NO_CHANGES_REQUIRED"
-    return not unchanged or bool(delivery["checks"][SERVER])
+def final_step(delivery):
+    """Confirmation only before server checks; a finished change waits for your review.
+
+    Server checks may change servers, so they start only after you confirm. Without
+    them nothing waits for you: a change is ready for your review, no change is done.
+    """
+    if delivery["checks"][SERVER]:
+        return "confirm"
+    return DONE if delivery[STATUS] == "NO_CHANGES_REQUIRED" else REVIEW
 
 
 def required(delivery, name):

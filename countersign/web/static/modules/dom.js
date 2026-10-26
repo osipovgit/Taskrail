@@ -36,6 +36,7 @@ export const statuses = {
   WAITING: 'Waiting',
   CONFIRM: 'Waiting for you',
   CONFIRMED: 'Confirmed',
+  COMPLETED: 'Completed',
 };
 
 // Treat every task, model message and file as text, never executable markup.
@@ -54,6 +55,7 @@ export function badge(text) {
     'PASS',
     'CHECK_COMPLETED',
     'CONFIRMED',
+    'COMPLETED',
   ].includes(text);
   const cls = good ? 'good' : /ERROR|BLOCKED|FAIL|INVALID|TIMEOUT/.test(text) ? 'bad' : '';
   return el('span', statuses[text] || text, 'badge ' + cls);

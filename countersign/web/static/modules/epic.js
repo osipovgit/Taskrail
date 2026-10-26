@@ -12,6 +12,7 @@ const STEP_TEXT = {
   approval: 'A check waits for root approval',
   validation_failed: 'Jenkins validation failed',
   confirm: 'Waiting for your confirmation',
+  review: 'Ready for your review',
   server: 'Server checks',
   server_failed: 'Server checks failed',
   done: 'Done',
