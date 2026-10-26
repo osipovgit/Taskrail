@@ -5,7 +5,13 @@ import os
 import re
 from collections import defaultdict
 
-from countersign.infrastructure import opencode_cli, read_warnings, turn_io, write_warnings
+from countersign.infrastructure import (
+    opencode_cli,
+    provider_limits,
+    read_warnings,
+    turn_io,
+    write_warnings,
+)
 
 END_OF_FILE = re.compile(r"\(End of file - total (\d+) lines\)")
 LINE_NUMBER = re.compile(r"^\s*(\d+):", re.MULTILINE)
@@ -14,6 +20,7 @@ TOKEN_FIELDS = ("input", "output", "reasoning", "total")
 RECOVERY_KEYS = ("event_line", "call_id", "part_id")
 STATUS = "status"
 ERROR = "error"
+ERRORS = "errors"
 TOOL = "tool"
 PART = "part"
 INPUT = "input"
@@ -109,7 +116,7 @@ class EventSummary:
 
     def fail(self, error):
         """Every error is kept; a permission denial is also flagged."""
-        self.failures["errors"].append(error)
+        self.failures[ERRORS].append(error)
         self.failures["permission"] |= opencode_cli.permission_error(error)
 
     def step(self, event_line, part):
@@ -135,9 +142,10 @@ class EventSummary:
             tool_calls=self.counts["tool_calls"],
             warnings=offset_warnings(self.failures, self.full_reads),
             sessions=sorted(self.identity["sessions"]),
-            errors=self.failures["errors"],
+            errors=self.failures[ERRORS],
             tool_errors=self.failures["tool_errors"],
             permission=self.failures["permission"],
+            provider_limit=provider_limits.reached(self.failures[ERRORS]),
             completed=final is not None,
             final_text=text,
         )

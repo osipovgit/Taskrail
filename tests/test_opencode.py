@@ -573,6 +573,28 @@ class RealStreamTests(unittest.TestCase):
         self.assertTrue(all(part["state"]["input"]["filePath"].startswith("/") for part in reads))
         self.assertTrue(any("(End of file - total" in part["state"]["output"] for part in reads))
 
+    def test_only_quota_and_billing_errors_mark_a_provider_limit(self):
+        cases = {
+            "2.x quota": dict(
+                type="provider.quota", message="Free usage limit reached.", status=429
+            ),
+            "1.x quota": dict(
+                name="APIError", data=dict(message="insufficient_quota", statusCode=429)
+            ),
+            "billing": dict(name="APIError", data=dict(message="Payment Required", statusCode=402)),
+            "rate limit": dict(
+                name="APIError", data=dict(message="Rate limit reached, retry in 20s")
+            ),
+        }
+        expected = {"2.x quota": True, "1.x quota": True, "billing": True, "rate limit": False}
+        for name, error in cases.items():
+            with self.subTest(name=name), tempfile.TemporaryDirectory() as temp:
+                events = Path(temp) / "events.jsonl"
+                events.write_text(json.dumps(dict(type="error", error=error)) + "\n")
+                result = parse_events(events)
+                self.assertEqual(result["provider_limit"], expected[name])
+                self.assertEqual(len(result["errors"]), 1)
+
 
 class SelectionTests(unittest.TestCase):
     def version(self, output):

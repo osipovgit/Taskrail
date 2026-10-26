@@ -559,6 +559,10 @@ if mode == "context-overflow" and role == "planner" and record["mode"] == "model
     overflow = dict(type="error", error=dict(name="APIError", data=dict(message=message)))
     print(json.dumps(dict(overflow, sessionID="ses1")))
     sys.exit(0)
+if mode == "provider-quota" and role == "plan-reviewer":
+    quota = dict(type="provider.quota", message="Free usage limit reached.", status=429)
+    print(json.dumps(dict(type="error", error=quota, sessionID="ses1")))
+    sys.exit(1)
 if mode in {"planned-overflow", "unobserved-planned-overflow"} and role == "planner":
     if mode == "unobserved-planned-overflow":
         plan.write_text(
