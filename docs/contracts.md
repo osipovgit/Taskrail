@@ -329,9 +329,10 @@ would fail the same way; Continue the run after the limit resets. A short rate l
 is always retried. Denial means the command is
 skipped; consider the operator's alternative. Format repair cannot request execution.
 
-All roles disable automatic compaction. `model_context_tokens` defaults to 94,208
+All roles disable automatic compaction. `model_context_tokens` (one window, or one per
+model with a `default`) defaults to 94,208
 and `context_reserve_tokens` to 8,192; the reserve must be positive and smaller than
-the window. Before starting any role, admission counts one token per UTF-8 byte
+every window; each role uses its model's window. Before starting any role, admission counts one token per UTF-8 byte
 of its actual frozen request and role instruction body, plus 1,024 framing tokens.
 Writers also reserve bytes for every distinct approved read/edit input, subtracting
 only exact current line bytes already delivered in the packet. A partial window
