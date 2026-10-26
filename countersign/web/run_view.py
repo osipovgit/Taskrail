@@ -67,6 +67,7 @@ def index_view(state, stages):
     roots = state.get(ROOTS, {})
     first_stage = next((stage.get(STARTED) for stage in stages), None)
     return dict(
+        phase=state.get("phase"),
         started_at=state.get(STARTED) or first_stage,
         finished_at=state.get("finished_at"),
         server_time=clock(),

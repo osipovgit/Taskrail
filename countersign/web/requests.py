@@ -6,7 +6,7 @@ from types import MappingProxyType
 
 from countersign.application import check_parents, child_inputs, worktree_isolation
 from countersign.core import control, delivery_record, schema, task_spec
-from countersign.web import history, task_form
+from countersign.web import history, restarts, task_form
 
 DESIGN = "design"
 CONTINUING = ("followup", "answer", DESIGN)
@@ -132,6 +132,7 @@ class Submission:
 
     def inherit_worktrees(self, index):
         """A follow-up of an isolated run continues in its worktrees; Restart starts anew."""
+        restarts.require_standalone(self.previous, self.mode, index)
         if self.mode in CONTINUING and index.get("worktrees"):
             self.fields["roots"] = worktree_isolation.root_entries(index["roots"])
             self.flags[WORKTREE] = False
