@@ -5,10 +5,10 @@ import unittest
 from pathlib import Path
 from types import SimpleNamespace
 
-from countersign.application.attempt_retries import overflow_outputs
-from countersign.application.evidence import MAX_CHARACTERS, bounded
-from countersign.application.recovery import collect_evidence, write_evidence
-from countersign.infrastructure.context_overflow import tool_outputs
+from taskrail.application.attempt_retries import overflow_outputs
+from taskrail.application.evidence import MAX_CHARACTERS, bounded
+from taskrail.application.recovery import collect_evidence, write_evidence
+from taskrail.infrastructure.context_overflow import tool_outputs
 
 
 class RecoveryTests(unittest.TestCase):

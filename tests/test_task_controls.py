@@ -9,16 +9,16 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from countersign.application import mode_rules
-from countersign.application.live import execute_task
-from countersign.core.files import atomic_json
-from countersign.web import delivery_launch, requests, submissions, task_form
-from countersign.web.history import HISTORY, TaskDraft, conversation, previous_messages, task_draft
-from countersign.web.lifecycle import trash_run
-from countersign.web.run_list import list_runs
-from countersign.web.run_view import run_view
-from countersign.web.submissions import TaskLauncher
-from countersign.web.task_form import build_task
+from taskrail.application import mode_rules
+from taskrail.application.live import execute_task
+from taskrail.core.files import atomic_json
+from taskrail.web import delivery_launch, requests, submissions, task_form
+from taskrail.web.history import HISTORY, TaskDraft, conversation, previous_messages, task_draft
+from taskrail.web.lifecycle import trash_run
+from taskrail.web.run_list import list_runs
+from taskrail.web.run_view import run_view
+from taskrail.web.submissions import TaskLauncher
+from taskrail.web.task_form import build_task
 
 BASE = Path(__file__).resolve().parents[1]
 
@@ -75,7 +75,7 @@ class TaskControlTests(unittest.TestCase):
                         "--mode",
                         mode,
                     ],
-                    agent_source=str(BASE / "countersign/agents"),
+                    agent_source=str(BASE / "taskrail/agents"),
                     agent_directory=str(self.base / "profiles"),
                     timeout_seconds=30,
                     max_read_retries=0,
@@ -122,7 +122,7 @@ class TaskControlTests(unittest.TestCase):
                 )
             )
             text = launch.call_args.args[0]["text"]
-        meta = json.loads(text.split("```countersign-task\n")[1].split("```")[0])
+        meta = json.loads(text.split("```taskrail-task\n")[1].split("```")[0])
         self.assertTrue(meta["read_only"])
         self.assertIn("Previous conclusion", text)
         self.assertIn("Evidence", text)
@@ -152,7 +152,7 @@ class TaskControlTests(unittest.TestCase):
         with patch.object(self.launcher, "launch", return_value={"id": "next"}) as launch:
             self.launcher.submit(dict(self.payload, worktree=True, read_only=True))
             text = launch.call_args.args[0]["text"]
-        meta = json.loads(text.split("```countersign-task\n")[1].split("```")[0])
+        meta = json.loads(text.split("```taskrail-task\n")[1].split("```")[0])
         self.assertEqual(meta["isolation"], "worktree")
         self.assertTrue(meta["read_only"])
         with self.assertRaisesRegex(ValueError, "boolean"):
@@ -183,7 +183,7 @@ class TaskControlTests(unittest.TestCase):
         with patch.object(self.launcher, "launch", return_value={"id": "next"}) as launch:
             self.launcher.submit(dict(self.payload, auto_approve=True))
             text = launch.call_args.args[0]["text"]
-        meta = json.loads(text.split("```countersign-task\n")[1].split("```")[0])
+        meta = json.loads(text.split("```taskrail-task\n")[1].split("```")[0])
         self.assertIs(meta["auto_approve"], True)
         (self.run / "00-input/task.md").write_text(text)
         self.assertTrue(task_draft(self.run)["auto_approve"])
@@ -194,7 +194,7 @@ class TaskControlTests(unittest.TestCase):
         with patch.object(self.launcher, "launch", return_value={"id": "next"}) as launch:
             self.launcher.submit(dict(self.payload, design=True))
             text = launch.call_args.args[0]["text"]
-        meta = json.loads(text.split("```countersign-task\n")[1].split("```")[0])
+        meta = json.loads(text.split("```taskrail-task\n")[1].split("```")[0])
         self.assertTrue(meta["design"])
         self.assertTrue(meta["read_only"])
         self.assertNotIn("Turn control", text)
@@ -592,7 +592,7 @@ class TaskControlTests(unittest.TestCase):
         header = dict(phase=phase, check_parent="original", roots={"project": str(self.repo)})
         child = self.runs / name
         (child / "00-input").mkdir(parents=True, exist_ok=True)
-        task = f"```countersign-task\n{json.dumps(header)}\n```\n# {phase}\n"
+        task = f"```taskrail-task\n{json.dumps(header)}\n```\n# {phase}\n"
         (child / "00-input/task.md").write_text(task)
         state = dict(status=status, summary=f"{name} failed\ndetails", phase=phase, stages=[])
         state["roots"] = header["roots"]

@@ -2,8 +2,8 @@
 
 import unittest
 
-from countersign.infrastructure import opencode_cli
-from countersign.web import task_brief
+from taskrail.infrastructure import opencode_cli
+from taskrail.web import task_brief
 
 PARENT = dict(
     requirements=[

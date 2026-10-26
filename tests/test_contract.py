@@ -6,8 +6,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from countersign.application import evidence, instruction_sources, prompts, result_validation
-from countersign.core import (
+from taskrail.application import evidence, instruction_sources, prompts, result_validation
+from taskrail.core import (
     control,
     coverage,
     json_response,

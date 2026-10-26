@@ -46,7 +46,7 @@ while [[ $# -gt 0 ]]; do
     shift
 done
 if [[ "$autostart_explicit" == no && "$boot" == no && -t 0 ]]; then
-    read -r -p 'Start Countersign automatically at login? [y/n/Enter=keep current setting] ' answer
+    read -r -p 'Start Taskrail automatically at login? [y/n/Enter=keep current setting] ' answer
     case "$answer" in
         y | Y | yes) autostart=yes ;;
         n | N | no) autostart=no ;;

@@ -1,6 +1,6 @@
 # Task format and New task form
 
-The CLI accepts a UTF-8 Markdown file with an optional fenced `countersign-task`
+The CLI accepts a UTF-8 Markdown file with an optional fenced `taskrail-task`
 JSON header. The rest of the Markdown describes the task. The browser form
 generates this file; users do not need to write JSON.
 
@@ -59,7 +59,7 @@ the agents' input.
 
 ## Header
 
-```countersign-task
+```taskrail-task
 {
   "roots": {"project": "~/src/my-project"},
   "verification": ["Run the scenario twice in the target environment and verify the expected result"],
@@ -118,7 +118,7 @@ this correction.
 
 With `"isolation": "worktree"` every root must be the top level of a Git repository.
 Before planning, the run creates one linked worktree per root from its current
-`HEAD` on a new branch `countersign/<run>`, under `worktree_base` (default: a
+`HEAD` on a new branch `taskrail/<run>`, under `worktree_base` (default: a
 `worktrees` folder beside the run store). Uncommitted changes in the source checkout
 are not included. The whole run, including Continue, works in the worktrees; the
 source checkout and its other branches may change meanwhile without stopping the

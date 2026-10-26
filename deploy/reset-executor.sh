@@ -7,19 +7,19 @@ set -euo pipefail
 }
 # shellcheck source=deploy/executor-maintenance.sh
 source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/executor-maintenance.sh"
-lock_executor_maintenance /run/countersign-executor-maintenance.lock
+lock_executor_maintenance /run/taskrail-executor-maintenance.lock
 /usr/bin/python3 -I - <<'PY'
 from pathlib import Path
-for raw in ('/opt/countersign-executor', '/etc/countersign-executor', '/var/lib/countersign-executor', '/run/countersign-executor'):
+for raw in ('/opt/taskrail-executor', '/etc/taskrail-executor', '/var/lib/taskrail-executor', '/run/taskrail-executor'):
     path = Path(raw)
     if path.resolve() != path:
         raise SystemExit('Refuse executor directory symlink: ' + raw)
 PY
-marker=/etc/countersign-executor/maintenance
+marker=/etc/taskrail-executor/maintenance
 trap 'leave_maintenance "$marker"' EXIT
 # The journal of a running or uncertain action is never deleted: reconcile it first.
-begin_maintenance "$marker" /var/lib/countersign-executor /etc/systemd/system/countersign-executor.service RUNNING UNKNOWN
-systemctl disable countersign-executor.service 2>/dev/null || true
-rm -f -- /etc/systemd/system/countersign-executor.service /usr/local/bin/countersign-executor-approve
-rm -rf -- /opt/countersign-executor /etc/countersign-executor /var/lib/countersign-executor /run/countersign-executor /etc/systemd/system/countersign-executor.service.d
+begin_maintenance "$marker" /var/lib/taskrail-executor /etc/systemd/system/taskrail-executor.service RUNNING UNKNOWN
+systemctl disable taskrail-executor.service 2>/dev/null || true
+rm -f -- /etc/systemd/system/taskrail-executor.service /usr/local/bin/taskrail-executor-approve
+rm -rf -- /opt/taskrail-executor /etc/taskrail-executor /var/lib/taskrail-executor /run/taskrail-executor /etc/systemd/system/taskrail-executor.service.d
 systemctl daemon-reload

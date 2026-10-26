@@ -6,22 +6,22 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from countersign.core import protected_paths
-from countersign.core.source_claims import matching_positions
-from countersign.infrastructure import (
+from taskrail.core import protected_paths
+from taskrail.core.source_claims import matching_positions
+from taskrail.infrastructure import (
     environment,
     opencode_api,
     opencode_cli,
     opencode_server,
     permission_check,
 )
-from countersign.infrastructure.agent_profile import make_profile
-from countersign.infrastructure.agent_sync import launch_settings
-from countersign.infrastructure.event_summary import parse_events
-from countersign.infrastructure.opencode_events import EventTranslator
-from countersign.infrastructure.permission_check import verify_launch
-from countersign.infrastructure.profile_rules import permissions
-from countersign.infrastructure.runner import run_agent
+from taskrail.infrastructure.agent_profile import make_profile
+from taskrail.infrastructure.agent_sync import launch_settings
+from taskrail.infrastructure.event_summary import parse_events
+from taskrail.infrastructure.opencode_events import EventTranslator
+from taskrail.infrastructure.permission_check import verify_launch
+from taskrail.infrastructure.profile_rules import permissions
+from taskrail.infrastructure.runner import run_agent
 
 RECORDER = """
 import json, os, sys
@@ -728,7 +728,7 @@ class AdapterTests(unittest.TestCase):
     def test_turns_attach_to_the_stage_server(self):
         prompt = self.root / "request.md"
         prompt.write_text("task")
-        attachment = {"COUNTERSIGN_OPENCODE_SERVER": "http://127.0.0.1:9", "OPENCODE_PASSWORD": "p"}
+        attachment = {"TASKRAIL_OPENCODE_SERVER": "http://127.0.0.1:9", "OPENCODE_PASSWORD": "p"}
         runtime = dict(attachment=attachment)
         result = run_agent(
             dict(
@@ -745,9 +745,7 @@ class AdapterTests(unittest.TestCase):
         self.assertEqual(result["status"], "OK", result)
         self.assertFalse((self.root / "serve-started").exists())
         with opencode_api.stage_server(self.command, self.workspace, ()) as server:
-            self.assertEqual(
-                server.attachment()["COUNTERSIGN_OPENCODE_SERVER"], "http://127.0.0.1:9"
-            )
+            self.assertEqual(server.attachment()["TASKRAIL_OPENCODE_SERVER"], "http://127.0.0.1:9")
         self.assertTrue((self.root / "serve-started").exists())
         with opencode_api.stage_server(["opencode"], self.workspace, ()) as server:
             self.assertIsNone(server)

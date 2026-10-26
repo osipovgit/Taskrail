@@ -1,7 +1,7 @@
 # Isolated SSH and Jenkins executor
 
-The optional executor runs as the dedicated Linux account `countersign-executor`.
-Countersign can submit an exact action and observe its result. Only root can approve it.
+The optional executor runs as the dedicated Linux account `taskrail-executor`.
+Taskrail can submit an exact action and observe its result. Only root can approve it.
 The web application and model never receive SSH passwords or the approval right.
 
 ## Install and configure
@@ -12,9 +12,9 @@ then install the executor separately:
 ```sh
 bash deploy/install.sh --wait=3600 --autostart=keep
 sudo bash deploy/install-executor.sh --client="$USER" --autostart=enable
-sudoedit /etc/countersign-executor/hosts.json
-sudoedit /etc/countersign-executor/known_hosts
-sudo systemctl start countersign-executor.service
+sudoedit /etc/taskrail-executor/hosts.json
+sudoedit /etc/taskrail-executor/known_hosts
+sudo systemctl start taskrail-executor.service
 ```
 
 `--autostart=enable|disable|keep` is explicit and never prompts. Enabled means system
@@ -24,8 +24,8 @@ targets, so concurrent maintenance is refused. Packages receive explicit directo
 and file permissions and must import successfully as the executor account before
 the service stops. Updates and resets (`deploy/install.sh --fresh` runs
 `deploy/reset-executor.sh`) work in maintenance mode: while
-`/etc/countersign-executor/maintenance` exists the service refuses new submissions and
-approvals, and Countersign waits and asks again. The script then refuses to go on while
+`/etc/taskrail-executor/maintenance` exists the service refuses new submissions and
+approvals, and Taskrail waits and asks again. The script then refuses to go on while
 an action is RUNNING (a reset also while one is UNKNOWN), stops the service and fails
 if it does not stop, checks the journal again, and only then swaps in the package it
 prepared beforehand, or deletes the installation. A failed safety check prevents the
@@ -35,10 +35,10 @@ An existing maintenance marker is preserved and requires inspection of the inter
 operation before retrying. Startup is left to the explicit command above.
 
 Log out and back in after first installation so your account inherits the
-`countersign-executor-clients` group, then restart the user application service.
+`taskrail-executor-clients` group, then restart the user application service.
 If the user systemd manager remains alive through logout (lingering), reboot once
-to refresh its groups. Never add the Countersign account to the private
-`countersign-executor` group or give it passwordless sudo.
+to refresh its groups. Never add the Taskrail account to the private
+`taskrail-executor` group or give it passwordless sudo.
 
 Inventory format (replace the example before starting):
 
@@ -53,7 +53,7 @@ Inventory format (replace the example before starting):
 }
 ```
 
-Credentials and host keys belong to `root:countersign-executor`, mode `0640`, inside a
+Credentials and host keys belong to `root:taskrail-executor`, mode `0640`, inside a
 `0750` directory. Obtain and verify host keys through a trusted channel before
 adding them to `known_hosts`; the executor never accepts unknown keys automatically.
 For nonstandard ports use OpenSSH's `[hostname]:port` known-hosts notation.
@@ -61,11 +61,11 @@ After editing an existing inventory, restart the executor when no actions are
 running; inventory changes are loaded at service startup.
 Each host uses either `password` or `identity_file`. For key authentication, replace
 `password` with the absolute path of an unencrypted private key inside
-`/etc/countersign-executor/`, owned by `root:countersign-executor` with mode `0640`:
+`/etc/taskrail-executor/`, owned by `root:taskrail-executor` with mode `0640`:
 
 ```sh
-sudo install -d -m 0750 -o root -g countersign-executor /etc/countersign-executor/keys
-sudo install -m 0640 -o root -g countersign-executor id_ed25519 /etc/countersign-executor/keys/qa-node-1
+sudo install -d -m 0750 -o root -g taskrail-executor /etc/taskrail-executor/keys
+sudo install -m 0640 -o root -g taskrail-executor id_ed25519 /etc/taskrail-executor/keys/qa-node-1
 ```
 
 The key is offered alone (`IdentitiesOnly`, no agent, no password prompt). Remote
@@ -96,9 +96,9 @@ The UI shows the exact script, bundled files, connection targets and ticket ID.
 Review them, then run the command displayed by the UI:
 
 ```sh
-sudo -k /usr/local/bin/countersign-executor-approve TICKET_ID
+sudo -k /usr/local/bin/taskrail-executor-approve TICKET_ID
 # To reject an incorrect request:
-sudo -k /usr/local/bin/countersign-executor-approve --reject TICKET_ID
+sudo -k /usr/local/bin/taskrail-executor-approve --reject TICKET_ID
 ```
 
 The helper displays the immutable request and requires its full digest. There is
@@ -122,16 +122,16 @@ API token stays in the executor configuration; the application and models see on
 server and job aliases, URLs, the account name and allowed parameter names.
 
 ```sh
-sudo cp /etc/countersign-executor/jenkins.json.example /etc/countersign-executor/jenkins.json
-sudoedit /etc/countersign-executor/jenkins.json
-sudo systemctl restart countersign-executor.service
+sudo cp /etc/taskrail-executor/jenkins.json.example /etc/taskrail-executor/jenkins.json
+sudoedit /etc/taskrail-executor/jenkins.json
+sudo systemctl restart taskrail-executor.service
 ```
 
 ```json
 {
   "ci": {
     "url": "https://jenkins.example.com",
-    "username": "countersign-bot",
+    "username": "taskrail-bot",
     "token": "REPLACE_WITH_JENKINS_API_TOKEN",
     "jobs": {
       "shop-tests": {"path": "shop/tests", "parameters": ["BRANCH", "SUITE"]}
@@ -146,10 +146,10 @@ sudo systemctl restart countersign-executor.service
 - `jobs`: aliases agents use. `path` is the job's folder path as shown in its URL
   (`/job/shop/job/tests` is `shop/tests`). `parameters` lists the build parameters
   agents may set; an empty list means none.
-- `ca_file` (optional): an absolute path under `/etc/countersign-executor/` to the CA
+- `ca_file` (optional): an absolute path under `/etc/taskrail-executor/` to the CA
   certificate of an internal Jenkins.
 
-Keep the file `root:countersign-executor`, mode `0640`; the installer enforces this.
+Keep the file `root:taskrail-executor`, mode `0640`; the installer enforces this.
 Without `jenkins.json` Jenkins is not offered. If you use only Jenkins, set
 `hosts.json` to `{}`.
 
@@ -163,7 +163,7 @@ Agents return `JENKINS_REQUEST` ([contract](contracts.md#executor-requests)):
 | `build` | Starts one build, waits up to `timeout_seconds` for its result and console tail | Root, like SSH |
 
 Approve a build in a terminal with the command the UI shows:
-`sudo -k /usr/local/bin/countersign-executor-approve TICKET_ID`. The helper shows
+`sudo -k /usr/local/bin/taskrail-executor-approve TICKET_ID`. The helper shows
 the server, job path, account and parameters. Requests never follow HTTP redirects
 or use proxies, so the token is sent only to the configured URL. The application
 account can ask the executor for reads directly; reads change nothing in Jenkins.
@@ -201,7 +201,7 @@ same ticket instead of submitting it again. Rejection stops the workflow for rev
 Run artifacts contain `execution.json`, UI action cards and a report section. They
 record targets, payload, approval digest, statuses and bounded output. Captured known
 passwords are redacted, but arbitrary remote output can still contain other secrets:
-do not request secret dumps. Server tickets remain in `/var/lib/countersign-executor`, owned
+do not request secret dumps. Server tickets remain in `/var/lib/taskrail-executor`, owned
 by the executor; application history deletion does not delete them.
 
 Action success means that the submitted command exited successfully; it does not
@@ -212,11 +212,11 @@ independent review agrees; otherwise it stays deferred.
 Diagnostics:
 
 ```sh
-sudo systemctl status countersign-executor.service
-sudo journalctl -u countersign-executor.service
-cd ~/.local/share/countersign/current
-python3 -m countersign.executor catalog
-python3 -m countersign.executor status TICKET_ID
+sudo systemctl status taskrail-executor.service
+sudo journalctl -u taskrail-executor.service
+cd ~/.local/share/taskrail/current
+python3 -m taskrail.executor catalog
+python3 -m taskrail.executor status TICKET_ID
 ```
 
 Run these from the installed release (as shown) or a source checkout so Python

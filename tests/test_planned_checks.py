@@ -3,7 +3,7 @@
 import unittest
 from types import SimpleNamespace
 
-from countersign.application import planned_checks, transitions
+from taskrail.application import planned_checks, transitions
 
 
 class PlannedCheckTests(unittest.TestCase):

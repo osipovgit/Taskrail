@@ -6,7 +6,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from countersign.deployment.fresh import erase, prepare
+from taskrail.deployment.fresh import erase, prepare
 
 BASE = Path(__file__).resolve().parents[1]
 
@@ -16,9 +16,9 @@ class DeploymentResetTests(unittest.TestCase):
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
         self.home = Path(temporary.name)
-        self.config = self.home / ".config/countersign"
-        self.app = self.home / ".local/share/countersign"
-        self.state = self.home / ".local/state/countersign"
+        self.config = self.home / ".config/taskrail"
+        self.app = self.home / ".local/share/taskrail"
+        self.state = self.home / ".local/state/taskrail"
         self.history = self.home / "history"
         self.project = self.home / "project"
         for directory in (self.config, self.app, self.state, self.history, self.project):
@@ -40,8 +40,8 @@ class DeploymentResetTests(unittest.TestCase):
             self.config / "source",
             self.app / "source",
             self.state / "source",
-            self.home / ".cache/countersign/source",
-            self.home / ".config/systemd/user/countersign.service.d/source",
+            self.home / ".cache/taskrail/source",
+            self.home / ".config/systemd/user/taskrail.service.d/source",
         ):
             with self.subTest(root=root):
                 record = self.record(".trash/old/run", root)
@@ -55,7 +55,7 @@ class DeploymentResetTests(unittest.TestCase):
         folder.mkdir(parents=True)
         (folder / "launch.json").write_text('{"status":"LAUNCH_ERROR"}')
         header = json.dumps(dict(roots=dict(project=str(self.app / "source"))))
-        (folder / "task.md").write_text("```countersign-task\n" + header + "\n```\nGoal")
+        (folder / "task.md").write_text("```taskrail-task\n" + header + "\n```\nGoal")
         with self.assertRaisesRegex(ValueError, "overlap a declared project"):
             prepare(self.home, [BASE])
 
@@ -79,7 +79,7 @@ class DeploymentResetTests(unittest.TestCase):
                 unrelated.unlink()
 
     def test_release_and_supplied_settings_in_cache_are_protected(self):
-        cache = self.home / ".cache/countersign"
+        cache = self.home / ".cache/taskrail"
         for protected in (cache / "release", cache / "settings.json"):
             with (
                 self.subTest(protected=protected),
@@ -88,8 +88,8 @@ class DeploymentResetTests(unittest.TestCase):
                 prepare(self.home, [protected])
 
     def test_generated_profile_inside_a_declared_source_is_protected(self):
-        profile = self.profiles / "countersign-planner.md"
-        profile.write_text("Managed Countersign workflow")
+        profile = self.profiles / "taskrail-planner.md"
+        profile.write_text("Managed Taskrail workflow")
         self.record("completed", self.profiles)
         with self.assertRaisesRegex(ValueError, "overlap a declared project"):
             prepare(self.home, [BASE])
@@ -99,8 +99,8 @@ class DeploymentResetTests(unittest.TestCase):
         self.record(".trash/old/run", self.project)
         keep = self.profiles / "custom.md"
         keep.write_text("custom role")
-        generated = self.profiles / "countersign-planner.md"
-        generated.write_text("Managed Countersign workflow")
+        generated = self.profiles / "taskrail-planner.md"
+        generated.write_text("Managed Taskrail workflow")
         locks = [self.app / "install.lock", self.state / "live.lock"]
         for lock in locks:
             lock.touch()

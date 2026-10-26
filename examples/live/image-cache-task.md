@@ -1,4 +1,4 @@
-```countersign-task
+```taskrail-task
 {
   "roots": {"app": "~/src/web-app", "ci": "~/src/ci-pipelines"}
 }

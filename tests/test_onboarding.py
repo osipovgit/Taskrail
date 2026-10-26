@@ -7,7 +7,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from countersign.onboarding import check, init
+from taskrail.onboarding import check, init
 
 BASE = Path(__file__).resolve().parents[1]
 

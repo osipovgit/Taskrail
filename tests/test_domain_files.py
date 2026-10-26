@@ -6,8 +6,8 @@ from importlib.util import find_spec
 from pathlib import Path
 from unittest.mock import patch
 
-from countersign.application import builtin_checks
-from countersign.application.project_files import described, landmarks
+from taskrail.application import builtin_checks
+from taskrail.application.project_files import described, landmarks
 
 LANDMARK_CASES = (
     (

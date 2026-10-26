@@ -16,6 +16,18 @@ bash deploy/install.sh
 bash deploy/install.sh --wait=3600 --autostart=keep
 ```
 
+An installation made under the previous project name, Countersign, moves to the Taskrail
+names on its first update: `~/.config/countersign` and `~/.local/state/countersign`
+become `~/.config/taskrail` and `~/.local/state/taskrail` (settings, roles and run
+history are kept), folder names inside the kept settings and `COUNTERSIGN_*` service
+variables are rewritten, and the old user service and command are removed. The old
+application folder `~/.local/share/countersign` only holds earlier releases; delete it
+yourself when the new version works. Stored runs and task files that still open with
+a `countersign-task` header are read as before. `sudo bash deploy/install-executor.sh`
+moves an installed executor the same way: `/etc/countersign-executor` and its journal
+move to the `taskrail-executor` paths and the service account and groups are renamed,
+keeping their IDs and memberships; it refuses while an action runs.
+
 Interactive installation asks about startup at login only when `--autostart` is
 omitted (and boot startup was not requested). Explicit `--autostart=keep` never
 prompts, including in a terminal. Unattended installs need
@@ -41,7 +53,7 @@ documentation stays in the source tree.
 
 ## Run on a remote server
 
-Countersign can run on a Linux server while you use the browser on your workstation:
+Taskrail can run on a Linux server while you use the browser on your workstation:
 
 1. Install on the server as the account that owns the projects, with opencode (or a
    compatible wrapper) and its model credentials configured for that account.
@@ -65,19 +77,19 @@ Root approval of SSH actions happens in a terminal on the server.
 
 | Content | Default path |
 |---|---|
-| Releases / active symlink | `~/.local/share/countersign/releases/` / `current` |
-| Settings | `~/.config/countersign/settings.json` |
-| Imported custom roles | `~/.config/countersign/agents/` |
-| Service environment | `~/.config/countersign/service.env` |
-| Systemd unit | `~/.config/systemd/user/countersign.service` |
-| CLI | `~/.local/bin/countersign` |
-| History and trash | `~/.local/state/countersign/runs/` |
-| Installation lock (shared by runs) | `~/.local/state/countersign/live.lock` |
-| Project and run locks | `~/.local/state/countersign/locks/` |
+| Releases / active symlink | `~/.local/share/taskrail/releases/` / `current` |
+| Settings | `~/.config/taskrail/settings.json` |
+| Imported custom roles | `~/.config/taskrail/agents/` |
+| Service environment | `~/.config/taskrail/service.env` |
+| Systemd unit | `~/.config/systemd/user/taskrail.service` |
+| CLI | `~/.local/bin/taskrail` |
+| History and trash | `~/.local/state/taskrail/runs/` |
+| Installation lock (shared by runs) | `~/.local/state/taskrail/live.lock` |
+| Project and run locks | `~/.local/state/taskrail/locks/` |
 
 Sources remain in their declared roots. The application does not copy entire
 projects. `run_base` may override history storage; relative paths resolve from the
-settings directory. Settings precedence: explicit CLI path, `COUNTERSIGN_SETTINGS`, installed
+settings directory. Settings precedence: explicit CLI path, `TASKRAIL_SETTINGS`, installed
 user settings, source defaults. See [budgets](monitoring.md) for timeout controls.
 
 To switch from imported custom roles to the maintained bundled roles:
@@ -91,7 +103,7 @@ files untouched. Subsequent releases update bundled roles through `current`.
 The default `--agents=keep` preserves the existing selection. Role changes apply
 to new tasks; Continue keeps the frozen roles of its run.
 
-Bundled roles follow `current/countersign/agents`. Imported custom roles are copied once and
+Bundled roles follow `current/taskrail/agents`. Imported custom roles are copied once and
 preserved on update: merge their instructions deliberately or point `agent_source`
 to bundled roles. Generated opencode profiles are temporary permissions, not editable
 source templates. See [instruction contracts](contracts.md).
@@ -229,15 +241,15 @@ to `run_base`, the port or environment requires a service restart.
 
 Systemd does not source shell startup files. Add required proxy/runtime variables
 to the existing mode-0600 `service.env`, preserving its PATH. Use `KEY=value`, not
-`export` or shell commands. `COUNTERSIGN_WEB_PORT` controls the port. Credentials stay in
+`export` or shell commands. `TASKRAIL_WEB_PORT` controls the port. Credentials stay in
 your opencode installation; do not copy them into tasks or logs.
 
 ```sh
-countersign check        # settings, opencode, permission enforcement, run storage
-systemctl --user status countersign
-systemctl --user restart countersign
-journalctl --user -u countersign -n 100 --no-pager
-countersign resume /absolute/path/run
+taskrail check        # settings, opencode, permission enforcement, run storage
+systemctl --user status taskrail
+systemctl --user restart taskrail
+journalctl --user -u taskrail -n 100 --no-pager
+taskrail resume /absolute/path/run
 ```
 
 Closing the browser does not stop work. Service shutdown requests an interruption
@@ -248,7 +260,7 @@ restarts with its approved assignment from the current files and reports the fil
 changed outside the split.
 
 Back up config/state while workflows are stopped; project source needs its own
-backup. `systemctl --user disable --now countersign` disables startup without
+backup. `systemctl --user disable --now taskrail` disables startup without
 deleting configuration, history or code.
 
 ## Optional SSH service

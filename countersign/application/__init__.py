@@ -1,1 +1,0 @@
-"""Application components for Countersign."""

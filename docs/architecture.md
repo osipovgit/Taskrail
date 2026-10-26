@@ -8,7 +8,7 @@ UI updates read the ordered stage index and public event stream.
 
 | Location | Responsibility |
 |---|---|
-| `countersign/cli.py`, `__main__.py` | CLI parsing and module entry point |
+| `taskrail/cli.py`, `__main__.py` | CLI parsing and module entry point |
 | `cli_api.py`, `cli_requests.py`, `cli_runs.py` | Automation commands (`submit`, `decide`, `action`, `status`) through the browser's launcher |
 | `application/` | Workflow, stage artifacts, checkpoints, budgets, prompts and research recovery |
 | `interactions/` | Same-session executor turns: one request parser (`request_envelope.py`), routing (`request_routes.py`, `local_route.py`), exact-command approvals, adopted command effects, active clock |
@@ -26,7 +26,7 @@ UI updates read the ordered stage index and public event stream.
 | `web/static/` | Browser JavaScript, CSS, HTML and theme handling |
 | `deploy/` | Offline release installation, CLI wrapper and systemd units |
 | `deployment/` | Installer helpers: first-install settings and service PATH (`settings_init.py`), validated fresh-install reset (`fresh.py`) |
-| `countersign/agents/`, `countersign/settings.json` | Bundled role templates (frozen per run) and default settings |
+| `taskrail/agents/`, `taskrail/settings.json` | Bundled role templates (frozen per run) and default settings |
 | `tests/` | Workflow, contracts, permissions, API, telemetry and DOM regressions |
 | `tools/` | Development quality gates: pinned tool versions and the Wemake run |
 | `docs/`, `examples/` | Documentation and example tasks |

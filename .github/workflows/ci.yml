@@ -71,5 +71,5 @@ jobs:
         run: |
           export HOME="$RUNNER_TEMP/home" PATH="$RUNNER_TEMP/opencode/node_modules/.bin:$PATH"
           mkdir -p "$HOME"
-          python -m countersign init --opencode "$(command -v opencode)" --format-repair-tools none
-          python -m countersign check
+          python -m taskrail init --opencode "$(command -v opencode)" --format-repair-tools none
+          python -m taskrail check

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Maintenance steps shared by the executor installer and reset (sourced, not run).
 # Paths are arguments, so the order of the steps can be tested without root.
-executor_unit=countersign-executor.service
+executor_unit=taskrail-executor.service
 executor_marker_owned=''
 
 # The root-owned lock is outside all installation/reset targets and lives until exit.
@@ -37,17 +37,17 @@ leave_maintenance() { # MARKER
 
 # The dedicated service must be able to import even a privately extracted release.
 prepare_executor_package() { # SOURCE_PACKAGE STAGING_DIRECTORY
-    cp -R -- "$1" "$2/countersign"
-    if [[ -n $(find "$2/countersign" -type l -print -quit) ]]; then
+    cp -R -- "$1" "$2/taskrail"
+    if [[ -n $(find "$2/taskrail" -type l -print -quit) ]]; then
         printf 'Executor packages must not contain symlinks.\n' >&2
         return 1
     fi
-    chown -R root:root "$2/countersign"
-    find "$2/countersign" -type d -exec chmod 0755 {} +
-    find "$2/countersign" -type f -exec chmod 0644 {} +
+    chown -R root:root "$2/taskrail"
+    find "$2/taskrail" -type d -exec chmod 0755 {} +
+    find "$2/taskrail" -type f -exec chmod 0644 {} +
     chmod 0755 "$2"
-    runuser -u countersign-executor -- /usr/bin/python3 -I -B -c \
-        'import sys; sys.path.insert(0, sys.argv[1]); import countersign.executor.service; import countersign.executor.approval' "$2"
+    runuser -u taskrail-executor -- /usr/bin/python3 -I -B -c \
+        'import sys; sys.path.insert(0, sys.argv[1]); import taskrail.executor.service; import taskrail.executor.approval' "$2"
 }
 
 # Fail while a ticket has one of the given statuses; nothing is changed.
@@ -63,6 +63,39 @@ for path in sorted(state.glob('*.json')):
     if status in statuses:
         raise SystemExit(f'Executor action {path.stem} is {status}; reconcile it first. Nothing was changed.')
 PY
+}
+
+# Move an executor installed under the previous project name (Countersign) to the
+# Taskrail names once: its configuration, credentials, host keys and journal stay; the
+# groups and the service account are renamed, so IDs and memberships are kept. ROOT is
+# empty on a real system and a test directory in the tests.
+migrate_previous_executor() { # CONFIG STATE ROOT
+    local old=countersign-executor root=${3-}
+    if [[ ! -d $root/etc/$old || -e $1 ]]; then
+        return 0
+    fi
+    executor_unit=$old.service
+    begin_maintenance "$root/etc/$old/maintenance" "$root/var/lib/$old" "$root/etc/systemd/system/$old.service" RUNNING
+    systemctl disable "$old.service" 2>/dev/null || true
+    rm -f -- "$root/etc/systemd/system/$old.service" "$root/usr/local/bin/$old-approve"
+    rm -rf -- "$root/etc/systemd/system/$old.service.d" "$root/opt/$old"
+    leave_maintenance "$root/etc/$old/maintenance"
+    executor_unit=taskrail-executor.service
+    mv -T -- "$root/etc/$old" "$1"
+    if [[ -d $root/var/lib/$old ]]; then
+        mv -T -- "$root/var/lib/$old" "$2"
+    fi
+    if getent group "$old-clients" >/dev/null; then
+        groupmod -n taskrail-executor-clients "$old-clients"
+    fi
+    if id "$old" >/dev/null 2>&1; then
+        usermod -l taskrail-executor "$old"
+    fi
+    if getent group "$old" >/dev/null; then
+        groupmod -n taskrail-executor "$old"
+    fi
+    systemctl daemon-reload
+    printf 'Moved the Countersign executor to %s and %s.\n' "$1" "$2"
 }
 
 # Stop an installed service; a failed or incomplete stop fails the caller.

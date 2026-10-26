@@ -5,8 +5,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from countersign.infrastructure.runner import recover_unavailable_format_tools, run_agent
-from countersign.observability.activity import Progress, event_activity
+from taskrail.infrastructure.runner import recover_unavailable_format_tools, run_agent
+from taskrail.observability.activity import Progress, event_activity
 
 
 class FormatTests(unittest.TestCase):

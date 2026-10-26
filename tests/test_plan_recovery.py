@@ -3,7 +3,7 @@
 import unittest
 from unittest.mock import patch
 
-from countersign.application import plan_recovery
+from taskrail.application import plan_recovery
 
 
 class PlanRecoveryTests(unittest.TestCase):

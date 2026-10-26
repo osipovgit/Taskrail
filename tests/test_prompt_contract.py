@@ -8,9 +8,9 @@ from pathlib import Path
 
 from live_fixture import LiveFixture
 
-from countersign.application import instruction_sources, prompts
-from countersign.core import prompt_texts, task_spec
-from countersign.web.task_form import build_task
+from taskrail.application import instruction_sources, prompts
+from taskrail.core import prompt_texts, task_spec
+from taskrail.web.task_form import build_task
 
 # Bytes of the instructions of one stage, paths shortened; the task and Context excluded.
 BUDGETS = {"01-plan": 10500, "02-plan-review": 10500, "03-implement": 9000, "05-review": 9000}
@@ -27,7 +27,7 @@ class LabelTests(unittest.TestCase):
             payload.update(constraints="Do not disable rules.")
             payload["roots"] = [dict(alias="project", path=str(root))]
             text, _ = build_task(payload, Path(directory) / "runs")
-        meta = json.loads(text.split("```countersign-task\n", 1)[1].split("\n```", 1)[0])
+        meta = json.loads(text.split("```taskrail-task\n", 1)[1].split("\n```", 1)[0])
         spec = task_spec.resolve(text, dict(meta, verification=["The play runs twice"]))
         shown = task_spec.prompt_text(spec, spec["requirements"])
         self.assertNotIn("## Title", shown)

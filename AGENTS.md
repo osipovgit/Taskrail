@@ -27,7 +27,7 @@ zero new Ruff, Wemake, ESLint, Stylelint or formatting findings. Fix nearby simp
 existing findings when practical. Do not disable rules or add suppressions to make
 failures disappear; there is no debt baseline.
 
-Keep instructions short and single-owned: role method in `countersign/agents/`,
+Keep instructions short and single-owned: role method in `taskrail/agents/`,
 execution boundaries in `application/policy.md` (sections per stage), every other
 model-facing text in `core/prompt-texts.json`, response contracts in
 `core/result-schemas.json`. Code holds no model-facing prose. Keep the per-stage

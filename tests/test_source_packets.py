@@ -5,7 +5,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from countersign.application import (
+from taskrail.application import (
     context_projection,
     evidence,
     recovery,
@@ -14,8 +14,8 @@ from countersign.application import (
     source_packet,
     source_windows,
 )
-from countersign.core import source_claims
-from countersign.infrastructure import artifact_access
+from taskrail.core import source_claims
+from taskrail.infrastructure import artifact_access
 
 
 class SourcePacketTests(unittest.TestCase):

@@ -8,9 +8,9 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from countersign import cli
-from countersign.application import run_locks
-from countersign.core.files import atomic_json
+from taskrail import cli
+from taskrail.application import run_locks
+from taskrail.core.files import atomic_json
 
 
 class CliApiTests(unittest.TestCase):
@@ -32,7 +32,7 @@ class CliApiTests(unittest.TestCase):
         output, errors = io.StringIO(), io.StringIO()
         arguments = [*argv, "--runs-dir", str(self.runs)]
         with (
-            patch("sys.argv", ["countersign", *arguments]),
+            patch("sys.argv", ["taskrail", *arguments]),
             contextlib.redirect_stdout(output),
             contextlib.redirect_stderr(errors),
         ):
@@ -42,7 +42,7 @@ class CliApiTests(unittest.TestCase):
     def test_submit_starts_a_detached_worker_with_the_form_fields(self):
         goal = self.base / "goal.md"
         goal.write_text("Explain why the pipeline failed.")
-        with patch("countersign.web.submissions.start_worker", return_value=None) as start:
+        with patch("taskrail.web.submissions.start_worker", return_value=None) as start:
             code, answer = self.call(
                 "submit",
                 "--root",

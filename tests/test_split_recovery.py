@@ -9,10 +9,10 @@ from unittest.mock import patch
 
 from test_reviewed_workflow import ReviewedFixture
 
-from countersign.application import outside_changes, transitions
-from countersign.application.live import execute_task
-from countersign.core.files import atomic_json
-from countersign.web import (
+from taskrail.application import outside_changes, transitions
+from taskrail.application.live import execute_task
+from taskrail.core.files import atomic_json
+from taskrail.web import (
     delivery_state,
     epic_launch,
     epic_tasks,
@@ -21,8 +21,8 @@ from countersign.web import (
     requests,
     run_list,
 )
-from countersign.web.run_view import run_view
-from countersign.web.submissions import TaskLauncher
+from taskrail.web.run_view import run_view
+from taskrail.web.submissions import TaskLauncher
 
 FIELDS = dict(goal="Return 2 and add the new module", criteria="Both outputs work")
 
@@ -97,7 +97,7 @@ class SplitRecoveryTests(ReviewedFixture, unittest.TestCase):
             parent, state, dict(tasks={}), "T1", "failed", "writer-prose-always"
         )
         launcher = TaskLauncher(self.runs, self.settings, recover=False)
-        with patch("countersign.web.submissions.start_worker", side_effect=self.retry_worker):
+        with patch("taskrail.web.submissions.start_worker", side_effect=self.retry_worker):
             result = launcher.action(dict(id=child.name, action="restart"))
         retry = self.runs / result["id"]
         retried = json.loads((retry / "run.json").read_text())
@@ -155,7 +155,7 @@ class SplitRecoveryTests(ReviewedFixture, unittest.TestCase):
         self.assertIn("Use Restart reviewed task", refused["summary"])
         self.assertEqual(len(refused["attempts"]), len(before["attempts"]))
         launcher = TaskLauncher(self.runs, self.settings, recover=False)
-        with patch("countersign.web.submissions.start_worker", side_effect=self.retry_worker):
+        with patch("taskrail.web.submissions.start_worker", side_effect=self.retry_worker):
             result = launcher.action(dict(id=child.name, action="restart"))
         retried = json.loads((self.runs / result["id"] / "run.json").read_text())
         self.assertEqual(retried["status"], "READY_FOR_REVIEW", retried["summary"])

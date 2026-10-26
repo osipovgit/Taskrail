@@ -7,8 +7,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from countersign.application import decision_adapter, instruction_sources, prompts
-from countersign.core import json_response, schema
+from taskrail.application import decision_adapter, instruction_sources, prompts
+from taskrail.core import json_response, schema
 
 BASE = Path(__file__).resolve().parents[1]
 
@@ -54,7 +54,7 @@ class ResponseContractTests(unittest.TestCase):
 
     def test_roles_fail_before_model_launch_and_bundled_roles_pass(self):
         for role in instruction_sources.ROLES:
-            instruction_sources.validate_role_source(BASE / "countersign/agents" / (role + ".md"))
+            instruction_sources.validate_role_source(BASE / "taskrail/agents" / (role + ".md"))
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "planner.md"
             path.write_text("steps MUST be a list of nonempty strings, not objects.")
@@ -111,7 +111,5 @@ class InstallerOptionTests(unittest.TestCase):
                 finally:
                     os.close(master)
                     os.close(slave)
-                self.assertEqual(
-                    "Start Countersign automatically" in result.stderr, prompts_expected
-                )
+                self.assertEqual("Start Taskrail automatically" in result.stderr, prompts_expected)
                 self.assertEqual(result.stdout, expected)

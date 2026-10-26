@@ -4,7 +4,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from countersign.infrastructure.event_summary import parse_events
+from taskrail.infrastructure.event_summary import parse_events
 
 PLAN = "/run/task/plan.md"
 REJECTION = f"You must read file {PLAN} before overwriting it. Use the Read tool first"

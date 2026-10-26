@@ -2,8 +2,8 @@
 
 import unittest
 
-from countersign.application import prompts, result_context
-from countersign.core import schema
+from taskrail.application import prompts, result_context
+from taskrail.core import schema
 
 
 class VersionTests(unittest.TestCase):

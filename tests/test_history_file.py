@@ -4,9 +4,9 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from countersign.application.history_file import INLINE_BYTES, MARKER, prompt_task
+from taskrail.application.history_file import INLINE_BYTES, MARKER, prompt_task
 
-CURRENT = "```countersign-task\n{}\n```\n# Next\n\n## Goal\nReturn 3\n\n## Current turn\nRule\n"
+CURRENT = "```taskrail-task\n{}\n```\n# Next\n\n## Goal\nReturn 3\n\n## Current turn\nRule\n"
 
 
 def turn(number, diff_lines):

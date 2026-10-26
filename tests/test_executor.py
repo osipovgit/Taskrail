@@ -14,12 +14,12 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
-from countersign.application import execution_requests, execution_wait
-from countersign.core import prompt_texts
-from countersign.executor import action_schema, client, hosts, protocol, streams, transport, worker
-from countersign.executor.service import ExecutorServer
-from countersign.executor.store import TicketStore
-from countersign.interactions import remote, remote_inspection
+from taskrail.application import execution_requests, execution_wait
+from taskrail.core import prompt_texts
+from taskrail.executor import action_schema, client, hosts, protocol, streams, transport, worker
+from taskrail.executor.service import ExecutorServer
+from taskrail.executor.store import TicketStore
+from taskrail.interactions import remote, remote_inspection
 
 INVENTORY = {
     "server-a": dict(
@@ -164,11 +164,11 @@ class ExecutorTest(unittest.TestCase):
     def test_key_hosts_use_one_identity_and_no_password_helper(self):
         key_host = dict(INVENTORY["server-a"])
         key_host.pop("password")
-        key_host["identity_file"] = "/etc/countersign-executor/keys/server-a"
+        key_host["identity_file"] = "/etc/taskrail-executor/keys/server-a"
         hosts.validate(key_host)
         argv = transport.command(key_host)
         for option in (
-            "IdentityFile=/etc/countersign-executor/keys/server-a",
+            "IdentityFile=/etc/taskrail-executor/keys/server-a",
             "IdentitiesOnly=yes",
             "BatchMode=yes",
             "PasswordAuthentication=no",
@@ -178,9 +178,9 @@ class ExecutorTest(unittest.TestCase):
         self.assertNotIn("PreferredAuthentications=password", argv)
         env = transport.environment(key_host)
         self.assertNotIn("SSH_ASKPASS", env)
-        self.assertNotIn("COUNTERSIGN_SSH_PASSWORD", env)
+        self.assertNotIn("TASKRAIL_SSH_PASSWORD", env)
         self.assertEqual(hosts.redact("text", {"k": key_host}), "text")
-        for identity in ("relative/key", "/root/.ssh/id_ed25519", "/etc/countersign-executor/../x"):
+        for identity in ("relative/key", "/root/.ssh/id_ed25519", "/etc/taskrail-executor/../x"):
             with self.subTest(identity=identity), self.assertRaises(ValueError):
                 hosts.validate(dict(key_host, identity_file=identity))
         with self.assertRaises(ValueError):
@@ -416,8 +416,8 @@ class ExecutorTest(unittest.TestCase):
                 hosts.validate(dict(INVENTORY["server-a"], **{key: value}))
 
     def test_unbound_successful_ticket_cannot_prove_a_runtime_criterion(self):
-        from countersign.application.execution_evidence import claim_ids
-        from countersign.core.coverage import validate_outcome
+        from taskrail.application.execution_evidence import claim_ids
+        from taskrail.core.coverage import validate_outcome
 
         run = self.root / "runtime-proof"
         directory = run / "00-input/ssh"

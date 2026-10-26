@@ -4,7 +4,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from countersign.interactions.output_digest import summary
+from taskrail.interactions.output_digest import summary
 
 LINT = """WARNING Listing 3 violation(s) that are fatal
 var-naming[no-role-prefix]: Variables names should start with the role name

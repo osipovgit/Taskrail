@@ -34,7 +34,7 @@ without a tool-less format-repair pass.
   `revert --no-edit <full hash>`, `cherry-pick --no-edit <full hash>`,
   `merge --ff-only <full hash>`, `fetch <remote>`,
   `push <remote> HEAD:refs/heads/<branch>`, when needed by the task. A push waits for
-  your personal decision in the UI (or `countersign decide`); **Allow all actions** does
+  your personal decision in the UI (or `taskrail decide`); **Allow all actions** does
   not cover it.
 - Always forbidden: hard reset, clean, history rewriting, amend, rebase and forced
   pushes, including force-with-lease and `+refspec`. Direct metadata writes and

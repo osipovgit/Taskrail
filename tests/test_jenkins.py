@@ -13,8 +13,8 @@ from typing import ClassVar
 from unittest.mock import patch
 from urllib.parse import parse_qs
 
-from countersign.application import execution_wait, jenkins_requests
-from countersign.executor import (
+from taskrail.application import execution_wait, jenkins_requests
+from taskrail.executor import (
     client,
     jenkins_build,
     jenkins_config,
@@ -22,9 +22,9 @@ from countersign.executor import (
     jenkins_schema,
     worker,
 )
-from countersign.executor.service import ExecutorServer
-from countersign.executor.store import TicketStore
-from countersign.interactions import jenkins
+from taskrail.executor.service import ExecutorServer
+from taskrail.executor.store import TicketStore
+from taskrail.interactions import jenkins
 
 EXAMPLE = Path(__file__).resolve().parents[1] / "deploy/executor-jenkins.example.json"
 READ = dict(
@@ -155,7 +155,7 @@ class JenkinsTest(unittest.TestCase):
     def test_reads_status_console_tail_and_failed_tests(self):
         status = jenkins_reads.read(self.servers, READ)
         self.assertEqual(status["build"]["number"], 7)
-        account = base64.b64encode(b"countersign-bot:REPLACE_WITH_JENKINS_API_TOKEN").decode()
+        account = base64.b64encode(b"taskrail-bot:REPLACE_WITH_JENKINS_API_TOKEN").decode()
         self.assertEqual(FakeJenkins.log[0][2], "Basic " + account)
         console = jenkins_reads.read(self.servers, dict(READ, operation="console", build=7))
         self.assertTrue(console["truncated"])
@@ -250,7 +250,7 @@ class JenkinsTest(unittest.TestCase):
         with (
             patch.object(client, "request", return_value=answers[0]),
             patch.object(execution_wait, "resume", return_value="built") as resume,
-            patch("countersign.interactions.jenkins.ApprovalPause"),
+            patch("taskrail.interactions.jenkins.ApprovalPause"),
         ):
             self.assertEqual(jenkins.consume(actions, json.dumps(envelope)), "built")
         resume.assert_called_once()

@@ -8,7 +8,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from countersign.application import (
+from taskrail.application import (
     check_batches,
     check_configuration,
     check_diagnostics,
@@ -21,12 +21,12 @@ from countersign.application import (
     execution_wait,
     verify_commands,
 )
-from countersign.application.source_guard import SourceGuard
-from countersign.application.workflow_state import Workflow
-from countersign.core import coverage
-from countersign.core.files import atomic_json
-from countersign.executor import protocol
-from countersign.web import delivery_checks, delivery_payload, integration_review, requests
+from taskrail.application.source_guard import SourceGuard
+from taskrail.application.workflow_state import Workflow
+from taskrail.core import coverage
+from taskrail.core.files import atomic_json
+from taskrail.executor import protocol
+from taskrail.web import delivery_checks, delivery_payload, integration_review, requests
 
 
 class CheckRecipesTest(unittest.TestCase):
@@ -75,7 +75,7 @@ class CheckRecipesTest(unittest.TestCase):
 
     def test_existing_verify_command_is_bound_once_without_a_second_model_command(self):
         with patch(
-            "countersign.interactions.approval_policy.decision",
+            "taskrail.interactions.approval_policy.decision",
             return_value=dict(decision="allow", alternative=""),
         ) as approval:
             checks = verify_commands.run_commands(self.workflow([self.command]), self.folder)
@@ -90,7 +90,7 @@ class CheckRecipesTest(unittest.TestCase):
     def test_new_recipe_keeps_personal_approval_and_decline_cannot_become_success(self):
         decision = dict(decision="deny", alternative="")
         with patch(
-            "countersign.interactions.approval_policy.decision", return_value=decision
+            "taskrail.interactions.approval_policy.decision", return_value=decision
         ) as approval:
             checks = verify_commands.run_commands(self.workflow(), self.folder)
         approval.assert_called_once()
@@ -101,10 +101,10 @@ class CheckRecipesTest(unittest.TestCase):
     def test_configured_verify_command_cannot_bypass_denial_or_spawn_a_process(self):
         with (
             patch(
-                "countersign.interactions.approval_policy.decision",
+                "taskrail.interactions.approval_policy.decision",
                 return_value=dict(decision="deny", alternative=""),
             ) as approval,
-            patch("countersign.interactions.local.execute") as execute,
+            patch("taskrail.interactions.local.execute") as execute,
         ):
             checks = verify_commands.run_commands(self.workflow([self.command]), self.folder)
         approval.assert_called_once()
@@ -119,10 +119,10 @@ class CheckRecipesTest(unittest.TestCase):
 
         with (
             patch(
-                "countersign.interactions.approval_policy.decision",
+                "taskrail.interactions.approval_policy.decision",
                 side_effect=changed_while_approving,
             ),
-            patch("countersign.interactions.local.execute") as execute,
+            patch("taskrail.interactions.local.execute") as execute,
         ):
             checks = verify_commands.run_commands(self.workflow([self.command]), self.folder)
         execute.assert_not_called()
@@ -192,7 +192,7 @@ class CheckRecipesTest(unittest.TestCase):
 
     def test_server_recipe_cannot_bypass_parent_confirmation(self):
         with (
-            patch("countersign.application.execution_requests.remote_mode", return_value="inspect"),
+            patch("taskrail.application.execution_requests.remote_mode", return_value="inspect"),
             self.assertRaisesRegex(ValueError, "confirmed changes"),
         ):
             check_remote.authorize(self.workflow(), dict(kind="ssh"))
@@ -306,8 +306,8 @@ class CheckRecipesTest(unittest.TestCase):
             dict(id="ticket", status="SUCCEEDED", results=[completed]),
         ]
         with (
-            patch("countersign.executor.client.request", side_effect=responses) as client,
-            patch("countersign.application.execution_wait.time.sleep"),
+            patch("taskrail.executor.client.request", side_effect=responses) as client,
+            patch("taskrail.application.execution_wait.time.sleep"),
         ):
             check_batches.run_configured(workflow)
             check_batches.run_configured(workflow)
@@ -329,7 +329,7 @@ class CheckRecipesTest(unittest.TestCase):
             tests=dict(passCount=0, failCount=1, skipCount=0, failed_cases=[]),
         )
         with patch(
-            "countersign.executor.client.request",
+            "taskrail.executor.client.request",
             return_value=dict(id="ticket", status="FAILED", results=[failed]),
         ):
             check_batches.run_configured(workflow)
@@ -400,7 +400,7 @@ class CheckRecipesTest(unittest.TestCase):
         spec = dict(self.spec, phase="validation")
         state = dict(self.state, check_specs=[spec])
         planned = ["Jenkins check: ci/job: passes", "Server check: health returns 200"]
-        with patch("countersign.web.delivery_checks.planned", return_value=planned):
+        with patch("taskrail.web.delivery_checks.planned", return_value=planned):
             shown = delivery_checks.checks(self.run, state)
             written = delivery_checks.written(self.run, state)
         self.assertEqual(shown["jenkins"], ["ci/job: passes", "C-health: health"])
@@ -414,9 +414,9 @@ class CheckRecipesTest(unittest.TestCase):
     def test_integration_links_its_parent_and_preserves_recorded_requirements(self):
         state = dict(self.state, check_specs=[self.spec])
         with (
-            patch("countersign.web.history.task_draft", return_value=dict(title="Goal")),
-            patch("countersign.web.epic_tasks.tasks", return_value=[]),
-            patch("countersign.web.parent_context.snapshot", return_value="Parent goal"),
+            patch("taskrail.web.history.task_draft", return_value=dict(title="Goal")),
+            patch("taskrail.web.epic_tasks.tasks", return_value=[]),
+            patch("taskrail.web.parent_context.snapshot", return_value="Parent goal"),
         ):
             typed = integration_review.payload(self.run, state)
             legacy = integration_review.payload(self.run, dict(roots=self.state["roots"]))

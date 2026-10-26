@@ -4,11 +4,11 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from countersign.infrastructure.agent_profile import make_profile
-from countersign.infrastructure.artifact_access import manifest, model_inputs, result_inputs
-from countersign.infrastructure.process_watch import permission_denied_event
-from countersign.infrastructure.profile_rules import permission_worktree
-from countersign.infrastructure.runner import run_agent
+from taskrail.infrastructure.agent_profile import make_profile
+from taskrail.infrastructure.artifact_access import manifest, model_inputs, result_inputs
+from taskrail.infrastructure.process_watch import permission_denied_event
+from taskrail.infrastructure.profile_rules import permission_worktree
+from taskrail.infrastructure.runner import run_agent
 
 
 class PermissionTests(unittest.TestCase):
@@ -176,8 +176,8 @@ class AccessManifestTests(unittest.TestCase):
                 self.assertNotIn(str(private), permissions["read"])
 
     def test_executor_contracts_are_response_alternatives_not_function_tools(self):
-        from countersign.application import executor_contracts
-        from countersign.git.requests import extract, instructions
+        from taskrail.application import executor_contracts
+        from taskrail.git.requests import extract, instructions
 
         git = executor_contracts.git_schema()
         payload = dict(

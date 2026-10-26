@@ -36,7 +36,7 @@ globalThis.document = {
   getElementById: () => monitor,
 };
 globalThis.location = { hash: '' };
-const staticDir = path.join(__dirname, '../countersign/web/static');
+const staticDir = path.join(__dirname, '../taskrail/web/static');
 const moduleNames = ['state', 'dom', 'stages', 'monitor', 'app'];
 const script = ['dashboard.js', ...moduleNames.map((name) => `modules/${name}.js`)]
   .map((name) => fs.readFileSync(path.join(staticDir, name), 'utf8'))
@@ -79,10 +79,7 @@ async function main() {
     'div',
   );
   assert.equal(dom.timeNode(null).textContent, 'Time unavailable');
-  const css = fs.readFileSync(
-    path.join(__dirname, '../countersign/web/static/dashboard.css'),
-    'utf8',
-  );
+  const css = fs.readFileSync(path.join(__dirname, '../taskrail/web/static/dashboard.css'), 'utf8');
   assert.match(css, /\.stage-meta\s*\{[^}]*margin-left:\s*auto;[^}]*text-align:\s*right/);
   console.log('Dashboard structure: timestamps, aligned metadata, and text-only rendering passed.');
 
@@ -638,7 +635,7 @@ async function main() {
     id: 'task-preview',
     status: 'RUNNING',
     actions: {},
-    task: { text: '```countersign-task\n{"task_spec": {}}\n```\n## Workflow rules\nKeep scope.' },
+    task: { text: '```taskrail-task\n{"task_spec": {}}\n```\n## Workflow rules\nKeep scope.' },
     draft: {
       goal: '<script>literal goal</script>',
       criteria: 'Existing checks pass.',
@@ -734,7 +731,7 @@ async function main() {
   });
   assert.ok(
     all(sshCard).some((node) =>
-      node.textContent.includes('sudo -k /usr/local/bin/countersign-executor-approve ticket-123'),
+      node.textContent.includes('sudo -k /usr/local/bin/taskrail-executor-approve ticket-123'),
     ),
   );
   assert.ok(

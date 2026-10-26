@@ -4,10 +4,10 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from countersign.application import plan_file, project_map
-from countersign.core import source_claims
-from countersign.core.files import digest
-from countersign.core.plan_document import payload
+from taskrail.application import plan_file, project_map
+from taskrail.core import source_claims
+from taskrail.core.files import digest
+from taskrail.core.plan_document import payload
 
 ROOTS = {"project": "/repo"}
 REQUIREMENTS = [

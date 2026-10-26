@@ -5,9 +5,9 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from countersign.application import evidence, result_validation, session_budget, source_packet
-from countersign.core import schema
-from countersign.core.files import atomic_json
+from taskrail.application import evidence, result_validation, session_budget, source_packet
+from taskrail.core import schema
+from taskrail.core.files import atomic_json
 
 
 class DecisionContractTests(unittest.TestCase):

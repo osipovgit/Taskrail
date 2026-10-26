@@ -1,0 +1,111 @@
+"""Stage decisions without model calls, filesystem writes or permission changes."""
+
+from types import MappingProxyType
+
+from taskrail.application import review_outcome
+from taskrail.core import plan_contract
+
+PLAN_REVIEW = "plan-reviewer"
+STATUS = "status"
+SUMMARY = "summary"
+PLANNER = "planner"
+ALLOWED = "allowed"
+IMPLEMENTER = "implementer"
+REPAIRS = "repair_count"
+REVIEWER = "reviewer"
+
+
+def planning(flow, state, verdict, limit):
+    """Send every plan, including no-change plans, to independent review."""
+    flow.update(plan=verdict, stage=PLAN_REVIEW)
+
+
+def plan_review(flow, state, verdict, limit):
+    """Approve scope or return bounded feedback to planning."""
+    state["plan_review"] = verdict
+    if verdict[STATUS] == "REQUEST_CHANGES":
+        if flow["plan_repairs"] >= limit:
+            state.update(status="PLAN_REJECTED", summary=verdict[SUMMARY])
+        else:
+            flow.update(feedback=verdict, stage=PLANNER)
+            flow["plan_repairs"] += 1
+        return
+    flow[ALLOWED] = flow["plan"]["proposed_change_files"]
+    state["no_changes_needed"] = not bool(flow[ALLOWED])
+    state["review_outcome"] = review_outcome.describe(verdict, state.get("changed_files", []))
+    if plan_contract.splits(flow["plan"], state.get("decompose")):
+        state.update(status="TASKS_READY", summary=verdict[SUMMARY])
+    elif flow[ALLOWED]:
+        flow.update(stage=IMPLEMENTER, feedback=None, effect="capture_preimages")
+    else:
+        state.update(status=review_outcome.accepted_status(flow, state), summary=verdict[SUMMARY])
+
+
+def implementation(flow, state, verdict, limit):
+    """Check actual edits before independent result review."""
+    flow.update(stage="check", effect="write_diff")
+
+
+def result_review(flow, state, verdict, limit):
+    """Stop on approval, or return the findings to the implementer while repairs remain.
+
+    A run without approved files (an integration review or a delivery check) has no
+    writer to repair anything, so its findings end the run for the operator.
+    """
+    state["review_outcome"] = review_outcome.describe(verdict, state.get("changed_files", []))
+    if verdict[STATUS] == "APPROVE":
+        state.update(status=review_outcome.accepted_status(flow, state), summary=verdict[SUMMARY])
+    elif not flow[ALLOWED] or flow[REPAIRS] >= limit:
+        state.update(status="CHANGES_REQUESTED", summary=verdict[SUMMARY])
+    else:
+        flow.update(feedback=verdict, stage=IMPLEMENTER)
+        flow[REPAIRS] += 1
+
+
+HANDLERS = MappingProxyType(
+    {
+        PLANNER: planning,
+        PLAN_REVIEW: plan_review,
+        IMPLEMENTER: implementation,
+        REVIEWER: result_review,
+    }
+)
+RESULT_KEYS = MappingProxyType(
+    {
+        PLANNER: "plan",
+        PLAN_REVIEW: "plan-review",
+        IMPLEMENTER: "implementation",
+        REVIEWER: "review",
+    }
+)
+
+
+def advance(flow, state, verdict, reference, limit):
+    """Choose a transition; the engine retains source integrity and write effects."""
+    stage = flow["stage"]
+    if stage in {PLAN_REVIEW, REVIEWER}:
+        state.setdefault("review_limits", []).append(
+            dict(
+                stage=reference.split("/")[0],
+                unverified=verdict["unverified"],
+                blocking_gaps=verdict["blocking_gaps"],
+            )
+        )
+    if verdict[STATUS] == "BLOCKED":
+        state.update(status="BLOCKED", summary=verdict[SUMMARY])
+        return
+    state["results"][RESULT_KEYS[stage]] = reference
+    HANDLERS[stage](flow, state, verdict, limit)
+
+
+def checked(flow, state, limit):
+    """Route failed built-in checks to bounded repair, never to approval."""
+    failed = any(check[STATUS] == "FAIL" for check in state["checks"])
+    if failed:
+        if not flow[ALLOWED] or flow[REPAIRS] >= limit:
+            state.update(status="CHECK_FAILED", summary="Checks failed after the last repair")
+        else:
+            flow.update(stage=IMPLEMENTER, feedback={"checks": state["checks"]})
+            flow[REPAIRS] += 1
+    else:
+        flow["stage"] = REVIEWER

@@ -6,9 +6,9 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from countersign.application.live import execute_task
-from countersign.core.files import atomic_json
-from countersign.web import (
+from taskrail.application.live import execute_task
+from taskrail.core.files import atomic_json
+from taskrail.web import (
     epic_launch,
     epic_tasks,
     integration_review,
@@ -55,7 +55,7 @@ class ReviewedFixture:
                     "--mode",
                     mode,
                 ],
-                agent_source=str(BASE / "countersign/agents"),
+                agent_source=str(BASE / "taskrail/agents"),
                 agent_directory=str(self.base / "profiles"),
                 timeout_seconds=1 if mode == "writer-timeout" else 10,
             ),
