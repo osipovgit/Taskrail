@@ -81,7 +81,8 @@ the failed attempt's edits: its implementer is told the earlier outcome, review 
 and failed checks, and its diff compares against the original files. Every run started
 for a task is recorded as an attempt, and the server checks the chain of attempts
 before reusing the reviewed contract. Files or Git state changed outside the split's
-tasks (by you, your IDE or another tool) never stop a task. The task gets their list
+tasks (by you, your IDE or another tool) never stop a task; only files Git tracks or
+would track count, never Git-ignored ones. The task gets their list
 first: its implementer reads them, keeps an assigned change that is already there,
 changes them as its task requires and keeps edits unrelated to it. The task's report
 and card name them under **Changed outside this task**, and the integration review

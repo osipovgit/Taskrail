@@ -34,7 +34,7 @@ def verify(parent, task_id, workflow):
     start = after_earlier_tasks(parent, task_id, drift)
     checkpoint, earlier = chain(parent, own_attempts(parent, task_id, workflow), start, drift)
     drift.between(checkpoint, {EXPECTED: workflow.guard.expected, GIT: workflow.guard.git_before})
-    return earlier, drift.summary()
+    return earlier, drift.summary(roots)
 
 
 def own_attempts(parent, task_id, workflow):
