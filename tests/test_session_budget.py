@@ -37,9 +37,9 @@ class SessionBudgetTests(unittest.TestCase):
 
     def test_positive_headroom_and_conservative_defaults(self):
         configured = limits({})
-        self.assertEqual(configured["model_context_tokens"], 32768)
+        self.assertEqual(configured["model_context_tokens"], 94208)
         self.assertEqual(configured["context_reserve_tokens"], 8192)
-        self.assertEqual(session_budget.capacity(configured), 24576)
+        self.assertEqual(session_budget.capacity(configured), 86016)
         for context, reserve in ((0, 1), (10, 0), (10, 10), (10, 11)):
             with (
                 self.subTest(context=context, reserve=reserve),
@@ -53,7 +53,7 @@ class SessionBudgetTests(unittest.TestCase):
         (self.root / "request.md").write_text("request")
         (self.root / "agent.md").write_text("frozen role")
         source = self.root / "source.py"
-        source.write_text("\u0430" * 20000, encoding="utf-8")
+        source.write_text("\u0430" * 50000, encoding="utf-8")
         record = dict(role="implementer")
         outcome = session_budget.admission(
             {}, (self.root, record), [source, source, self.root / "new.py"]
@@ -61,8 +61,8 @@ class SessionBudgetTests(unittest.TestCase):
         self.assertEqual(outcome["status"], "CONTEXT_EXCEEDED")
         self.assertIn("Split this task", outcome["errors"][0])
         measured = record["context_budget"]
-        self.assertEqual(measured["planned_input_bytes"], 40000)
-        self.assertEqual(measured["estimated_input_tokens"], 40018 + 1024)
+        self.assertEqual(measured["planned_input_bytes"], 100000)
+        self.assertEqual(measured["estimated_input_tokens"], 100018 + 1024)
         self.assertEqual(measured["bytes_per_token"], 1)
         source.write_text("small")
         self.assertIsNone(session_budget.admission({}, (self.root, record), [source]))
@@ -128,7 +128,7 @@ class SessionBudgetTests(unittest.TestCase):
                     active = (self.root, dict(role=role, stage=role, writable_files=files))
                     launch = launch_options(workflow, active, 100000, format_only)
                     self.assertIs(launch["runtime"]["autocompact"], False)
-                    self.assertEqual(launch["runtime"]["context_budget"], 24576)
+                    self.assertEqual(launch["runtime"]["context_budget"], 86016)
                     self.assertEqual(launch["runtime"]["token_budget"], 100000)
                     plan_file = str(self.root / "plan.md")
                     expected = plan_file if role == "planner" and not format_only else None

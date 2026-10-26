@@ -129,7 +129,7 @@ for 2.x. Profiles allow every declared path in both forms and deny everything el
 ## Context limits
 
 Automatic compaction is disabled for every role, including the implementer. Set
-`model_context_tokens` (default `32768`) no higher than the smallest context window
+`model_context_tokens` (default `94208`) no higher than the smallest context window
 of the configured role models; `context_reserve_tokens` (default `8192`) must be
 positive and smaller than that window. Keep the provider's own model limits accurate.
 
