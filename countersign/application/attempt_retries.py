@@ -46,7 +46,7 @@ class Retries:
 
     def allowed(self, outcome):
         """Return True after preparing the next attempt, False to stop the stage."""
-        if outcome.get("admission_blocked") or already_corrected(self.stage, outcome):
+        if final(self.stage, outcome):
             return False
         status = outcome["status"]
         if status == "INVALID_RESULT":
@@ -123,10 +123,15 @@ class Retries:
         return True
 
 
-def already_corrected(stage, outcome):
-    """Do not spend another full session on a planner error already returned for repair."""
-    eligible = stage == "planner" and outcome["status"] == "INVALID_RESULT"
-    return eligible and outcome.get(CONTRACT_ERROR) in outcome.get("validation_errors", [])
+def final(stage, outcome):
+    """An outcome no retry can change: blocked admission, a provider limit, or a planner
+    error already returned for repair (another full session would repeat it)."""
+    if outcome.get("provider_limit"):
+        say("  Provider quota or billing limit reached; no retry until it resets")
+        return True
+    repaired = stage == "planner" and outcome["status"] == "INVALID_RESULT"
+    repaired = repaired and outcome.get(CONTRACT_ERROR) in outcome.get("validation_errors", [])
+    return bool(outcome.get("admission_blocked")) or repaired
 
 
 def needs_sources(error, config):

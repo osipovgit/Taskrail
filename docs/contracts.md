@@ -322,7 +322,10 @@ plan validator and can proceed directly to plan review. The implementer stops so
 Continue can inspect its edits.
 The new session is told how much tool output the overflowing session received and
 which calls returned at least 10,000 characters (at most five), so it does not repeat
-them whole. Denial means the command is
+them whole. An exhausted provider quota or billing limit (`provider.quota`, "usage
+limit", "insufficient quota", HTTP 402) stops the stage at once instead of retrying,
+because a new session would fail the same way; Continue the run after the limit
+resets. A short rate limit keeps the usual retry. Denial means the command is
 skipped; consider the operator's alternative. Format repair cannot request execution.
 
 All roles disable automatic compaction. `model_context_tokens` defaults to 94,208

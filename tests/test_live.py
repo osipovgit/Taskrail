@@ -668,6 +668,14 @@ class LiveTests(LiveFixture, unittest.TestCase):
         self.assertIsNone(state["preimages"]["project/new.py"])
         self.assertTrue((self.root / "new.py").exists())
 
+    def test_a_provider_quota_stops_the_stage_without_retries(self):
+        _run, status, state = self.run_mode("provider-quota")
+        reviews = [entry for entry in state["attempts"] if entry["stage"] == "plan-reviewer"]
+        self.assertEqual(len(reviews), 1, state["attempts"])
+        self.assertEqual(reviews[0]["status"], "PROCESS_ERROR")
+        self.assertIn("Free usage limit reached", state["summary"])
+        self.assertNotEqual(status, "READY_FOR_REVIEW")
+
     def test_read_retry(self):
         _, status, state = self.run_mode("read-retry")
         self.assertEqual(status, "READY_FOR_REVIEW")
