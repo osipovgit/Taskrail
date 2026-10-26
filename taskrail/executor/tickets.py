@@ -25,6 +25,12 @@ def described(payload, config):
     return SSH, action, ssh_identity(action, config)
 
 
+def preapproved(servers, request):
+    """A build of a Jenkins job whose builds root allowed in advance in its configuration."""
+    job = servers[request["server"]][jenkins_config.JOBS][request["job"]]
+    return request["operation"] == "build" and job.get(jenkins_config.APPROVAL) == "none"
+
+
 def identity(ticket, config):
     """The current identity of a ticket's targets, compared again at approval."""
     if kind_of(ticket) == JENKINS:

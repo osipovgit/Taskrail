@@ -6,11 +6,18 @@
     "jobs": {
       "shop-tests": {
         "path": "shop/tests",
-        "parameters": ["BRANCH", "SUITE"]
+        "parameters": [
+          "BRANCH",
+          "SUITE"
+        ],
+        "approval": "none"
       },
       "shop-deploy-staging": {
         "path": "shop/deploy-staging",
-        "parameters": ["VERSION"]
+        "parameters": [
+          "VERSION"
+        ],
+        "approval": "root"
       }
     }
   }

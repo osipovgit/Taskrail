@@ -24,6 +24,7 @@ PEER_CREDENTIAL_BYTES = 12
 PRIVATE_UMASK = 0o77
 SOCKET_MODE = 0o660
 IDENTIFIER = "id"
+DIGEST = "digest"
 PRIVILEGED = frozenset(("approve", "reject"))
 # Operations that could start remote work later; refused while maintenance runs.
 HELD = frozenset(("submit", "approve"))
@@ -56,27 +57,40 @@ class ExecutorServer(socketserver.ThreadingUnixStreamServer):
             jenkins = jenkins_config.public(self.configs[tickets.JENKINS])
             return dict(hosts=hosts.public(self.configs[tickets.SSH]), jenkins=jenkins)
         if operation == "submit":
-            return self.store.submit(payload, self.configs[tickets.kind_of(payload)])
+            return self.submit(payload)
         if operation == "status":
             return self.store.get(payload[IDENTIFIER])
         if operation == "jenkins-read":
             return self.jenkins_read(payload["request"])
         raise ValueError("Unsupported operation or privileged approval required")
 
+    def submit(self, payload):
+        """Record a ticket; a build of a job configured with approval none starts at once."""
+        kind = tickets.kind_of(payload)
+        ticket = self.store.submit(payload, self.configs[kind])
+        waiting = ticket["status"] == "PENDING_APPROVAL" and kind == tickets.JENKINS
+        if waiting and tickets.preapproved(self.configs[kind], ticket["action"]):
+            return self.decide("approve", {IDENTIFIER: ticket[IDENTIFIER], DIGEST: ticket[DIGEST]})
+        return ticket
+
     def decide(self, operation, payload):
-        """Root rejects, or approves and starts exactly one execution."""
+        """Root rejects, or approves and starts exactly one execution.
+
+        A build that root allowed in advance in the Jenkins configuration is approved
+        here on submission, against the same digest and identity checks.
+        """
         identifier = payload[IDENTIFIER]
         if operation == "reject":
-            return self.store.reject(identifier, payload["digest"])
+            return self.store.reject(identifier, payload[DIGEST])
         config = self.configs[tickets.kind_of(self.store.get(identifier))]
-        ticket = self.store.approve(identifier, payload["digest"], config)
+        ticket = self.store.approve(identifier, payload[DIGEST], config)
         threading.Thread(
             target=worker.perform, args=(self.store, ticket, config), daemon=True
         ).start()
         return dict(id=ticket["id"], status="RUNNING")
 
     def jenkins_read(self, request):
-        """Reads were approved in the application; builds always need a root ticket."""
+        """Reads were approved in the application; builds always go through a ticket."""
         servers = self.configs[tickets.JENKINS]
         jenkins_schema.validate(request, servers)
         if request["operation"] not in jenkins_schema.READS:

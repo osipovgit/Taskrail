@@ -145,7 +145,11 @@ sudo systemctl restart taskrail-executor.service
   API Token). Give that account only the permissions the listed jobs need.
 - `jobs`: aliases agents use. `path` is the job's folder path as shown in its URL
   (`/job/shop/job/tests` is `shop/tests`). `parameters` lists the build parameters
-  agents may set; an empty list means none.
+  agents may set; an empty list means none. `approval` (optional) is `"root"` (the
+  default: every build waits for your root approval) or `"none"`: you allow the job's
+  builds in advance, so they start as soon as a stage requests them. Use `"none"` only
+  for jobs that change nothing outside CI, such as test or lint jobs; keep deploy jobs
+  on `"root"`.
 - `ca_file` (optional): an absolute path under `/etc/taskrail-executor/` to the CA
   certificate of an internal Jenkins.
 
@@ -160,9 +164,11 @@ Agents return `JENKINS_REQUEST` ([contract](contracts.md#executor-requests)):
 | `status` | Number, result, running state and timing of `"last"` or a numbered build | UI (covered by Allow all actions) |
 | `console` | The last 32,000 bytes of the console log | UI (covered by Allow all actions) |
 | `tests` | Pass, fail and skip counts with up to 100 failed cases | UI (covered by Allow all actions) |
-| `build` | Starts one build, waits up to `timeout_seconds` for its result and console tail | Root, like SSH |
+| `build` | Starts one build, waits up to `timeout_seconds` for its result and console tail | Root, like SSH; none for a job with `"approval": "none"` |
 
-Approve a build in a terminal with the command the UI shows:
+A job with `"approval": "none"` gets an executor ticket like any build, and the
+executor approves it on submission against the same digest and identity checks; the
+journal records it. Approve any other build in a terminal with the command the UI shows:
 `sudo -k /usr/local/bin/taskrail-executor-approve TICKET_ID`. The helper shows
 the server, job path, account and parameters. Requests never follow HTTP redirects
 or use proxies, so the token is sent only to the configured URL. The application
