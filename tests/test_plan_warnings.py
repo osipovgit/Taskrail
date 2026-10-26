@@ -31,11 +31,39 @@ class PlanWarningTests(unittest.TestCase):
         )
         return events
 
-    def parse(self, events, target=PLAN):
+    def parse(self, events, target=PLAN, writable_files=()):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "events.jsonl"
             path.write_text("\n".join(map(json.dumps, events)))
-            return parse_events(path, plan_file=target)
+            return parse_events(path, plan_file=target, writable_files=writable_files)
+
+    def test_only_the_same_approved_source_can_recover_each_write(self):
+        events = self.events()
+        other = copy.deepcopy(events[:3])
+        for event in other:
+            part = event["part"]
+            part["id"] += "-other"
+            part["state"]["input"]["filePath"] = "/repo/other.py"
+        other_error = REJECTION.replace(PLAN, "/repo/other.py")
+        other[0]["part"]["state"]["error"] = other_error
+        combined = [events[0], other[0], events[1], other[1], events[2], *events[3:]]
+        result = self.parse(combined, None, (PLAN, "/repo/other.py"))
+        self.assertEqual(result["errors"], [other_error])
+        self.assertEqual(len(result["warnings"]), 1)
+        combined.insert(5, other[2])
+        result = self.parse(combined, None, (PLAN, "/repo/other.py"))
+        self.assertEqual(result["errors"], [])
+        self.assertEqual(len(result["warnings"]), 2)
+        result = self.parse(combined, None, (PLAN,))
+        self.assertEqual(result["errors"], [other_error])
+
+    def test_later_unresolved_rejection_of_same_file_is_still_fatal(self):
+        events = self.events()
+        later = copy.deepcopy(events[0])
+        later["part"]["id"] = "later-error"
+        result = self.parse([*events[:3], later, *events[3:]], None, (PLAN,))
+        self.assertEqual(result["errors"], [REJECTION])
+        self.assertEqual(len(result["warnings"]), 1)
 
     def test_actual_read_then_write_preserves_the_rejection_and_its_proof(self):
         for tool in ("write", "edit"):

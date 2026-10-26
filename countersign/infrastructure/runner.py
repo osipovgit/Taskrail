@@ -54,6 +54,7 @@ def summarize(watch, process, options):
         turn.path,
         len(turn.previous.splitlines()),
         plan_file=(options["runtime"] or {}).get("plan_file"),
+        writable_files=(options["runtime"] or {}).get("writable_files", ()),
     )
     usage_limits.explain(outcome, watch.telemetry, turn.budgets["context_budget"])
     stderr = turn.error_text()

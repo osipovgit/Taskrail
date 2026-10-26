@@ -120,6 +120,46 @@ class LiveTests(unittest.TestCase):
         self.assertEqual(checkpoint["git_before"], git_metadata({"project": self.root}))
         self.assertIn("G0", (run / "05-review/evidence-bindings.json").read_text())
 
+    def test_resolved_source_overwrite_keeps_user_edits_and_independent_review(self):
+        source = self.root / "hello.py"
+        original = "# inserted before the function\n\n" + source.read_text()
+        source.write_text(original)
+        run, status, state = self.run_mode("write-recovered")
+        self.assertEqual(status, "READY_FOR_REVIEW", state.get("summary"))
+        self.assertEqual(source.read_text(), original.replace("return 1", "return 2"))
+        self.assertEqual((self.root / "unrelated.txt").read_text(), "user dirty work\n")
+        writer = [entry for entry in state["attempts"] if entry["stage"] == "implementer"]
+        self.assertEqual(len(writer), 1)
+        self.assertEqual(writer[0]["errors"], [])
+        warning = writer[0]["warnings"][0]
+        self.assertIn("read", warning["recovered_by"])
+        stages = state["stages"]
+        self.assertEqual(stages[-1]["stage"], "reviewer")
+        self.assertEqual(stages[-1]["status"], "RESULT_VALID")
+        self.assertIn(
+            "Recovered by a later read and successful write", (run / "report.md").read_text()
+        )
+
+    def test_source_overwrite_recovery_never_hides_stops_or_replays_writes(self):
+        cases = (
+            ("write-unresolved", "TOOL_ERROR"),
+            ("write-context", "CONTEXT_EXCEEDED"),
+            ("write-scope", "BLOCKED"),
+        )
+        for mode, expected in cases:
+            with self.subTest(mode=mode):
+                self.setUp()
+                _, status, state = self.run_mode(mode)
+                self.assertEqual(status, expected, state.get("summary"))
+                writer = [entry for entry in state["stages"] if entry["stage"] == "implementer"]
+                self.assertEqual(len(writer), 1)
+                self.assertEqual(writer[0]["session_turns"], 1)
+                self.assertNotIn("reviewer", [entry["stage"] for entry in state["stages"]])
+                if mode == "write-unresolved":
+                    self.assertIn("return 1", (self.root / "hello.py").read_text())
+                if mode == "write-scope":
+                    self.assertIn("Scope violation", state["summary"])
+
     def test_git_policy_rejection_returns_feedback_and_workflow_continues(self):
         run, status, state = self.run_mode("git-denied")
         self.assertEqual(status, "READY_FOR_REVIEW", state.get("summary"))
@@ -367,6 +407,10 @@ class LiveTests(unittest.TestCase):
         self.assertIn("return 1", (self.root / "hello.py").read_text())
 
     def test_both_reviews_keep_unverified_evidence(self):
+        task = self.task.read_text()
+        self.task.write_text(
+            task.replace('"roots":', '"verification": ["Run the declared scenario"], "roots":', 1)
+        )
         run, status, state = self.run_mode()
         self.assertEqual(len(state["review_limits"]), 2)
         report = (run / "report.md").read_text()
@@ -378,6 +422,10 @@ class LiveTests(unittest.TestCase):
         self.assertEqual(context["diff_file"], str(run / "changes.diff"))
 
     def test_already_satisfied_task_needs_no_writer(self):
+        task = self.task.read_text()
+        self.task.write_text(
+            task.replace('"roots":', '"verification": ["Run the declared scenario"], "roots":', 1)
+        )
         (self.root / "hello.py").write_text("def hello():\n    return 2\n")
         run, status, state = self.run_mode("no-change")
         self.assertEqual(status, "NO_CHANGES_REQUIRED")
@@ -385,7 +433,7 @@ class LiveTests(unittest.TestCase):
         self.assertEqual([a["stage"] for a in state["attempts"]], ["planner", "plan-reviewer"])
         self.assertEqual(state["checks"], [])
         self.assertEqual(len(state["review_limits"]), 1)
-        self.assertIn("Runtime not run", (run / "report.md").read_text())
+        self.assertIn("Review limitations: 02-plan-review", (run / "report.md").read_text())
         self.assertIn("return 2", (self.root / "hello.py").read_text())
         done = subprocess.run(
             [

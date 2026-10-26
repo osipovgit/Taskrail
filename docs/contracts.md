@@ -183,8 +183,13 @@ ends; the file survives an interrupted or overflowing session. After a context
 stop, a fully validated ready proposal advances to independent plan review; an
 invalid one supplies exact validation errors to the bounded recovery attempt.
 An exact native read-before-overwrite error becomes a warning only after a later
-successful native read and write of that plan in the same session. The saved plan
-still passes full validation and independent review.
+successful native read and write of the same server-approved file in the same session,
+before the final response. This applies to the planner's plan and the implementer's
+allowed files, never to read-only stages or format repair. The original rejection and
+the read/write event references remain recorded; unresolved errors still stop the stage.
+This classification executes no tools and never retries a writer. Read ranges are
+evidence locations, not edit coordinates: edits must match freshly read content.
+The saved plan still passes full validation and independent review.
 No source, coverage or scope check is relaxed. The request labels requirement blocks with `R<n>` and
 names the project map. The format:
 

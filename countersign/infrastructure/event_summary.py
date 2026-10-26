@@ -5,7 +5,7 @@ import os
 import re
 from collections import defaultdict
 
-from countersign.infrastructure import opencode_cli, plan_warnings, read_warnings, turn_io
+from countersign.infrastructure import opencode_cli, read_warnings, turn_io, write_warnings
 
 END_OF_FILE = re.compile(r"\(End of file - total (\d+) lines\)")
 LINE_NUMBER = re.compile(r"^\s*(\d+):", re.MULTILINE)
@@ -20,10 +20,12 @@ INPUT = "input"
 FILE_PATH = "filePath"
 
 
-def parse_events(path, start=0, plan_file=None):
+def parse_events(path, start=0, plan_file=None, writable_files=()):
     """Usage, sessions, errors and the final text of events after line `start`."""
     summary = EventSummary()
-    writes = plan_warnings.PlanWrites(plan_file)
+    writes = write_warnings.FileWrites(
+        (*writable_files, plan_file) if plan_file else writable_files
+    )
     for event_line, line in turn_io.event_lines(path, start):
         event = decoded(line)
         if event is not None:

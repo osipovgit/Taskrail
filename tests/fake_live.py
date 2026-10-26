@@ -9,6 +9,7 @@ import uuid
 from pathlib import Path
 
 from fake_contract import enrich, plan_text
+from fake_file_writes import implement
 from fake_report_repair import report_result
 
 args = sys.argv[1:]
@@ -339,7 +340,10 @@ elif role == "implementer":
     if mode == "writer-timeout":
         target.write_text(target.read_text().replace("return 1", "return 2"))
         time.sleep(5)
-    target.write_text(target.read_text().replace("return 1", "return 2"))
+    if mode.startswith("write-"):
+        implement(target, mode, print)
+    else:
+        target.write_text(target.read_text().replace("return 1", "return 2"))
     if mode == "scope":
         (root / "unrelated.txt").write_text("corrupted")
     if mode == "new":
