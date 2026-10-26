@@ -1,0 +1,37 @@
+"""Native rejected writes and content-matched recovery for subprocess workflow tests."""
+
+import json
+import time
+
+
+def implement(target, mode, emit):
+    """A rejected write changes nothing; recovery reads and matches the current text."""
+    error = f"You must read file {target} before overwriting it. Use the Read tool first"
+    event(emit, target, "write", "error", error)
+    if mode == "write-unresolved":
+        return
+    current = target.read_text()
+    numbered = "\n".join(f"{number}:{line}" for number, line in enumerate(current.splitlines(), 1))
+    event(emit, target, "read", "completed", numbered)
+    assert current.count("return 1") == 1
+    updated = current.replace("return 1", "return 2")
+    target.write_text(updated)
+    event(emit, target, "edit", "completed", "File edited successfully")
+    if mode == "write-scope":
+        target.with_name("unrelated.txt").write_text("forbidden change\n")
+    if mode == "write-context":
+        emit(
+            json.dumps(
+                dict(type="step_finish", part=dict(id="overflow", tokens=dict(input=100000)))
+            ),
+            flush=True,
+        )
+        time.sleep(1)
+
+
+def event(emit, target, tool, status, output):
+    """One completed or failed native operation with a stable session-local identity."""
+    state = dict(status=status, input=dict(filePath=str(target)))
+    state["error" if status == "error" else "output"] = output
+    part = dict(id="source-" + tool, callID="source-" + tool, tool=tool, state=state)
+    emit(json.dumps(dict(type="tool_use", part=part)))
