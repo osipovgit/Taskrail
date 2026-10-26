@@ -10,7 +10,7 @@ from countersign.infrastructure.context_overflow import STATUS
 
 MODEL_CONTEXT = "model_context_tokens"
 CONTEXT_RESERVE = "context_reserve_tokens"
-DEFAULT_CONTEXT = 32768
+DEFAULT_CONTEXT = 94208
 DEFAULT_RESERVE = 8192
 BYTES_PER_TOKEN = 1
 FRAMING_TOKENS = 1024

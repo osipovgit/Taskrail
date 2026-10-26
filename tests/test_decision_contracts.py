@@ -162,7 +162,7 @@ class DecisionContractTests(unittest.TestCase):
         record = dict(role="reviewer")
         self.assertIsNone(session_budget.admission({}, (self.folder, record), []))
         self.assertEqual(record["context_budget"]["planned_input_bytes"], 0)
-        self.folder.joinpath("request.md").write_text("large" * 10000)
+        self.folder.joinpath("request.md").write_text("large" * 20000)
         outcome = session_budget.admission({}, (self.folder, record), [])
         self.assertTrue(outcome["admission_blocked"])
         self.assertEqual(outcome["status"], "CONTEXT_EXCEEDED")

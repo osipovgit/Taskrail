@@ -314,7 +314,7 @@ which calls returned at least 10,000 characters (at most five), so it does not r
 them whole. Denial means the command is
 skipped; consider the operator's alternative. Format repair cannot request execution.
 
-All roles disable automatic compaction. `model_context_tokens` defaults to 32,768
+All roles disable automatic compaction. `model_context_tokens` defaults to 94,208
 and `context_reserve_tokens` to 8,192; the reserve must be positive and smaller than
 the window. Before starting any role, admission counts one token per UTF-8 byte
 of its actual frozen request and role instruction body, plus 1,024 framing tokens.
