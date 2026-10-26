@@ -6,7 +6,7 @@ from pathlib import Path
 from countersign.core.paths import tool_paths
 from countersign.interactions import approval_policy
 from countersign.observability.progress import clock
-from countersign.web import delivery_state, history, lifecycle
+from countersign.web import delivery_state, history, lifecycle, run_family
 from countersign.web.run_activity import run_busy
 from countersign.web.run_files import contained, optional_json, stage_telemetry, text_tail
 from countersign.web.run_messages import public_messages
@@ -35,9 +35,19 @@ def run_view(base, name):
     return dict(
         id=name,
         launch=launch,
+        parent=parent_view(run, submission),
         **index_view(state, stages),
         **context_view(run, submission, state),
     )
+
+
+def parent_view(run, submission):
+    """The split or delivery a task or phase run belongs to, shown in that parent's card."""
+    folder = run if run.joinpath(history.TASK_FILE).is_file() else submission
+    if not run_family.shown_inside(run.parent, folder):
+        return None
+    run_name, slot = run_family.parent_link(folder)
+    return dict(run=run_name, slot=slot)
 
 
 def stage_views(run, state):

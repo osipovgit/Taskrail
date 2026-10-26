@@ -2,15 +2,18 @@
 
 import json
 
-from countersign.application import reviewed_artifacts
+from countersign.application import check_parents, reviewed_artifacts
 from countersign.core.schema import require
-from countersign.web import epic_launch, history
+from countersign.web import delivery_launch, epic_launch, history, run_family
 
 
 def restart(launcher, run):
-    """Offer standalone drafts, but relaunch a split child from its approved parent."""
+    """Offer standalone drafts; a split task or delivery phase restarts under its parent."""
     state = json.loads(history.read_artifact(run, "run.json"))
-    if state.get("phase") != "task":
+    phase = state.get(check_parents.PHASE)
+    if phase in check_parents.PHASES:
+        return restart_phase(launcher, run, phase)
+    if phase != "task":
         return dict(id=run.name, draft=history.task_draft(run))
     metadata = history.TaskDraft(history.read_artifact(run, history.TASK_FILE)).metadata
     assignment = metadata.get("assigned_contract")
@@ -21,9 +24,22 @@ def restart(launcher, run):
     )
 
 
+def restart_phase(launcher, run, phase):
+    """A delivery phase runs again under the delivery that started it."""
+    link = run_family.parent_link(run)
+    require(link is not None and link[1] == phase, "Missing delivery parent of this phase")
+    parent = history.checked_run(launcher.base, link[0])
+    return delivery_launch.restart_phase(launcher, parent, phase, run.name)
+
+
 def require_standalone(run, mode, state):
-    """An old UI or API caller cannot turn an assigned retry into a detached planner."""
+    """A task or phase run cannot become a detached planner or conversation.
+
+    It restarts through its restart action and continues through Continue with a note;
+    a follow-up belongs to its parent.
+    """
     require(
-        mode != "restart" or state.get("phase") != "task",
-        f"Run {run.name} is an assigned task; use its restart action or the parent split",
+        not state.get(check_parents.PHASE),
+        f"Run {run.name} belongs to a split or delivery; use its restart action, Continue "
+        "with a note, or a follow-up of the parent run",
     )

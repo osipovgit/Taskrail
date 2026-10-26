@@ -2,6 +2,7 @@ import { badge, detail, el, list, showError } from './dom.js';
 import { renderMonitor } from './monitor.js';
 import { executionCard, stageCard, tickStageTimers } from './stages.js';
 import { deliverySection } from './epic.js';
+import { attentionRun } from './graph.js';
 import { preserveSelection, state } from './state.js';
 import { taskSection } from './task.js';
 
@@ -46,7 +47,7 @@ export function menu() {
   nav.replaceChildren();
   const query = document.getElementById('filter').value.toLowerCase();
   const visible = state.runs.filter((run) =>
-    (run.title + ' ' + run.id).toLowerCase().includes(query),
+    [run.title, run.id, ...(run.members || [])].join(' ').toLowerCase().includes(query),
   );
   for (const [group, label] of GROUPS) {
     const runs = visible.filter((run) => (run.group || 'attention') === group);
@@ -88,20 +89,28 @@ function runButton(run) {
   return button;
 }
 
-function select(id) {
+function select(id, focus = '') {
   state.selected = id;
-  location.hash = encodeURIComponent(id);
+  state.focus = focus;
+  const parts = focus ? [id, focus] : [id];
+  location.hash = parts.map(encodeURIComponent).join('/');
   state.last = '';
 }
 
-export async function showRun(id) {
-  select(id);
+// Show a task or phase run, or a planned node, inside the parent card; again to close.
+function pick(focus) {
+  select(state.selected, focus === state.focus ? '' : focus);
+  refreshRun().catch(showError);
+}
+
+export async function showRun(id, focus = '') {
+  select(id, focus);
   state.runs = await get('/api/runs');
   menu();
   await refreshRun();
 }
 
-export function approvalCard(pending) {
+export function approvalCard(pending, runId = state.selected) {
   const card = el('section', undefined, 'approval-card');
   card.append(
     el('h3', 'Your decision required'),
@@ -137,7 +146,7 @@ export function approvalCard(pending) {
     button.onclick = async () => {
       state.actionPending = true;
       try {
-        const payload = { id: state.selected, ticket: pending.ticket, decision };
+        const payload = { id: runId, ticket: pending.ticket, decision };
         payload.alternative = input.value;
         if (decision === 'allow' && allowAll.checked) payload.allow_all = true;
         await post('/api/decision', payload, 'Decision failed');
@@ -243,23 +252,34 @@ const ACTION_TITLES = {
   delete: 'Move run history to local trash. Project files are preserved.',
 };
 
-function actionButtons(data) {
+// A task or phase run restarts under its parent; deleting it would break the attempt chain.
+const ASSIGNED_RESTARTS = {
+  task: [
+    'Restart reviewed task',
+    'Retry this task under its approved parent plan. Existing edits are preserved.',
+  ],
+  integration: ['Restart this phase', 'Run this phase again under the same delivery.'],
+  validation: ['Restart this phase', 'Run this phase again under the same delivery.'],
+  server: ['Restart this phase', 'Run this phase again under the same delivery.'],
+};
+
+function actionButtons(data, embedded = false) {
   const actions = el('div', undefined, 'run-actions');
+  const assigned = ASSIGNED_RESTARTS[data.phase];
   for (const [action, label] of ACTIONS) {
-    const assignedRestart = action === 'restart' && data.phase === 'task';
-    const button = el('button', assignedRestart ? 'Restart reviewed task' : label);
-    button.disabled = state.actionPending || !data.actions?.[action];
+    const assignedRestart = action === 'restart' && Boolean(assigned);
+    const button = el('button', assignedRestart ? assigned[0] : label);
+    const available = data.actions?.[action] && !(embedded && action === 'delete');
+    button.disabled = state.actionPending || !available;
     // Unavailable actions are hidden rather than shown disabled.
-    button.hidden = !data.actions?.[action];
+    button.hidden = !available;
     if (action === 'delete') button.className = 'danger';
     button.title = action === 'resume' ? data.actions?.resume_reason || '' : ACTION_TITLES[action];
-    if (assignedRestart)
-      button.title =
-        'Retry this task under its approved parent plan. Existing edits are preserved.';
+    if (assignedRestart) button.title = assigned[1];
     button.onclick = () =>
       action === 'restart' && !assignedRestart
         ? openComposer(data.draft, { parent_run: data.id, submission_mode: 'restart' })
-        : runAction(action);
+        : runAction(action, {}, data.id);
     actions.append(button);
   }
   if (data.actions?.resume) {
@@ -292,14 +312,78 @@ function materialsSection(data) {
   return materials;
 }
 
-export function render(data) {
+// The parent's header, or a compact header for a run shown inside its parent's card.
+function runHeader(data, embedded) {
+  const nodes = embedded
+    ? [el('p', data.id, 'muted run-id'), badge(data.status || '')]
+    : [
+        el('h2', state.runs.find((run) => run.id === data.id)?.title || data.id),
+        el('p', data.id, 'muted run-id'),
+        badge(data.status || ''),
+      ];
+  if (data.draft && !embedded) {
+    const mode = data.draft.decompose ? 'decompose' : draftMode(data.draft);
+    nodes.push(el('span', 'Mode: ' + MODE_LABELS[mode], 'badge'));
+  }
+  if (data.auto_approve) nodes.push(el('span', 'All actions allowed', 'badge auto-approve'));
+  return nodes;
+}
+
+// The run shown in the parent's card: the one you picked, else one waiting for you.
+function currentFocus(data) {
+  return state.focus || attentionRun(data.delivery);
+}
+
+const isRun = (focus) => Boolean(focus) && !focus.includes(':');
+
+// Everything one run shows; a run inside its parent's card has no delivery of its own.
+export function runBody(data, embedded = false, child = null) {
+  const nodes = [...runHeader(data, embedded), actionButtons(data, embedded)];
+  if (data.pending_approval) nodes.push(approvalCard(data.pending_approval, data.id));
+  const delivery =
+    !embedded &&
+    data.delivery &&
+    deliverySection(data.delivery, {
+      act: (action, extra) => runAction(action, extra, data.id),
+      pick,
+      focus: currentFocus(data),
+      child,
+      embed: (view) => runBody(view, true),
+    });
+  if (delivery) nodes.push(delivery);
+  for (const job of data.execution_jobs || []) nodes.push(executionCard(job));
+  if (data.actions?.stop_requested)
+    nodes.push(el('p', 'Stop requested. Waiting for process cleanup and checkpoint.', 'muted'));
+  for (const turn of data.conversation || []) {
+    const previous = el('section');
+    previous.append(
+      el('h3', 'Earlier Goal'),
+      el('div', turn.goal, 'text'),
+      el('h3', 'Earlier conclusion'),
+      el('div', turn.summary, 'text'),
+    );
+    nodes.push(previous);
+  }
+  if (data.summary) {
+    const summary = el('section');
+    summary.append(el('h3', 'Conclusion'), el('div', data.summary, 'text'));
+    nodes.push(summary);
+  }
+  nodes.push(taskSection(data));
+  for (const stage of data.stages) nodes.push(stageCard(stage));
+  nodes.push(materialsSection(data));
+  return nodes;
+}
+
+export function render(data, child = null) {
   if (preserveSelection()) return;
   if (state.currentRun?.id !== data.id) document.getElementById('reply-goal').value = '';
   state.currentRun = data;
   document.getElementById('followup-panel').hidden = !data.actions?.followup;
   document.getElementById('send-reply').disabled = state.actionPending;
-  renderMonitor(data);
-  const signature = JSON.stringify({ ...data, server_time: undefined });
+  renderMonitor(child || data);
+  const timeless = (view) => view && { ...view, server_time: undefined };
+  const signature = JSON.stringify([timeless(data), timeless(child), state.focus]);
   if (signature === state.last) return;
   state.last = signature;
   const view = document.getElementById('chat');
@@ -309,43 +393,7 @@ export function render(data) {
       .map((node) => node.csKey || node.querySelector('summary').textContent),
   );
   const y = scrollY;
-  view.replaceChildren();
-  view.append(
-    el('h2', state.runs.find((run) => run.id === state.selected)?.title || data.id),
-    el('p', data.id, 'muted run-id'),
-    badge(data.status || ''),
-  );
-  if (data.draft) {
-    const mode = data.draft.decompose ? 'decompose' : draftMode(data.draft);
-    view.append(el('span', 'Mode: ' + MODE_LABELS[mode], 'badge'));
-  }
-  if (data.auto_approve) view.append(el('span', 'All actions allowed', 'badge auto-approve'));
-  view.append(actionButtons(data));
-  if (data.pending_approval) view.append(approvalCard(data.pending_approval));
-  const delivery =
-    data.delivery && deliverySection(data.delivery, { act: runAction, open: showRun });
-  if (delivery) view.append(delivery);
-  for (const job of data.execution_jobs || []) view.append(executionCard(job));
-  if (data.actions?.stop_requested)
-    view.append(el('p', 'Stop requested. Waiting for process cleanup and checkpoint.', 'muted'));
-  for (const turn of data.conversation || []) {
-    const previous = el('section');
-    previous.append(
-      el('h3', 'Earlier Goal'),
-      el('div', turn.goal, 'text'),
-      el('h3', 'Earlier conclusion'),
-      el('div', turn.summary, 'text'),
-    );
-    view.append(previous);
-  }
-  if (data.summary) {
-    const summary = el('section');
-    summary.append(el('h3', 'Conclusion'), el('div', data.summary, 'text'));
-    view.append(summary);
-  }
-  view.append(taskSection(data));
-  for (const stage of data.stages) view.append(stageCard(stage));
-  view.append(materialsSection(data));
+  view.replaceChildren(...runBody(data, false, child));
   for (const node of view.querySelectorAll('details')) {
     if (openTitles.has(node.csKey || node.querySelector('summary').textContent)) node.open = true;
   }
@@ -356,12 +404,21 @@ export async function refreshRun() {
   if (!state.selected || state.composing) return;
   const id = state.selected;
   const data = await get('/api/run?id=' + encodeURIComponent(id));
-  if (id === state.selected) {
-    state.serverClockOffset = new Date(data.server_time).getTime() - Date.now();
-    if (!Number.isFinite(state.serverClockOffset)) state.serverClockOffset = 0;
-    render(data);
-    tickStageTimers();
+  if (id !== state.selected) return;
+  // A task or phase run opens inside its parent's card.
+  if (data.parent && data.parent.run !== id) {
+    select(data.parent.run, id);
+    return refreshRun();
   }
+  const focus = currentFocus(data);
+  const child = isRun(focus)
+    ? await get('/api/run?id=' + encodeURIComponent(focus)).catch(() => null)
+    : null;
+  if (id !== state.selected) return;
+  state.serverClockOffset = new Date(data.server_time).getTime() - Date.now();
+  if (!Number.isFinite(state.serverClockOffset)) state.serverClockOffset = 0;
+  render(data, child);
+  tickStageTimers();
 }
 
 export async function refresh() {
@@ -384,13 +441,13 @@ const CONFIRMATIONS = {
     'Grant two extra attempts and one attempt timeout, then continue? Token caps and permissions are unchanged.',
 };
 
-export async function runAction(action, extra = {}) {
+export async function runAction(action, extra = {}, runId = state.selected) {
   if (state.actionPending) return;
   if (CONFIRMATIONS[action] && !confirm(CONFIRMATIONS[action])) return;
   state.actionPending = true;
   document.querySelectorAll('.run-actions button').forEach((button) => (button.disabled = true));
   try {
-    const payload = { id: state.selected, action, ...extra };
+    const payload = { id: runId, action, ...extra };
     if (action.startsWith('resume') && state.resumeNote?.trim()) payload.note = state.resumeNote;
     const result = await post('/api/actions', payload, 'Action failed');
     if (action.startsWith('resume')) state.resumeNote = '';
@@ -400,7 +457,8 @@ export async function runAction(action, extra = {}) {
       document.getElementById('followup-panel').hidden = true;
       document.getElementById('monitor').replaceChildren();
     }
-    select(result.id);
+    // A new or continued task run opens inside its parent; the parent keeps its focus.
+    if (action === 'delete' || result.id !== state.selected) select(result.id);
     state.runs = await get('/api/runs');
     menu();
   } catch (error) {

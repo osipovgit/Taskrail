@@ -67,6 +67,11 @@ class DashboardTests(unittest.TestCase):
         self.assertIn("textContent", self.get("/modules/dom.js"))
         self.assertIn("showAnalytics", self.get("/modules/analytics.js"))
         self.assertIn("taskSection", self.get("/modules/task.js"))
+        # Every dashboard module is served; a module missing from the list breaks the page.
+        static = Path(__file__).resolve().parents[1] / "countersign/web/static/modules"
+        for module in sorted(static.glob("*.js")):
+            with self.subTest(module=module.name):
+                self.assertIn("export", self.get(f"/modules/{module.name}"))
         totals = json.loads(self.get("/api/analytics"))
         self.assertEqual(totals["runs"]["count"], 1)
         self.assertEqual(totals["stages"]["planner"]["attempts"], 1)
