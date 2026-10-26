@@ -115,7 +115,7 @@ def permission_worktree(options):
 
 
 def limits(options):
-    """Clamp numeric settings to their supported ranges."""
+    """Clamp numeric settings to their supported ranges; read the retry policy."""
     return dict(
         **session_budget.settings(options),
         stage_seconds=max(1, int(options.get("stage_timeout_seconds", DEFAULT_TIMEOUT * 4))),
@@ -124,6 +124,7 @@ def limits(options):
         timeout=max(1, int(options.get("timeout_seconds", DEFAULT_TIMEOUT))),
         max_repairs=max(0, min(5, int(options.get("max_repairs", 3)))),
         read_retries=max(0, min(3, int(options.get("read_retries", 3)))),
+        stop_on_provider_limit=options.get("stop_on_provider_limit") is True,
         max_change_lines=max(0, int(options.get("max_change_lines", CHANGE_LINES))),
         max_change_files=max(0, int(options.get("max_change_files", CHANGE_FILES))),
     )

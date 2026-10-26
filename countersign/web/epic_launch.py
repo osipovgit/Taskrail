@@ -35,9 +35,10 @@ def start_next(launcher, run, automatic=False, retry=None):
         if state.get(epic_tasks.STATUS) != epic_tasks.READY:
             raise ValueError("Only a task split can start its tasks")
         entries = epic_tasks.tasks(run, state)
-        if automatic and not continues(epic, entries):
-            return None
         task = epic_progress.next_task(entries)
+        # While a task runs or waits, auto-continue simply waits; that is not an error.
+        if automatic and (task is None or not continues(epic, entries)):
+            return None
         if task is None:
             raise ValueError(
                 "No task is ready: one is running, failed or waits for its dependencies"

@@ -12,14 +12,14 @@
 | Continue interrupted run | Eligible checkpoint and unchanged source | Append new attempts to the same run, starting at the interrupted stage; a stage that reported **Blocked** can continue too, with your note answering its question; an interrupted or blocked implementer first inspects its existing edits |
 | Send a follow-up Goal | Previous standalone run stopped, no active run on its projects | Snapshot prior public evidence and start a new run from planning; a task or phase run has no follow-up, use Continue with a note or a follow-up of its parent |
 | Answer only | New or follow-up submission | Research and independent review, no implementation; the reviewed answer opens the report and is the `answer` of `countersign status` |
-| Design discussion | New or follow-up submission | Like Answer only, but the reviewed summary is a design document, saved as `design.md`; follow-ups refine it, a **Change code** follow-up implements it |
+| Design discussion | New or follow-up submission | Like Answer only, but the reviewed summary is a design document, saved as `design.md`; follow-ups refine it, a **Develop** follow-up implements it |
 | Confirm changes | A finished code change, after integration review for a split and any Jenkins validation | Accept the change; server checks, if any, start only now |
 | Mark as done / Move back from Done | Stopped run | Move the run to the Done group, or return it to its computed group; nothing else changes |
 | Delete from history | Stopped/completed run | Move run and launcher artifacts to local trash; leave source files untouched |
 
-Each run page shows its mode (**Change code**, **Answer only** or **Design discussion**;
+Each run page shows its mode (**Develop**, **Answer only** or **Design discussion**;
 older forced splits show **Split into tasks**); the run list shows the mode when it is
-not Change code.
+not Develop.
 
 The run list groups runs by what they need:
 
@@ -32,7 +32,7 @@ The run list groups runs by what they need:
 
 ## Delivery of a code change
 
-Every **Change code** task goes through the same steps:
+Every **Develop** task goes through the same steps:
 
 1. **Planning.** The planner chooses one atomic task (`single`) or several (`split`).
    Each task owns a deliverable, exact files, requirements or scoped parts, acceptance
@@ -179,7 +179,7 @@ For a question, choose the **Answer only** mode. This sets server-generated `rea
 metadata as well as instructions. Nonempty steps or proposed change paths are
 rejected by plan validation, and a separate transition guard blocks implementation.
 A successful reviewed answer finishes as `NO_CHANGES_REQUIRED` with its conclusion.
-Changing back to **Change code** on the next turn removes the answer-only constraint.
+Changing back to **Develop** on the next turn removes the answer-only constraint.
 
 ## Deletion
 
@@ -223,7 +223,7 @@ countersign action RUN resume --note "python3 is installed now"
 countersign submit --json payload.json       # the fields of POST /api/tasks
 ```
 
-`--mode` is `change`, `answer`, `design` or `split`; `--followup RUN` and `--restart RUN`
+`--mode` is `develop` (the default), `answer`, `design` or `split`; `--followup RUN` and `--restart RUN`
 continue a conversation; a text option may name a file as `@FILE`. `action` accepts the
 `/api/actions` actions. For a standalone run, `action RUN restart` prints the saved
 `draft`; submit the edited fields with `parent_run` and `submission_mode: "restart"`

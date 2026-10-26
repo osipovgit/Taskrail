@@ -56,12 +56,12 @@ def run_summary(path):
 
 
 def task_mode(task):
-    """change, answer, design or decompose, from the server-generated task header."""
+    """develop, answer, design or decompose, from the server-generated task header."""
     metadata = history.TaskDraft(task).metadata
     for flag, mode in MODES.items():
         if metadata.get(flag) is True:
             return mode
-    return "change"
+    return "develop"
 
 
 def task_title(task, fallback):
