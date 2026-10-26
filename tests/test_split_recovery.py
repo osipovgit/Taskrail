@@ -1,12 +1,15 @@
 """A split continues after a failed task, after outside edits, and ends its reviews."""
 
 import json
+import subprocess
+import tempfile
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
 from test_reviewed_workflow import ReviewedFixture
 
-from countersign.application import transitions
+from countersign.application import outside_changes, transitions
 from countersign.application.live import execute_task
 from countersign.core.files import atomic_json
 from countersign.web import (
@@ -158,6 +161,33 @@ class SplitRecoveryTests(ReviewedFixture, unittest.TestCase):
         self.assertEqual(retried["status"], "READY_FOR_REVIEW", retried["summary"])
         self.assertEqual(retried["outside_changes"], dict(files=["project/hello.py"], git=False))
         self.assertIn("# external edit", source.read_text())
+
+
+class OutsideChangesTests(unittest.TestCase):
+    def test_only_files_git_tracks_or_would_track_are_reported(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            subprocess.run(["git", "init", "-q", str(root)], check=True)
+            (root / ".gitignore").write_text("build/\n*.log\n")
+            (root / "build").mkdir()
+            (root / "build/out.txt").write_text("generated")
+            (root / "app.log").write_text("log")
+            (root / "src.py").write_text("x = 1\n")
+            (root / "new.py").write_text("y = 2\n")
+            drift = outside_changes.Drift()
+            drift.files.update(
+                ["p/build/out.txt", "p/app.log", "p/src.py", "p/new.py", "p/.gitignore"]
+            )
+            summary = drift.summary({"p": str(root)})
+        self.assertEqual(summary, dict(files=["p/.gitignore", "p/new.py", "p/src.py"], git=False))
+        only_ignored = outside_changes.Drift()
+        only_ignored.files.add("p/build/out.txt")
+        with tempfile.TemporaryDirectory() as temp:
+            subprocess.run(["git", "init", "-q", temp], check=True)
+            Path(temp, ".gitignore").write_text("build/\n")
+            Path(temp, "build").mkdir()
+            Path(temp, "build/out.txt").write_text("generated")
+            self.assertIsNone(only_ignored.summary({"p": temp}))
 
 
 class ReviewOutcomeTests(unittest.TestCase):

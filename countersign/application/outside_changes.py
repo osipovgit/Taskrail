@@ -7,6 +7,7 @@ and the integration review name them.
 
 from pathlib import Path
 
+from countersign.application import source_ignores
 from countersign.core import prompt_texts
 
 KEY = "outside_changes"
@@ -32,11 +33,28 @@ class Drift:
                 self.files.add(name)
         self.git = self.git or before[GIT] != after[GIT]
 
-    def summary(self):
-        """Sorted alias paths and whether Git changed; None when nothing changed."""
-        if not self.files and not self.git:
+    def summary(self, roots):
+        """Sorted alias paths Git tracks or would track, and whether Git changed.
+
+        Files Git ignores now are never reported, even when an older checkpoint
+        still listed them. None when nothing else changed.
+        """
+        paths = {alias: Path(path) for alias, path in roots.items()}
+        ignored = source_ignores.ignored(paths)
+        files = sorted(name for name in self.files if not git_ignored(name, ignored))
+        if not files and not self.git:
             return None
-        return dict(files=sorted(self.files), git=self.git)
+        return dict(files=files, git=self.git)
+
+
+def git_ignored(name, ignored):
+    """An alias path Git ignores, by its own name or an ignored directory above it."""
+    parent = name
+    while parent:
+        if parent in ignored or f"{parent}/" in ignored:
+            return True
+        parent = parent.rpartition("/")[0]
+    return False
 
 
 def announce(workflow, outside):
