@@ -5,16 +5,16 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from countersign.application import (
+from taskrail.application import (
     check_configuration,
     planned_paths,
     project_map,
     source_windows,
     task_config,
 )
-from countersign.core import protected_paths
-from countersign.infrastructure.profile_rules import permissions
-from countersign.interactions import access, read_only
+from taskrail.core import protected_paths
+from taskrail.infrastructure.profile_rules import permissions
+from taskrail.interactions import access, read_only
 
 DENY = "deny"
 
@@ -40,7 +40,7 @@ class ProtectedPathTests(unittest.TestCase):
         source.write_text(json.dumps(dict(opencode_version="1.x", **settings)))
         header = json.dumps(dict(roots={"project": str(self.root)}))
         task = self.base / "task.md"
-        task.write_text(f"```countersign-task\n{header}\n```\n# Goal\nChange app.py\n")
+        task.write_text(f"```taskrail-task\n{header}\n```\n# Goal\nChange app.py\n")
         return task_config.configuration(task, source)
 
     def listing(self, argv, protected=protected_paths.DEFAULT_PATTERNS):

@@ -5,7 +5,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from countersign.web.analytics import analytics
+from taskrail.web.analytics import analytics
 
 
 def stage(name, status, **details):

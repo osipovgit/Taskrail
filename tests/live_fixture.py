@@ -6,7 +6,7 @@ import tempfile
 from pathlib import Path
 from unittest.mock import patch
 
-from countersign.application.live import execute_task
+from taskrail.application.live import execute_task
 
 BASE = Path(__file__).resolve().parents[1]
 
@@ -26,7 +26,7 @@ class LiveFixture:
         (self.root / "unrelated.txt").write_text("user dirty work\n")
         self.task = self.base / "task.md"
         self.task.write_text(
-            "```countersign-task\n"
+            "```taskrail-task\n"
             + json.dumps({"roots": {"project": str(self.root)}})
             + "\n```\nReturn 2"
         )
@@ -43,7 +43,7 @@ class LiveFixture:
                 "--mode",
                 mode,
             ],
-            agent_source=str(getattr(self, "source", BASE / "countersign/agents")),
+            agent_source=str(getattr(self, "source", BASE / "taskrail/agents")),
             agent_directory=str(self.profiles),
             timeout_seconds=1
             if mode
@@ -62,7 +62,7 @@ class LiveFixture:
     def run_mode(self, mode="ok", **overrides):
         self.configure_mode(mode, **overrides)
         with patch(
-            "countersign.interactions.approvals.wait",
+            "taskrail.interactions.approvals.wait",
             return_value=dict(decision="deny", alternative="Use permitted source paths"),
         ):
             run, status = execute_task(self.task, self.settings, run_dir=self.base / "result")
@@ -71,7 +71,7 @@ class LiveFixture:
 
     def real_repository(self):
         """Turn the root into a Git repository with one commit; returns the Git runner."""
-        from countersign.git import process
+        from taskrail.git import process
 
         (self.root / ".git/HEAD").unlink()
         (self.root / ".git").rmdir()

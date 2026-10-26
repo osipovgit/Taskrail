@@ -7,13 +7,13 @@ from pathlib import Path
 
 BASE = Path(__file__).resolve().parents[1]
 SYSTEM_PATHS = (
-    "/etc/systemd/system/countersign-executor.service",
-    "/usr/local/bin/countersign-executor-approve",
-    "/run/countersign-executor-maintenance.lock",
-    "/opt/countersign-executor",
-    "/etc/countersign-executor",
-    "/var/lib/countersign-executor",
-    "/run/countersign-executor",
+    "/etc/systemd/system/taskrail-executor.service",
+    "/usr/local/bin/taskrail-executor-approve",
+    "/run/taskrail-executor-maintenance.lock",
+    "/opt/taskrail-executor",
+    "/etc/taskrail-executor",
+    "/var/lib/taskrail-executor",
+    "/run/taskrail-executor",
 )
 
 
@@ -47,7 +47,7 @@ class DeploymentFixture:
     def source(self):
         if not self.release.exists():
             self.release.mkdir()
-            for name in ("countersign", "deploy", "docs"):
+            for name in ("taskrail", "deploy", "docs"):
                 shutil.copytree(
                     BASE / name,
                     self.release / name,

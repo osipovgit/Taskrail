@@ -22,7 +22,7 @@ verified. Provider quotas, not these counters, enforce billing limits.
 
 ## Server settings
 
-Edit `~/.config/countersign/settings.json` (or the explicit `--settings` file). The
+Edit `~/.config/taskrail/settings.json` (or the explicit `--settings` file). The
 opencode command, models and profile directory are described in
 [deployment](deployment.md#opencode). Budget settings:
 
@@ -52,7 +52,7 @@ Cumulative usage has no warning threshold. Counters are for comparison, not cont
 
 ## Analytics
 
-**Analytics** in the task list (CLI: `countersign analytics`) sums every run in the
+**Analytics** in the task list (CLI: `taskrail analytics`) sums every run in the
 run store: outcomes and success rate, recorded model time, reported tokens and
 continuations, and per model and per stage the attempts, failed attempts, format
 repairs, recoveries, tokens and time. Runs in the trash are not counted. Missing

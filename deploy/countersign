@@ -1,6 +1,0 @@
-#!/usr/bin/env bash
-set -euo pipefail
-app_dir=$(readlink -f -- "$HOME/.local/share/countersign/current")
-export PYTHONPATH="$app_dir"
-export COUNTERSIGN_SETTINGS="$HOME/.config/countersign/settings.json"
-exec "$app_dir/venv/bin/python" -m countersign "$@"

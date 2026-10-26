@@ -13,7 +13,7 @@ make check PYTHON=.venv/bin/python
 `make check` first compares every pin in `requirements-dev.txt` with the distributions
 installed for the selected Python and stops with the install command when one differs.
 Ruff checks imports, correctness, bugbear, pyupgrade, simplification and Ruff rules,
-and formatting, with no per-file exemptions. Wemake/Flake8 checks the design and style of `countersign/` and `tools/`; tests use Ruff
+and formatting, with no per-file exemptions. Wemake/Flake8 checks the design and style of `taskrail/` and `tools/`; tests use Ruff
 only, because descriptive test names, literal fixtures and expected values conflict
 with Wemake's name length, string reuse and magic number limits. ESLint, Stylelint and
 Prettier cover the UI. Bash parses every deployment script separately; ShellCheck
@@ -27,7 +27,7 @@ checkpoints, budgets, telemetry, UI DOM behavior and deployment. Deployment test
 private release copies and system paths, with unconditional privilege-command stubs;
 they never invoke the host's sudo, systemd or executor reset.
 GitHub Actions (`.github/workflows/ci.yml`) runs `make check` on Python 3.12, the
-test suite on Python 3.10 to 3.14, and `countersign init` plus `countersign check`
+test suite on Python 3.10 to 3.14, and `taskrail init` plus `taskrail check`
 against a pinned opencode 1.x without calling a model. CodeQL (only while the
 repository is public; private repositories need GitHub Code Security) and Dependabot
 watch the code and pinned dependencies. `tests/fixtures/` holds recorded opencode 1.19.3
@@ -45,9 +45,9 @@ recovery. Run an individual workflow test with a private `HOME`, as `make test` 
 failure assertions should include the run summary rather than only its status.
 
 ```sh
-.venv/bin/python -m ruff format countersign tests tools
+.venv/bin/python -m ruff format taskrail tests tools
 .venv/bin/shfmt -i 4 -ci -w deploy/*.sh
-npx prettier --write 'countersign/web/static/**/*' 'tests/*.cjs' eslint.config.mjs
+npx prettier --write 'taskrail/web/static/**/*' 'tests/*.cjs' eslint.config.mjs
 .venv/bin/python tools/lint_python.py
 ```
 

@@ -9,9 +9,9 @@ from unittest.mock import patch
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
-from countersign.web.server import make_server
-from countersign.web.submissions import BusyError, TaskLauncher
-from countersign.web.task_form import build_task
+from taskrail.web.server import make_server
+from taskrail.web.submissions import BusyError, TaskLauncher
+from taskrail.web.task_form import build_task
 
 BASE = Path(__file__).resolve().parents[1]
 
@@ -38,7 +38,7 @@ class SubmissionTests(unittest.TestCase):
 
     def test_markdown_has_structured_roots_and_verification(self):
         text, title = build_task(self.payload, self.runs)
-        meta = json.loads(text.split("```countersign-task\n")[1].split("```")[0])
+        meta = json.loads(text.split("```taskrail-task\n")[1].split("```")[0])
         self.assertEqual(meta["roots"], {"project": str(self.repo)})
         self.assertEqual(meta["verification"], ["Manually exercise the caller"])
         self.assertIn("# Return two", text)
@@ -53,7 +53,7 @@ class SubmissionTests(unittest.TestCase):
             goal="Return 2 from hello.\nKeep the docstring.",
         )
         text, title = build_task(payload, self.runs)
-        meta = json.loads(text.split("```countersign-task\n")[1].split("```")[0])
+        meta = json.loads(text.split("```taskrail-task\n")[1].split("```")[0])
         self.assertEqual(meta["roots"], {"repo": str(self.repo), "other-repo": str(other)})
         self.assertEqual(title, "Return 2 from hello.")
         self.assertIn("## Acceptance criteria\nThe Goal is achieved", text)
@@ -63,9 +63,8 @@ class SubmissionTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "unique"):
             build_task(dict(payload, roots=clash), self.runs)
         renamed = [dict(alias="repo", path=str(other)), dict(path=str(self.repo))]
-        meta = json.loads(
-            build_task(dict(payload, roots=renamed), self.runs)[0].split("```")[1][17:]
-        )
+        text = build_task(dict(payload, roots=renamed), self.runs)[0]
+        meta = json.loads(text.split("```taskrail-task\n")[1].split("```")[0])
         self.assertEqual(meta["roots"]["repo-2"], str(self.repo))
 
     def test_invalid_tasks_never_create_files(self):
@@ -78,7 +77,7 @@ class SubmissionTests(unittest.TestCase):
             dict(roots=[dict(alias="project", path="relative")]),
             dict(roots=[dict(alias="project", path=str(self.base))]),
             dict(roots=[dict(alias="project", path=str(self.repo))] * 2),
-            dict(goal="```countersign-task\n{}\n```"),
+            dict(goal="```taskrail-task\n{}\n```"),
             dict(title="a\nb"),
         ]
         for change in cases:
@@ -88,7 +87,7 @@ class SubmissionTests(unittest.TestCase):
 
     def test_busy_server_does_not_launch_a_second_worker(self):
         launcher = TaskLauncher(self.runs)
-        with patch("countersign.web.submissions.subprocess.Popen") as popen:
+        with patch("taskrail.web.submissions.subprocess.Popen") as popen:
             popen.return_value.poll.return_value = None
             launcher.submit(self.payload)
             with self.assertRaises(BusyError):
@@ -113,13 +112,13 @@ class SubmissionTests(unittest.TestCase):
         return url, {
             "Content-Type": "application/json",
             "Origin": url,
-            "X-Countersign-Token": token,
+            "X-Taskrail-Token": token,
         }
 
     def test_browser_submission_requires_same_origin_token_and_valid_payload(self):
         url, headers = self.start_server()
         for replacement, expected in [
-            ({"X-Countersign-Token": ""}, 403),
+            ({"X-Taskrail-Token": ""}, 403),
             ({"Origin": "http://evil.example"}, 403),
             ({"Content-Type": "text/plain"}, 415),
         ]:
@@ -150,7 +149,7 @@ class SubmissionTests(unittest.TestCase):
                         "--mode",
                         "ok",
                     ],
-                    agent_source=str(BASE / "countersign/agents"),
+                    agent_source=str(BASE / "taskrail/agents"),
                     agent_directory=str(self.base / "profiles"),
                     timeout_seconds=5,
                 )
@@ -199,7 +198,7 @@ class SubmissionTests(unittest.TestCase):
         )
         (run / "checkpoint.json").write_text("{}")
         url, headers = self.start_server()
-        with patch("countersign.web.submissions.subprocess.Popen") as popen:
+        with patch("taskrail.web.submissions.subprocess.Popen") as popen:
             popen.return_value.poll.return_value = 0
             with urlopen(
                 Request(
@@ -231,7 +230,7 @@ class SubmissionTests(unittest.TestCase):
                 Request(
                     url + "/api/actions",
                     data=json.dumps(dict(id=run.name, action="resume")).encode(),
-                    headers=dict(headers, **{"X-Countersign-Token": ""}),
+                    headers=dict(headers, **{"X-Taskrail-Token": ""}),
                 )
             )
         self.assertEqual(error.exception.code, 403)
@@ -252,7 +251,7 @@ class ApprovalHttpTests(unittest.TestCase):
         url, headers = self.start_server()
         payload = dict(id=run.name, ticket="exact-ticket", decision="deny", alternative="")
         for body, extra, code in [
-            (payload, {"X-Countersign-Token": ""}, 403),
+            (payload, {"X-Taskrail-Token": ""}, 403),
             (payload, {"Origin": "http://untrusted.example"}, 403),
             (dict(payload, ticket="stale"), {}, 400),
             ([], {}, 400),

@@ -4,8 +4,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from countersign.infrastructure.runner import run_agent
-from countersign.observability.telemetry import Telemetry
+from taskrail.infrastructure.runner import run_agent
+from taskrail.observability.telemetry import Telemetry
 
 
 class TelemetryTests(unittest.TestCase):

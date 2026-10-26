@@ -2,7 +2,7 @@
 
 | Owner | Responsibility |
 |---|---|
-| `countersign/agents/*.md` | Role-specific method; no duplicate schema, policy or budget |
+| `taskrail/agents/*.md` | Role-specific method; no duplicate schema, policy or budget |
 | `application/policy.md` | Execution boundaries, in `## All stages` and per-stage sections; each stage reads only its sections |
 | `core/prompt-texts.json` | Every other model-facing text: stage and mode rules, plan format, response routing, executor routes, feedback and recovery notes |
 | `application/instruction-modules.json` | Reading and language guidance selected per stage |
@@ -268,9 +268,9 @@ tools, never to a tool-less format repair. Error messages name requirements by l
 Custom `agent_source` directories take precedence over bundled roles, and updates
 never overwrite installed custom roles. Each role must contain the exact line
 `Instruction contract: 1.` after its frontmatter; a missing declaration fails
-before any model runs. Review a custom role against `countersign/agents/` before adding the
+before any model runs. Review a custom role against `taskrail/agents/` before adding the
 declaration, or select the maintained roles with `deploy/install.sh --agents=bundled`.
-Managed opencode profiles are named `countersign-<role>-<run suffix>`, and their permissions come from the
+Managed opencode profiles are named `taskrail-<role>-<run suffix>`, and their permissions come from the
 engine, not from role frontmatter. Each stage records the source path, role hash,
 contract hash and request hash; the UI shows this provenance. Editing a managed
 profile is not a supported configuration method.

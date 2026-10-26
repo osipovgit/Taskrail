@@ -1,6 +1,6 @@
 # Security policy
 
-Countersign runs coding agents against local projects and can relay approved
+Taskrail runs coding agents against local projects and can relay approved
 commands to remote hosts, so security reports are welcome and handled privately.
 
 ## Reporting a vulnerability

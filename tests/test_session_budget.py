@@ -8,14 +8,14 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from countersign.application import context_windows, session_budget
-from countersign.application.attempt_retries import Retries
-from countersign.application.attempt_session import launch_options
-from countersign.application.live import execute_task
-from countersign.application.task_config import limits
-from countersign.infrastructure import usage_limits
-from countersign.infrastructure.runner import run_agent
-from countersign.observability.telemetry import Telemetry
+from taskrail.application import context_windows, session_budget
+from taskrail.application.attempt_retries import Retries
+from taskrail.application.attempt_session import launch_options
+from taskrail.application.live import execute_task
+from taskrail.application.task_config import limits
+from taskrail.infrastructure import usage_limits
+from taskrail.infrastructure.runner import run_agent
+from taskrail.observability.telemetry import Telemetry
 
 
 def usage(identity, incoming, cached=0, total=1):
@@ -214,7 +214,7 @@ class SessionBudgetTests(unittest.TestCase):
         attempt.joinpath("events.jsonl").write_text(json.dumps(usage("prior", 1000)) + "\n")
         followup = attempt / "tool-result.md"
         followup.write_text("Executor result")
-        with patch("countersign.infrastructure.process_watch.subprocess.Popen") as launch:
+        with patch("taskrail.infrastructure.process_watch.subprocess.Popen") as launch:
             outcome = run_agent(
                 dict(
                     command=["unused"],
@@ -235,7 +235,7 @@ class SessionBudgetTests(unittest.TestCase):
             flow=dict(stage="implementer"), state=dict(stages=[]), config=dict(read_retries=3)
         )
         retries = Retries(SimpleNamespace(workflow=workflow))
-        with patch("countersign.application.attempt_retries.overflow_outputs", return_value=""):
+        with patch("taskrail.application.attempt_retries.overflow_outputs", return_value=""):
             self.assertFalse(retries.allowed(dict(status="CONTEXT_EXCEEDED")))
 
     def test_workflow_refuses_oversized_initial_stage_without_retry_or_edits(self):
@@ -248,7 +248,7 @@ class SessionBudgetTests(unittest.TestCase):
         source.write_text(original)
         task = self.root / "task.md"
         header = json.dumps(dict(roots=dict(project=str(project))))
-        task.write_text(f"```countersign-task\n{header}\n```\nReturn 2")
+        task.write_text(f"```taskrail-task\n{header}\n```\nReturn 2")
         settings = self.root / "settings.json"
         settings.write_text(json.dumps(self.workflow_settings()))
         run, status = execute_task(task, settings, run_dir=self.root / "result")
@@ -276,7 +276,7 @@ class SessionBudgetTests(unittest.TestCase):
                 "--mode",
                 "ok",
             ],
-            agent_source=str(base / "countersign/agents"),
+            agent_source=str(base / "taskrail/agents"),
             agent_directory=str(profiles),
             timeout_seconds=5,
             model_context_tokens=15000,

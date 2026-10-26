@@ -6,9 +6,9 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from countersign.application import child_inputs, plan_validation, task_config, task_scope
-from countersign.core import plan_contract, plan_document
-from countersign.web import epic_launch, epic_tasks, parent_context, requests, task_brief, task_form
+from taskrail.application import child_inputs, plan_validation, task_config, task_scope
+from taskrail.core import plan_contract, plan_document
+from taskrail.web import epic_launch, epic_tasks, parent_context, requests, task_brief, task_form
 
 
 class ChildContractTests(unittest.TestCase):

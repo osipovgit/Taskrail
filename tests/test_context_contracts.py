@@ -5,12 +5,12 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from countersign.application import execution_wait, prompts, response_format
-from countersign.core import prompt_texts, task_markdown, task_spec
-from countersign.core.files import atomic_json
-from countersign.core.plan_document import payload
-from countersign.infrastructure import artifact_access
-from countersign.interactions import transcripts
+from taskrail.application import execution_wait, prompts, response_format
+from taskrail.core import prompt_texts, task_markdown, task_spec
+from taskrail.core.files import atomic_json
+from taskrail.core.plan_document import payload
+from taskrail.infrastructure import artifact_access
+from taskrail.interactions import transcripts
 
 PLAN = """**Decision:** split
 Summary: Keep __name__ and `shell` literal.

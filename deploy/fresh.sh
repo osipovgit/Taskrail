@@ -6,13 +6,13 @@ if [[ "$autostart" == keep ]]; then
 fi
 fresh_reset() {
     "$python_bin" -I -c \
-        'import sys; sys.path.insert(0, sys.argv.pop(1)); from countersign.deployment.fresh import main; main()' \
+        'import sys; sys.path.insert(0, sys.argv.pop(1)); from taskrail.deployment.fresh import main; main()' \
         "$source_dir" "$1" "$source_dir" "$initial_settings"
 }
 # Validate the complete deletion set before stopping or deleting anything.
 fresh_reset check
 executor_reset=no
-if [[ -e /etc/systemd/system/countersign-executor.service || -d /opt/countersign-executor ]]; then
+if [[ -e /etc/systemd/system/taskrail-executor.service || -d /opt/taskrail-executor ]]; then
     executor_reset=yes
     sudo -v
     sudo bash "$source_dir/deploy/reset-executor.sh"

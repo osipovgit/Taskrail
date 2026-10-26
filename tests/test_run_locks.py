@@ -10,9 +10,9 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from countersign.application.live import execute_task
-from countersign.application.run_locks import INSTALL_LOCK, STATE, conflict, run_locks
-from countersign.web.run_activity import BusyError, require_idle
+from taskrail.application.live import execute_task
+from taskrail.application.run_locks import INSTALL_LOCK, STATE, conflict, run_locks
+from taskrail.web.run_activity import BusyError, require_idle
 
 BASE = Path(__file__).resolve().parents[1]
 
@@ -117,7 +117,7 @@ class RunLockTests(unittest.TestCase):
         (root / "hello.py").write_text("def hello():\n    return 1\n")
         task = self.base / "task.md"
         header = json.dumps({"roots": {"project": str(root)}, "isolation": "worktree"})
-        task.write_text(f"```countersign-task\n{header}\n```\nReturn 2")
+        task.write_text(f"```taskrail-task\n{header}\n```\nReturn 2")
         settings = self.base / "settings.json"
         command = [sys.executable, str(BASE / "tests/fake_live.py"), "--profiles"]
         command += [str(self.base / "profiles"), "--mode", "ok"]

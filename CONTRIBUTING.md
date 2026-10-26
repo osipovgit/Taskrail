@@ -1,6 +1,6 @@
 # Contributing
 
-Thank you for helping improve Countersign. Maintainer rules live in
+Thank you for helping improve Taskrail. Maintainer rules live in
 [AGENTS.md](AGENTS.md); this page covers the practical steps.
 
 ## Issues

@@ -1,4 +1,4 @@
-# Countersign
+# Taskrail
 
 A local, browser-first application for research, scoped code changes and independent
 review through [opencode](https://opencode.ai). It edits original project roots,
@@ -20,9 +20,9 @@ Without the managed service, install the package and run the UI in the foregroun
 
 ```sh
 pipx install .            # from a checkout or an extracted release
-countersign init          # writes ~/.config/countersign/settings.json
-countersign check         # verifies opencode, settings and permission enforcement
-countersign serve
+taskrail init          # writes ~/.config/taskrail/settings.json
+taskrail check         # verifies opencode, settings and permission enforcement
+taskrail serve
 ```
 
 The bundled settings launch `opencode` with its configured default model; set role
@@ -76,14 +76,14 @@ The CLI runs a task in the foreground, or starts and controls runs for automatio
 [automation](docs/task-controls.md#automation-from-the-cli).
 
 ```sh
-countersign /absolute/path/task.md
-countersign submit --root shop=/srv/shop --goal @goal.md
-countersign status RUN
-countersign decide RUN allow
-countersign action RUN resume --note "python3 is installed now"
-countersign analytics
+taskrail /absolute/path/task.md
+taskrail submit --root shop=/srv/shop --goal @goal.md
+taskrail status RUN
+taskrail decide RUN allow
+taskrail action RUN resume --note "python3 is installed now"
+taskrail analytics
 # Foreground development UI:
-python3 -m countersign serve --settings countersign/settings.json
+python3 -m taskrail serve --settings taskrail/settings.json
 ```
 
 ## Guides
@@ -107,5 +107,5 @@ first. [Access routes](docs/access.md) describe what agents may read, edit and r
 
 ## License and security
 
-Countersign is licensed under the [Apache License 2.0](LICENSE). Report vulnerabilities
+Taskrail is licensed under the [Apache License 2.0](LICENSE). Report vulnerabilities
 privately as described in [SECURITY.md](SECURITY.md); see [CONTRIBUTING.md](CONTRIBUTING.md) to contribute.

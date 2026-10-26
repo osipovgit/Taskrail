@@ -1,7 +1,7 @@
 {
   "ci": {
     "url": "https://jenkins.example.com",
-    "username": "countersign-bot",
+    "username": "taskrail-bot",
     "token": "REPLACE_WITH_JENKINS_API_TOKEN",
     "jobs": {
       "shop-tests": {

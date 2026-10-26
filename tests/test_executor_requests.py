@@ -9,9 +9,9 @@ from unittest.mock import patch
 
 from live_fixture import LiveFixture
 
-from countersign.application.live import execute_task
-from countersign.core import prompt_texts
-from countersign.interactions import (
+from taskrail.application.live import execute_task
+from taskrail.core import prompt_texts
+from taskrail.interactions import (
     actions,
     approval_policy,
     local_policy,
@@ -110,10 +110,10 @@ class LiveRequestTests(LiveFixture, unittest.TestCase):
         self.real_repository()
         (self.root / ".gitignore").write_text(".cache-tool/\n")
         header = {"roots": {"project": str(self.root)}, "auto_approve": True}
-        self.task.write_text(f"```countersign-task\n{json.dumps(header)}\n```\nReturn 2")
+        self.task.write_text(f"```taskrail-task\n{json.dumps(header)}\n```\nReturn 2")
         self.configure_mode("local-effects")
         allow = dict(decision="allow", alternative="")
-        with patch("countersign.interactions.approvals.wait", return_value=allow) as wait:
+        with patch("taskrail.interactions.approvals.wait", return_value=allow) as wait:
             run, status = execute_task(self.task, self.settings, run_dir=self.base / "result")
         state = json.loads((run / "run.json").read_text())
         self.assertEqual(status, "READY_FOR_REVIEW", state.get("summary"))

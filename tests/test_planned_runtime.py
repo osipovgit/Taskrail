@@ -8,7 +8,7 @@ import unittest
 from pathlib import Path
 from types import SimpleNamespace
 
-from countersign.application import (
+from taskrail.application import (
     check_planning,
     check_results,
     evidence,
@@ -19,9 +19,9 @@ from countersign.application import (
     result_validation,
     verify_commands,
 )
-from countersign.application.source_guard import SourceGuard
-from countersign.core import coverage, task_lineage
-from countersign.core.files import atomic_json
+from taskrail.application.source_guard import SourceGuard
+from taskrail.core import coverage, task_lineage
+from taskrail.core.files import atomic_json
 
 PLAN = """Decision: split
 Summary: Implement and verify one output, then document it.

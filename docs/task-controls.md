@@ -11,7 +11,7 @@
 | Continue with extra budget | Eligible checkpoint; explicit confirmation | Add two attempts and one attempt timeout to the interrupted stage; retain consumption |
 | Continue interrupted run | Eligible checkpoint and unchanged source | Append new attempts to the same run, starting at the interrupted stage; a stage that reported **Blocked** can continue too, with your note answering its question; an interrupted or blocked implementer first inspects its existing edits |
 | Send a follow-up Goal | Previous standalone run stopped, no active run on its projects | Snapshot prior public evidence and start a new run from planning; a task or phase run has no follow-up, use Continue with a note or a follow-up of its parent |
-| Answer only | New or follow-up submission | Research and independent review, no implementation; the reviewed answer opens the report and is the `answer` of `countersign status` |
+| Answer only | New or follow-up submission | Research and independent review, no implementation; the reviewed answer opens the report and is the `answer` of `taskrail status` |
 | Design discussion | New or follow-up submission | Like Answer only, but the reviewed summary is a design document, saved as `design.md`; follow-ups refine it, a **Develop** follow-up implements it |
 | Confirm changes | A finished code change with planned server checks, after integration review for a split and any Jenkins validation | Accept the change; the server checks start only now |
 | Mark as done / Move back from Done | Stopped run | Move the run to the Done group, or return it to its computed group; nothing else changes |
@@ -134,7 +134,7 @@ also requests this checkpoint-preserving interruption for its owned worker.
 
 Continue is also offered after `INVALID_RESULT` and `TOOL_ERROR`, for example when
 a writer finished its edits but returned an unusable response, or a required program
-was missing. The optional note under the actions (CLI: `countersign resume RUN
+was missing. The optional note under the actions (CLI: `taskrail resume RUN
 --note TEXT`) is passed verbatim to the continued stage as `operator_note`, for
 example "python3 is installed now". The task, approved scope and policy still apply;
 an interrupted or failed writer inspects current files before editing again.
@@ -221,11 +221,11 @@ and controls runs through the same launcher, validation and run store. Each comm
 prints one JSON object and returns at once; the task runs in a detached worker.
 
 ```sh
-countersign submit --root shop=/srv/shop --goal @goal.md --mode answer --allow-all
-countersign status RUN                       # status, answer, worker activity, approval, delivery step
-countersign decide RUN alternative --text "Use tox instead"
-countersign action RUN resume --note "python3 is installed now"
-countersign submit --json payload.json       # the fields of POST /api/tasks
+taskrail submit --root shop=/srv/shop --goal @goal.md --mode answer --allow-all
+taskrail status RUN                       # status, answer, worker activity, approval, delivery step
+taskrail decide RUN alternative --text "Use tox instead"
+taskrail action RUN resume --note "python3 is installed now"
+taskrail submit --json payload.json       # the fields of POST /api/tasks
 ```
 
 `--mode` is `develop` (the default), `answer`, `design` or `split`; `--followup RUN` and `--restart RUN`
@@ -294,5 +294,5 @@ Deleting history moves artifacts to local trash and never changes project files.
 CLI equivalent:
 
 ```sh
-countersign resume /absolute/path/to/run --extend-budget
+taskrail resume /absolute/path/to/run --extend-budget
 ```

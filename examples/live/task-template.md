@@ -1,4 +1,4 @@
-```countersign-task
+```taskrail-task
 {"roots":{"project":"~/src/my-project"}}
 ```
 

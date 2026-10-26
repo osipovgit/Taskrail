@@ -8,9 +8,9 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from countersign.application import transitions
-from countersign.interactions import local_actions, local_journal, request_limits
-from countersign.web import delivery_steps
+from taskrail.application import transitions
+from taskrail.interactions import local_actions, local_journal, request_limits
+from taskrail.web import delivery_steps
 
 
 class LocalJournalTests(unittest.TestCase):
@@ -40,20 +40,20 @@ class LocalJournalTests(unittest.TestCase):
             self.assertEqual(entry["effective_argv"], context["effective_argv"])
             return dict(status="SUCCEEDED", exit_code=0, stdout="Python", stderr="")
 
-        with patch("countersign.interactions.local.execute", side_effect=command):
+        with patch("taskrail.interactions.local.execute", side_effect=command):
             outcome = self.execute()
         self.assertEqual(outcome["status"], "SUCCEEDED")
         self.assertEqual(local_journal.records(self.run)[0]["status"], "SUCCEEDED")
 
     def test_interrupt_is_unknown_and_never_replayed_after_reason_or_source_changes(self):
         with (
-            patch("countersign.interactions.local.execute", side_effect=KeyboardInterrupt),
+            patch("taskrail.interactions.local.execute", side_effect=KeyboardInterrupt),
             self.assertRaises(KeyboardInterrupt),
         ):
             self.execute()
         self.payload["reason"] = "A different explanation"
         self.context["expected"] = {"project/a.py": "changed"}
-        with patch("countersign.interactions.local.execute") as execute:
+        with patch("taskrail.interactions.local.execute") as execute:
             outcome = self.execute()
         execute.assert_not_called()
         self.assertEqual(outcome["status"], "UNKNOWN")
@@ -61,7 +61,7 @@ class LocalJournalTests(unittest.TestCase):
 
     def test_denied_command_does_not_run_again_under_a_new_reason(self):
         decision = dict(decision="deny", alternative="Use source evidence")
-        with patch("countersign.interactions.local.execute") as execute:
+        with patch("taskrail.interactions.local.execute") as execute:
             self.execute(decision)
             self.payload["reason"] = "Please run it again"
             outcome = self.execute()
@@ -71,8 +71,8 @@ class LocalJournalTests(unittest.TestCase):
 
     def test_failure_to_record_running_cannot_start_subprocess(self):
         with (
-            patch("countersign.interactions.local_journal.update", side_effect=OSError),
-            patch("countersign.interactions.local.execute") as execute,
+            patch("taskrail.interactions.local_journal.update", side_effect=OSError),
+            patch("taskrail.interactions.local.execute") as execute,
             self.assertRaises(OSError),
         ):
             self.execute()

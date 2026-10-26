@@ -7,13 +7,13 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from countersign.application import result_validation
-from countersign.application.git_state import git_metadata
-from countersign.application.plan_validation import validate_plan
-from countersign.application.source_tree import snapshot
-from countersign.core import coverage
-from countersign.git import dispatch, execution, policy, process, requests
-from countersign.interactions.session import StageSession
+from taskrail.application import result_validation
+from taskrail.application.git_state import git_metadata
+from taskrail.application.plan_validation import validate_plan
+from taskrail.application.source_tree import snapshot
+from taskrail.core import coverage
+from taskrail.git import dispatch, execution, policy, process, requests
+from taskrail.interactions.session import StageSession
 
 
 class GitExecutorTests(unittest.TestCase):
@@ -121,7 +121,7 @@ class GitExecutorTests(unittest.TestCase):
             ["update-ref", "refs/heads/main", "HEAD~1"],
             ["replace", "HEAD", "HEAD~1"],
         ]
-        with patch("countersign.git.process.invoke") as invoke:
+        with patch("taskrail.git.process.invoke") as invoke:
             for argv in forbidden:
                 with self.subTest(argv=argv):
                     self.assertEqual(self.execute(argv, "implementer")["status"], "REJECTED")
@@ -177,7 +177,7 @@ class GitExecutorTests(unittest.TestCase):
         self.assertEqual(self.file.read_text(), "2\n")
         self.assertEqual(process.checked(self.root, ["rev-parse", "HEAD^"]).strip(), original)
         self.assertEqual(process.checked(self.root, ["rev-list", "--count", "HEAD"]).strip(), "4")
-        with patch("countersign.git.process.invoke") as invoke:
+        with patch("taskrail.git.process.invoke") as invoke:
             again = self.execute(["revert", "--no-edit", original], "implementer", [record])
             self.assertEqual(again["status"], "REJECTED")
             invoke.assert_not_called()
@@ -251,7 +251,7 @@ class GitExecutorTests(unittest.TestCase):
         self.assertEqual(process.checked(self.root, ["show", "HEAD:value.txt"]), "5\n")
         uncertain = dict(first, status="UNKNOWN")
         self.file.write_text("6\n")
-        with patch("countersign.git.process.invoke") as invoke:
+        with patch("taskrail.git.process.invoke") as invoke:
             again = self.execute(add, "implementer", [uncertain])
             invoke.assert_not_called()
         self.assertEqual(again["status"], "REJECTED")
@@ -337,7 +337,7 @@ class GitExecutorTests(unittest.TestCase):
             ["log", "--output=bad"],
         ]:
             invalid.append("Now\n" + json.dumps(self.payload(argv)))
-        with patch("countersign.git.process.invoke") as invoke:
+        with patch("taskrail.git.process.invoke") as invoke:
             for text in invalid:
                 self.assertIsNone(requests.extract(text), text)
                 self.assertIsNone(
@@ -403,7 +403,7 @@ class GitExecutorTests(unittest.TestCase):
                 tokens=dict(total=10),
             )
 
-        with patch("countersign.interactions.session.run_agent", side_effect=backend):
+        with patch("taskrail.interactions.session.run_agent", side_effect=backend):
             outcome = StageSession((folder, record), state, self.env, launch).run()
         self.assertEqual(outcome["tokens"]["total"], 30)
         self.assertEqual(len(state["stages"]), 1)
@@ -459,10 +459,10 @@ class GitExecutorTests(unittest.TestCase):
         argv = ["revert", "--no-edit", process.checked(self.root, ["rev-parse", "HEAD"]).strip()]
         record = dict(request=self.payload(argv), status="RUNNING")
         with (
-            patch("countersign.git.execution.prepare", return_value=argv),
-            patch("countersign.git.execution.settings", return_value=[]),
+            patch("taskrail.git.execution.prepare", return_value=argv),
+            patch("taskrail.git.execution.settings", return_value=[]),
             patch(
-                "countersign.git.process.invoke",
+                "taskrail.git.process.invoke",
                 side_effect=subprocess.TimeoutExpired(argv, 60),
             ),
         ):

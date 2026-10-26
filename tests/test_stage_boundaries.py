@@ -6,15 +6,15 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from countersign.application import (
+from taskrail.application import (
     budget_extensions,
     budgets,
     instruction_modules,
     transitions,
 )
-from countersign.core import task_graph
-from countersign.web.lifecycle import actions
-from countersign.web.submissions import worker_command
+from taskrail.core import task_graph
+from taskrail.web.lifecycle import actions
+from taskrail.web.submissions import worker_command
 
 
 class StageBoundaryTests(unittest.TestCase):

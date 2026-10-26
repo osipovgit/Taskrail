@@ -9,12 +9,12 @@ from unittest.mock import patch
 
 from live_fixture import BASE, LiveFixture
 
-from countersign.application.live import execute_task
-from countersign.application.plan_validation import canonical_plan, validate_plan
-from countersign.application.planned_paths import safe_file
-from countersign.application.task_config import configuration
-from countersign.core.paths import tool_paths
-from countersign.infrastructure.runner import run_agent as real_run_agent
+from taskrail.application.live import execute_task
+from taskrail.application.plan_validation import canonical_plan, validate_plan
+from taskrail.application.planned_paths import safe_file
+from taskrail.application.task_config import configuration
+from taskrail.core.paths import tool_paths
+from taskrail.infrastructure.runner import run_agent as real_run_agent
 
 
 class LiveTests(LiveFixture, unittest.TestCase):
@@ -40,7 +40,7 @@ class LiveTests(LiveFixture, unittest.TestCase):
         self.assertEqual(report.read_bytes(), original)
 
     def test_git_history_and_revert_complete_the_workflow(self):
-        from countersign.git import process
+        from taskrail.git import process
 
         process.checked(self.root, ["init", "-b", "main"])
         process.checked(self.root, ["config", "user.name", "Fixture"])
@@ -59,7 +59,7 @@ class LiveTests(LiveFixture, unittest.TestCase):
         self.assertEqual(process.checked(self.root, ["rev-parse", "HEAD^"]).strip(), head)
         self.assertIn("return 2", (self.root / "hello.py").read_text())
         checkpoint = json.loads((run / "checkpoint.json").read_text())
-        from countersign.application.git_state import git_metadata
+        from taskrail.application.git_state import git_metadata
 
         self.assertEqual(checkpoint["git_before"], git_metadata({"project": self.root}))
         review = json.loads((run / "05-review/response-object.json").read_text())
@@ -121,7 +121,7 @@ class LiveTests(LiveFixture, unittest.TestCase):
             status="SUCCEEDED",
             results=[dict(target="server-a", output="Linux", status="SUCCEEDED")],
         )
-        with patch("countersign.executor.client.request", return_value=response) as request:
+        with patch("taskrail.executor.client.request", return_value=response) as request:
             run, status, state = self.run_mode("ssh-action")
         self.assertEqual(status, "READY_FOR_REVIEW")
         self.assertEqual(request.call_count, 1)
@@ -137,8 +137,8 @@ class LiveTests(LiveFixture, unittest.TestCase):
             return dict(id="same-ticket", status="PENDING_APPROVAL", results=[])
 
         with (
-            patch("countersign.executor.client.request", side_effect=pending_request) as request,
-            patch("countersign.application.execution_wait.time.sleep"),
+            patch("taskrail.executor.client.request", side_effect=pending_request) as request,
+            patch("taskrail.application.execution_wait.time.sleep"),
         ):
             run, status, _state = self.run_mode("ssh-action")
         self.assertEqual(status, "INTERRUPTED")
@@ -146,7 +146,7 @@ class LiveTests(LiveFixture, unittest.TestCase):
         outcome = dict(
             id="same-ticket", status="SUCCEEDED", results=[dict(output="Linux", status="SUCCEEDED")]
         )
-        with patch("countersign.executor.client.request", return_value=outcome) as request:
+        with patch("taskrail.executor.client.request", return_value=outcome) as request:
             _, status = execute_task(
                 run / "00-input/task.md", self.settings, run_dir=run, resume=True
             )
@@ -166,7 +166,7 @@ class LiveTests(LiveFixture, unittest.TestCase):
         self.assertIn("-    return 1", (run / "changes.diff").read_text())
         self.assertIn("--- " + str(self.root / "hello.py"), (run / "changes.diff").read_text())
         self.assertTrue((run / "report.md").exists())
-        self.assertFalse(list(self.profiles.glob("countersign-*.md")))
+        self.assertFalse(list(self.profiles.glob("taskrail-*.md")))
         self.assertEqual(
             [a["stage"] for a in state["attempts"]],
             ["planner", "plan-reviewer", "implementer", "reviewer"],
@@ -175,10 +175,10 @@ class LiveTests(LiveFixture, unittest.TestCase):
         self.assertEqual(
             [a["agent"] for a in state["attempts"]],
             [
-                f"countersign-planner-{suffix}",
-                f"countersign-reviewer-{suffix}",
-                f"countersign-implementer-{suffix}",
-                f"countersign-reviewer-{suffix}",
+                f"taskrail-planner-{suffix}",
+                f"taskrail-reviewer-{suffix}",
+                f"taskrail-implementer-{suffix}",
+                f"taskrail-reviewer-{suffix}",
             ],
         )
         self.assertEqual(len(list((run / "00-input/agents").glob("*.md"))), 3)
@@ -199,7 +199,7 @@ class LiveTests(LiveFixture, unittest.TestCase):
         secondary.mkdir()
         (secondary / "pipeline.groovy").write_text("old\n")
         self.task.write_text(
-            "```countersign-task\n"
+            "```taskrail-task\n"
             + json.dumps({"roots": {"project": str(self.root), "jenkins": str(secondary)}})
             + "\n```\nFix both"
         )
@@ -217,7 +217,7 @@ class LiveTests(LiveFixture, unittest.TestCase):
             [
                 sys.executable,
                 "-m",
-                "countersign",
+                "taskrail",
                 str(self.task),
                 "--settings",
                 str(self.settings),
@@ -238,7 +238,7 @@ class LiveTests(LiveFixture, unittest.TestCase):
         self.source.mkdir()
         for role in ("planner", "implementer", "reviewer"):
             (self.source / (role + ".md")).write_bytes(
-                (BASE / "countersign/agents" / (role + ".md")).read_bytes()
+                (BASE / "taskrail/agents" / (role + ".md")).read_bytes()
             )
         original = (self.source / "reviewer.md").read_text()
         changed = original + "\nNEW_INSTRUCTIONS_NEXT_RUN\n"
@@ -248,7 +248,7 @@ class LiveTests(LiveFixture, unittest.TestCase):
             (self.source / "reviewer.md").write_text(changed)
             return result
 
-        with patch("countersign.interactions.session.run_agent", side_effect=invoke):
+        with patch("taskrail.interactions.session.run_agent", side_effect=invoke):
             run, status, state = self.run_mode()
         self.assertEqual(status, "READY_FOR_REVIEW")
         self.assertEqual((run / "00-input/agents/reviewer.md").read_text(), original)
@@ -389,7 +389,7 @@ class LiveTests(LiveFixture, unittest.TestCase):
             [
                 sys.executable,
                 "-m",
-                "countersign",
+                "taskrail",
                 str(self.task),
                 "--settings",
                 str(self.settings),
@@ -763,7 +763,7 @@ class LiveTests(LiveFixture, unittest.TestCase):
         self.assertIn(str(self.root), request)
 
     def test_permission_checkpoint_exposes_resume_and_only_runs_review(self):
-        from countersign.application.checkpoints import resume_available
+        from taskrail.application.checkpoints import resume_available
 
         run, status, state = self.run_mode(
             "review-denied-always", read_retries=0, timeout_seconds=1
@@ -887,7 +887,7 @@ class LiveTests(LiveFixture, unittest.TestCase):
     def isolated_repository(self):
         process = self.real_repository()
         header = {"roots": {"project": str(self.root)}, "isolation": "worktree"}
-        self.task.write_text(f"```countersign-task\n{json.dumps(header)}\n```\nReturn 2")
+        self.task.write_text(f"```taskrail-task\n{json.dumps(header)}\n```\nReturn 2")
         return process
 
     def test_worktree_isolation_leaves_the_source_checkout_untouched(self):
@@ -901,7 +901,7 @@ class LiveTests(LiveFixture, unittest.TestCase):
         entry = state["worktrees"]["project"]
         worktree = Path(entry["worktree"])
         self.assertEqual(worktree, (self.base / "worktrees" / run.name / "project").resolve())
-        self.assertEqual(entry["branch"], f"countersign/{run.name}")
+        self.assertEqual(entry["branch"], f"taskrail/{run.name}")
         self.assertEqual(state["roots"], {"project": str(worktree)})
         self.assertIn("return 1", (self.root / "hello.py").read_text())
         self.assertIn("return 2", (worktree / "hello.py").read_text())
@@ -911,7 +911,7 @@ class LiveTests(LiveFixture, unittest.TestCase):
         self.assertIn("edited in isolated worktrees", report)
         log = next(run.glob("*-check/verify-01.log")).read_text()
         self.assertIn(f"cwd {worktree}", log)
-        from countersign.application.worktree_isolation import source_roots
+        from taskrail.application.worktree_isolation import source_roots
 
         self.assertEqual(source_roots(state), [{"alias": "project", "path": str(self.root)}])
 
@@ -932,16 +932,16 @@ class LiveTests(LiveFixture, unittest.TestCase):
         nested = self.root / "nested"
         nested.mkdir()
         header = {"roots": {"project": str(nested)}, "isolation": "worktree"}
-        self.task.write_text(f"```countersign-task\n{json.dumps(header)}\n```\nReturn 2")
+        self.task.write_text(f"```taskrail-task\n{json.dumps(header)}\n```\nReturn 2")
         with self.assertRaisesRegex(ValueError, "top-level"):
             self.run_mode("ok", worktree_base=str(self.base / "wt"))
         header["isolation"] = "copy"
-        self.task.write_text(f"```countersign-task\n{json.dumps(header)}\n```\nReturn 2")
+        self.task.write_text(f"```taskrail-task\n{json.dumps(header)}\n```\nReturn 2")
         with self.assertRaisesRegex(ValueError, "isolation"):
             configuration(self.task)
 
     def test_linked_worktree_ignores_other_branches_but_tracks_its_own(self):
-        from countersign.application.git_state import git_metadata
+        from taskrail.application.git_state import git_metadata
 
         process = self.isolated_repository()
         linked = self.base / "linked"
@@ -1048,7 +1048,7 @@ class LiveTests(LiveFixture, unittest.TestCase):
             return decisions.pop(0)
 
         (self.root / "hello.py").write_text("# user comment\ndef hello():\n    return 1\n")
-        with patch("countersign.interactions.approvals.wait", side_effect=decide):
+        with patch("taskrail.interactions.approvals.wait", side_effect=decide):
             run, status = execute_task(self.task, self.settings, run_dir=self.base / "second")
         state = json.loads((run / "run.json").read_text())
         self.assertEqual(status, "READY_FOR_REVIEW", state.get("summary"))
@@ -1064,7 +1064,7 @@ class LiveTests(LiveFixture, unittest.TestCase):
 
     def test_allow_all_actions_approves_the_change_limit_with_a_ledger(self):
         header = {"roots": {"project": str(self.root)}, "auto_approve": True}
-        self.task.write_text(f"```countersign-task\n{json.dumps(header)}\n```\nReturn 2")
+        self.task.write_text(f"```taskrail-task\n{json.dumps(header)}\n```\nReturn 2")
         run, status, state = self.run_mode("ok", max_change_lines=1)
         self.assertEqual(status, "READY_FOR_REVIEW", state.get("summary"))
         self.assertEqual(state["approved_change"], dict(lines=2, files=1))
@@ -1075,7 +1075,7 @@ class LiveTests(LiveFixture, unittest.TestCase):
 
     def test_split_into_tasks_stops_after_the_reviewed_plan(self):
         header = {"roots": {"project": str(self.root)}, "decompose": True}
-        self.task.write_text(f"```countersign-task\n{json.dumps(header)}\n```\nReturn 2")
+        self.task.write_text(f"```taskrail-task\n{json.dumps(header)}\n```\nReturn 2")
         run, status, state = self.run_mode("ok")
         self.assertEqual(status, "TASKS_READY", state.get("summary"))
         self.assertEqual(
@@ -1100,7 +1100,7 @@ class LiveTests(LiveFixture, unittest.TestCase):
 
     def test_design_discussion_leaves_a_reviewed_design_document(self):
         header = {"roots": {"project": str(self.root)}, "design": True}
-        self.task.write_text(f"```countersign-task\n{json.dumps(header)}\n```\nDesign caching")
+        self.task.write_text(f"```taskrail-task\n{json.dumps(header)}\n```\nDesign caching")
         run, status, state = self.run_mode("no-change")
         self.assertEqual(status, "NO_CHANGES_REQUIRED", state.get("summary"))
         self.assertEqual((run / "design.md").read_text(), "Current source already returns 2\n")
@@ -1110,7 +1110,7 @@ class LiveTests(LiveFixture, unittest.TestCase):
 
     def test_question_report_and_index_carry_the_reviewed_answer(self):
         header = {"roots": {"project": str(self.root)}, "read_only": True}
-        self.task.write_text(f"```countersign-task\n{json.dumps(header)}\n```\nWhat is returned?")
+        self.task.write_text(f"```taskrail-task\n{json.dumps(header)}\n```\nWhat is returned?")
         run, status, state = self.run_mode("no-change")
         self.assertEqual(status, "NO_CHANGES_REQUIRED", state.get("summary"))
         self.assertEqual(state["answer"], "Current source already returns 2")

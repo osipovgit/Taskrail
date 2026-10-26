@@ -6,8 +6,8 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from countersign.application import evidence, source_view_json, source_views
-from countersign.core import source_claims
+from taskrail.application import evidence, source_view_json, source_views
+from taskrail.core import source_claims
 
 
 class SourceViewTests(unittest.TestCase):

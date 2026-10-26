@@ -6,11 +6,11 @@ import unittest
 from pathlib import Path
 from typing import ClassVar
 
-from countersign.application import plan_write, reviewed_artifacts
-from countersign.core import task_lineage, task_markdown, task_spec
-from countersign.core.plan_document import payload
-from countersign.web import requests, task_form
-from countersign.web.history import TaskDraft
+from taskrail.application import plan_write, reviewed_artifacts
+from taskrail.core import task_lineage, task_markdown, task_spec
+from taskrail.core.plan_document import payload
+from taskrail.web import requests, task_form
+from taskrail.web.history import TaskDraft
 
 
 class InputContractTests(unittest.TestCase):
@@ -40,7 +40,7 @@ class InputContractTests(unittest.TestCase):
 
     def test_markdown_sections_become_the_typed_fields_of_the_form(self):
         text = (
-            "```countersign-task\n{}\n```\n# Fix input\n\n## Goal\nFix it.\n\n"
+            "```taskrail-task\n{}\n```\n# Fix input\n\n## Goal\nFix it.\n\n"
             "## Acceptance criteria\nRequirements:\n\n- Reject bad names.\n\n"
             "```text\n## Current behavior\n\n  preserve\n```\n\n"
             "## Known entry points\nsrc/api.py\n\n## Additional constraints\nKeep the API.\n\n"
@@ -78,7 +78,7 @@ class InputContractTests(unittest.TestCase):
             ("Intro\n\n## Goal\nFix it.", "line 1: text outside a section"),
             ("## Goal\nA\n\n## Goal\nB", "line 4: repeated section 'Goal'"),
             ("## Constraints\nKeep it.", "needs a Goal"),
-            ("```countersign-task\n{}\n```\n## Goal\nA\n## Workflow rules\nB", "line 6: unknown"),
+            ("```taskrail-task\n{}\n```\n## Goal\nA\n## Workflow rules\nB", "line 6: unknown"),
         ):
             with self.subTest(text=text), self.assertRaisesRegex(ValueError, message):
                 task_markdown.typed_input(text, {})
@@ -154,7 +154,7 @@ class InputContractTests(unittest.TestCase):
         spec = task_spec.resolve(decorated, json.loads(encoded))
         prompt = task_spec.prompt_text(spec)
         self.assertEqual(prompt.count("Current Verify: run the declared check."), 1)
-        self.assertNotIn("countersign-task", prompt)
+        self.assertNotIn("taskrail-task", prompt)
 
     def test_repeated_constraint_stays_global_even_when_it_is_also_the_goal(self):
         text, meta = self.form(goal="Keep the API stable.", constraints="Keep the API stable.")

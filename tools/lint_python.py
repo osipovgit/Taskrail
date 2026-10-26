@@ -11,7 +11,7 @@ ROOT = Path(__file__).resolve().parents[1]
 def main():
     """Fail closed when the plugin is absent; Flake8 reports every finding itself."""
     importlib.import_module("wemake_python_styleguide")
-    command = [sys.executable, "-m", "flake8", "countersign", "tools"]
+    command = [sys.executable, "-m", "flake8", "taskrail", "tools"]
     return subprocess.run(command, cwd=ROOT, check=False).returncode
 
 

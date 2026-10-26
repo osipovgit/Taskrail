@@ -3,7 +3,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from countersign.infrastructure.event_summary import parse_events
+from taskrail.infrastructure.event_summary import parse_events
 
 
 class ReadRecoveryTests(unittest.TestCase):

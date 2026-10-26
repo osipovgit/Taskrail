@@ -5,7 +5,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from countersign.application import access_recovery, attempt_context, budgets
+from taskrail.application import access_recovery, attempt_context, budgets
 
 
 class BudgetTests(unittest.TestCase):

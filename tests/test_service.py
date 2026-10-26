@@ -17,10 +17,10 @@ from urllib.request import ProxyHandler, Request, build_opener
 
 from deployment_fixture import DeploymentFixture
 
-from countersign.application.task_config import configuration
-from countersign.core.runtime import run_storage, settings_path
-from countersign.web.config_watch import ConfigurationWatch
-from countersign.web.health import ready
+from taskrail.application.task_config import configuration
+from taskrail.core.runtime import run_storage, settings_path
+from taskrail.web.config_watch import ConfigurationWatch
+from taskrail.web.health import ready
 
 BASE = Path(__file__).resolve().parents[1]
 
@@ -71,21 +71,21 @@ class ServiceTests(unittest.TestCase):
                         "--mode",
                         "planner-timeout",
                     ],
-                    agent_source=str(BASE / "countersign/agents"),
+                    agent_source=str(BASE / "taskrail/agents"),
                     agent_directory=str(self.home / "profiles"),
                     timeout_seconds=3600,
                 )
             )
         )
         self.environment = dict(os.environ, HOME=str(self.home), PYTHONPATH=str(BASE))
-        self.environment.pop("COUNTERSIGN_SETTINGS", None)
+        self.environment.pop("TASKRAIL_SETTINGS", None)
         self.deployment = DeploymentFixture(self.home)
         self.environment = self.deployment.environment(self.environment)
 
     def test_configuration_defaults_to_one_hour_and_explicit_override_works(self):
         task = self.home / "task.md"
         task.write_text(
-            "```countersign-task\n"
+            "```taskrail-task\n"
             + json.dumps(dict(roots={"project": str(self.repo)}))
             + "\n```\nExplain"
         )
@@ -104,7 +104,7 @@ class ServiceTests(unittest.TestCase):
 
     def test_shared_configuration_and_relative_history_resolution(self):
         with patch.dict(os.environ, self.environment, clear=True):
-            config = self.home / ".config/countersign/settings.json"
+            config = self.home / ".config/taskrail/settings.json"
             config.parent.mkdir(parents=True)
             config.write_text(json.dumps(dict(run_base="my-runs")))
             self.assertEqual(settings_path(), config)
@@ -122,7 +122,7 @@ class ServiceTests(unittest.TestCase):
             [
                 sys.executable,
                 "-m",
-                "countersign.web.service",
+                "taskrail.web.service",
                 "--port",
                 str(port),
                 "--settings",
@@ -156,7 +156,7 @@ class ServiceTests(unittest.TestCase):
             headers={
                 "Content-Type": "application/json",
                 "Origin": url,
-                "X-Countersign-Token": token,
+                "X-Taskrail-Token": token,
             },
         )
         with opener.open(request) as response:
@@ -170,7 +170,7 @@ class ServiceTests(unittest.TestCase):
         self.assertEqual(json.loads((run / "run.json").read_text())["status"], "INTERRUPTED")
         self.assertTrue((run / "checkpoint.json").is_file())
         self.assertIn("return 1", (self.repo / "hello.py").read_text())
-        with (self.home / ".local/state/countersign/live.lock").open("a") as lock:
+        with (self.home / ".local/state/taskrail/live.lock").open("a") as lock:
             fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
 
     def installer(self, *arguments):
@@ -198,13 +198,13 @@ class ServiceTests(unittest.TestCase):
         self.assertEqual(installed.returncode, 0, installed.stderr)
         self.assertFalse((self.home / "loginctl.log").exists())
         log = self.home / "systemctl.log"
-        self.assertIn("--user enable countersign.service", log.read_text())
+        self.assertIn("--user enable taskrail.service", log.read_text())
         log.write_text("")
-        current = self.home / ".local/share/countersign/current"
+        current = self.home / ".local/share/taskrail/current"
         first = current.resolve()
-        self.assertTrue((first / "countersign/deployment/settings_init.py").is_file())
+        self.assertTrue((first / "taskrail/deployment/settings_init.py").is_file())
         self.assertFalse((first / "docs").exists())
-        config = self.home / ".config/countersign/settings.json"
+        config = self.home / ".config/taskrail/settings.json"
         options = json.loads(config.read_text())
         self.assertEqual(options["timeout_seconds"], 3600)
         agents = Path(options["agent_source"])
@@ -212,7 +212,7 @@ class ServiceTests(unittest.TestCase):
         options["max_repairs"] = 1
         config.write_text(json.dumps(options))
         before = config.read_bytes()
-        run = self.home / ".local/state/countersign/runs/preserved"
+        run = self.home / ".local/state/taskrail/runs/preserved"
         run.mkdir()
         (run / "run.json").write_text("{}")
         updated = self.installer()
@@ -220,7 +220,7 @@ class ServiceTests(unittest.TestCase):
         self.assertNotIn("--user enable ", log.read_text())
         disabled = self.installer("--autostart=no")
         self.assertEqual(disabled.returncode, 0, disabled.stderr)
-        self.assertIn("--user disable countersign.service", log.read_text())
+        self.assertIn("--user disable taskrail.service", log.read_text())
         invalid = self.installer("--wait=bad")
         self.assertEqual(invalid.returncode, 2)
         boot = self.installer("--boot=yes")
@@ -232,7 +232,7 @@ class ServiceTests(unittest.TestCase):
         self.assertEqual((agents / "planner.md").read_text(), "User-owned instructions")
         self.assertEqual((run / "run.json").read_text(), "{}")
         command = subprocess.run(
-            [str(self.home / ".local/bin/countersign"), "status", str(run)],
+            [str(self.home / ".local/bin/taskrail"), "status", str(run)],
             env=self.environment,
             capture_output=True,
             text=True,
@@ -241,13 +241,13 @@ class ServiceTests(unittest.TestCase):
         switched = self.installer("--agents=bundled", "--autostart=keep")
         self.assertEqual(switched.returncode, 0, switched.stderr)
         self.assertEqual(
-            json.loads(config.read_text())["agent_source"], str(current / "countersign/agents")
+            json.loads(config.read_text())["agent_source"], str(current / "taskrail/agents")
         )
         self.assertEqual((agents / "planner.md").read_text(), "User-owned instructions")
         self.assertIn(
             before, [path.read_bytes() for path in config.parent.glob("settings.json.backup-*")]
         )
-        with (self.home / ".local/state/countersign/live.lock").open("a") as lock:
+        with (self.home / ".local/state/taskrail/live.lock").open("a") as lock:
             fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
             rejected = self.installer()
             self.assertNotEqual(rejected.returncode, 0)
@@ -265,9 +265,9 @@ class ServiceTests(unittest.TestCase):
                 output, error = pending.communicate(timeout=30)
                 self.assertEqual(pending.returncode, 0, output + error)
         if shutil.which("systemd-analyze"):
-            unit = self.home / "countersign.service"
+            unit = self.home / "taskrail.service"
             unit.write_text(
-                (BASE / "deploy/countersign.service").read_text().replace("%h", str(self.home))
+                (BASE / "deploy/taskrail.service").read_text().replace("%h", str(self.home))
             )
             checked = subprocess.run(
                 ["systemd-analyze", "verify", str(unit)], capture_output=True, text=True
@@ -285,8 +285,8 @@ class ServiceTests(unittest.TestCase):
         self.environment["PYTHON"] = sys.executable
         initial = self.installer(str(self.settings), "--autostart=no")
         self.assertEqual(initial.returncode, 0, initial.stderr)
-        config = self.home / ".config/countersign/settings.json"
-        app = self.home / ".local/share/countersign"
+        config = self.home / ".config/taskrail/settings.json"
+        app = self.home / ".local/share/taskrail"
         old_release = (app / "current").resolve()
         history = self.home / "old-runs"
         run = history / "run-1"
@@ -295,9 +295,9 @@ class ServiceTests(unittest.TestCase):
         options = json.loads(config.read_text())
         options.update(run_base=str(history), timeout_seconds=9)
         config.write_text(json.dumps(options))
-        profile = self.home / "profiles/countersign-planner.md"
+        profile = self.home / "profiles/taskrail-planner.md"
         profile.parent.mkdir(exist_ok=True)
-        profile.write_text("Managed Countersign workflow test")
+        profile.write_text("Managed Taskrail workflow test")
         credential = self.home / ".config/opencode/auth.json"
         credential.parent.mkdir(parents=True)
         credential.write_text("synthetic credential")
@@ -318,7 +318,7 @@ class ServiceTests(unittest.TestCase):
         systemctl.write_text("#!/bin/sh\nexit 0\n")
         systemctl.chmod(0o755)
         self.environment["PATH"] = str(binaries) + os.pathsep + self.environment["PATH"]
-        config = self.home / ".config/countersign"
+        config = self.home / ".config/taskrail"
         config.mkdir(parents=True)
         (config / "settings.json").write_text(json.dumps({"run_base": str(self.repo)}))
         result = self.installer("--fresh", "--autostart=keep")
@@ -328,7 +328,7 @@ class ServiceTests(unittest.TestCase):
         self.assertTrue((config / "settings.json").exists())
 
     def test_fresh_executor_reset_uses_only_private_host_paths_and_privilege_stubs(self):
-        installed_executor = self.deployment.system / "opt/countersign-executor"
+        installed_executor = self.deployment.system / "opt/taskrail-executor"
         installed_executor.mkdir(parents=True)
         sentinel = installed_executor / "preserved-by-sudo-stub"
         sentinel.write_text("fixture")
@@ -347,7 +347,7 @@ class ServiceTests(unittest.TestCase):
         self.assertTrue(sentinel.is_file())
 
     def test_fresh_refuses_archived_source_overlap_before_stopping_services(self):
-        config = self.home / ".config/countersign"
+        config = self.home / ".config/taskrail"
         config.mkdir(parents=True)
         history = self.home / "history"
         record = history / ".trash/old/run/run.json"

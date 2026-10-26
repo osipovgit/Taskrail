@@ -3,7 +3,7 @@ requires = ["setuptools>=84.0.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "countersign"
+name = "taskrail"
 dynamic = ["version"]
 description = "Reviewed, approval-gated, resumable opencode task workflows"
 requires-python = ">=3.10"
@@ -12,19 +12,19 @@ readme = "README.md"
 dependencies = []
 
 [project.scripts]
-countersign = "countersign.__main__:main"
+taskrail = "taskrail.__main__:main"
 
 [tool.setuptools.dynamic]
-version = {attr = "countersign.core.version.VERSION"}
+version = {attr = "taskrail.core.version.VERSION"}
 
 [tool.setuptools.packages.find]
-include = ["countersign*"]
+include = ["taskrail*"]
 
 [tool.setuptools.package-data]
-"countersign" = ["settings.json", "agents/*.md"]
-"countersign.core" = ["*.json"]
-"countersign.application" = ["*.md", "*.json"]
-"countersign.web" = ["static/*.html", "static/*.js", "static/*.css", "static/*.svg", "static/modules/*.js"]
+"taskrail" = ["settings.json", "agents/*.md"]
+"taskrail.core" = ["*.json"]
+"taskrail.application" = ["*.md", "*.json"]
+"taskrail.web" = ["static/*.html", "static/*.js", "static/*.css", "static/*.svg", "static/modules/*.js"]
 
 [tool.ruff]
 target-version = "py310"

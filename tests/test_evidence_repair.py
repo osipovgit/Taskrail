@@ -7,8 +7,8 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from countersign.application import citation_review, evidence, source_guidance, source_views
-from countersign.application.attempt_retries import Retries
+from taskrail.application import citation_review, evidence, source_guidance, source_views
+from taskrail.application.attempt_retries import Retries
 
 
 class EvidenceRepairTests(unittest.TestCase):

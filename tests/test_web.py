@@ -6,8 +6,8 @@ from pathlib import Path
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
-from countersign.web.run_messages import public_messages
-from countersign.web.server import make_server
+from taskrail.web.run_messages import public_messages
+from taskrail.web.server import make_server
 
 
 class DashboardTests(unittest.TestCase):
@@ -68,7 +68,7 @@ class DashboardTests(unittest.TestCase):
         self.assertIn("showAnalytics", self.get("/modules/analytics.js"))
         self.assertIn("taskSection", self.get("/modules/task.js"))
         # Every dashboard module is served; a module missing from the list breaks the page.
-        static = Path(__file__).resolve().parents[1] / "countersign/web/static/modules"
+        static = Path(__file__).resolve().parents[1] / "taskrail/web/static/modules"
         for module in sorted(static.glob("*.js")):
             with self.subTest(module=module.name):
                 self.assertIn("export", self.get(f"/modules/{module.name}"))

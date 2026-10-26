@@ -3,8 +3,8 @@ PYTHON ?= python3
 TOOL_DIR := $(shell $(PYTHON) -c 'import sysconfig; print(sysconfig.get_path("scripts"))')
 SHELLCHECK = $(TOOL_DIR)/shellcheck
 SHFMT = $(TOOL_DIR)/shfmt
-SHELL_SCRIPTS = deploy/fresh.sh deploy/executor-maintenance.sh deploy/reset-executor.sh deploy/install.sh deploy/options.sh deploy/countersign deploy/install-executor.sh deploy/executor-service deploy/countersign-executor-approve deploy/ssh-askpass
-SHELL_ENTRYPOINTS = deploy/install.sh deploy/install-executor.sh deploy/reset-executor.sh deploy/countersign deploy/executor-service deploy/countersign-executor-approve deploy/ssh-askpass
+SHELL_SCRIPTS = deploy/fresh.sh deploy/executor-maintenance.sh deploy/reset-executor.sh deploy/install.sh deploy/options.sh deploy/taskrail deploy/install-executor.sh deploy/executor-service deploy/taskrail-executor-approve deploy/ssh-askpass
+SHELL_ENTRYPOINTS = deploy/install.sh deploy/install-executor.sh deploy/reset-executor.sh deploy/taskrail deploy/executor-service deploy/taskrail-executor-approve deploy/ssh-askpass
 
 .PHONY: lint lint-python lint-ui lint-shell test format-check check tool-versions
 lint: lint-python lint-ui lint-shell
@@ -15,12 +15,12 @@ lint-shell: tool-versions
 	$(SHELLCHECK) -x -P . $(SHELL_ENTRYPOINTS)
 	$(SHFMT) -i 4 -ci -d $(SHELL_SCRIPTS)
 lint-python: tool-versions
-	$(PYTHON) -m ruff check countersign tests tools
+	$(PYTHON) -m ruff check taskrail tests tools
 	$(PYTHON) tools/lint_python.py
 lint-ui:
 	npm run lint
 format-check: tool-versions
-	$(PYTHON) -m ruff format --check countersign tests tools
+	$(PYTHON) -m ruff format --check taskrail tests tools
 	npm run format:check
 test:
 	@# A private HOME keeps the real workflow lock and installed settings out of the tests.

@@ -7,9 +7,9 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from countersign.application import check_configuration, check_recipes, run_setup
-from countersign.core.files import atomic_json
-from countersign.core.requirements import requirement
+from taskrail.application import check_configuration, check_recipes, run_setup
+from taskrail.core.files import atomic_json
+from taskrail.core.requirements import requirement
 
 BASE = Path(__file__).resolve().parents[1]
 
@@ -47,7 +47,7 @@ class ResumeCheckConfigurationTests(unittest.TestCase):
         header = dict(
             roots=state["roots"], verification=["Health check passes"], check_specs=[self.spec]
         )
-        self.task.write_text("```countersign-task\n" + json.dumps(header) + "\n```\nVerify health")
+        self.task.write_text("```taskrail-task\n" + json.dumps(header) + "\n```\nVerify health")
         atomic_json(
             self.settings,
             dict(
@@ -77,7 +77,7 @@ class ResumeCheckConfigurationTests(unittest.TestCase):
     def test_tampered_frozen_catalog_fails_before_loading_agent_settings(self):
         atomic_json(self.run / "00-input/settings.json", dict(self.frozen, check_recipes={}))
         with (
-            patch("countersign.application.task_config.launch_settings") as launch,
+            patch("taskrail.application.task_config.launch_settings") as launch,
             self.assertRaisesRegex(ValueError, "Frozen check settings changed"),
         ):
             run_setup.configure(self.request)

@@ -13,9 +13,9 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
-from countersign.core import protected_paths
-from countersign.git import deadline, process
-from countersign.interactions import (
+from taskrail.core import protected_paths
+from taskrail.git import deadline, process
+from taskrail.interactions import (
     access,
     approval_policy,
     approvals,
@@ -25,8 +25,8 @@ from countersign.interactions import (
     read_only,
     transcripts,
 )
-from countersign.interactions.clock import StageClock
-from countersign.interactions.session import StageSession
+from taskrail.interactions.clock import StageClock
+from taskrail.interactions.session import StageSession
 
 
 class InteractionTests(unittest.TestCase):
@@ -76,7 +76,7 @@ class InteractionTests(unittest.TestCase):
     def test_allow_all_on_a_card_approves_later_requests_with_a_ledger(self):
         state = {}
         card = dict(decision="allow", alternative="", allow_all=True)
-        with patch("countersign.interactions.approvals.wait", return_value=card) as wait:
+        with patch("taskrail.interactions.approvals.wait", return_value=card) as wait:
             first = approval_policy.decision(self.run, self.request(["echo", "1"]), state)
             second = approval_policy.decision(self.run, self.request(["echo", "2"]), state)
         self.assertEqual(wait.call_count, 1)
@@ -117,7 +117,7 @@ class InteractionTests(unittest.TestCase):
                 self.assertEqual("Allow all actions never" in notice, argv in inline)
         state = dict(auto_approve=True)
         card = dict(decision="allow", alternative="")
-        with patch("countersign.interactions.approvals.wait", return_value=card) as wait:
+        with patch("taskrail.interactions.approvals.wait", return_value=card) as wait:
             request = self.request(["bash", "-c", "id"])
             answer = approval_policy.decision(self.run, request, state, personal=True)
         wait.assert_called_once()
@@ -174,7 +174,7 @@ class InteractionTests(unittest.TestCase):
             with self.subTest(argv=argv):
                 self.assertFalse(read_only.command(self.request(argv), roots))
         state = {}
-        with patch("countersign.interactions.approvals.wait") as wait:
+        with patch("taskrail.interactions.approvals.wait") as wait:
             scope = (roots, protected_paths.DEFAULT_PATTERNS)
             answer = approval_policy.decision(self.run, self.request(["ls"]), state, scope)
         wait.assert_not_called()
@@ -190,7 +190,7 @@ class InteractionTests(unittest.TestCase):
         self.assertFalse(approval_policy.active(self.run, state))
         self.assertFalse(approval_policy.at_start(self.run, dict(auto_approve=True)))
         card = dict(decision="allow", alternative="", allow_all=True)
-        with patch("countersign.interactions.approvals.wait", return_value=card) as wait:
+        with patch("taskrail.interactions.approvals.wait", return_value=card) as wait:
             approval_policy.decision(self.run, self.request(["make"]), state)
             approval_policy.decision(self.run, self.request(["make"]), state)
         self.assertEqual(wait.call_count, 1)
@@ -230,7 +230,7 @@ class InteractionTests(unittest.TestCase):
     def test_allow_all_needs_an_allow_decision_and_a_boolean(self):
         payload = dict(id="run", ticket="t", decision="deny", alternative="", allow_all=True)
         state = {}
-        with patch("countersign.interactions.approvals.wait", return_value=payload):
+        with patch("taskrail.interactions.approvals.wait", return_value=payload):
             approval_policy.decision(self.run, self.request(["echo", "1"]), state)
         self.assertNotIn("auto_approve", state)
         approvals.validate_decision(payload)
@@ -289,9 +289,9 @@ class InteractionTests(unittest.TestCase):
             )
 
     def test_clock_excludes_only_paused_seconds(self):
-        with patch("countersign.interactions.clock.time.monotonic", return_value=100):
+        with patch("taskrail.interactions.clock.time.monotonic", return_value=100):
             clock = StageClock(3600)
-        with patch("countersign.interactions.clock.time.monotonic", return_value=8000):
+        with patch("taskrail.interactions.clock.time.monotonic", return_value=8000):
             clock.paused = 7800
             self.assertEqual(clock.elapsed(), 100)
             self.assertEqual(clock.remaining(), 3500)
@@ -386,21 +386,21 @@ class InteractionTests(unittest.TestCase):
                     with ExitStack() as stack:
                         stack.enter_context(
                             patch(
-                                "countersign.interactions.clock.time.monotonic",
+                                "taskrail.interactions.clock.time.monotonic",
                                 side_effect=lambda *, now=now: now[0],
                             )
                         )
-                        stack.enter_context(patch("countersign.interactions.clock.save_run"))
-                        stack.enter_context(patch("countersign.interactions.session.save_run"))
+                        stack.enter_context(patch("taskrail.interactions.clock.save_run"))
+                        stack.enter_context(patch("taskrail.interactions.session.save_run"))
                         stack.enter_context(
-                            patch("countersign.interactions.session.run_agent", side_effect=invoke)
+                            patch("taskrail.interactions.session.run_agent", side_effect=invoke)
                         )
                         stack.enter_context(
-                            patch("countersign.interactions.approvals.wait", side_effect=decide)
+                            patch("taskrail.interactions.approvals.wait", side_effect=decide)
                         )
                         execute = stack.enter_context(
                             patch(
-                                "countersign.interactions.local.execute",
+                                "taskrail.interactions.local.execute",
                                 return_value=dict(status="SUCCEEDED", stdout="Python", exit_code=0),
                             )
                         )
@@ -441,7 +441,7 @@ class InteractionTests(unittest.TestCase):
                     git_metadata=lambda roots: {},
                 )
                 responses = [
-                    json.dumps(self.request(["countersign-missing-tool", "--check"])),
+                    json.dumps(self.request(["taskrail-missing-tool", "--check"])),
                     "{}",
                 ]
                 requests = []
@@ -459,26 +459,26 @@ class InteractionTests(unittest.TestCase):
                     return dict(decision="allow", alternative="")
 
                 def found(*_args, installed_now=installed_now, **_kwargs):
-                    return "/usr/bin/countersign-missing-tool" if installed_now[0] else None
+                    return "/usr/bin/taskrail-missing-tool" if installed_now[0] else None
 
                 with ExitStack() as stack:
-                    stack.enter_context(patch("countersign.interactions.clock.save_run"))
-                    stack.enter_context(patch("countersign.interactions.session.save_run"))
+                    stack.enter_context(patch("taskrail.interactions.clock.save_run"))
+                    stack.enter_context(patch("taskrail.interactions.session.save_run"))
                     stack.enter_context(
-                        patch("countersign.interactions.session.run_agent", side_effect=invoke)
+                        patch("taskrail.interactions.session.run_agent", side_effect=invoke)
                     )
                     stack.enter_context(
-                        patch("countersign.interactions.approvals.wait", side_effect=decide)
+                        patch("taskrail.interactions.approvals.wait", side_effect=decide)
                     )
                     stack.enter_context(
                         patch(
-                            "countersign.interactions.local_request.shutil.which",
+                            "taskrail.interactions.local_request.shutil.which",
                             side_effect=found,
                         )
                     )
                     execute = stack.enter_context(
                         patch(
-                            "countersign.interactions.local.execute",
+                            "taskrail.interactions.local.execute",
                             return_value=dict(status="SUCCEEDED", stdout="ok", exit_code=0),
                         )
                     )
@@ -514,12 +514,12 @@ class InteractionTests(unittest.TestCase):
             return dict(status="OK", sessions=["same"], tokens={}, final_text=responses.pop(0))
 
         with ExitStack() as stack:
-            stack.enter_context(patch("countersign.interactions.clock.save_run"))
-            stack.enter_context(patch("countersign.interactions.session.save_run"))
+            stack.enter_context(patch("taskrail.interactions.clock.save_run"))
+            stack.enter_context(patch("taskrail.interactions.session.save_run"))
             stack.enter_context(
-                patch("countersign.interactions.session.run_agent", side_effect=invoke)
+                patch("taskrail.interactions.session.run_agent", side_effect=invoke)
             )
-            execute = stack.enter_context(patch("countersign.interactions.local.execute"))
+            execute = stack.enter_context(patch("taskrail.interactions.local.execute"))
             outcome = StageSession((folder, record), dict(stages=[record]), environment, {}).run()
         self.assertEqual(execute.call_count, 0)
         self.assertEqual(len(prompts), 3)
@@ -528,7 +528,7 @@ class InteractionTests(unittest.TestCase):
         self.assertIn("ansible-lint", outcome["final_text"])
 
     def test_local_cwd_may_be_a_directory_inside_a_declared_root(self):
-        from countersign.interactions import local_request
+        from taskrail.interactions import local_request
 
         inner = self.root / "ansible-playbooks"
         inner.mkdir()
@@ -543,7 +543,7 @@ class InteractionTests(unittest.TestCase):
     def test_expired_git_stage_never_starts_a_process(self):
         with (
             deadline.Deadline(0, self.run),
-            patch("countersign.git.transport.subprocess.Popen") as launch,
+            patch("taskrail.git.transport.subprocess.Popen") as launch,
         ):
             with self.assertRaises(subprocess.TimeoutExpired):
                 process.invoke(self.root, ["status"])

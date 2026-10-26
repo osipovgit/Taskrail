@@ -4,8 +4,8 @@ import io
 import unittest
 from unittest.mock import patch
 
-from countersign.executor import __main__ as executor_cli
-from countersign.executor import approval
+from taskrail.executor import __main__ as executor_cli
+from taskrail.executor import approval
 
 ACTION = dict(
     targets=["server-a"], script="uname -a\n", files={}, reason="Inspect kernel", timeout_seconds=30
@@ -43,7 +43,7 @@ class ApprovalHelperTests(unittest.TestCase):
 
         output = io.StringIO()
         with (
-            patch("sys.argv", ["countersign-executor-approve", *arguments, ticket["id"]]),
+            patch("sys.argv", ["taskrail-executor-approve", *arguments, ticket["id"]]),
             patch("sys.stdin", stdin or Terminal(f"{typed}\n")),
             patch("sys.stdout", output),
             patch("sys.stderr", io.StringIO()),

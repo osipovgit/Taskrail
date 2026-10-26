@@ -19,7 +19,7 @@ if "--version" in args:
 profiles = Path(args[args.index("--profiles") + 1])
 mode = args[args.index("--mode") + 1]
 if "agent" in args:
-    for path in sorted(profiles.glob("countersign-*.md")):
+    for path in sorted(profiles.glob("taskrail-*.md")):
         header = json.loads(path.read_text().split("---")[1])
         rules = []
         for permission, value in header["permission"].items():

@@ -1,6 +1,6 @@
 import unittest
 
-from countersign.application.access_recovery import AccessRecovery
+from taskrail.application.access_recovery import AccessRecovery
 
 
 class AccessRecoveryTests(unittest.TestCase):

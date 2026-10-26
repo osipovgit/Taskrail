@@ -6,15 +6,15 @@ import unittest
 from pathlib import Path
 from types import SimpleNamespace
 
-from countersign.application import (
+from taskrail.application import (
     check_configuration,
     reviewed_artifacts,
     reviewed_input,
     reviewed_start,
 )
-from countersign.application.source_guard import SourceGuard
-from countersign.core import plan_document, task_lineage, task_spec
-from countersign.core.files import atomic_json, digest
+from taskrail.application.source_guard import SourceGuard
+from taskrail.core import plan_document, task_lineage, task_spec
+from taskrail.core.files import atomic_json, digest
 
 
 class ReviewedStartTests(unittest.TestCase):

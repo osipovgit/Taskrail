@@ -4,14 +4,14 @@ import ast
 import unittest
 from pathlib import Path
 
-PACKAGE = Path(__file__).resolve().parents[1] / "countersign"
+PACKAGE = Path(__file__).resolve().parents[1] / "taskrail"
 
 
 def imported_packages(package):
-    """(file, imported countersign package) for every module of a package."""
+    """(file, imported taskrail package) for every module of a package."""
     for path in (PACKAGE / package).glob("*.py"):
         for node in ast.walk(ast.parse(path.read_text())):
-            if isinstance(node, ast.ImportFrom) and (node.module or "").startswith("countersign."):
+            if isinstance(node, ast.ImportFrom) and (node.module or "").startswith("taskrail."):
                 yield path, node.module.split(".")[1]
 
 
