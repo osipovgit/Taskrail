@@ -3,7 +3,13 @@
 import json
 from functools import partial
 
-from countersign.web import delivery_state, epic_record, history, integration_review
+from countersign.web import (
+    delivery_state,
+    epic_record,
+    history,
+    integration_review,
+    run_attempts,
+)
 from countersign.web.delivery_steps import INTEGRATION
 from countersign.web.run_activity import BusyError
 
@@ -35,6 +41,7 @@ def repeat(launcher, run):
         previous = delivery_state.phases(run, epic).values()
         if any(active_phase(phase) for phase in previous):
             raise BusyError("Stop active delivery phases before repeating integration review")
+        run_attempts.remember_phases(epic)
         epic.setdefault("phase_history", []).append(epic.get(PHASES, {}))
         epic[PHASES] = {}
         epic.pop("confirmed", None)

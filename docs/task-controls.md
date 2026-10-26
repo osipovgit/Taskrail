@@ -6,10 +6,11 @@
 |---|---|---|
 | Restart from scratch (standalone run) | No active run on its projects | Open the prefilled task form; submit explicitly to create a new run |
 | Restart reviewed task (split child) | Latest attempt of the next unfinished task; no active writer | Start a linked attempt from the approved parent plan, directly at implementation; preserve previous edits and original preimages |
+| Restart this phase (integration review, Jenkins validation, server checks) | Latest stopped attempt of the phase | Start the phase again under the same delivery; the earlier run stays one of its attempts |
 | Stop task | Running | Write a stop request; the worker cleans up opencode and saves an interruption checkpoint |
 | Continue with extra budget | Eligible checkpoint; explicit confirmation | Add two attempts and one attempt timeout to the interrupted stage; retain consumption |
 | Continue interrupted run | Eligible checkpoint and unchanged source | Append new attempts to the same run, starting at the interrupted stage; a stage that reported **Blocked** can continue too, with your note answering its question; an interrupted or blocked implementer first inspects its existing edits |
-| Send a follow-up Goal | Previous run stopped, no active run on its projects | Snapshot prior public evidence and start a new run from planning |
+| Send a follow-up Goal | Previous standalone run stopped, no active run on its projects | Snapshot prior public evidence and start a new run from planning; a task or phase run has no follow-up, use Continue with a note or a follow-up of its parent |
 | Answer only | New or follow-up submission | Research and independent review, no implementation; the reviewed answer opens the report and is the `answer` of `countersign status` |
 | Design discussion | New or follow-up submission | Like Answer only, but the reviewed summary is a design document, saved as `design.md`; follow-ups refine it, a **Change code** follow-up implements it |
 | Confirm changes | A finished code change, after integration review for a split and any Jenkins validation | Accept the change; server checks, if any, start only now |
@@ -63,8 +64,14 @@ Every **Change code** task goes through the same steps:
    run only after confirmation, through the isolated executor and root approval.
    Before confirmation, SSH requests may only inspect ([SSH executor](ssh-executor.md)).
 
-The run page shows these steps in a **Delivery** panel. A split lists its tasks with the
-status of each task's run. The next task starts automatically after each successful
+The run page shows these steps in a **Delivery** panel as one graph: the tasks of a
+split in columns by their dependencies, then integration review, Jenkins validation,
+your confirmation and server checks. Each node shows its status and, after a retry,
+how many earlier attempts it has. Select a node to work with its run inside the same
+card: its stages, decision requests, actions, diff and report; a run that waits for
+your decision is shown without a click. Earlier attempts collapse into one line
+(`2 earlier attempts · #1 Invalid result · #2 Tool error`) that expands to open any
+of them. The address `#parent/child` opens a node directly. The next task starts automatically after each successful
 one (**Start the next task automatically after each successful one** is on); it stops
 at the first task that does not finish successfully, and before a task marked **Pause
 before this task**, for example when you want to review the code before a task that
@@ -100,7 +107,9 @@ starts it again automatically, and **Start S-n again** starts a new run.
 The run list puts a delivery under Running while code, integration review, validation or server checks run,
 Needs you when a task, a check or an approval waits for you or failed, Ready for review
 while it waits for your confirmation, and Done when it is confirmed and its server
-checks finished. A split shows its progress (`Tasks 1/3`). A task header with
+checks finished. A split shows its progress (`Tasks 1/3`). Task and phase runs are not
+listed separately: they open in their parent's card, and searching for their run ID
+finds the parent. A task header with
 `"decompose": true` requests child execution even for one task; children cannot inherit it.
 
 A done mark belongs to the outcome it was given for: if a continuation ends with a
@@ -138,8 +147,9 @@ establish a fresh baseline; none of these actions revert earlier changes.
 A child restart uses the parent's sealed plan, typed requirements, effective roots
 and file scope. The new attempt is linked before its worker starts; completed,
 superseded or running child attempts cannot be retried this way. The API restart
-action has the same behavior; submitting a detached restart draft for a child is
-rejected. An already detached run is not automatically reattached: stop it and
+action has the same behavior; submitting a detached restart draft or a follow-up for a
+task or phase run is rejected. **Restart this phase** starts a delivery phase again
+under the same parent, so the parent never loses the link to its current phase run. An already detached run is not automatically reattached: stop it and
 recover through the original parent, inspecting its changes before accepting files.
 
 ## Conversation context
@@ -215,8 +225,9 @@ continue a conversation; a text option may name a file as `@FILE`. `action` acce
 `/api/actions` actions. For a standalone run, `action RUN restart` prints the saved
 `draft`; submit the edited fields with `parent_run` and `submission_mode: "restart"`
 in the JSON payload. For a split child, `action CHILD_RUN restart` launches a new
-linked attempt of the same reviewed task directly; `submit --restart CHILD_RUN`
-is rejected because an editable draft would lose the assignment.
+linked attempt of the same reviewed task directly, and `action PHASE_RUN restart` runs a
+delivery phase again under its parent; `submit --restart` or `--followup` naming a task
+or phase run is rejected because a detached run would lose its parent.
 Automatic steps of a split (the next task, integration review,
 Jenkins validation, server checks after confirmation) need the managed service.
 

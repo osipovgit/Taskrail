@@ -19,6 +19,7 @@ from countersign.web import (
     history,
     integration_launch,
     integration_review,
+    run_attempts,
 )
 from countersign.web.delivery_steps import INTEGRATION, SERVER, VALIDATION
 from countersign.web.run_activity import BusyError
@@ -83,6 +84,22 @@ def start_phase(launcher, run, name):
         state = json.loads(history.read_artifact(run, INDEX))
         link = partial(epic_record.link, run, epic, (PHASES, name))
         return launcher.submit(delivery_payload.payload(run, state, name), before_start=link)
+
+
+def restart_phase(launcher, run, name, attempt):
+    """Run the latest attempt of a stopped phase again under the same delivery."""
+    with epic_record.changing(run) as epic:
+        if epic.get(PHASES, {}).get(name) != attempt:
+            raise ValueError("Only the latest attempt of a delivery phase can restart")
+        if integration_launch.active_phase(delivery_state.phase(run, attempt)):
+            raise BusyError("Stop the phase before restarting it")
+        run_attempts.remember_phases(epic)
+        if name != INTEGRATION:
+            epic[PHASES].pop(name)
+            epic.pop("launch_error", None)
+    if name == INTEGRATION:
+        return integration_launch.repeat(launcher, run)
+    return start_phase(launcher, run, name)
 
 
 def confirm(launcher, run):

@@ -13,7 +13,7 @@ import {
 import { showAnalytics } from './modules/analytics.js';
 import { showError } from './modules/dom.js';
 import { tickStageTimers } from './modules/stages.js';
-import { state } from './modules/state.js';
+import { parseHash, state } from './modules/state.js';
 
 document.getElementById('new-task').onclick = () => openComposer();
 document.getElementById('show-analytics').onclick = showAnalytics;
@@ -26,18 +26,11 @@ document.getElementById('task-form').onsubmit = submitTask;
 document.getElementById('followup-form').onsubmit = submitFollowup;
 document.getElementById('filter').oninput = menu;
 // Back/forward and edited addresses change only the hash; follow them to the named run.
-function hashRun() {
-  try {
-    return decodeURIComponent(location.hash.slice(1));
-  } catch {
-    return '';
-  }
-}
 window.addEventListener('hashchange', () => {
-  const id = hashRun();
-  if (!id || id === state.selected) return;
+  const { selected, focus } = parseHash(location.hash);
+  if (!selected || (selected === state.selected && focus === state.focus)) return;
   closeComposer();
-  showRun(id).catch(showError);
+  showRun(selected, focus).catch(showError);
 });
 addRoot();
 refresh();

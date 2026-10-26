@@ -11,7 +11,7 @@ import fcntl
 
 from countersign.application import run_locks
 from countersign.core.files import atomic_json
-from countersign.web import epic_tasks
+from countersign.web import epic_tasks, run_family
 
 PAUSE = epic_tasks.PAUSE
 
@@ -35,13 +35,16 @@ def link(run, epic, place, child):
     """Link a child run under epic[section][name] and write it before the child starts.
 
     A task keeps the list of every run started for it, so a retry can continue from
-    an earlier attempt's edits through an authenticated chain.
+    an earlier attempt's edits through an authenticated chain; a phase keeps its runs
+    so earlier attempts stay visible in the parent's card.
     """
     section, name = place
     links = epic.setdefault(section, {})
     if section == "tasks":
         earlier = [links[name]] if name in links else []
         epic.setdefault("attempts", {}).setdefault(name, earlier).append(child)
+    else:
+        epic.setdefault(run_family.PHASE_ATTEMPTS, {}).setdefault(name, []).append(child)
     links[name] = child
     save(run, epic)
 
