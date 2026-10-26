@@ -312,6 +312,26 @@ function materialsSection(data) {
   return materials;
 }
 
+// Files a split task found changed outside the split's tasks; they never stop it.
+function outsideSection(outside) {
+  const section = el('section');
+  section.append(
+    el('h3', 'Changed outside this task'),
+    el(
+      'p',
+      'Changed by you or another tool, not by the tasks of this split, before this task ' +
+        'started. The task checked them first and kept edits unrelated to it; its diff may ' +
+        'include them.',
+      'muted',
+    ),
+  );
+  const files = el('ul');
+  for (const name of outside.files) files.append(el('li', name));
+  if (outside.git) files.append(el('li', 'Git state (commits, branch or index) also changed.'));
+  section.append(files);
+  return section;
+}
+
 // The parent's header, or a compact header for a run shown inside its parent's card.
 function runHeader(data, embedded) {
   const nodes = embedded
@@ -369,6 +389,7 @@ export function runBody(data, embedded = false, child = null) {
     summary.append(el('h3', 'Conclusion'), el('div', data.summary, 'text'));
     nodes.push(summary);
   }
+  if (data.outside_changes) nodes.push(outsideSection(data.outside_changes));
   nodes.push(taskSection(data));
   for (const stage of data.stages) nodes.push(stageCard(stage));
   nodes.push(materialsSection(data));

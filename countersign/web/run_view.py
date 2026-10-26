@@ -89,6 +89,7 @@ def index_view(state, stages):
         roots=roots,
         changed_files=tool_paths(state.get("changed_files", []), roots),
         unverified=state.get("unverified", []),
+        outside_changes=state.get("outside_changes"),
         review_limits=state.get("review_limits", []),
         metrics=state.get("metrics", {}),
         stages=stages,

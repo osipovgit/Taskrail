@@ -440,21 +440,6 @@ async function main() {
   assert.ok(all(blockedDelivery).some((n) => n.textContent === 'Integration review'));
   assert.ok(all(blockedDelivery).some((n) => n.textContent === 'Child contract is too large'));
   assert.ok(!all(blockedDelivery).some((n) => n.textContent === 'Confirm changes'));
-  assert.ok(!all(panel).some((n) => n.textContent === 'Accept current files for S-2'));
-  const accepted = [];
-  const changedSources = deliverySection(
-    {
-      ...delivery,
-      step: 'needs_you',
-      launch_error:
-        'Sources changed since reviewed task prerequisites; accept the current files for ' +
-        'this task or replan the parent',
-    },
-    { ...actions(''), act: (action, extra) => accepted.push([action, extra]) },
-  );
-  const accept = all(changedSources).find((n) => n.textContent === 'Accept current files for S-2');
-  accept.onclick();
-  assert.deepEqual(accepted, [['epic_accept_sources', { task: 'S-2' }]]);
   console.log('Delivery graph, in-card runs and collapsed attempts passed.');
 
   // A budget-paused run exposes both continuation choices and reversible deletion.
@@ -589,6 +574,18 @@ async function main() {
   assert.ok(all(nodes.runs).some((n) => n.textContent === 'Split work'));
   nodes.filter.value = '';
   state.runs = [];
+  app.render({
+    ...base,
+    id: 'outside-run',
+    phase: 'task',
+    outside_changes: { files: ['admin/site.yml', 'admin/.idea/workspace.xml'], git: true },
+  });
+  const outside = all(nodes.chat)
+    .filter((n) => n.tagName === 'li')
+    .map((n) => n.textContent);
+  assert.ok(all(nodes.chat).some((n) => n.textContent === 'Changed outside this task'));
+  assert.ok(outside.includes('admin/site.yml'));
+  assert.ok(outside.includes('Git state (commits, branch or index) also changed.'));
   console.log('Task and phase runs open inside the parent card with their own decisions.');
 
   const toolToggle = all(nodes.chat).find((node) => node.type === 'checkbox');

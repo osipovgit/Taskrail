@@ -1,9 +1,7 @@
-"""A split continues after a failed task, after intended edits, and ends its reviews."""
+"""A split continues after a failed task, after outside edits, and ends its reviews."""
 
 import json
-import threading
 import unittest
-from types import SimpleNamespace
 from unittest.mock import patch
 
 from test_reviewed_workflow import ReviewedFixture
@@ -13,9 +11,9 @@ from countersign.application.live import execute_task
 from countersign.core.files import atomic_json
 from countersign.web import (
     delivery_state,
-    epic_baseline,
     epic_launch,
     epic_tasks,
+    integration_review,
     lifecycle,
     requests,
     run_list,
@@ -56,24 +54,32 @@ class SplitRecoveryTests(ReviewedFixture, unittest.TestCase):
         _, status, second = self.start(parent, state, epic, "T2", "t2")
         self.assertEqual(status, "READY_FOR_REVIEW", second.get("summary"))
 
-    def test_accepted_current_files_let_the_next_task_start(self):
+    def test_outside_edits_between_tasks_reach_the_next_task_and_its_report(self):
         parent, state = self.split()
         epic = dict(tasks={})
         _, status, first = self.start(parent, state, epic, "T1", "t1")
         self.assertEqual(status, "READY_FOR_REVIEW", first.get("summary"))
-        (self.root / "hello.py").write_text(
-            "# operator edit\n" + (self.root / "hello.py").read_text()
+        hello = self.root / "hello.py"
+        hello.write_text("# operator edit\n" + hello.read_text())
+        (self.root / "notes.txt").write_text("unrelated\n")
+        second, status, done = self.start(parent, state, epic, "T2", "t2")
+        self.assertEqual(status, "READY_FOR_REVIEW", done.get("summary"))
+        outside = ["project/hello.py", "project/notes.txt"]
+        self.assertEqual(done["outside_changes"], dict(files=outside, git=False))
+        request = (second / "01-implement/request.md").read_text()
+        self.assertIn("changed outside the tasks of this split", request)
+        self.assertIn(str(self.root / "notes.txt"), request)
+        self.assertIn("keep edits unrelated to it", request)
+        report = (second / "report.md").read_text()
+        self.assertIn("## Changed outside this task", report)
+        self.assertIn(f"- {self.root / 'notes.txt'}", report)
+        self.assertIn("# operator edit", hello.read_text())
+        delivery = delivery_state.view(parent, json.loads((parent / "run.json").read_text()))
+        self.assertEqual(delivery["tasks"][1]["outside_files"], outside)
+        self.assertIn(
+            "changed outside the split before it started: project/hello.py",
+            integration_review.changes_by_task(delivery["tasks"]),
         )
-        _, status, refused = self.start(parent, state, epic, "T2", "t2-a")
-        self.assertEqual(status, "BLOCKED")
-        self.assertIn("accept the current files", refused["summary"])
-        launcher = SimpleNamespace(lock=threading.RLock())
-        self.assertEqual(epic_baseline.accept(launcher, parent, "T2")["status"], "SOURCES_ACCEPTED")
-        epic = json.loads((parent / "epic.json").read_text())
-        _, status, accepted = self.start(parent, state, epic, "T2", "t2-b")
-        self.assertEqual(status, "READY_FOR_REVIEW", accepted.get("summary"))
-        with self.assertRaisesRegex(ValueError, "Only the next task"):
-            epic_baseline.accept(launcher, parent, "T1")
 
     def retry_worker(self, folder, manifest, run, options):
         """Run the actual workflow synchronously after the launcher's durable link."""
@@ -131,7 +137,7 @@ class SplitRecoveryTests(ReviewedFixture, unittest.TestCase):
             run_view(self.runs, retry.name)["parent"], dict(run=parent.name, slot="T1")
         )
 
-    def test_checkpoint_drift_needs_explicit_acceptance_even_on_child_restart(self):
+    def test_a_restart_after_outside_edits_starts_and_names_them(self):
         parent, state = self.split()
         child, _, before = self.start(
             parent, state, dict(tasks={}), "T1", "failed", "writer-prose-always"
@@ -143,18 +149,14 @@ class SplitRecoveryTests(ReviewedFixture, unittest.TestCase):
         )
         refused = json.loads((child / "run.json").read_text())
         self.assertEqual(status, "BLOCKED")
-        self.assertIn("Open the parent split", refused["summary"])
+        self.assertIn("Use Restart reviewed task", refused["summary"])
         self.assertEqual(len(refused["attempts"]), len(before["attempts"]))
         launcher = TaskLauncher(self.runs, self.settings, recover=False)
         with patch("countersign.web.submissions.start_worker", side_effect=self.retry_worker):
             result = launcher.action(dict(id=child.name, action="restart"))
-            blocked = json.loads((self.runs / result["id"] / "run.json").read_text())
-            self.assertEqual(blocked["status"], "BLOCKED")
-            self.assertIn("accept the current files", blocked["summary"])
-            epic_baseline.accept(launcher, parent, "T1")
-            result = launcher.action(dict(id=result["id"], action="restart"))
         retried = json.loads((self.runs / result["id"] / "run.json").read_text())
         self.assertEqual(retried["status"], "READY_FOR_REVIEW", retried["summary"])
+        self.assertEqual(retried["outside_changes"], dict(files=["project/hello.py"], git=False))
         self.assertIn("# external edit", source.read_text())
 
 

@@ -71,9 +71,9 @@ def checkpoint_source_error(config):
     """A refused continuation must not send a split child into standalone planning."""
     if config.get("phase") == "task":
         return (
-            "Source/Git changed since checkpoint; continuation refused. Open the parent split, "
-            "inspect the current files and explicitly accept them for this task before retrying. "
-            "Replan the parent if its scope or requirements changed."
+            "Source/Git changed since checkpoint; continuation refused. Use Restart reviewed "
+            "task: the new attempt reads the files changed outside the split first and reports "
+            "them."
         )
     return (
         "Source/Git changed since checkpoint; continuation refused. Use Restart for fresh planning."

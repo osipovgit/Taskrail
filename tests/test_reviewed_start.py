@@ -122,11 +122,16 @@ class ReviewedStartTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "Child criteria changed"):
             reviewed_start.begin(self.workflow)
 
-    def test_new_source_snapshot_cannot_reuse_parent_plan(self):
+    def test_a_new_source_snapshot_starts_the_task_and_names_the_outside_change(self):
         (self.root / "a.py").write_text("answer = 3\n")
         self.workflow.guard.capture()
-        with self.assertRaisesRegex(ValueError, "Sources changed"):
-            reviewed_start.begin(self.workflow)
+        reviewed_start.begin(self.workflow)
+        outside = self.workflow.state["outside_changes"]
+        self.assertEqual((len(outside["files"]), outside["git"]), (1, False))
+        self.assertTrue(outside["files"][0].endswith("a.py"), outside)
+        note = self.workflow.flow["feedback"]["outside_changes"]
+        self.assertIn(str(self.root / "a.py"), note)
+        self.assertIn("If your assigned change is already there", note)
 
     def test_integration_starts_one_independent_reviewer_without_write_authority(self):
         self.workflow.config["phase"] = "integration"

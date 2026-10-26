@@ -62,7 +62,7 @@ source checks, checkpoints and file operations:
 | `workflow_start.py`, `workflow_finish.py` | Fresh start or checkpoint continuation; interruption and the final report |
 | `workflow_state.py`, `source_guard.py`, `source_ignores.py` | Run state, flow, checkpoints and source/Git integrity; Git-ignored files are not source |
 | `prompts.py`, `policy_sections.py`, `mode_rules.py`, `response_format.py` | The request of a stage from frozen policy sections and catalog texts |
-| `reviewed_start.py`, `reviewed_sources.py`, `child_brief.py`, `previous_attempt.py` | A split task started from the reviewed plan: attempt chain, operator baselines, brief and retries |
+| `reviewed_start.py`, `reviewed_sources.py`, `outside_changes.py`, `child_brief.py`, `previous_attempt.py` | A split task started from the reviewed plan: attempt chain, changes made outside the tasks, brief and retries |
 | `integration_changes.py`, `inherited_preimages.py` | The combined diff a split's integration review reads |
 | `stage_attempts.py`, `attempt_*.py` | One model stage: profile, launch, validation and bounded retries |
 | `check_stage.py`, `builtin_checks.py`, `verify_*.py` | Syntax checks and settings verification commands |
@@ -107,8 +107,9 @@ before it continues.
 
 Child task headers carry the parent's immutable file scope; no nested split or scope
 expansion can reach implementation. The server authenticates the reviewed plan digest,
-requirement lineage and accepted prerequisite source/Git snapshots before starting a
-child directly at implementation; a child of an unsealed parent is refused.
+requirement lineage and accepted prerequisite results before starting a child directly
+at implementation, and names the files changed outside the split's tasks along the
+attempt chain; a child of an unsealed parent is refused.
 A bounded prerequisite index points to a sealed full parent snapshot. After all children finish, a read-only integration run reviews
 the complete original goal and criteria through the same execution engine and
 independent reviewer. Confirmation rechecks its source/Git fingerprint, and changed

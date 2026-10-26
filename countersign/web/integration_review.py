@@ -4,7 +4,7 @@ import contextlib
 import json
 from pathlib import Path
 
-from countersign.application import run_locks, worktree_isolation
+from countersign.application import outside_changes, run_locks, worktree_isolation
 from countersign.application.source_guard import SourceGuard
 from countersign.core.files import digest
 from countersign.interactions import approval_policy
@@ -51,7 +51,7 @@ def payload(run, state):
 
 
 def changes_by_task(entries):
-    """One line per task: its title, run outcome and the files it changed."""
+    """One line per task: its title, run outcome, changed files and outside changes."""
     lines = ["Tasks of the split, in the order they ran:"]
     for task in entries:
         files = list(task["changed_files"])
@@ -61,6 +61,7 @@ def changes_by_task(entries):
             changed = f"{changed} and {more} more (see changes.diff)"
         lines.append(
             "- {id}: {title} ({status}, run {run}); changed files: {0}".format(changed, **task)
+            + outside_changes.integration_note(task.get("outside_files"))
         )
     return "\n".join(lines)
 

@@ -1,5 +1,6 @@
 """The human review report written at the end of every run."""
 
+from countersign.application import outside_changes
 from countersign.application.artifacts import save_run
 from countersign.application.report_sections import (
     check_lines,
@@ -34,6 +35,7 @@ def report(run, state):
         *timeline(state),
         *inventory(state),
         *check_lines(state),
+        *outside_changes.report_lines(state),
         *command_effects(state),
         *stage_errors(state),
         *execution_report(state),
