@@ -42,3 +42,8 @@ ACTIVE = Catalog(release())
 def text(key, **fields):
     """A text of the active catalog."""
     return ACTIVE.text(key, **fields)
+
+
+def diagnostic(key, **fields):
+    """Current validators use current diagnostics even with an older frozen prompt catalog."""
+    return Catalog(release()).text(key, **fields)

@@ -25,7 +25,7 @@ TITLE_LIMIT = 160
 IDENTIFIER = "id"
 
 
-def start_next(launcher, run, automatic=False):
+def start_next(launcher, run, automatic=False, retry=None):
     """Launch the next ready task; its run is linked to the epic before its worker starts.
 
     automatic: only while auto-continue still applies when the epic lock is held.
@@ -42,9 +42,17 @@ def start_next(launcher, run, automatic=False):
             raise ValueError(
                 "No task is ready: one is running, failed or waits for its dependencies"
             )
+        require_retry(task, retry)
         link = partial(epic_record.link, run, epic, ("tasks", task[IDENTIFIER]))
         epic.pop("launch_error", None)
         return launcher.submit(payload(run, state, entries, task), before_start=link)
+
+
+def require_retry(task, retry):
+    """Check the operator's exact target under the same lock as the new link."""
+    current = (task[IDENTIFIER], task.get("run"))
+    if retry is not None and current != retry:
+        raise ValueError("Only the latest attempt of the next unfinished task can restart")
 
 
 def payload(run, state, entries, task):

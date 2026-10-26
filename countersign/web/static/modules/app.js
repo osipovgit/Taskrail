@@ -246,14 +246,18 @@ const ACTION_TITLES = {
 function actionButtons(data) {
   const actions = el('div', undefined, 'run-actions');
   for (const [action, label] of ACTIONS) {
-    const button = el('button', label);
+    const assignedRestart = action === 'restart' && data.phase === 'task';
+    const button = el('button', assignedRestart ? 'Restart reviewed task' : label);
     button.disabled = state.actionPending || !data.actions?.[action];
     // Unavailable actions are hidden rather than shown disabled.
     button.hidden = !data.actions?.[action];
     if (action === 'delete') button.className = 'danger';
     button.title = action === 'resume' ? data.actions?.resume_reason || '' : ACTION_TITLES[action];
+    if (assignedRestart)
+      button.title =
+        'Retry this task under its approved parent plan. Existing edits are preserved.';
     button.onclick = () =>
-      action === 'restart'
+      action === 'restart' && !assignedRestart
         ? openComposer(data.draft, { parent_run: data.id, submission_mode: 'restart' })
         : runAction(action);
     actions.append(button);

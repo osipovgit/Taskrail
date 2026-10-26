@@ -56,9 +56,7 @@ def validated_checkpoint(workflow):
     checkpoint = load_checkpoint(run, workflow.state)
     workflow.guard.before = json.loads(run.joinpath(INPUTS, "manifest.json").read_text())
     workflow.guard.adopt(checkpoint["expected"], checkpoint["git_before"])
-    workflow.guard.verify(
-        "Source/Git changed since checkpoint; continuation refused. Use Restart for fresh planning."
-    )
+    workflow.guard.verify(checkpoint_source_error(workflow.config))
     task_hash = checkpoint.get("task_hash")
     if task_hash and digest(workflow.config["task_text"].encode()) != task_hash:
         raise ValueError("Task changed since checkpoint; continuation refused")
@@ -67,6 +65,19 @@ def validated_checkpoint(workflow):
     child_inputs.verify(run, workflow.state)
     resume_inputs.verify_preimages(run, workflow.state, workflow.guard.before)
     return checkpoint
+
+
+def checkpoint_source_error(config):
+    """A refused continuation must not send a split child into standalone planning."""
+    if config.get("phase") == "task":
+        return (
+            "Source/Git changed since checkpoint; continuation refused. Open the parent split, "
+            "inspect the current files and explicitly accept them for this task before retrying. "
+            "Replan the parent if its scope or requirements changed."
+        )
+    return (
+        "Source/Git changed since checkpoint; continuation refused. Use Restart for fresh planning."
+    )
 
 
 def restore(workflow, checkpoint, mode):

@@ -5,6 +5,8 @@ import unittest
 from pathlib import Path
 
 from countersign.application import plan_file, project_map
+from countersign.core import source_claims
+from countersign.core.files import digest
 from countersign.core.plan_document import payload
 
 ROOTS = {"project": "/repo"}
@@ -47,6 +49,72 @@ Verify: ansible-lint roles/web
 
 
 class PlanDocumentTests(unittest.TestCase):
+    def test_explicit_ranges_are_evidence_but_parenthetical_prose_is_not(self):
+        detail = (
+            "/runs/task/00-input/git/01-plan-2.txt:7-42,43-156,157-169; "
+            "`project/file with spaces.yml:2-3` "
+            "(diff mentions v100.yaml:165-166 and 01-plan-2.txt:165-166)"
+        )
+        plan = payload(
+            PLAN.replace("project/README.md:12-18, roles/x.yml:3", detail), REQUIREMENTS, ROOTS
+        )
+        self.assertEqual(
+            [(entry["path"], entry["line_start"], entry["line_end"]) for entry in plan["evidence"]],
+            [
+                ("/runs/task/00-input/git/01-plan-2.txt", 7, 42),
+                ("/runs/task/00-input/git/01-plan-2.txt", 43, 156),
+                ("/runs/task/00-input/git/01-plan-2.txt", 157, 169),
+                ("/repo/file with spaces.yml", 2, 3),
+            ],
+        )
+        self.assertIn("v100.yaml:165-166", plan["coverage"][1]["explanation"])
+
+    def test_invalid_citation_suffixes_cannot_drop_claims_silently(self):
+        for detail in (
+            "project/a:1,2-bad",
+            "project/a:1,",
+            "project/a:1;2-3",
+            "project/a:1, missing",
+            "project/a:1 junk project/b:2",
+            "project/a:1 (unclosed",
+            "project/a:1 (note), project/b:2 (hidden)",
+        ):
+            with self.subTest(detail=detail), self.assertRaisesRegex(ValueError, "cite the lines"):
+                payload(
+                    PLAN.replace("project/README.md:12-18, roles/x.yml:3", detail),
+                    REQUIREMENTS,
+                    ROOTS,
+                )
+
+    def test_shorthand_ranges_still_need_observed_reads(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / "snapshot.txt"
+            source.write_text("one\ntwo\nthree\nfour\nfive\n")
+            plan = payload(
+                PLAN.replace("project/README.md:12-18, roles/x.yml:3", f"{source}:1,4-5"),
+                REQUIREMENTS,
+                ROOTS,
+            )
+            records = [
+                dict(
+                    input=dict(filePath=str(source)),
+                    output="1:one",
+                    source_sha256=digest(source.read_bytes()),
+                    source_event="read.jsonl",
+                    event_line=1,
+                )
+            ]
+            source_claims.validate_claim(plan["evidence"][0], records)
+            with self.assertRaisesRegex(ValueError, "offset=4, limit=2"):
+                source_claims.validate_claim(plan["evidence"][1], records)
+
+    def test_read_ranges_keep_quoted_paths_and_reject_prose(self):
+        text = PLAN.replace("Done when:", "Read: `project/a file.yml:1-2`,3-4\nDone when:", 1)
+        plan = payload(text, REQUIREMENTS, ROOTS)
+        self.assertEqual(plan["steps"][0]["read"], ["/repo/a file.yml:1-2", "/repo/a file.yml:3-4"])
+        with self.assertRaisesRegex(ValueError, "cite the lines"):
+            payload(text.replace("`,3-4", "` (project/b:99)"), REQUIREMENTS, ROOTS)
+
     def test_a_forgiving_plan_becomes_the_stored_result(self):
         plan = payload(PLAN, REQUIREMENTS, ROOTS)
         self.assertEqual((plan["status"], plan["decision"]), ("PLAN_READY", "split"))

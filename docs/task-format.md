@@ -95,7 +95,7 @@ user text cannot change those boundaries. Original field text and the complete
 submitted file remain stored verbatim. Requirements retain stable content IDs and
 source character ranges. A scoped child requirement retains its parent ID and exact
 text; global constraints apply unchanged to every child. Task prompts contain user
-fields once, without the JSON transport or copied server policy. Restart drafts use
+fields once, without the JSON transport or copied server policy. Standalone restart drafts use
 the typed fields directly; a task file of an older release that the Markdown reader
 rejects is offered whole as the Goal. A split whose parent requirements lack typed
 field provenance or a sealed reviewed plan cannot start children; restart the parent.
@@ -124,8 +124,9 @@ are not included. The whole run, including Continue, works in the worktrees; the
 source checkout and its other branches may change meanwhile without stopping the
 run. Changes stay uncommitted in the worktrees: the report lists each worktree and
 branch, and you review, commit, merge and finally `git worktree remove` it yourself.
-A browser follow-up continues in the same worktrees; Restart starts again from the
-source checkouts in new worktrees.
+A browser follow-up continues in the same worktrees; a standalone restart starts
+from the source checkouts in new worktrees. Restarting a reviewed split child keeps
+the parent's effective roots, including its existing worktrees.
 
 ## Execution boundaries
 

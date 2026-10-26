@@ -1,5 +1,6 @@
 """Validate requirement ownership and review decisions, independently of prose."""
 
+from countersign.core import prompt_texts
 from countersign.core.schema import require
 
 OUTCOME = "outcome"
@@ -44,8 +45,10 @@ def validate_outcome(outcome, requirement, evidence, executed_evidence=(), plann
         require(bool(outcome["evidence_ids"]), "Source claim needs observed evidence")
     if requirement["kind"] == "runtime":
         runtime_outcome(outcome, requirement, executed_evidence, planned_runtime)
-    else:
-        require(outcome[OUTCOME] != "deferred", "Required task evidence cannot be deferred")
+    elif outcome[OUTCOME] == "deferred":
+        raise ValueError(
+            prompt_texts.diagnostic("validation.task_deferred", requirement=requirement[IDENTIFIER])
+        )
 
 
 def runtime_outcome(outcome, requirement, executed_evidence, planned_runtime):

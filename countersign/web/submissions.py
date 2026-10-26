@@ -9,7 +9,7 @@ from pathlib import Path
 
 from countersign.core.files import atomic_json
 from countersign.core.runtime import settings_path
-from countersign.web import history, lifecycle, parent_context, requests, run_records
+from countersign.web import history, lifecycle, parent_context, requests, restarts, run_records
 from countersign.web.launch_records import LAUNCH_ERROR, LAUNCH_FILE, announce, recover_launches
 from countersign.web.run_activity import BusyError, require_idle, run_sources
 from countersign.web.task_form import build_task
@@ -70,7 +70,7 @@ class TaskLauncher:
         run = history.checked_run(self.base, payload[ID])
         action = payload["action"]
         if action == "restart":
-            return dict(id=run.name, draft=history.task_draft(run))
+            return restarts.restart(self, run)
         if action == "stop":
             return lifecycle.request_stop(run)
         if action == "delete":

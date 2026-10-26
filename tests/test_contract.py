@@ -228,9 +228,12 @@ class ContractTests(unittest.TestCase):
             source_claims.validate_claim(claim, records)
 
     def test_directory_or_missing_citation_is_feedback_not_a_crash(self):
-        for path in (self.source.parent, self.source.parent / "absent.py"):
+        for path, message in (
+            (self.source.parent, "regular file, not a directory"),
+            (self.source.parent / "absent.py", "cited file does not exist"),
+        ):
             claim = dict(self.payload["evidence"][0], path=str(path))
-            with self.subTest(path=path), self.assertRaisesRegex(ValueError, "existing file"):
+            with self.subTest(path=path), self.assertRaisesRegex(ValueError, message):
                 source_claims.validate_claim(claim, evidence.validation_records(self.run))
 
     def test_forged_or_wrong_root_citation_fails(self):

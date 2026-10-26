@@ -22,6 +22,7 @@
   "mode.integration": "Mode: integration review of a finished split. Change nothing. changes.diff holds the combined change of all tasks against the original files, and the Task split context lists the files each task changed. Check the original goal and every requirement against the current source, including how the tasks work together; task reports are not proof. Missing static evidence is a gap. Runtime checks stay deferred to their delivery phase.",
   "plan.format": [
     "PLAN FILE: your result is the Markdown file $path. It already holds a template: read it with the read tool first (the edit tool refuses to change an unread file), then edit it. Fill in Decision and the requirement lines early; the file survives an interruption. When the plan is complete, reply DONE. The server checks the file and returns every problem with its line number.",
+    "- Citations: start done: with exact read paths and ranges, e.g. /path:7-42,43-156; /other:1-4. Backtick-quote paths with spaces. Put explanations in parentheses after the list; prose references are not evidence. Never claim an unrun check passed from a source diff.",
     "- Decision: single (one task, implemented in this run), split (two or more tasks, each implemented as its own run), no change (every requirement is already met) or blocked (a required input is missing).",
     "- Summary: one or two sentences. An answer or design document goes in a final ## Answer section instead.",
     "- ## Requirements: one line per requirement with exactly one outcome. R1 → T1 (the task that delivers it). R2 → T1 [part A], T2 [part B] (scoped parts of one requirement). R3 → done: /absolute/path:10-18 (lines you read that already meet it). R4 → runtime (a runtime requirement checked later). R5 → gap: <the missing input> (then Decision must be blocked). R6 → all tasks (a constraint; already filled in).",
@@ -102,5 +103,9 @@
   "profile.runtime_rules": "Follow the current request's stage-specific response format and runtime policy, including its execution boundaries. Executor requests are available only when advertised in that request.",
   "child.header": "Task $task of a reviewed split of parent run $parent. Tasks run in plan order; earlier tasks are already applied to the source.",
   "child.earlier": "Earlier tasks:",
-  "child.none": "This is the first task."
+  "child.none": "This is the first task.",
+  "validation.plan_citations": "cite the lines as <path>:<from>-<to>; separate citations with commas or semicolons, use comma-separated ranges for the same path, and put any explanation in parentheses",
+  "validation.missing_source": "$label: cited file does not exist; use the exact read path",
+  "validation.regular_source": "$label: cite lines of a regular file, not a directory",
+  "validation.task_deferred": "Required task evidence cannot be deferred ($requirement). Assign unfinished work to a task, or use gap: for missing required evidence. A source diff does not prove an unrun check passed."
 }

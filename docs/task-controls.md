@@ -4,7 +4,8 @@
 
 | Action | Required state | Result |
 |---|---|---|
-| Restart from scratch | No active run on its projects | Open the prefilled task form; submit explicitly to create a new run |
+| Restart from scratch (standalone run) | No active run on its projects | Open the prefilled task form; submit explicitly to create a new run |
+| Restart reviewed task (split child) | Latest attempt of the next unfinished task; no active writer | Start a linked attempt from the approved parent plan, directly at implementation; preserve previous edits and original preimages |
 | Stop task | Running | Write a stop request; the worker cleans up opencode and saves an interruption checkpoint |
 | Continue with extra budget | Eligible checkpoint; explicit confirmation | Add two attempts and one attempt timeout to the interrupted stage; retain consumption |
 | Continue interrupted run | Eligible checkpoint and unchanged source | Append new attempts to the same run, starting at the interrupted stage; a stage that reported **Blocked** can continue too, with your note answering its question; an interrupted or blocked implementer first inspects its existing edits |
@@ -128,8 +129,18 @@ Resume retains frozen task/agent snapshots, approved scope and original preimage
 A run frozen by a release with other response schemas, or a child without a sealed
 reviewed parent, stays viewable but cannot continue: Restart it (or its parent). If source or Git metadata changed after
 the checkpoint, continuation refuses to
-proceed. Restart and follow-up establish a new baseline from current sources; they
-never revert earlier changes.
+proceed. For a split child, open the parent split, inspect the changes and explicitly
+use **Accept current files for Tn**, then retry that task. Replan the parent when
+its scope or requirements changed. Restart reviewed task retains source integrity
+checks and never accepts external edits implicitly. Standalone restart and follow-up
+establish a fresh baseline; none of these actions revert earlier changes.
+
+A child restart uses the parent's sealed plan, typed requirements, effective roots
+and file scope. The new attempt is linked before its worker starts; completed,
+superseded or running child attempts cannot be retried this way. The API restart
+action has the same behavior; submitting a detached restart draft for a child is
+rejected. An already detached run is not automatically reattached: stop it and
+recover through the original parent, inspecting its changes before accepting files.
 
 ## Conversation context
 
@@ -201,8 +212,12 @@ countersign submit --json payload.json       # the fields of POST /api/tasks
 
 `--mode` is `change`, `answer`, `design` or `split`; `--followup RUN` and `--restart RUN`
 continue a conversation; a text option may name a file as `@FILE`. `action` accepts the
-`/api/actions` actions; `action RUN restart` only prints the saved `draft`, which
-`submit --json - --restart RUN` launches after any edits. Automatic steps of a split (the next task, integration review,
+`/api/actions` actions. For a standalone run, `action RUN restart` prints the saved
+`draft`; submit the edited fields with `parent_run` and `submission_mode: "restart"`
+in the JSON payload. For a split child, `action CHILD_RUN restart` launches a new
+linked attempt of the same reviewed task directly; `submit --restart CHILD_RUN`
+is rejected because an editable draft would lose the assignment.
+Automatic steps of a split (the next task, integration review,
 Jenkins validation, server checks after confirmation) need the managed service.
 
 ## Decisions and continuation

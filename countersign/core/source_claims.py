@@ -7,7 +7,7 @@ Every cited line must be current and must have reached the model in full.
 import hashlib
 from pathlib import Path
 
-from countersign.core import source_lines
+from countersign.core import prompt_texts, source_lines
 from countersign.core.schema import require
 from countersign.core.source_lines import returned_lines as returned_lines
 
@@ -53,7 +53,10 @@ def cited_lines(claim, label):
 def file_bytes(name, label):
     """A directory or a vanished file is citation feedback, not a stage failure."""
     path = Path(name)
-    require(path.is_file(), f"{label}: cite lines of an existing file, not a directory")
+    if not path.exists():
+        raise ValueError(prompt_texts.diagnostic("validation.missing_source", label=label))
+    if not path.is_file():
+        raise ValueError(prompt_texts.diagnostic("validation.regular_source", label=label))
     return path.read_bytes()
 
 
