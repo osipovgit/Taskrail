@@ -25,8 +25,14 @@ class OnboardingTests(unittest.TestCase):
     def settings(self, **options):
         path = self.root / "settings.json"
         values = dict(
-            command=[sys.executable, str(BASE / "tests/fake_live.py"), "--profiles"]
-            + [str(self.profiles), "--mode", "ok"],
+            command=[
+                sys.executable,
+                str(BASE / "tests/fake_live.py"),
+                "--profiles",
+                str(self.profiles),
+                "--mode",
+                "ok",
+            ],
             agent_directory=str(self.profiles),
             run_base=str(self.root / "runs"),
         )
@@ -52,7 +58,7 @@ class OnboardingTests(unittest.TestCase):
 
     def test_init_writes_private_settings_once(self):
         fake = self.root / "opencode"
-        fake.write_text("#!{0}\nprint('1.19.3')\n".format(sys.executable))
+        fake.write_text(f"#!{sys.executable}\nprint('1.19.3')\n")
         fake.chmod(0o755)
         target = init(str(fake), ["planner=p/a", "reviewer=p/b"], "read")
         written = json.loads(target.read_text())

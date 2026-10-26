@@ -3,6 +3,7 @@
 from countersign.application.artifacts import save_run
 from countersign.application.report_sections import (
     check_lines,
+    command_effects,
     not_verified,
     stage_errors,
     worktree_lines,
@@ -33,6 +34,7 @@ def report(run, state):
         *timeline(state),
         *inventory(state),
         *check_lines(state),
+        *command_effects(state),
         *stage_errors(state),
         *execution_report(state),
         *not_verified(state),
@@ -45,16 +47,17 @@ def report(run, state):
 
 
 def header(state):
-    """Status, summary and the in-place editing notice."""
-    return [
+    """Status, summary, a reviewed answer and the in-place editing notice."""
+    lines = [
         "# Countersign — review report",
         "",
-        "Status: {0}".format(state["status"]),
+        "Status: {}".format(state["status"]),
         "",
         state.get("summary", ""),
-        "",
-        ISOLATED if state.get("worktrees") else IN_PLACE,
     ]
+    if state.get("answer"):
+        lines += ["", "## Answer", "", state["answer"]]
+    return [*lines, "", ISOLATED if state.get("worktrees") else IN_PLACE]
 
 
 def timeline(state):
@@ -74,7 +77,7 @@ def timeline_row(stage):
     """Number, linked directory, role, mode and status with any verdict."""
     outcome = stage["status"]
     if stage.get("verdict"):
-        outcome = "{0} / {1}".format(outcome, stage["verdict"])
+        outcome = "{} / {}".format(outcome, stage["verdict"])
     role = stage.get("role") or "system"
     cells = (stage["number"], stage["directory"], role, stage["mode"], outcome)
     return ROW.format(*cells)

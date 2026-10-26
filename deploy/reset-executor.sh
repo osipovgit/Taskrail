@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
 # Full reset of the separately installed SSH executor; explicit sudo is required.
 set -euo pipefail
-[[ $EUID -eq 0 ]] || { echo 'Run as root' >&2; exit 2; }
+[[ $EUID -eq 0 ]] || {
+    echo 'Run as root' >&2
+    exit 2
+}
 # shellcheck source=deploy/executor-maintenance.sh
 source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/executor-maintenance.sh"
 lock_executor_maintenance /run/countersign-executor-maintenance.lock

@@ -15,7 +15,7 @@ def index_lines(records, blocks, start):
     """The index after line start: one entry per record with the lines of its block."""
     spans = block_spans(blocks, start + len(HEAD) + len(records))
     entries = list(HEAD)
-    for number, pair in enumerate(zip(records, spans), 1):
+    for number, pair in enumerate(zip(records, spans, strict=True), 1):
         entries.append(index_entry(number, *pair))
     return entries
 
@@ -40,5 +40,5 @@ def index_entry(number, record, span):
     target = arguments.get("filePath") or arguments.get("path") or ""
     present = [key for key in WINDOW_KEYS if key in arguments]
     window = json.dumps({key: arguments[key] for key in present})
-    where = "{0} characters · lines {1}-{2}".format(len(record["output"]), *span)
-    return "{0}. {1} {2} {3} · {4}".format(number, record["tool"], target, window, where)
+    where = "{} characters · lines {}-{}".format(len(record["output"]), *span)
+    return "{}. {} {} {} · {}".format(number, record["tool"], target, window, where)

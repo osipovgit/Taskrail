@@ -3,6 +3,7 @@
 from countersign.application import (
     check_configuration,
     planned_checks,
+    previous_attempt,
     reviewed_artifacts,
     reviewed_input,
     reviewed_plan,
@@ -20,7 +21,7 @@ REFERENCE = "00-input/reviewed-plan.json"
 
 
 def begin(workflow):
-    """Legacy child runs still plan; authenticated contracts skip redundant model planning."""
+    """Authenticated child contracts and integration reviews skip model planning."""
     phase = workflow.config.get("phase")
     if phase == "integration":
         stage = "check" if workflow.config.get("check_specs") else "reviewer"
@@ -29,7 +30,7 @@ def begin(workflow):
             reviewed_plan.empty("Review the combined result against every criterion"),
             stage,
         )
-    elif phase == "task" and workflow.config.get("assigned_contract"):
+    elif phase == "task":
         child(workflow)
 
 
@@ -37,12 +38,8 @@ def child(workflow):
     """Recheck authority, dependency results, roots and source freshness under the run lock."""
     assignment = workflow.config["assigned_contract"]
     parent = reviewed_artifacts.parent(workflow.run.parent, assignment["parent_run"])
-    if parent is None:
-        return
-    by_id = {step["id"]: step for step in parent[PLAN]["steps"]}
-    schema.require(assignment["task_id"] in by_id, "Unknown reviewed child task")
-    step = by_id[assignment["task_id"]]
-    reviewed_sources.verify(parent, step["id"], workflow)
+    step = assigned_step(parent, assignment["task_id"])
+    earlier = reviewed_sources.verify(parent, step["id"], workflow)
     verify_requirements(parent, step, workflow)
     check_configuration.adopt(workflow, parent["run"], parent["state"])
     reviewed_input.capture(workflow, parent, step)
@@ -53,6 +50,15 @@ def child(workflow):
         workflow, planned_checks.inherit(parent["state"], workflow.state[REQUIREMENTS])
     )
     install(workflow, plan, "implementer")
+    if earlier:
+        previous_attempt.continue_from(workflow, earlier)
+
+
+def assigned_step(parent, task_id):
+    """The reviewed plan step a child was started for."""
+    by_id = {step["id"]: step for step in parent[PLAN]["steps"]}
+    schema.require(task_id in by_id, "Unknown reviewed child task")
+    return by_id[task_id]
 
 
 def verify_requirements(parent, step, workflow):

@@ -24,8 +24,6 @@ def serve(base, port=DEFAULT_PORT, settings=None):
     """Serve until interrupted; running task workers are not stopped."""
     with make_server(base, port, settings=settings) as server:
         say(
-            "Countersign: http://{0}:{1} — task dashboard; Ctrl+C stops the server, not active task workers".format(
-                HOST, server.server_port
-            )
+            f"Countersign: http://{HOST}:{server.server_port} — task dashboard; Ctrl+C stops the server, not active task workers"
         )
         server.serve_forever()

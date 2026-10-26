@@ -19,10 +19,11 @@ and exact evidence citations; they do not create workflow stages. A request is n
 
 For read-only Git commands, the dispatcher also accepts one unambiguous JSON
 object surrounded by prose or a Markdown fence. It never repairs arguments or
-chooses among multiple objects. Duplicate keys, malformed JSON and unknown fields
-are rejected. Root and command validation still apply. Requests that can change
-state require strict JSON with no surrounding prose. Read requests are routed to
-the executor before final-result validation, without a tool-less format-repair pass.
+chooses among multiple objects. Requests that can change state must be the entire
+response. A request with unknown or missing fields, a wrong version or an empty reason
+runs nothing; the same session is told what to fix. Root and command validation still
+apply. Read requests are routed to the executor before final-result validation,
+without a tool-less format-repair pass.
 
 ## Permissions
 
@@ -32,7 +33,9 @@ the executor before final-result validation, without a tool-less format-repair p
 - Implementer: additionally `add -- <files>`, `commit -m <message>`,
   `revert --no-edit <full hash>`, `cherry-pick --no-edit <full hash>`,
   `merge --ff-only <full hash>`, `fetch <remote>`,
-  `push <remote> HEAD:refs/heads/<branch>`, when needed by the task.
+  `push <remote> HEAD:refs/heads/<branch>`, when needed by the task. A push waits for
+  your personal decision in the UI (or `countersign decide`); **Allow all actions** does
+  not cover it.
 - Always forbidden: hard reset, clean, history rewriting, amend, rebase and forced
   pushes, including force-with-lease and `+refspec`. Direct metadata writes and
   model shell execution remain disabled.

@@ -43,19 +43,18 @@ def cited_lines(claim, label):
     """The current text of the cited line range."""
     start, end = claim["line_start"], claim["line_end"]
     require(start <= end, f"{label}: reversed line range")
-    source_bytes = Path(claim["path"]).read_bytes()
+    source_bytes = file_bytes(claim["path"], label)
     lines = source_bytes.decode("utf-8").splitlines()
     require(end <= len(lines), f"{label}: range outside source of {len(lines)} lines")
     excerpt = "\n".join(lines[start - 1 : end])
     return excerpt, hashlib.sha256(source_bytes).hexdigest()
 
 
-def supports(record, claim, excerpt):
-    """Every cited position must be in the returned output, with the current text."""
-    if record["input"]["filePath"] != claim["path"]:
-        return False
-    expected = dict(enumerate(excerpt.split("\n"), claim["line_start"]))
-    return len(matching_positions(record, expected)) == len(expected)
+def file_bytes(name, label):
+    """A directory or a vanished file is citation feedback, not a stage failure."""
+    path = Path(name)
+    require(path.is_file(), f"{label}: cite lines of an existing file, not a directory")
+    return path.read_bytes()
 
 
 def observed_ranges(claim, records, current):

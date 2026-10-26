@@ -46,9 +46,11 @@ class LocalJournalTests(unittest.TestCase):
         self.assertEqual(local_journal.records(self.run)[0]["status"], "SUCCEEDED")
 
     def test_interrupt_is_unknown_and_never_replayed_after_reason_or_source_changes(self):
-        with patch("countersign.interactions.local.execute", side_effect=KeyboardInterrupt):
-            with self.assertRaises(KeyboardInterrupt):
-                self.execute()
+        with (
+            patch("countersign.interactions.local.execute", side_effect=KeyboardInterrupt),
+            self.assertRaises(KeyboardInterrupt),
+        ):
+            self.execute()
         self.payload["reason"] = "A different explanation"
         self.context["expected"] = {"project/a.py": "changed"}
         with patch("countersign.interactions.local.execute") as execute:
@@ -68,10 +70,12 @@ class LocalJournalTests(unittest.TestCase):
         self.assertEqual(outcome["decision"], decision)
 
     def test_failure_to_record_running_cannot_start_subprocess(self):
-        with patch("countersign.interactions.local_journal.update", side_effect=OSError):
-            with patch("countersign.interactions.local.execute") as execute:
-                with self.assertRaises(OSError):
-                    self.execute()
+        with (
+            patch("countersign.interactions.local_journal.update", side_effect=OSError),
+            patch("countersign.interactions.local.execute") as execute,
+            self.assertRaises(OSError),
+        ):
+            self.execute()
         execute.assert_not_called()
         self.assertEqual(local_journal.records(self.run)[0]["status"], "APPROVED")
 

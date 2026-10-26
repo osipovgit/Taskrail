@@ -1,14 +1,13 @@
 """Deterministic check assessments from explicit output formats, never keyword counts."""
 
 import json
-from xml.etree import ElementTree
 
 from countersign.application import check_lint, check_reports
 
 MAX_REPORT = 2 * 1024 * 1024
 MAX_DIAGNOSTICS = 100
 ERROR = "error"
-PARSE_ERRORS = (ValueError, TypeError, KeyError, ElementTree.ParseError)
+PARSE_ERRORS = (ValueError, TypeError, KeyError)
 
 
 def assess(adapter, outcome):

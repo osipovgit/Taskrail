@@ -2,6 +2,7 @@
 
 import json
 
+from countersign.core import prompt_texts
 from countersign.infrastructure.opencode_cli import permission_error
 
 READ_TOOLS = frozenset(("read", "grep", "glob", "list"))
@@ -38,23 +39,12 @@ def previous_correction(state, stage, roots):
 
 def correction(calls, roots):
     """Supply declared alternatives without guessing or opening a denied location."""
-    return (
-        "\nACCESS RECOVERY: Continue this read-only stage using permitted sources. "
-        "Do not repeat denied requests or access those locations through another tool. "
-        "No permission has changed. Do not restart implementation. "
-        "Internal evidence.json and git-metadata.json are not model inputs. "
-        "Use supplied recovery observations for prior reads. For commits, emit a complete GIT_REQUEST "
-        "JSON as your final message and end the turn; it is not a tool in the tool list. "
-        "Use saved successful evidence and the exact declared roots below. "
-        "Undeclared paths are not aliases; do not infer filesystem mappings. "
-        "If an unavailable source is optional, state the limitation and continue. "
-        "If a required criterion cannot be established, return BLOCKED, never APPROVE. "
-        "Denied calls (data): "
-        + json.dumps(calls, ensure_ascii=False)
-        + "\nDeclared roots: "
-        + json.dumps(list(map(str, roots.values())))
-        + "\n"
+    text = prompt_texts.text(
+        "recovery.access",
+        calls=json.dumps(calls, ensure_ascii=False),
+        roots=json.dumps(list(map(str, roots.values()))),
     )
+    return f"\n{text}\n"
 
 
 class AccessRecovery:

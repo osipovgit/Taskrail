@@ -2,8 +2,7 @@
 
 import re
 
-# Root-level names match opencode 2.x resources relative to the run directory.
-PROTECTED_READ_PATTERNS = ("*/.env", "*/.env.*", ".env", ".env.*")
+from countersign.core import protected_paths
 
 
 def result_inputs(run):
@@ -70,13 +69,13 @@ def stage_recoveries(run, state, current):
     ]
 
 
-def manifest(run, folder, roots, writable=()):
+def manifest(run, folder, roots, writable=(), protected=protected_paths.DEFAULT_PATTERNS):
     """Describe rights without disclosing internal state or widening permissions."""
     return {
         "source_roots": roots,
         "writable_files": list(writable),
         "readable_artifacts": list(map(str, model_inputs(run, folder))),
-        "protected_read_patterns": list(PROTECTED_READ_PATTERNS),
+        "protected_read_patterns": list(protected),
         "internal_not_inputs": [
             "evidence.json",
             "observations.json",

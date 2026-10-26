@@ -41,11 +41,13 @@ class SessionBudgetTests(unittest.TestCase):
         self.assertEqual(configured["context_reserve_tokens"], 8192)
         self.assertEqual(session_budget.capacity(configured), 24576)
         for context, reserve in ((0, 1), (10, 0), (10, 10), (10, 11)):
-            with self.subTest(context=context, reserve=reserve):
-                with self.assertRaisesRegex(ValueError, "context_reserve_tokens"):
-                    session_budget.settings(
-                        dict(model_context_tokens=context, context_reserve_tokens=reserve)
-                    )
+            with (
+                self.subTest(context=context, reserve=reserve),
+                self.assertRaisesRegex(ValueError, "context_reserve_tokens"),
+            ):
+                session_budget.settings(
+                    dict(model_context_tokens=context, context_reserve_tokens=reserve)
+                )
 
     def test_writer_admission_counts_frozen_role_and_distinct_planned_bytes(self):
         (self.root / "request.md").write_text("request")

@@ -1,5 +1,7 @@
 """Recover only known plan-artifact read-before-write rejections."""
 
+from countersign.core import prompt_texts
+
 
 def read_before_write(outcome, run):
     """Only a rejected edit of this run's plan can request a same-session read."""
@@ -11,11 +13,7 @@ def read_before_write(outcome, run):
     target = str(run / "plan.md")
     if not all(unread_plan(failure, target) for failure in failures):
         return None
-    return (
-        f"The plan edit was rejected before execution. Read {target} with the read tool "
-        "in THIS session, inspect its current contents, then apply your intended plan edit "
-        "and end with DONE. Earlier session or server reads do not satisfy this rule."
-    )
+    return prompt_texts.text("feedback.plan_unread", path=target)
 
 
 def unread_plan(failure, target):

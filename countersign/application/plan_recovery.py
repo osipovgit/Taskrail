@@ -1,6 +1,7 @@
 """Validate a persisted planner proposal after context exhaustion, before spending a retry."""
 
 from countersign.application.attempt_session import validated
+from countersign.core import prompt_texts
 from countersign.infrastructure.context_overflow import STATUS
 
 RECOVERY = "plan_recovery"
@@ -29,9 +30,4 @@ def feedback(outcome):
     failure = outcome.get(RECOVERY)
     if not failure:
         return ""
-    return (
-        "\nThe saved plan.md failed server validation: {0}\n"
-        "Read the current plan file in this session before editing it. Correct these "
-        "defects using recorded evidence; read only missing source ranges. Do not repeat "
-        "completed discovery. Finish the plan and end with DONE.\n"
-    ).format(failure["reason"])
+    return "\n{}\n".format(prompt_texts.text("recovery.plan", reason=failure["reason"]))

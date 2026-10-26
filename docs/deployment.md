@@ -35,7 +35,9 @@ Updates wait for every active run (runs share the installation lock), validate a
 `current` and restart. They preserve history, settings, custom roles and original
 project edits. They never execute Git, rewrite run artifacts or roll back source
 or application changes. If startup fails, inspect the journal. The update
-script uses a trusted local release, not an automatic Internet download feed.
+script uses a trusted local release, not an automatic Internet download feed. An
+installed release holds the application, deployment scripts, README and license;
+documentation stays in the source tree.
 
 ## Run on a remote server
 
@@ -105,6 +107,8 @@ source templates. See [instruction contracts](contracts.md).
 | `agent_env_allow` | `[]` | Extra environment variables opencode may receive despite their secret-shaped names; common provider keys are always allowed |
 | `format_repair_tools` | `none` | `read` keeps read-only tools in format repair passes, for providers that reject tool-less requests |
 | `permission_worktree` | inferred | Base directory for relative permission names (Git worktree for 1.x, first root for 2.x); required when `.git` is a file or symlink |
+| `tool_output_dir` | opencode location | Absolute directory (`~` allowed) where a compatible CLI keeps truncated tool output; its automatic `external_directory` allow rule is accepted only for this directory |
+| `protected_paths` | credentials list | Patterns models never read or edit, besides `.env` files; setting it replaces the defaults ([access](access.md#protected-paths)) |
 
 opencode 1.x is called as `opencode run --session --dir --agent --format json --file`
 and `opencode agent list`. For 2.x, each stage starts one private `opencode serve`,

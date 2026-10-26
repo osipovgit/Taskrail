@@ -71,10 +71,16 @@ and per-requirement outcomes are checked before each transition.
 
 ## CLI
 
+The CLI runs a task in the foreground, or starts and controls runs for automation
+(a chat bot or script on the server) with the browser's launcher; see
+[automation](docs/task-controls.md#automation-from-the-cli).
+
 ```sh
 countersign /absolute/path/task.md
-countersign status /absolute/path/run
-countersign resume /absolute/path/run --note "python3 is installed now"
+countersign submit --root shop=/srv/shop --goal @goal.md
+countersign status RUN
+countersign decide RUN allow
+countersign action RUN resume --note "python3 is installed now"
 countersign analytics
 # Foreground development UI:
 python3 -m countersign serve --settings countersign/settings.json

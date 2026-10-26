@@ -26,14 +26,18 @@ def digest(name, location):
     """Lines, severity mentions and the most mentioned files and rules of one output."""
     text = location.read_text(encoding="utf-8", errors="replace")
     lowered = text.casefold().splitlines()
-    severities = ", ".join(
-        "{0} {1}".format(sum(word in line for line in lowered), word) for word in SEVERITIES
-    )
+    severities = mentions(lowered)
     lines = [f"Digest of {name} ({len(lowered)} lines, {location}): lines mentioning {severities}."]
-    lines.append("Files most mentioned: {0}".format(ranked(FILE_MENTION.findall(text))))
-    lines.append("Rules most mentioned: {0}".format(ranked(RULE.findall(text))))
+    lines.append(f"Files most mentioned: {ranked(FILE_MENTION.findall(text))}")
+    lines.append(f"Rules most mentioned: {ranked(RULE.findall(text))}")
     lines.append("Read only the windows you need: grep the file for a rule or a path.")
     return "\n".join(lines)
+
+
+def mentions(lines):
+    """`count word` for each severity word, counting the lines that mention it."""
+    counts = {word: sum(word in line for line in lines) for word in SEVERITIES}
+    return ", ".join(f"{count} {word}" for word, count in counts.items())
 
 
 def ranked(found):

@@ -12,7 +12,6 @@ from unittest.mock import patch
 from countersign.application import mode_rules
 from countersign.application.live import execute_task
 from countersign.core.files import atomic_json
-from countersign.core.requirements import task_requirements
 from countersign.web import delivery_launch, requests, submissions, task_form
 from countersign.web.history import HISTORY, TaskDraft, conversation, previous_messages, task_draft
 from countersign.web.lifecycle import trash_run
@@ -143,9 +142,11 @@ class TaskControlTests(unittest.TestCase):
             dict(confirmed_change="original"),
             dict(phase="server", confirmed_change="../original"),
         ):
-            with self.subTest(fields=fields):
-                with self.assertRaisesRegex(ValueError, "Only a server check"):
-                    self.launcher.submit(dict(self.payload, **fields))
+            with (
+                self.subTest(fields=fields),
+                self.assertRaisesRegex(ValueError, "Only a server check"),
+            ):
+                self.launcher.submit(dict(self.payload, **fields))
 
     def test_worktree_flag_is_a_boolean_task_header_option(self):
         with patch.object(self.launcher, "launch", return_value={"id": "next"}) as launch:
@@ -198,9 +199,9 @@ class TaskControlTests(unittest.TestCase):
         self.assertTrue(meta["read_only"])
         self.assertNotIn("Turn control", text)
         rule = mode_rules.render(dict(design=True, read_only=True), "planner")
-        self.assertIn("Design discussion: no edits", rule)
-        self.assertNotIn("Answer only", rule)
-        self.assertIn("Split into tasks", mode_rules.render(dict(decompose=True), "planner"))
+        self.assertIn("Mode: design discussion. Change nothing", rule)
+        self.assertNotIn("answer only", rule)
+        self.assertIn("Mode: split into tasks", mode_rules.render(dict(decompose=True), "planner"))
         self.assertIn("this run then implements it", mode_rules.render({}, "planner"))
         self.assertEqual(mode_rules.render({}, "implementer"), "")
         with patch.object(self.launcher, "launch", return_value={"id": "next"}) as launch:
@@ -219,10 +220,10 @@ class TaskControlTests(unittest.TestCase):
     def test_restart_drafts_keep_policy_separate_and_preserve_explicit_user_text(self):
         draft = task_draft(self.run)
         self.assertNotIn("Workflow rules", draft["constraints"])
-        legacy = dict(draft, constraints="Keep X\n\n" + task_form.COPIED_RULES)
-        fields = {key: legacy[key] for key in task_form.FIELDS}
-        text, _ = build_task(dict(fields, roots=legacy["roots"]), self.runs)
-        self.assertEqual(TaskDraft(text).fields()["constraints"], legacy["constraints"])
+        edited = dict(draft, constraints="Keep X\n\n### Workflow rules\nMy own rule")
+        fields = {key: edited[key] for key in task_form.FIELDS}
+        text, _ = build_task(dict(fields, roots=edited["roots"]), self.runs)
+        self.assertEqual(TaskDraft(text).fields()["constraints"], edited["constraints"])
         self.assertEqual(sum(line == "## Workflow rules" for line in text.splitlines()), 1)
         self.assertIn("## Additional constraints\nKeep X\n", text)
 
@@ -256,8 +257,10 @@ class TaskControlTests(unittest.TestCase):
             roots={"project": str(self.repo)},
             results={"plan": "plan.json"},
             stages=[],
+            requirements=[],
         )
         (epic / "run.json").write_text(json.dumps(index))
+        (epic / "00-input/settings.json").write_text("{}")
         return epic
 
     def launching(self, name):
@@ -295,7 +298,7 @@ class TaskControlTests(unittest.TestCase):
         self.assertIn('"auto_approve": true', text)
         self.assertNotIn('"decompose"', text)
         self.assertNotIn("Conversation history", text)
-        ids = [entry["text"] for entry in task_requirements(text, [])]
+        ids = [entry["text"] for entry in TaskDraft(text).typed["requirements"]]
         self.assertFalse(any("S-2" in entry or "Workflow rules" in entry for entry in ids))
         self.assertIn("## Task split context", text)
         self.assertIn(self.payload["criteria"], snapshot)
@@ -423,9 +426,11 @@ class TaskControlTests(unittest.TestCase):
             self.assertIn("S-1", json.loads(record.read_text())["tasks"])
             raise KeyboardInterrupt
 
-        with patch.object(submissions, "start_worker", side_effect=application_stops):
-            with self.assertRaises(KeyboardInterrupt):
-                self.launcher.action(dict(id="epic", action="epic_next"))
+        with (
+            patch.object(submissions, "start_worker", side_effect=application_stops),
+            self.assertRaises(KeyboardInterrupt),
+        ):
+            self.launcher.action(dict(id="epic", action="epic_next"))
         child = json.loads(record.read_text())["tasks"]["S-1"]
         launch = self.runs / ".submissions" / child / "launch.json"
         self.assertEqual(json.loads(launch.read_text())["status"], "STARTING")

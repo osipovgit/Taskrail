@@ -212,6 +212,13 @@
             },
             "notes": {
               "type": "string"
+            },
+            "read": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
             }
           }
         }
@@ -259,295 +266,6 @@
                 "type": "string",
                 "minLength": 1
               }
-            }
-          }
-        }
-      }
-    }
-  },
-  "implementer": {
-    "type": "object",
-    "required": [
-      "schema_version",
-      "status",
-      "summary",
-      "coverage",
-      "evidence",
-      "unverified",
-      "blocking_gaps",
-      "completed_steps",
-      "changed_files"
-    ],
-    "additionalProperties": false,
-    "properties": {
-      "schema_version": {
-        "type": "integer",
-        "enum": [
-          1
-        ]
-      },
-      "status": {
-        "type": "string",
-        "enum": [
-          "IMPLEMENTED",
-          "BLOCKED"
-        ]
-      },
-      "summary": {
-        "type": "string",
-        "minLength": 1
-      },
-      "coverage": {
-        "type": "array",
-        "items": {
-          "type": "object",
-          "required": [
-            "id",
-            "outcome",
-            "evidence_ids",
-            "explanation"
-          ],
-          "additionalProperties": false,
-          "properties": {
-            "id": {
-              "type": "string",
-              "minLength": 1
-            },
-            "outcome": {
-              "type": "string",
-              "enum": [
-                "satisfied",
-                "planned",
-                "deferred",
-                "gap",
-                "contradicted",
-                "not_evaluated"
-              ]
-            },
-            "evidence_ids": {
-              "type": "array",
-              "items": {
-                "type": "string",
-                "minLength": 1
-              }
-            },
-            "explanation": {
-              "type": "string",
-              "minLength": 1
-            }
-          }
-        }
-      },
-      "evidence": {
-        "type": "array",
-        "items": {
-          "type": "object",
-          "required": [
-            "id",
-            "path",
-            "line_start",
-            "line_end"
-          ],
-          "additionalProperties": false,
-          "properties": {
-            "id": {
-              "type": "string",
-              "minLength": 1
-            },
-            "path": {
-              "type": "string",
-              "minLength": 1
-            },
-            "line_start": {
-              "type": "integer",
-              "minimum": 1
-            },
-            "line_end": {
-              "type": "integer",
-              "minimum": 1
-            }
-          }
-        }
-      },
-      "unverified": {
-        "type": "array",
-        "items": {
-          "type": "string",
-          "minLength": 1
-        }
-      },
-      "blocking_gaps": {
-        "type": "array",
-        "items": {
-          "type": "string",
-          "minLength": 1
-        }
-      },
-      "completed_steps": {
-        "type": "array",
-        "items": {
-          "type": "string",
-          "minLength": 1
-        }
-      },
-      "changed_files": {
-        "type": "array",
-        "items": {
-          "type": "string",
-          "minLength": 1
-        }
-      }
-    }
-  },
-  "reviewer": {
-    "type": "object",
-    "required": [
-      "schema_version",
-      "status",
-      "summary",
-      "coverage",
-      "evidence",
-      "unverified",
-      "blocking_gaps",
-      "input_complete",
-      "findings"
-    ],
-    "additionalProperties": false,
-    "properties": {
-      "schema_version": {
-        "type": "integer",
-        "enum": [
-          1
-        ]
-      },
-      "status": {
-        "type": "string",
-        "enum": [
-          "APPROVE",
-          "REQUEST_CHANGES",
-          "BLOCKED"
-        ]
-      },
-      "summary": {
-        "type": "string",
-        "minLength": 1
-      },
-      "coverage": {
-        "type": "array",
-        "items": {
-          "type": "object",
-          "required": [
-            "id",
-            "outcome",
-            "evidence_ids",
-            "explanation"
-          ],
-          "additionalProperties": false,
-          "properties": {
-            "id": {
-              "type": "string",
-              "minLength": 1
-            },
-            "outcome": {
-              "type": "string",
-              "enum": [
-                "satisfied",
-                "planned",
-                "deferred",
-                "gap",
-                "contradicted",
-                "not_evaluated"
-              ]
-            },
-            "evidence_ids": {
-              "type": "array",
-              "items": {
-                "type": "string",
-                "minLength": 1
-              }
-            },
-            "explanation": {
-              "type": "string",
-              "minLength": 1
-            }
-          }
-        }
-      },
-      "evidence": {
-        "type": "array",
-        "items": {
-          "type": "object",
-          "required": [
-            "id",
-            "path",
-            "line_start",
-            "line_end"
-          ],
-          "additionalProperties": false,
-          "properties": {
-            "id": {
-              "type": "string",
-              "minLength": 1
-            },
-            "path": {
-              "type": "string",
-              "minLength": 1
-            },
-            "line_start": {
-              "type": "integer",
-              "minimum": 1
-            },
-            "line_end": {
-              "type": "integer",
-              "minimum": 1
-            }
-          }
-        }
-      },
-      "unverified": {
-        "type": "array",
-        "items": {
-          "type": "string",
-          "minLength": 1
-        }
-      },
-      "blocking_gaps": {
-        "type": "array",
-        "items": {
-          "type": "string",
-          "minLength": 1
-        }
-      },
-      "input_complete": {
-        "type": "boolean"
-      },
-      "findings": {
-        "type": "array",
-        "items": {
-          "type": "object",
-          "required": [
-            "id",
-            "file",
-            "criterion",
-            "evidence"
-          ],
-          "additionalProperties": false,
-          "properties": {
-            "id": {
-              "type": "string",
-              "minLength": 1
-            },
-            "file": {
-              "type": "string",
-              "minLength": 1
-            },
-            "criterion": {
-              "type": "string",
-              "minLength": 1
-            },
-            "evidence": {
-              "type": "string",
-              "minLength": 1
             }
           }
         }
@@ -643,6 +361,80 @@
               "type": "string",
               "minLength": 1,
               "maxLength": 4000
+            }
+          }
+        }
+      },
+      "missing_inputs": {
+        "type": "array",
+        "maxItems": 100,
+        "items": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000
+        }
+      },
+      "summary": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 2000
+      }
+    }
+  },
+  "implementer-decision": {
+    "type": "object",
+    "required": [
+      "schema_version",
+      "outcomes",
+      "missing_inputs"
+    ],
+    "additionalProperties": false,
+    "properties": {
+      "schema_version": {
+        "type": "integer",
+        "enum": [
+          2
+        ]
+      },
+      "outcomes": {
+        "type": "array",
+        "maxItems": 500,
+        "items": {
+          "type": "object",
+          "required": [
+            "requirement",
+            "result",
+            "evidence"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "requirement": {
+              "type": "string",
+              "minLength": 1
+            },
+            "result": {
+              "type": "string",
+              "enum": [
+                "satisfied",
+                "deferred",
+                "gap",
+                "contradicted",
+                "not_evaluated"
+              ]
+            },
+            "evidence": {
+              "type": "array",
+              "maxItems": 50,
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 4096
+              }
+            },
+            "reason": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 2000
             }
           }
         }

@@ -43,5 +43,5 @@ def output_entry(line):
     if not isinstance(output, str):
         return []
     arguments = json.dumps(state.get("input"), ensure_ascii=False)
-    call = "{0} {1}".format(part.get("tool"), arguments)
+    call = "{} {}".format(part.get("tool"), arguments)
     return [(len(output), call[:CALL_CHARS])]

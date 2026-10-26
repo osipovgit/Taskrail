@@ -10,14 +10,17 @@ npm ci --ignore-scripts
 make check PYTHON=.venv/bin/python
 ```
 
-Wemake/Flake8 checks Python design and style; Ruff checks imports/basic correctness
-and formatting. ESLint, Stylelint and Prettier cover the UI. Bash parses every deployment
-script separately; pinned ShellCheck follows sourced libraries from their entry points.
-`make` locates ShellCheck beside the selected Python runtime; `SHELLCHECK` may override
-the executable when development tools are installed separately. No new findings are
-allowed. The code has no Wemake findings, so `quality/wemake-baseline.json` is empty;
-it is not a suppression budget. Never refresh the baseline to conceal a finding:
-fix it.
+`make check` first compares every pin in `requirements-dev.txt` with the distributions
+installed for the selected Python and stops with the install command when one differs.
+Ruff checks imports, correctness, bugbear, pyupgrade, simplification and Ruff rules,
+and formatting, with no per-file exemptions. Wemake/Flake8 checks the design and style of `countersign/` and `tools/`; tests use Ruff
+only, because descriptive test names, literal fixtures and expected values conflict
+with Wemake's name length, string reuse and magic number limits. ESLint, Stylelint and
+Prettier cover the UI. Bash parses every deployment script separately; ShellCheck
+follows sourced libraries from their entry points and shfmt (`-i 4 -ci`) checks the
+formatting. Both come from the same pinned environment, and `make lint-shell` also
+checks `local/*.sh` when a private overlay is present. No new findings are allowed and
+there is no debt baseline: fix every finding instead of suppressing it.
 
 Tests use fake opencode 1.x and 2.x subprocesses, temporary source trees and real
 local HTTP workers. They exercise contracts, permissions, workflow and recovery,
@@ -44,6 +47,7 @@ failure assertions should include the run summary rather than only its status.
 
 ```sh
 .venv/bin/python -m ruff format countersign tests tools
+.venv/bin/shfmt -i 4 -ci -w deploy/*.sh
 npx prettier --write 'countersign/web/static/**/*' 'tests/*.cjs' eslint.config.mjs
 .venv/bin/python tools/lint_python.py
 ```

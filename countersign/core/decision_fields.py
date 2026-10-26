@@ -37,7 +37,7 @@ def finding(entry, requirements, claims):
     return dict(
         criterion=requirement_id(entry["requirement"], requirements),
         file=proof["path"],
-        evidence="{0} ({1})".format(entry["problem"], ", ".join(identifiers)),
+        evidence="{} ({})".format(entry["problem"], ", ".join(identifiers)),
     )
 
 

@@ -51,10 +51,8 @@ def owned(previous, repo):
 
 def belongs(repo, staged, recorded):
     """Every staged path holds exactly the entry the run staged for it."""
-    for name, blob in entries(repo, staged).items():
-        if recorded.get(name, UNOWNED) != blob:
-            return False
-    return True
+    found = entries(repo, staged)
+    return {name: recorded.get(name, UNOWNED) for name in found} == found
 
 
 def fingerprint(repo, root, argv):

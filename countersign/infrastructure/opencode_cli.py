@@ -64,9 +64,14 @@ def agent_directory():
     return _base("XDG_CONFIG_HOME", ".config") / "opencode" / AGENT_FOLDER
 
 
-def tool_output_pattern():
-    """opencode appends an allow rule for its own truncated tool output."""
-    return str(_base("XDG_DATA_HOME", ".local/share") / "opencode/tool-output/*")
+def tool_output_pattern(directory=None):
+    """opencode appends an allow rule for its own truncated tool output.
+
+    A compatible build may keep that output elsewhere (settings.tool_output_dir).
+    """
+    if directory is None:
+        directory = _base("XDG_DATA_HOME", ".local/share") / "opencode/tool-output"
+    return str(Path(directory) / "*")
 
 
 def _base(name, fallback):

@@ -21,14 +21,14 @@ npm ci --ignore-scripts
 make check PYTHON=.venv/bin/python
 ```
 
-See [development](docs/development.md) for formatting commands, the Wemake debt
-baseline and what the tests cover.
+See [development](docs/development.md) for formatting commands and what the tests
+cover.
 
 ## Pull requests
 
 - Keep each pull request focused on one change and explain why it is needed.
 - `make check` must pass with zero new Ruff, Wemake, ESLint, Stylelint or formatting
-  findings. Do not add suppressions or refresh the baseline to hide findings.
+  findings. Do not disable rules or add suppressions to hide findings.
 - Add behavior tests for contract, transition, permission or UI changes, and update
   the current documentation in the same pull request.
 - Project-owned code, comments, prompts, UI text and documentation are English.

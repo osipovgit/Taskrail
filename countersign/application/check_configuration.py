@@ -2,6 +2,7 @@
 
 import json
 
+from countersign.core import protected_paths
 from countersign.core.files import atomic_json, digest
 from countersign.core.schema import require
 
@@ -25,9 +26,16 @@ def capture(config, state):
 
 
 def restore(config, run, state):
-    """Historical runs may reuse only recipes present in their saved settings."""
+    """Historical runs may reuse only recipes present in their saved settings.
+
+    Protected paths frozen at the start stay protected; new settings can add more.
+    """
     saved = frozen(run, state)
     inherit(config, saved)
+    protected = config.get(protected_paths.KEY, [])
+    config[protected_paths.KEY] = protected_paths.resumed(
+        protected, saved.get(protected_paths.KEY, [])
+    )
     config["check_specs"] = state.get("check_specs", saved.get("check_specs", []))
 
 

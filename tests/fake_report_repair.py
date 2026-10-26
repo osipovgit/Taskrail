@@ -70,17 +70,14 @@ def observed(path, offset, limit, emit, clip=False):
 
 def review(context, claims):
     """Independent reviewer reaches the same sources through the real permission profile."""
+    cited = ["{path}:{line_start}-{line_end}".format(**claim) for claim in claims]
     return dict(
-        schema_version=1,
-        status="APPROVE",
+        schema_version=2,
         summary="Observed reports match the answer",
-        input_complete=True,
-        coverage=[
-            dict(id=entry["id"], outcome="satisfied", evidence_ids=["E1", "E2"], explanation="Read")
+        outcomes=[
+            dict(requirement=entry["id"], result="satisfied", evidence=cited)
             for entry in context["requirements"]
         ],
         findings=[],
-        evidence=claims,
-        unverified=[],
-        blocking_gaps=[],
+        missing_inputs=[],
     )

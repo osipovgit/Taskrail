@@ -5,6 +5,7 @@ import sys
 
 from countersign.application import budgets
 from countersign.application.artifacts import save_run
+from countersign.core import protected_paths
 from countersign.core.files import atomic_json
 from countersign.infrastructure.artifact_access import manifest
 from countersign.observability.progress import clock
@@ -32,21 +33,20 @@ def prepare(run, record, config, state):
     return record
 
 
-def save_request(folder, record, request, state):
+def save_request(folder, record, request, workflow):
     """Store exactly what is sent to the model with its reproducible fingerprint."""
+    state = workflow.state
     (folder / "tool-result.md").touch(exist_ok=True)
     if record["mode"] != "format-repair":
         access = folder / "access.json"
-        atomic_json(
-            access,
-            manifest(folder.parent, folder, state["roots"], record.get("writable_files", [])),
-        )
+        rights = (state["roots"], record.get("writable_files", []))
+        protected = protected_paths.patterns(workflow.config)
+        atomic_json(access, manifest(folder.parent, folder, *rights, protected))
         request = request.replace(
             "# Orchestrator instructions\n",
-            f"# Orchestrator instructions\nRead access manifest: {access}. Use only listed run artifacts.\n",
+            f"# Orchestrator instructions\nAccess manifest: {access} lists the run files you may read.\n",
             1,
         )
-    request = with_allowance(request, record["budget"])
     (folder / "request.md").write_text(request, encoding="utf-8")
     record["instruction_modules"] = (
         [] if record["mode"] == "format-repair" else state.get("instruction_modules", [])
@@ -75,11 +75,3 @@ def record_outcome(run, state, record, outcome):
     attempt.update(stage=record[STAGE], path=path)
     state["attempts"].append(attempt)
     return attempt
-
-
-def with_allowance(request, budget):
-    """Add runtime allowance after the task without editing verbatim user input."""
-    head, marker, tail = request.rpartition("# Orchestrator instructions\n")
-    if not marker:
-        return request
-    return f"{head}{marker}Effective observed allowance: {budget}\n{tail}"

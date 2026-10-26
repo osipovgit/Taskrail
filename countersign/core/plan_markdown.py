@@ -12,8 +12,9 @@ from countersign.core.plan_keys import CONTINUED, LISTS, NOTES, key_line, stored
 
 BULLET = re.compile(r"^(?:[-*+]|\d+[.)])\s+(.*)$")
 HEADING = re.compile(r"^#{1,6}\s+(.*?)\s*#*$")
-TASK = re.compile(r"^(?:T|Task\s*)(\d+)\s*[:.)\-–—]\s*(.+)$", re.IGNORECASE)
-REQUIREMENT = re.compile(r"^R(\d+)\s*(?:→|->|=>|:|—|–)\s*(.*)$", re.IGNORECASE)
+# Separators accept hyphens, en dashes (U+2013) and em dashes (U+2014).
+TASK = re.compile(r"^(?:T|Task\s*)(\d+)\s*[:.)\-\u2013\u2014]\s*(.+)$", re.IGNORECASE)
+REQUIREMENT = re.compile(r"^R(\d+)\s*(?:→|->|=>|:|\u2014|\u2013)\s*(.*)$", re.IGNORECASE)
 TOP = "top"
 TASKS = "tasks"
 AFTER = "after"
@@ -120,7 +121,7 @@ class Reader:
 
 def task_entry(found, number):
     """A new task from its heading."""
-    identifier = "T{0}".format(found.group(1))
+    identifier = f"T{found.group(1)}"
     entry = dict(id=identifier, title=found.group(2).strip())
     return dict(entry, line=number, fields={})
 
@@ -144,7 +145,7 @@ def requirement_entry(number, line):
     found = REQUIREMENT.match(unbullet(line))
     if not found:
         return None
-    label = "R{0}".format(found.group(1))
+    label = f"R{found.group(1)}"
     return dict(label=label, text=found.group(2).strip(), line=number)
 
 

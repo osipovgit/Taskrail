@@ -336,6 +336,21 @@ async function main() {
   assert.ok(all(blockedDelivery).some((n) => n.textContent === 'Integration review'));
   assert.ok(all(blockedDelivery).some((n) => n.textContent === 'Child contract is too large'));
   assert.ok(!all(blockedDelivery).some((n) => n.textContent === 'Confirm changes'));
+  assert.ok(!all(panel).some((n) => n.textContent === 'Accept current files for S-2'));
+  const accepted = [];
+  const changedSources = deliverySection(
+    {
+      ...delivery,
+      step: 'needs_you',
+      launch_error:
+        'Sources changed since reviewed task prerequisites; accept the current files for ' +
+        'this task or replan the parent',
+    },
+    { act: (action, extra) => accepted.push([action, extra]), open: () => {} },
+  );
+  const accept = all(changedSources).find((n) => n.textContent === 'Accept current files for S-2');
+  accept.onclick();
+  assert.deepEqual(accepted, [['epic_accept_sources', { task: 'S-2' }]]);
   console.log('Delivery panel passed.');
 
   // A budget-paused run exposes both continuation choices and reversible deletion.

@@ -38,9 +38,8 @@ class RunLockTests(unittest.TestCase):
                 self.assertEqual(same_run, "This run is already active")
             self.assertEqual(conflict([first]), f"Another task is running on {first}")
             installer = Path.home() / STATE / INSTALL_LOCK
-            with installer.open("a") as stream:
-                with self.assertRaises(BlockingIOError):
-                    fcntl.flock(stream, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            with installer.open("a") as stream, self.assertRaises(BlockingIOError):
+                fcntl.flock(stream, fcntl.LOCK_EX | fcntl.LOCK_NB)
         self.assertIsNone(conflict([first]))
         with installer.open("a") as stream:
             fcntl.flock(stream, fcntl.LOCK_EX | fcntl.LOCK_NB)
@@ -105,9 +104,11 @@ class RunLockTests(unittest.TestCase):
             require_idle({run: [project]}, None, [f"{project}/sub"])
         with self.assertRaisesRegex(BusyError, f"running on {project}"):
             require_idle({run: [f"{project}/sub"]}, None, [project])
-        with run_locks([other], self.base / "runs/r2"):
-            with self.assertRaisesRegex(BusyError, "Another task is running"):
-                require_idle({}, None, [other])
+        with (
+            run_locks([other], self.base / "runs/r2"),
+            self.assertRaisesRegex(BusyError, "Another task is running"),
+        ):
+            require_idle({}, None, [other])
 
     def test_a_run_on_a_busy_project_is_blocked_without_touching_it(self):
         root = self.base / "repo"

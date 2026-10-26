@@ -8,8 +8,8 @@ KEY = "task_scope"
 REPLAN = "Child task needs parent replanning"
 
 
-def configured(meta, roots):
-    """Only a child task may declare an exact list of writable paths."""
+def configured(meta, roots, protected=()):
+    """Only a child task may declare an exact list of writable, unprotected paths."""
     names = meta.get(KEY)
     if names is None:
         return absent(meta)
@@ -19,7 +19,7 @@ def configured(meta, roots):
         raise ValueError(f"{REPLAN}: a child cannot request forced decomposition")
     normalized = [canonical(name, roots) for name in names]
     for name in normalized:
-        safe_file(name, roots)
+        safe_file(name, roots, protected)
     if len(set(normalized)) != len(normalized):
         raise ValueError("task_scope must contain unique files")
     return normalized

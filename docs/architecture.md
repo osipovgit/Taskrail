@@ -9,10 +9,11 @@ UI updates read the ordered stage index and public event stream.
 | Location | Responsibility |
 |---|---|
 | `countersign/cli.py`, `__main__.py` | CLI parsing and module entry point |
+| `cli_api.py`, `cli_requests.py`, `cli_runs.py` | Automation commands (`submit`, `decide`, `action`, `status`) through the browser's launcher |
 | `application/` | Workflow, stage artifacts, checkpoints, budgets, prompts and research recovery |
-| `interactions/` | Same-session executor turns, exact-command approvals, active clock and local commands |
+| `interactions/` | Same-session executor turns: one request parser (`request_envelope.py`), routing (`request_routes.py`, `local_route.py`), exact-command approvals, adopted command effects, active clock |
 | `git/` | Controlled Git grammar, scope checks, isolated process execution and output snapshots |
-| `core/` | Result contract, schema validation, file/path utilities and stop/read-only guards |
+| `core/` | Result contract, schema validation, the prompt text catalog (`prompt-texts.json`), requirement labels, file/path utilities and stop/read-only guards |
 | `infrastructure/` | opencode launch (1.x direct, 2.x through an adapter), process watch, JSONL event summary, permission profiles |
 | `observability/` | Public progress, usage and compaction telemetry |
 | `executor/` | Separate system service: peer-authenticated socket, immutable tickets, root-only approval, SSH transport, Jenkins client |
@@ -23,15 +24,18 @@ UI updates read the ordered stage index and public event stream.
 | `web/history.py`, `requests.py`, `lifecycle.py` | Editable task drafts, conversation history and lifecycle controls |
 | `web/static/` | Browser JavaScript, CSS, HTML and theme handling |
 | `deploy/` | Offline release installation, CLI wrapper and systemd units |
+| `deployment/` | Installer helpers: first-install settings and service PATH (`settings_init.py`), validated fresh-install reset (`fresh.py`) |
 | `countersign/agents/`, `countersign/settings.json` | Bundled role templates (frozen per run) and default settings |
 | `tests/` | Workflow, contracts, permissions, API, telemetry and DOM regressions |
-| `tools/`, `quality/` | Development quality gates and the reviewed Wemake debt baseline |
+| `tools/` | Development quality gates: pinned tool versions and the Wemake run |
 | `docs/`, `examples/` | Documentation and example tasks |
 
 Dependency direction: CLI/web -> application, interactions and git (the workflow
 layer) -> infrastructure/observability -> core. Core imports nothing outside core;
-the executor imports only core and itself. Architecture tests enforce these
-boundaries. No plugins, message bus, service container or database are used. New
+the executor imports only core and itself. Architecture tests enforce the core and
+executor boundaries. The delivery of a split (next task, integration review, Jenkins
+validation, confirmation) is driven by the managed service from `web/`; CLI automation
+commands use the same launcher and records. No plugins, message bus, service container or database are used. New
 entry points must call the existing workflow instead of adding an execution path.
 
 Run artifacts: `00-input/`, numbered stage directories, `run.json`, `checkpoint.json`,
@@ -55,7 +59,10 @@ source checks, checkpoints and file operations:
 | `run_setup.py`, `run_state.py`, `task_config.py`, `task_roots.py` | Run directory, frozen inputs and validated configuration |
 | `worktree_isolation.py` | Optional linked Git worktree per root and run |
 | `workflow_start.py`, `workflow_finish.py` | Fresh start or checkpoint continuation; interruption and the final report |
-| `workflow_state.py`, `source_guard.py` | Run state, flow, checkpoints and source/Git integrity |
+| `workflow_state.py`, `source_guard.py`, `source_ignores.py` | Run state, flow, checkpoints and source/Git integrity; Git-ignored files are not source |
+| `prompts.py`, `policy_sections.py`, `mode_rules.py`, `response_format.py` | The request of a stage from frozen policy sections and catalog texts |
+| `reviewed_start.py`, `reviewed_sources.py`, `child_brief.py`, `previous_attempt.py` | A split task started from the reviewed plan: attempt chain, operator baselines, brief and retries |
+| `integration_changes.py`, `inherited_preimages.py` | The combined diff a split's integration review reads |
 | `stage_attempts.py`, `attempt_*.py` | One model stage: profile, launch, validation and bounded retries |
 | `check_stage.py`, `builtin_checks.py`, `verify_*.py` | Syntax checks and settings verification commands |
 | `source_tree.py`, `git_state.py`, `planned_paths.py`, `plan_validation.py`, `changes.py` | Fingerprints, path safety, plan checks, preimages and the diff |
@@ -64,9 +71,9 @@ The browser has no runtime
 dependencies; Node packages are only linting and formatting tools. The runtime needs
 Python 3.10+ for both the runtime and development tools, and Node 24.19+ for UI linting.
 
-The response contract lives in `core/result-schemas.json`: compact model decisions
-use version 2; the server materializes canonical version 1 artifacts and accepts
-historical version 1 responses through an explicit adapter.
+The response contract lives in `core/result-schemas.json`: models author compact
+version 2 decisions and the server materializes canonical version 1 records. A run
+frozen with other schemas stays viewable, but Continue refuses it; use Restart.
 Application helpers compose prompts, bind source evidence, freeze instructions and
 account for durable budgets. The engine owns requirement IDs and the actual
 changed-file and check records; a model cannot claim successful execution by
@@ -100,7 +107,7 @@ before it continues.
 Child task headers carry the parent's immutable file scope; no nested split or scope
 expansion can reach implementation. The server authenticates the reviewed plan digest,
 requirement lineage and accepted prerequisite source/Git snapshots before starting a
-child directly at implementation. Legacy unsealed parents retain child planning.
+child directly at implementation; a child of an unsealed parent is refused.
 A bounded prerequisite index points to a sealed full parent snapshot. After all children finish, a read-only integration run reviews
 the complete original goal and criteria through the same execution engine and
 independent reviewer. Confirmation rechecks its source/Git fingerprint, and changed
@@ -108,7 +115,9 @@ child completion records invalidate the approval.
 
 Before the first planning request the server writes `00-input/project-map.md`
 (`application/project_map.py`): an index, every source file of each root with its line
-count and landmarks (YAML task names and keys, definitions, headings), and for every
+count and landmarks (YAML task names and keys; definitions in Python, shell, JavaScript,
+TypeScript, Java, Go and Groovy; Jenkins stages; Dockerfile `FROM`/`ENTRYPOINT`/`CMD`;
+Terraform blocks; Jinja2 blocks and macros; Markdown headings), and for every
 requirement the first lines that name its distinctive words. Long command output also
 comes with a digest of its severities, most mentioned files and rules
 (`interactions/output_digest.py`). Response schemas are compact JSON, one alternative

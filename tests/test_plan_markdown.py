@@ -133,6 +133,35 @@ class PlanDocumentTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "no change cannot have tasks"):
             payload(answer.replace("## Answer", "## T1: x\n## Answer"), REQUIREMENTS, ROOTS)
 
+    def test_constraints_belong_to_every_task_and_read_ranges_become_evidence(self):
+        constraint = dict(id="R-ddd", text="Keep handlers", kind="task")
+        constraint["source"] = dict(field="constraints", start=0, end=13)
+        requirements = [*REQUIREMENTS[:2], constraint, REQUIREMENTS[2]]
+        text = (
+            "Decision: split\nSummary: two roles\n## Requirements\n"
+            "- R1 → T1 [ntp], T2 [web]\n- R2 → T2\n- R3 → all tasks\n- R4 → runtime\n"
+            "## T1: ntp\nDepends on: none\nFiles: project/ntp.yml\n"
+            "Read: project/ntp.yml:1-20, `project/defaults.yml:4`\n"
+            "Done when: ntp is clean\nVerify: ansible-lint ntp.yml\n"
+            "## T2: web\nDepends on: T1\nFiles: project/web.yml\nRead: <path:from-to>\n"
+            "Done when: web is clean\nVerify: ansible-lint web.yml\n"
+        )
+        plan = payload(text, requirements, ROOTS)
+        first, second = plan["steps"]
+        self.assertEqual(first["criteria"], ["R-aaa", "R-ddd"])
+        self.assertEqual(second["criteria"], ["R-aaa", "R-bbb", "R-ddd"])
+        self.assertEqual(first["read"], ["/repo/ntp.yml:1-20", "/repo/defaults.yml:4-4"])
+        self.assertEqual(second["read"], [])
+        cited = [(entry["path"], entry["line_start"]) for entry in plan["evidence"]]
+        self.assertEqual(cited, [("/repo/ntp.yml", 1), ("/repo/defaults.yml", 4)])
+        self.assertEqual(plan["unverified"], ["Playbook check passes"])
+        no_change = "Decision: no change\nSummary: done\n## Requirements\n" + (
+            "- R1 → done: project/a.py:1\n- R2 → done: project/a.py:1\n"
+            "- R3 → all tasks\n- R4 → runtime\n"
+        )
+        with self.assertRaisesRegex(ValueError, "R3 → all tasks needs a task"):
+            payload(no_change, requirements, ROOTS)
+
 
 class PlanFileTests(unittest.TestCase):
     def test_the_untouched_template_names_what_to_fill_in(self):
@@ -141,7 +170,8 @@ class PlanFileTests(unittest.TestCase):
             target = plan_file.prepare(run, REQUIREMENTS)
             target.write_text(target.read_text())
             plan_file.prepare(run, REQUIREMENTS[:1])
-            self.assertIn("- R3 → <outcome>", target.read_text())
+            self.assertIn("- R2 → <outcome>", target.read_text())
+            self.assertIn("- R3 → runtime\n", target.read_text())
             with self.assertRaises(ValueError) as raised:
                 plan_file.read_plan(run, REQUIREMENTS, ROOTS)
             message = str(raised.exception)
@@ -154,7 +184,7 @@ class PlanFileTests(unittest.TestCase):
             instructions = plan_file.instructions(run, dict(project=source), REQUIREMENTS)
             self.assertIn(f"PROJECT MAP: {run / '00-input/project-map.md'}", instructions)
             self.assertIn(f"the Markdown file {target}", instructions)
-            self.assertIn("R<n> labels attached to the task", instructions)
+            self.assertIn("R6 → all tasks", instructions)
 
     def test_messages_name_requirements_by_label(self):
         message = plan_file.labelled("Planned requirement R-bbb has no owner", REQUIREMENTS)
