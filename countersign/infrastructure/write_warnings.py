@@ -1,35 +1,38 @@
-"""Prove that a rejected plan overwrite was completed after a native read."""
+"""Prove that an approved file overwrite was completed after a native read."""
 
 REJECTION = "You must read file {0} before overwriting it. Use the Read tool first"
-RESOLUTION = "The rejected plan overwrite was followed by an actual read and successful write in the same session. The saved plan still requires validation."
+RESOLUTION = "The rejected overwrite was followed by an actual read and successful write of the same approved file in the same session. Result validation and independent review still apply."
 WRITERS = frozenset(("write", "edit"))
 TOOLS = WRITERS | {"read"}
 PROVENANCE = ("event_line", "call_id", "part_id")
 EVENT_LINE = "event_line"
 TOOL = "tool"
+INPUT = "input"
+FILE_PATH = "filePath"
 
 
-class PlanWrites:
-    """Record completed native operations only for the server-owned planner artifact."""
+class FileWrites:
+    """Record completed native operations only for server-approved writable files."""
 
-    def __init__(self, target):
-        """Without an explicit planner path, no failed write may be recovered."""
-        self.target = target
+    def __init__(self, targets):
+        """Without explicit writable paths, no failed write may be recovered."""
+        self.targets = frozenset(targets)
         self.calls = []
         self.seen = set()
 
     def observe(self, event_line, event):
         """Keep actual completed operations with their original session and event identity."""
-        if self.target is None or event.get("type") != "tool_use":
+        if not self.targets or event.get("type") != "tool_use":
             return
         part = event.get("part", {})
         state = part.get("state", {})
         identity = call_identity(event, part)
         if not all(identity) or identity in self.seen:
             return
-        matches = state.get("input", {}).get("filePath") == self.target
-        completed = state.get("status") == "completed"
-        if not matches or not completed or part.get(TOOL) not in TOOLS:
+        target = state.get(INPUT, {}).get(FILE_PATH)
+        if target not in self.targets or part.get(TOOL) not in TOOLS:
+            return
+        if state.get("status") != "completed":
             return
         self.seen.add(identity)
         self.calls.append(
@@ -39,6 +42,7 @@ class PlanWrites:
                 event_line=event_line,
                 call_id=part.get("callID"),
                 part_id=part.get("id"),
+                target=target,
             )
         )
 
@@ -46,7 +50,7 @@ class PlanWrites:
         """Retain a known rejection as a warning only with a later read/write proof."""
         sessions = outcome["sessions"]
         answered = final_line is not None and outcome["final_text"].strip()
-        if self.target is None or not answered or len(sessions) != 1:
+        if not self.targets or not answered or len(sessions) != 1:
             return outcome
         for failure in outcome["tool_errors"]:
             proof = self.recovery(failure, sessions[0], final_line)
@@ -58,16 +62,21 @@ class PlanWrites:
 
     def recovery(self, failure, session_id, final_line):
         """Only the known rejection in the completed session can use an observed proof."""
-        if failure.get("session_id") != session_id or not unread(failure, self.target):
+        target = failure.get(INPUT, {}).get(FILE_PATH)
+        if target not in self.targets or failure.get("session_id") != session_id:
             return None
-        return self.proof(failure[EVENT_LINE], session_id, final_line)
+        if not unread(failure, target):
+            return None
+        return self.proof(failure, session_id, final_line)
 
-    def proof(self, failed_line, session_id, final_line):
+    def proof(self, failure, session_id, final_line):
         """The ordered read and mutation must precede the final response in one session."""
         observed = [
             call
             for call in self.calls
-            if call["session_id"] == session_id and failed_line < call[EVENT_LINE] < final_line
+            if call["session_id"] == session_id
+            and call["target"] == failure[INPUT][FILE_PATH]
+            and failure[EVENT_LINE] < call[EVENT_LINE] < final_line
         ]
         read = next((call for call in observed if call[TOOL] == "read"), None)
         if read is None:
@@ -95,6 +104,6 @@ def unread(failure, target):
     message = REJECTION.format(target)
     return (
         failure.get(TOOL) in WRITERS
-        and failure.get("input", {}).get("filePath") == target
+        and failure.get(INPUT, {}).get(FILE_PATH) == target
         and failure.get("error") in {message, f"Error: {message}"}
     )
