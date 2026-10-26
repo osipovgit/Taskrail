@@ -7,7 +7,7 @@ from types import MappingProxyType
 
 MAX_BODY = 65536
 POST_PATHS = frozenset(("/api/tasks", "/api/actions", "/api/decision"))
-TOKEN_HEADER = "X-Countersign-Token"
+SESSION_HEADER = "X-Countersign-Token"
 PAGES = MappingProxyType(
     {
         "/": ("dashboard.html", "text/html; charset=utf-8"),
@@ -17,10 +17,13 @@ PAGES = MappingProxyType(
 )
 # Browser scripts served from static/; dashboard modules are fixed, never path-derived.
 SCRIPTS = frozenset(
-    ("/dashboard.js", "/theme.js")
-    + tuple(
-        f"/modules/{name}.js"
-        for name in ("analytics", "app", "dom", "epic", "monitor", "stages", "state", "task")
+    (
+        "/dashboard.js",
+        "/theme.js",
+        *(
+            f"/modules/{name}.js"
+            for name in ("analytics", "app", "dom", "epic", "monitor", "stages", "state", "task")
+        ),
     )
 )
 JAVASCRIPT = "text/javascript; charset=utf-8"
@@ -34,7 +37,7 @@ def error_json(message):
 def post_problem(request):
     """The rejection of a POST as (status, body), or None when it may proceed."""
     headers = request.headers
-    token = headers.get(TOKEN_HEADER, "")
+    token = headers.get(SESSION_HEADER, "")
     authorized = secrets.compare_digest(token, request.server.context["token"])
     if not request.trusted(require_origin=True) or not authorized:
         return HTTPStatus.FORBIDDEN, error_json("Invalid origin or session token. Reload the page.")

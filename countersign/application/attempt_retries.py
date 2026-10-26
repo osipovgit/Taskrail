@@ -1,7 +1,7 @@
 """Bounded retry policy of one stage: format repair, access and transport recovery."""
 
 from countersign.application import access_recovery, evidence, plan_recovery, prompts
-from countersign.application.attempt_launch import role_of
+from countersign.core import prompt_texts
 from countersign.infrastructure import context_overflow
 from countersign.observability.progress import say
 
@@ -11,11 +11,8 @@ TRANSPORT_KEY = "transport"
 FORMAT_KEY = "format"
 REBUILD_KEY = "rebuild"
 CONTRACT_ERROR = "contract_error"
-CONTEXT_NOTE = "\nTHE PREVIOUS SESSION EXCEEDED THE MODEL CONTEXT WINDOW. This is a new session: use the recorded evidence file instead of repeating research, read only the lines you need (targeted reads of large outputs, never whole logs), and return the next request or the final result as soon as the evidence allows.\n"
-OVERFLOW_OUTPUTS = "\nThe session that overflowed received {0} characters of tool output; the largest were: {1}. Do not repeat these calls whole: search their targets or read windows of at most 200 lines.\n"
 LARGE_OUTPUT = 10000
 NAMED_OUTPUTS = 5
-REBUILD_NOTE = "\nPREVIOUS FINAL RESPONSE WAS INVALID: {0}. Fixing it needs source reads that a repair without tools cannot make. Re-read only what you need and return one complete, valid final result or one complete executor request.\n"
 # Errors only a pass that can read sources again can fix.
 EVIDENCE_ERRORS = (
     "matching observed read",
@@ -58,7 +55,7 @@ class Retries:
             return self.access_recovery(outcome)
         if status == context_overflow.STATUS:
             return self.transport_retry(
-                CONTEXT_NOTE,
+                note(prompt_texts.text("recovery.context")),
                 overflow_outputs(self.attempts.workflow),
                 plan_recovery.feedback(outcome),
             )
@@ -81,7 +78,7 @@ class Retries:
         self.attempts.request = prompts.repair(
             outcome["final_text"],
             outcome[CONTRACT_ERROR],
-            role_of(self.stage),
+            self.stage,
             state.get("contract_version"),
             state["requirements"],
         )
@@ -106,8 +103,9 @@ class Retries:
         self.attempts.recovery = evidence.load_index(workflow.run)
         denied = access_recovery.denied_calls(outcome)
         correction = access_recovery.correction(denied, workflow.config["roots"])
-        self.attempts.request = "{0}{1}".format(self.attempts.request, correction)
-        say("  Access denied; continuing with allowed sources ({0}/2)".format(self.access.count))
+        self.attempts.request += correction
+        count = self.access.count
+        say(f"  Access denied; continuing with allowed sources ({count}/2)")
         return True
 
     def transport_retry(self, *notes):
@@ -119,7 +117,7 @@ class Retries:
         self.counts[TRANSPORT_KEY] += 1
         for note in notes:
             if note not in self.attempts.request:
-                self.attempts.request = "{0}{1}".format(self.attempts.request, note)
+                self.attempts.request += note
         if not self.attempts.format_only:
             self.attempts.recovery = evidence.load_index(workflow.run)
         return True
@@ -142,8 +140,8 @@ def full_attempt(retries):
     attempts = retries.attempts
     retries.counts[REBUILD_KEY] += 1
     attempts.format_only = False
-    note = REBUILD_NOTE.format(retries.repair["error"])
-    attempts.request = "{0}{1}".format(retries.repair["request"], note)
+    rebuild = note(prompt_texts.text("recovery.rebuild", error=retries.repair["error"]))
+    attempts.request = "{}{}".format(retries.repair["request"], rebuild)
     attempts.recovery = evidence.load_index(attempts.workflow.run)
     return True
 
@@ -157,4 +155,16 @@ def overflow_outputs(workflow):
     if not largest:
         return ""
     named = "; ".join("{1} ({0} characters)".format(*entry) for entry in largest)
-    return OVERFLOW_OUTPUTS.format(sum(entry[0] for entry in outputs), named)
+    return note(
+        prompt_texts.text("recovery.overflow", total=sum(map(output_size, outputs)), named=named)
+    )
+
+
+def output_size(entry):
+    """Characters of one recorded tool output."""
+    return entry[0]
+
+
+def note(text):
+    """A note appended to the request on a line of its own."""
+    return f"\n{text}\n"

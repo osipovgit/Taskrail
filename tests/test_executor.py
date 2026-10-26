@@ -15,6 +15,7 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 from countersign.application import execution_requests, execution_wait
+from countersign.core import prompt_texts
 from countersign.executor import action_schema, client, hosts, protocol, streams, transport, worker
 from countersign.executor.service import ExecutorServer
 from countersign.executor.store import TicketStore
@@ -240,13 +241,14 @@ class ExecutorTest(unittest.TestCase):
         self.assertEqual(execution_requests.server_scope(server, "planner", run), inspect_only)
         self.confirm_server_checks(run)
         confirmed = execution_requests.server_scope(server, "planner", run)
-        self.assertEqual(confirmed, execution_requests.SERVER_STEP)
+        self.assertEqual(confirmed, prompt_texts.text("routes.ssh.server"))
         planning = execution_requests.ssh_instructions(targets, inspect_only)
         self.assertIn("ACTION_REQUEST", planning)
         implementing = execution_requests.ssh_instructions(targets, None)
         self.assertNotIn("ACTION_REQUEST", implementing)
         session = self.session(run, "implementer", server)
-        self.assertEqual(remote.consume(session, self.request("uname -a\n")), remote.REFUSED)
+        refused = prompt_texts.text("feedback.ssh_refused")
+        self.assertEqual(remote.consume(session, self.request("uname -a\n")), refused)
         self.assertEqual(execution_wait.read(run), [])
 
     def test_a_changing_script_never_runs_before_the_change_is_confirmed(self):
@@ -346,9 +348,11 @@ class ExecutorTest(unittest.TestCase):
         folder = run / "01-plan"
         folder.mkdir(parents=True)
         execution_wait.submit(run, folder, ACTION)
-        with patch.object(client, "request", return_value=dict(status="UNKNOWN")):
-            with self.assertRaisesRegex(ValueError, "UNKNOWN"):
-                execution_wait.resume(run, {"attempts": []})
+        with (
+            patch.object(client, "request", return_value=dict(status="UNKNOWN")),
+            self.assertRaisesRegex(ValueError, "UNKNOWN"),
+        ):
+            execution_wait.resume(run, {"attempts": []})
 
     def test_rejection_is_terminal_and_never_executes(self):
         ticket = self.submit()

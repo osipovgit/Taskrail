@@ -1,4 +1,4 @@
-"""Versioned authored-decision adapter; canonical stored records keep their contract."""
+"""Authored V2 decisions become the canonical stored stage record."""
 
 import json
 from functools import partial
@@ -10,13 +10,12 @@ from countersign.core.files import atomic_json
 
 
 def stage_decision(response, context):
-    """Keep an explicit legacy adapter while models author the smaller V2 contract."""
+    """Models author the V2 decision contract; the server derives the stored record."""
+    schema.require(bool(response.strip()), "Empty final response; no JSON object received")
     payload = json_response.extract(response, schema.unique_fields)
     payload = corrected(payload, context["folder"])
-    if payload.get("schema_version") == 2:
-        resolve = partial(resolve_reference, context)
-        return decision_result.normalized(payload, context, resolve)
-    return schema.decode(response, context["role"])
+    resolve = partial(resolve_reference, context)
+    return decision_result.normalized(payload, context, resolve)
 
 
 def corrected(payload, folder):

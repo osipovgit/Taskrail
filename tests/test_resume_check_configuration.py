@@ -76,9 +76,11 @@ class ResumeCheckConfigurationTests(unittest.TestCase):
 
     def test_tampered_frozen_catalog_fails_before_loading_agent_settings(self):
         atomic_json(self.run / "00-input/settings.json", dict(self.frozen, check_recipes={}))
-        with patch("countersign.application.task_config.launch_settings") as launch:
-            with self.assertRaisesRegex(ValueError, "Frozen check settings changed"):
-                run_setup.configure(self.request)
+        with (
+            patch("countersign.application.task_config.launch_settings") as launch,
+            self.assertRaisesRegex(ValueError, "Frozen check settings changed"),
+        ):
+            run_setup.configure(self.request)
         launch.assert_not_called()
 
 

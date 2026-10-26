@@ -103,4 +103,4 @@ def report(problems, found, decision):
     if found["blocking_gaps"] and decision not in {None, BLOCKED}:
         problems.append("A requirement is a gap: set Decision: blocked, or plan the work")
     if problems:
-        raise ValueError("plan.md: {0}".format("; ".join(problems[:PROBLEM_LIMIT])))
+        raise ValueError("plan.md: {}".format("; ".join(problems[:PROBLEM_LIMIT])))

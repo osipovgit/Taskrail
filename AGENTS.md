@@ -24,15 +24,15 @@ Preserve user input and historical artifacts verbatim. Conversation may be Russi
 
 Run `make check` with pinned development dependencies before delivery. Introduce
 zero new Ruff, Wemake, ESLint, Stylelint or formatting findings. Fix nearby simple
-existing findings when practical. Do not disable rules, add suppressions or refresh
-baselines to make failures disappear. New modules receive no debt allowance.
-For existing debt, a reviewed fingerprint relocation must retain the same rule
-and must not increase its count or complexity; remove resolved baseline entries.
+existing findings when practical. Do not disable rules or add suppressions to make
+failures disappear; there is no debt baseline.
 
-Keep instructions short and single-owned: role responsibilities in `countersign/agents/`,
-shared runtime rules in `application/policy.md`, response contracts in
-`core/result-schemas.json`. Update behavior tests and current documentation with
-changes. Do not accumulate release narratives in docs/.
+Keep instructions short and single-owned: role method in `countersign/agents/`,
+execution boundaries in `application/policy.md` (sections per stage), every other
+model-facing text in `core/prompt-texts.json`, response contracts in
+`core/result-schemas.json`. Code holds no model-facing prose. Keep the per-stage
+request budget in `tests/test_prompt_contract.py`. Update behavior tests and current
+documentation with changes. Do not accumulate release narratives in docs/.
 
 See [development](docs/development.md), [architecture](docs/architecture.md),
 [contracts](docs/contracts.md) and [operations](docs/deployment.md).

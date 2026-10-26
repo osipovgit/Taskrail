@@ -2,14 +2,15 @@
 
 opencode names a file absolutely or relative to one base directory (the Git worktree
 for 1.x, the run directory for 2.x). Every allowed path gets both forms, so the same
-rules hold for each naming; everything else stays denied.
+rules hold for each naming; everything else stays denied. Protected patterns come last,
+so they deny reads and edits even inside allowed roots.
 """
 
 import os
 from pathlib import Path
 from types import MappingProxyType
 
-from countersign.infrastructure.artifact_access import PROTECTED_READ_PATTERNS
+from countersign.core import protected_paths
 
 ALLOW = "allow"
 DENY = "deny"
@@ -18,16 +19,16 @@ CLOSED = MappingProxyType({"*": DENY})
 WHOLE_BASE = MappingProxyType({"*": ALLOW, "/*": DENY, "..": DENY, "../*": DENY})
 
 
-def permissions(roots, readable, writable, base=None):
+def permissions(roots, readable, writable, base=None, protected=protected_paths.DEFAULT_PATTERNS):
     roots = list(roots)
     return {
         "*": DENY,
-        "read": read_rules(roots, list(readable), base),
+        "read": denied_last(read_rules(roots, list(readable), base), protected),
         "list": ALLOW,
         "glob": ALLOW,
         "grep": ALLOW,
         "external_directory": directory_rules([*roots, *readable]),
-        "edit": edit_rules(roots, writable, base),
+        "edit": denied_last(edit_rules(roots, writable, base), protected if writable else ()),
         "bash": DENY,
         "task": DENY,
         "skill": DENY,
@@ -40,7 +41,17 @@ def read_rules(roots, readable, base):
     rules = dict(WHOLE_BASE if whole else CLOSED)
     for path in map(Path, [*roots, *readable]):
         rules.update(dict.fromkeys(read_patterns(path, base), ALLOW))
-    rules.update(dict.fromkeys(PROTECTED_READ_PATTERNS, DENY))
+    return rules
+
+
+def denied_last(rules, protected):
+    """Protected patterns after every allowance; opencode applies the last match.
+
+    An edit section without writable files stays closed and gets none.
+    """
+    for pattern in protected:
+        rules.pop(pattern, None)
+        rules[pattern] = DENY
     return rules
 
 

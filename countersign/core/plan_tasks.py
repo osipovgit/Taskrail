@@ -10,7 +10,7 @@ from types import MappingProxyType
 
 from countersign.core.plan_keys import uncode
 from countersign.core.plan_markdown import FIELDS, LINE, TASKS
-from countersign.core.plan_outcomes import PLACEHOLDER, absolute
+from countersign.core.plan_outcomes import PLACEHOLDER, absolute, cited_ranges
 from countersign.core.plan_ownership import problems as ownership_problems
 from countersign.core.task_graph import order
 
@@ -28,6 +28,7 @@ STEP_FIELDS = MappingProxyType(
     }
 )
 REQUIRED = tuple(STEP_FIELDS.items())
+EVERYONE_WITHOUT_TASKS = "line {line}: {label} → all tasks needs a task; without tasks give done: <path>:<from>-<to> or gap:"
 TASK_COUNTS = MappingProxyType(
     {
         "split": (2, math.inf, "Decision split needs at least two tasks; use single for one"),
@@ -49,8 +50,8 @@ def steps(document, coverage):
 
 
 def step(task, coverage):
-    """One task section."""
-    owned = coverage.owners.get(task[IDENTIFIER], [])
+    """One task section; requirements of every task belong to each of them."""
+    owned = coverage.owners.get(task[IDENTIFIER], []) + coverage.everyone
     done = listed(task, "done")
     files = listed(task, "files")
     title = task["title"]
@@ -58,14 +59,15 @@ def step(task, coverage):
         id=task[IDENTIFIER],
         title=title,
         line=task[LINE],
-        action="{0}: {1}".format(title, "; ".join(done) or title),
+        action="{}: {}".format(title, "; ".join(done) or title),
         files=[str(absolute(name, coverage.roots)) for name in files],
         criteria=list(dict.fromkeys(entry[IDENTIFIER] for entry in owned)),
-        scopes=[entry for entry in owned if entry["scope"]],
+        scopes=[entry for entry in owned if entry.get("scope")],
         depends_on=dependencies(task),
         checks=listed(task, "verify"),
         done_when=done,
         notes=task[FIELDS].get("notes", ("", 0))[0],
+        read=cited_ranges(coverage, task[FIELDS].get("read", ([], 0))),
     )
 
 
@@ -94,6 +96,8 @@ def dependencies(task):
 def check(decision, planned, coverage):
     """Complete tasks, unique ownership, a valid graph and a matching decision."""
     problems = coverage.problems
+    if not planned:
+        problems.extend(EVERYONE_WITHOUT_TASKS.format(**entry) for entry in coverage.everyone)
     known = {entry[IDENTIFIER] for entry in planned}
     if len(known) != len(planned):
         problems.append("Task IDs must be unique")

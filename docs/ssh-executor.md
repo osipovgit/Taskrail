@@ -220,11 +220,14 @@ python3 -m countersign.executor status TICKET_ID
 ```
 
 Run these from the installed release (as shown) or a source checkout so Python
-finds the package. For a manual request use
-`python3 -m countersign.executor submit ACTION.json --key=UNIQUE_KEY`. Repeating the
-same key and payload returns the same job without replay. Within a task, each
-request gets its own key, so repeating an identical check after a change runs it
-again (after a new approval) instead of returning the earlier result. If the executor
+finds the package. The command line only shows the catalog and ticket status; it has
+no `submit`. Tickets come from task stages, where the server decides whether an action
+may only inspect. That decision is made by the application, not the executor: a
+process running as the application account can still reach the socket, so your root
+review of each ticket's exact script remains the boundary. Repeating the same key
+and payload returns the same job without replay. Within a task, each request gets its
+own key, so repeating an identical check after a change runs it again (after a new
+approval) instead of returning the earlier result. If the executor
 is briefly unreachable while a task waits, the task keeps asking about the same
 ticket. Limits: 16 targets, 200 text files, 512 KiB request, 3600 seconds per target,
 and the last 32,000 bytes of output per target; output is streamed, so a larger log

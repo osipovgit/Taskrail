@@ -3,8 +3,11 @@
 import ast
 import json
 import os
+import shutil
 import subprocess
 import tokenize
+from importlib import import_module
+from importlib.util import find_spec
 from types import MappingProxyType
 
 from countersign.application.planned_paths import safe_file
@@ -12,6 +15,7 @@ from countersign.application.planned_paths import safe_file
 SHELL_SECONDS = 30
 SKIPPED = "SKIPPED"
 CHECK_ERRORS = (ValueError, SyntaxError, OSError, subprocess.TimeoutExpired)
+YAML_SUFFIXES = (".yml", ".yaml")
 
 
 def syntax_checks(roots, names):
@@ -48,8 +52,11 @@ def json_syntax(path):
 
 def shell_syntax(path):
     """Trusted fixed argv; bash -n reads the script without executing it."""
+    bash = shutil.which("bash", path=os.defpath)
+    if bash is None:
+        raise ValueError("bash is not installed")
     completed = subprocess.run(
-        ["bash", "--noprofile", "--norc", "-n", str(path)],
+        [bash, "--noprofile", "--norc", "-n", str(path)],
         env={"PATH": os.defpath},
         stdin=subprocess.DEVNULL,
         capture_output=True,
@@ -61,4 +68,23 @@ def shell_syntax(path):
     return "bash -n (no execution)"
 
 
-VALIDATORS = MappingProxyType({".py": python_syntax, ".json": json_syntax, ".sh": shell_syntax})
+def yaml_syntax(path):
+    """Compose every document with the safe loader; tags such as !vault are not constructed."""
+    yaml = import_module("yaml")
+    try:
+        list(yaml.compose_all(path.read_text(), Loader=yaml.SafeLoader))
+    except yaml.YAMLError as error:
+        raise ValueError(str(error)) from error
+    return "YAML syntax (PyYAML, no tag construction)"
+
+
+def optional_validators():
+    """The runtime is standard-library only; YAML is checked only where PyYAML exists."""
+    if find_spec("yaml") is None:
+        return {}
+    return dict.fromkeys(YAML_SUFFIXES, yaml_syntax)
+
+
+VALIDATORS = MappingProxyType(
+    {".py": python_syntax, ".json": json_syntax, ".sh": shell_syntax, **optional_validators()}
+)

@@ -37,7 +37,7 @@ class DashboardTests(unittest.TestCase):
         self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
         self.thread.start()
         self.addCleanup(self.stop)
-        self.url = "http://127.0.0.1:%d" % self.server.server_port
+        self.url = f"http://127.0.0.1:{self.server.server_port}"
 
     def stop(self):
         self.server.shutdown()

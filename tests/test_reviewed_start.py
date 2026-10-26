@@ -1,5 +1,6 @@
 """Only authenticated, current parent contracts can skip a child's planning stages."""
 
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -95,19 +96,20 @@ class ReviewedStartTests(unittest.TestCase):
         self.assertEqual(original.read_text(), "answer = 1\n")
         self.assertEqual((self.root / "a.py").read_text(), "answer = 1\n")
 
-    def test_legacy_unsealed_parent_keeps_independent_child_planning(self):
-        self.parent_state.pop(reviewed_artifacts.SEAL)
-        atomic_json(self.parent / "run.json", self.parent_state)
-        reviewed_start.begin(self.workflow)
-        self.assertEqual(self.workflow.flow["stage"], "planner")
-        self.assertFalse((self.child / reviewed_start.REFERENCE).exists())
-
-    def test_legacy_sealed_parent_without_field_provenance_keeps_child_planning(self):
-        self.parent_state["requirements"][0].pop("source")
-        atomic_json(self.parent / "run.json", self.parent_state)
-        reviewed_start.begin(self.workflow)
-        self.assertEqual(self.workflow.flow["stage"], "planner")
-        self.assertFalse((self.child / reviewed_input.REFERENCE).exists())
+    def test_parent_without_seal_or_field_provenance_is_refused(self):
+        unsealed = dict(self.parent_state)
+        unsealed.pop(reviewed_artifacts.SEAL)
+        untyped = json.loads(json.dumps(self.parent_state))
+        untyped["requirements"][0].pop("source")
+        for state in (unsealed, untyped):
+            atomic_json(self.parent / "run.json", state)
+            with (
+                self.subTest(state=sorted(state)),
+                self.assertRaisesRegex(ValueError, "older release; restart the parent task"),
+            ):
+                reviewed_start.begin(self.workflow)
+            self.assertEqual(self.workflow.flow["stage"], "planner")
+            self.assertFalse((self.child / reviewed_input.REFERENCE).exists())
 
     def test_changed_parent_artifact_cannot_reuse_prior_approval(self):
         with (self.parent / "01-plan/result.json").open("a") as stream:
@@ -149,7 +151,8 @@ class ReviewedStartTests(unittest.TestCase):
         self.assertEqual(self.workflow.flow["stage"], "implementer")
         self.assertNotIn("Unapproved", prompt)
         self.assertIn("Return 2", prompt)
-        self.assertIn("Read the assignment", prompt)
+        self.assertIn("Task T1 of a reviewed split", prompt)
+        self.assertEqual(self.workflow.flow["plan"]["steps"][0]["checks"], ["Read the assignment"])
         self.assertEqual(
             self.workflow.config["task_text"],
             "The submitted task remains unchanged.",

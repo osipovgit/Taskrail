@@ -35,7 +35,7 @@ def check_server(server):
     """Exact fields, an http(s) base URL without credentials, and an allowlist of jobs."""
     require(isinstance(server, dict), "Each Jenkins server must be an object")
     extra = set(server) - SERVER_FIELDS - {CA_FILE}
-    require(SERVER_FIELDS <= set(server) and not extra, "Server fields: url, username, token, jobs")
+    require(set(server) >= SERVER_FIELDS and not extra, "Server fields: url, username, token, jobs")
     require(matches(URL_PATTERN, server[URL]), "Jenkins url must be http(s)://host[:port][/path]")
     protocol.text(server[USERNAME])
     protocol.text(server["token"])

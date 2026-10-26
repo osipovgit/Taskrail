@@ -4,6 +4,14 @@ import re
 
 BULLET = re.compile(r"^(?:[-*+] |\d+[.)] )")
 FENCE = re.compile(r"^\s{0,3}(`{3,}|~{3,})")
+HEADING = re.compile(r"#{1,6}\s")
+
+
+def is_label(block):
+    """One line ending with ':', or a lone heading, introduces the blocks after it."""
+    if "\n" in block or BULLET.match(block):
+        return False
+    return block.endswith(":") or bool(HEADING.match(block))
 
 
 def spans(text):

@@ -4,28 +4,24 @@ from countersign.application import (
     check_catalog,
     history_file,
     instruction_sources,
-    session_budget,
+    plan_projection,
     source_delivery,
     source_guidance,
     source_packet,
     source_windows,
 )
-from countersign.core import requirements, task_spec
+from countersign.core import protected_paths, requirements, task_spec
 from countersign.core.paths import tool_paths
 
 OPERATOR_NOTE = "operator_note"
 
 
-def task_text(config, run):
-    """Project typed input once and retain historical data through its existing bound."""
-    original = config["task_text"]
-    spec = config.get("task_spec")
-    if spec is None:
-        return history_file.prompt_task(original, run)
-    text = task_spec.prompt_text(spec)
-    if spec["fields"] and not config.get("reviewed_input"):
-        _, marker, historical = original.partition(requirements.HISTORY)
-        text += marker + historical
+def task_text(config, run, entries=()):
+    """The task as the model reads it: fields once, requirement labels, bounded history."""
+    text = task_spec.prompt_text(config["task_spec"], entries)
+    if not config.get("reviewed_input"):
+        _, marker, historical = config["task_text"].partition(requirements.HISTORY)
+        text = f"{text}{marker}{historical}"
     return history_file.prompt_task(text, run)
 
 
@@ -34,31 +30,31 @@ def request_context(config, execution, state, run):
     roots = config["roots"]
     plan = execution[1]
     context = dict(
-        schema_version=state.get("contract_version"),
-        context_limits=session_budget.settings(config),
-        requirements=list(map(requirement_metadata, state.get("requirements", []))),
         stage=execution[0],
         roots=state["roots"],
         task_file=str(run / "00-input/task.md"),
-        plan=plan_context(tool_paths(plan, roots)),
+        plan=plan_projection.plan_context(tool_paths(plan, roots), state.get("requirements", [])),
         imported_draft=instruction_sources.imported_draft(run, execution[0]),
         allowed_files=tool_paths(execution[2], roots) if execution[0] == "implementer" else [],
         feedback=feedback_context(execution[3], roots),
         checks=tool_paths(state["checks"], roots),
-        no_changes_needed=bool(plan is not None and not plan["proposed_change_files"]),
         diff_file=str(run / "changes.diff") if (run / "changes.diff").exists() else None,
         preimages=preimage_context(state["preimages"], roots, run),
     )
-    context["source_packet"] = source_delivery.public(
-        source_packet.prepare(
-            run, context["stage"], roots, source_windows.observations(config, plan)
-        )
-    )
+    context["source_packet"] = packet_context(config, run, context["stage"], plan)
     context["source_views"] = source_guidance.inputs(config, plan, run)
     if config.get("reviewed_input"):
         context["task_file"] = str(run / "00-input/reviewed-task-spec.json")
     context.update(check_catalog.context(config, context["stage"], context["plan"]))
     return {key: entry for key, entry in context.items() if included(entry)}
+
+
+def packet_context(config, run, stage, plan):
+    """Explicit entry points and current reads, without protected files."""
+    supplied = source_windows.observations(config, plan)
+    protected = protected_paths.patterns(config)
+    packet = source_packet.prepare(run, stage, config["roots"], supplied, protected)
+    return source_delivery.public(packet)
 
 
 def included(entry):
@@ -72,22 +68,6 @@ def preimage_context(preimages, roots, run):
         tool_paths(name, roots): str(run / ref) if ref else "FILE DID NOT EXIST"
         for name, ref in preimages.items()
     }
-
-
-def plan_context(plan):
-    """Keep the approved decisions, not another role's coverage and copied facts."""
-    if plan is None:
-        return None
-    return {
-        key: plan[key]
-        for key in ("decision", "summary", "steps", "proposed_change_files", "check_selections")
-        if key in plan and (key != "check_selections" or plan[key])
-    }
-
-
-def requirement_metadata(entry):
-    """Text is labelled in the task; context repeats only its stable identity."""
-    return {key: entry[key] for key in ("id", "kind")}
 
 
 def feedback_context(feedback, roots=None):

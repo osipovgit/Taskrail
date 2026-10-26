@@ -14,6 +14,7 @@ from countersign.web.run_activity import BusyError
 NAME = "integration"
 SEAL = "integration_inputs"
 TITLE_LIMIT = 160
+LISTED_FILES = 20
 
 
 def signature(entries):
@@ -26,21 +27,42 @@ def signature(entries):
 
 
 def payload(run, state):
-    """Review the original goal and every original criterion against combined source."""
+    """Review the original goal and every original criterion against combined source.
+
+    The parent link is authenticated by the integration run, which then shows the
+    combined diff of all task runs against the files before the split.
+    """
     draft = history.task_draft(run)
+    entries = epic_tasks.tasks(run, state)
     fields = {key: draft.get(key, "") for key in task_form.FIELDS}
-    fields["title"] = "{0} · Integration review".format(draft["title"])[:TITLE_LIMIT]
+    fields["title"] = "{} · Integration review".format(draft["title"])[:TITLE_LIMIT]
     return dict(
         fields,
         roots=worktree_isolation.root_entries(state["roots"]),
         phase=NAME,
         read_only=True,
         auto_approve=approval_policy.at_start(run, draft),
-        parent_context=parent_context.snapshot(run, epic_tasks.tasks(run, state)),
+        split_context=changes_by_task(entries),
+        parent_context=parent_context.snapshot(run, entries),
         check_specs=[spec for spec in state.get("check_specs", []) if spec["phase"] == "check"],
         assigned_requirements=state.get("requirements", []),
-        check_parent=run.name if state.get("check_specs") else None,
+        check_parent=run.name,
     )
+
+
+def changes_by_task(entries):
+    """One line per task: its title, run outcome and the files it changed."""
+    lines = ["Tasks of the split, in the order they ran:"]
+    for task in entries:
+        files = list(task["changed_files"])
+        changed = ", ".join(files[:LISTED_FILES]) or "none"
+        more = len(files) - LISTED_FILES
+        if more > 0:
+            changed = f"{changed} and {more} more (see changes.diff)"
+        lines.append(
+            "- {id}: {title} ({status}, run {run}); changed files: {0}".format(changed, **task)
+        )
+    return "\n".join(lines)
 
 
 def invalidate(delivery, epic):

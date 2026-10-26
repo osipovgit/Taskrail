@@ -72,7 +72,7 @@ def control_metadata(prefix, candidates):
     """Hash the existing control files of one Git directory."""
     control, paths = candidates
     return {
-        "{0}/{1}".format(prefix, path.relative_to(control)): digest(path.read_bytes())
+        f"{prefix}/{path.relative_to(control)}": digest(path.read_bytes())
         for path in paths
         if path.is_file()
     }

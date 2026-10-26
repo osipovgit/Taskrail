@@ -26,7 +26,7 @@ from countersign.application.workflow_state import Workflow
 from countersign.core import coverage
 from countersign.core.files import atomic_json
 from countersign.executor import protocol
-from countersign.web import delivery_payload, integration_review, requests
+from countersign.web import delivery_checks, delivery_payload, integration_review, requests
 
 
 class CheckRecipesTest(unittest.TestCase):
@@ -191,11 +191,11 @@ class CheckRecipesTest(unittest.TestCase):
         resume.assert_not_called()
 
     def test_server_recipe_cannot_bypass_parent_confirmation(self):
-        with patch(
-            "countersign.application.execution_requests.remote_mode", return_value="inspect"
+        with (
+            patch("countersign.application.execution_requests.remote_mode", return_value="inspect"),
+            self.assertRaisesRegex(ValueError, "confirmed changes"),
         ):
-            with self.assertRaisesRegex(ValueError, "confirmed changes"):
-                check_remote.authorize(self.workflow(), dict(kind="ssh"))
+            check_remote.authorize(self.workflow(), dict(kind="ssh"))
 
     def test_report_adapters_reject_invalid_empty_or_incomplete_reports(self):
         base = dict(status="SUCCEEDED", exit_code=0)
@@ -232,6 +232,19 @@ class CheckRecipesTest(unittest.TestCase):
         )
         self.assertEqual(assessment["counts"], dict(passed=1, failed=1, skipped=1))
         self.assertEqual(assessment["diagnostics"][0]["test"], "fail")
+
+    def test_junit_failure_may_quote_a_doctype_but_a_report_may_not_declare_one(self):
+        quoted = (
+            '<testsuite><testcase name="page"><failure>'
+            "<![CDATA[<!DOCTYPE html><p>wrong</p>]]></failure></testcase></testsuite>"
+        )
+        outcome = dict(status="FAILED", exit_code=1, stdout=quoted)
+        assessment = check_diagnostics.assess("junit", outcome)
+        self.assertEqual(assessment["status"], "failed")
+        self.assertIn("<!DOCTYPE html>", assessment["diagnostics"][0]["message"])
+        for text in ("<testsuite><testcase name='a'>&undefined;</testcase></testsuite>", "<a"):
+            outcome = dict(status="SUCCEEDED", exit_code=0, stdout=text)
+            self.assertEqual(check_diagnostics.assess("junit", outcome)["status"], "unknown")
 
     def test_later_failed_check_invalidates_an_earlier_pass_on_the_same_source(self):
         first = self.completed()
@@ -324,9 +337,9 @@ class CheckRecipesTest(unittest.TestCase):
         self.assertEqual(workflow.state["checks"][0]["assessment"], "failed")
         self.assertEqual(workflow.state["attempts"], [])
 
-    def test_partial_fixed_batch_keeps_planning_for_unbound_legacy_checks(self):
+    def test_partial_fixed_batch_keeps_planning_for_unbound_runtime_checks(self):
         workflow = self.remote_workflow()
-        workflow.state["requirements"].append(dict(self.requirement, id="R-legacy"))
+        workflow.state["requirements"].append(dict(self.requirement, id="R-unbound"))
         record = dict(criteria=["R-health"], assessment=dict(status="passed"))
         check_batches.review_completed(workflow, [record])
         self.assertEqual(workflow.flow["stage"], "planner")
@@ -383,19 +396,22 @@ class CheckRecipesTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "delivery check phase"):
             requests.Submission(dict(check_parent="parent", phase="task"), self.base)
 
-    def test_typed_delivery_labels_do_not_create_new_legacy_runtime_requirements(self):
+    def test_selected_recipe_labels_are_shown_but_never_become_written_checks(self):
         spec = dict(self.spec, phase="validation")
         state = dict(self.state, check_specs=[spec])
-        checks = dict(jenkins=["C-health: health", "Legacy check still needs a plan"])
+        planned = ["Jenkins check: ci/job: passes", "Server check: health returns 200"]
+        with patch("countersign.web.delivery_checks.planned", return_value=planned):
+            shown = delivery_checks.checks(self.run, state)
+            written = delivery_checks.written(self.run, state)
+        self.assertEqual(shown["jenkins"], ["ci/job: passes", "C-health: health"])
+        self.assertEqual(written, dict(jenkins=["ci/job: passes"], server=["health returns 200"]))
         selected = delivery_payload.typed_checks(self.run, state, "validation")
         self.assertEqual(selected["assigned_requirements"], [self.requirement])
         self.assertEqual(selected["check_parent"], self.run.name)
-        self.assertEqual(
-            delivery_payload.legacy_verification(self.run, state, "validation", checks),
-            ["Legacy check still needs a plan"],
-        )
+        unbound = delivery_checks.written(self.run, dict(self.state, check_specs=[]))
+        self.assertEqual(unbound["server"], ["Health check passes"])
 
-    def test_integration_preserves_recorded_requirements_and_accepts_legacy_parents(self):
+    def test_integration_links_its_parent_and_preserves_recorded_requirements(self):
         state = dict(self.state, check_specs=[self.spec])
         with (
             patch("countersign.web.history.task_draft", return_value=dict(title="Goal")),
@@ -409,7 +425,7 @@ class CheckRecipesTest(unittest.TestCase):
         self.assertEqual(typed["check_parent"], self.run.name)
         self.assertEqual(legacy["assigned_requirements"], [])
         self.assertEqual(legacy["check_specs"], [])
-        self.assertIsNone(legacy["check_parent"])
+        self.assertEqual(legacy["check_parent"], self.run.name)
 
     def test_exit_status_and_stylelint_reports_are_explicit_contracts(self):
         self.assertEqual(

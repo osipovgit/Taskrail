@@ -15,7 +15,7 @@ def build_url(server, request):
     """The job URL plus lastBuild or an explicit build number."""
     build = request["build"]
     reference = "lastBuild" if build == "last" else str(build)
-    url = "{0}/{1}".format(jenkins_http.job_url(server, request["job"]), reference)
+    url = "{}/{}".format(jenkins_http.job_url(server, request["job"]), reference)
     if build == "last" and request["operation"] != "status":
         number = status(server, url)["build"]["number"]
         return build_url(server, dict(request, build=number))

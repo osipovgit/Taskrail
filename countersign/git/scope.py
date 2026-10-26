@@ -33,8 +33,8 @@ def original_clean(repo, paths, baseline):
     """Do not stage unrelated pre-existing edits, even inside an approved file."""
     for path in paths:
         original = baseline.get(str(path))
-        reference = "HEAD:{0}".format(path.relative_to(repo).as_posix())
-        head = process.invoke(repo, ["show", reference])
+        relative = path.relative_to(repo).as_posix()
+        head = process.invoke(repo, ["show", f"HEAD:{relative}"])
         if original is None:
             require(head.returncode != 0, "Missing baseline for an existing tracked file")
         else:
@@ -107,5 +107,5 @@ def affected(repo, argv):
 def remote_command(argv):
     """Do not inherit force refspecs, mirror push or custom remote executables."""
     if argv[0] == "fetch":
-        return ["fetch", "--no-tags", argv[1], "refs/heads/*:refs/remotes/{0}/*".format(argv[1])]
+        return ["fetch", "--no-tags", argv[1], f"refs/heads/*:refs/remotes/{argv[1]}/*"]
     return argv

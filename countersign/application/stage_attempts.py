@@ -75,7 +75,7 @@ class StageAttempts:
         plan_access(workflow, record)
         recovery = None if self.format_only else self.recovery
         prompt = attempt_prompt(workflow, (folder, record), self.request, recovery)
-        attempt_context.save_request(folder, record, prompt, workflow.state)
+        attempt_context.save_request(folder, record, prompt, workflow)
         return folder, record
 
     def launch(self, active):
@@ -119,7 +119,7 @@ class StageAttempts:
         guard = workflow.guard
         attempt_context.record_outcome(workflow.run, workflow.state, active[1], outcome)
         prior = (guard.expected, guard.git_before)
-        guard.adopt(*workflow.state.pop("git_effect", prior))
+        guard.adopt(*workflow.state.pop("source_effect", prior))
         workflow.state["changed_files"] = guard.accept(workflow.writable())
         evidence.refresh(workflow.run, active[0] / "events.jsonl", evidence_roots(workflow))
         workflow.checkpoint()
@@ -153,7 +153,7 @@ def first_request(workflow):
     execution = tuple(workflow.flow[key] for key in EXECUTION_KEYS)
     state = workflow.state
     request = prompts.make_request(workflow.config, execution, state, workflow.run)
-    return "{0}{1}".format(request, previous_corrections(workflow))
+    return f"{request}{previous_corrections(workflow)}"
 
 
 def previous_corrections(workflow):
@@ -181,12 +181,13 @@ def fail(state, record, outcome):
     """Stop the run with the most specific reason the attempt recorded."""
     errors = "; ".join(outcome.get("errors", []))
     detail = outcome.get("contract_error") or errors or outcome[STATUS]
-    summary = "Stage {0} failed: {1}".format(record["directory"], detail)
+    summary = "Stage {} failed: {}".format(record["directory"], detail)
     state.update(status=outcome[STATUS], summary=summary)
 
 
 def plan_access(workflow, record):
     """Publish the planner artifact before saving the same access contract to disk."""
     if record["stage"] == "planner":
-        target = plan_file.prepare(workflow.run, workflow.state["requirements"])
+        read_only = bool(workflow.config.get("read_only"))
+        target = plan_file.prepare(workflow.run, workflow.state["requirements"], read_only)
         record["writable_files"].append(str(target))

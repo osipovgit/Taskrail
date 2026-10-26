@@ -67,7 +67,7 @@ def inspection(action):
     require(len(script.splitlines()) == 1, "run exactly one command")
     argv = arguments_of(script)
     check(argv)
-    return dict(action, script="{0}\n".format(shlex.join(argv)))
+    return dict(action, script=f"{shlex.join(argv)}\n")
 
 
 def arguments_of(script):

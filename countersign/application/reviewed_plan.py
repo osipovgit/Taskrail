@@ -27,6 +27,7 @@ def single(step, requirements):
     owned["scopes"] = list(map(scope, filter(scoped, requirements)))
     plan = empty(step["action"])
     plan.update(decision="single", steps=[owned], proposed_change_files=step["files"])
+    plan["evidence"] = read_ranges(step.get("read", []))
     plan["coverage"] = list(map(planned, requirements))
     runtime = [entry for entry in requirements if entry["kind"] == "runtime"]
     plan["unverified"] = [entry["text"] for entry in runtime]
@@ -52,3 +53,16 @@ def scoped(requirement):
 def scope(requirement):
     """Preserve the authenticated parent scope verbatim."""
     return dict(id=requirement[IDENTIFIER], scope=requirement["scope"])
+
+
+def read_ranges(references):
+    """The plan's `Read:` ranges as evidence, delivered to the task's implementer first."""
+    return [read_range(number, reference) for number, reference in enumerate(references, 1)]
+
+
+def read_range(number, reference):
+    """One `path:from-to` range."""
+    path, _, lines = reference.rpartition(":")
+    first, _, last = lines.partition("-")
+    span = dict(line_start=int(first), line_end=int(last or first))
+    return dict(span, id=f"E{number}", path=path)

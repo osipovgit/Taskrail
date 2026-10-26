@@ -3,10 +3,11 @@ import json
 import re
 import subprocess
 import sys
-import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
+
+from live_fixture import BASE, LiveFixture
 
 from countersign.application.live import execute_task
 from countersign.application.plan_validation import canonical_plan, validate_plan
@@ -15,65 +16,8 @@ from countersign.application.task_config import configuration
 from countersign.core.paths import tool_paths
 from countersign.infrastructure.runner import run_agent as real_run_agent
 
-BASE = Path(__file__).resolve().parents[1]
 
-
-class LiveTests(unittest.TestCase):
-    def setUp(self):
-        self.tmp = tempfile.TemporaryDirectory()
-        self.addCleanup(self.tmp.cleanup)
-        self.base = Path(self.tmp.name)
-        self.root = self.base / "repo"
-        self.root.mkdir()
-        (self.root / ".git").mkdir()
-        (self.root / ".git/HEAD").write_text("ref: refs/heads/main\n")
-        (self.root / "hello.py").write_text("# user comment\ndef hello():\n    return 1\n")
-        (self.root / "unrelated.txt").write_text("user dirty work\n")
-        self.task = self.base / "task.md"
-        self.task.write_text(
-            "```countersign-task\n"
-            + json.dumps({"roots": {"project": str(self.root)}})
-            + "\n```\nReturn 2"
-        )
-        self.settings = self.base / "settings.json"
-        self.profiles = self.base / "profiles"
-
-    def configure_mode(self, mode="ok", **overrides):
-        settings = dict(
-            command=[
-                sys.executable,
-                str(BASE / "tests/fake_live.py"),
-                "--profiles",
-                str(self.profiles),
-                "--mode",
-                mode,
-            ],
-            agent_source=str(getattr(self, "source", BASE / "countersign/agents")),
-            agent_directory=str(self.profiles),
-            timeout_seconds=1
-            if mode
-            in (
-                "writer-timeout",
-                "timeout-then-invalid",
-                "timeout-evidence",
-                "review-timeout",
-                "planner-timeout",
-            )
-            else 5,
-        )
-        settings.update(overrides)
-        self.settings.write_text(json.dumps(settings))
-
-    def run_mode(self, mode="ok", **overrides):
-        self.configure_mode(mode, **overrides)
-        with patch(
-            "countersign.interactions.approvals.wait",
-            return_value=dict(decision="deny", alternative="Use permitted source paths"),
-        ):
-            run, status = execute_task(self.task, self.settings, run_dir=self.base / "result")
-        state = json.loads((run / "run.json").read_text())
-        return run, status, state
-
+class LiveTests(LiveFixture, unittest.TestCase):
     def test_large_reports_repair_together_without_a_new_planner_session(self):
         text = self.root / "issues.txt"
         text.write_text("".join(f"Finding {number}\n" for number in range(1, 1046)))
@@ -118,7 +62,11 @@ class LiveTests(unittest.TestCase):
         from countersign.application.git_state import git_metadata
 
         self.assertEqual(checkpoint["git_before"], git_metadata({"project": self.root}))
-        self.assertIn("G0", (run / "05-review/evidence-bindings.json").read_text())
+        review = json.loads((run / "05-review/response-object.json").read_text())
+        outputs = {
+            job["output_file"] for job in json.loads((run / "git-execution.json").read_text())
+        }
+        self.assertLessEqual(outputs, {claim["path"] for claim in review["evidence"]})
 
     def test_resolved_source_overwrite_keeps_user_edits_and_independent_review(self):
         source = self.root / "hello.py"
@@ -188,9 +136,11 @@ class LiveTests(unittest.TestCase):
             (self.base / "result/stop.request").touch()
             return dict(id="same-ticket", status="PENDING_APPROVAL", results=[])
 
-        with patch("countersign.executor.client.request", side_effect=pending_request) as request:
-            with patch("countersign.application.execution_wait.time.sleep"):
-                run, status, state = self.run_mode("ssh-action")
+        with (
+            patch("countersign.executor.client.request", side_effect=pending_request) as request,
+            patch("countersign.application.execution_wait.time.sleep"),
+        ):
+            run, status, _state = self.run_mode("ssh-action")
         self.assertEqual(status, "INTERRUPTED")
         self.assertEqual(request.call_count, 1)
         outcome = dict(
@@ -238,7 +188,7 @@ class LiveTests(unittest.TestCase):
     def test_jenkins_example(self):
         original = "pipeline {\n    agent any\n    stages { stage('Tests') { steps { sh 'pytest -q || true' } } }\n}\n"
         (self.root / "Jenkinsfile").write_text(original)
-        run, status, state = self.run_mode("jenkins")
+        _run, status, state = self.run_mode("jenkins")
         self.assertEqual(status, "READY_FOR_REVIEW")
         self.assertEqual((self.root / "Jenkinsfile").read_text(), original.replace(" || true", ""))
         self.assertEqual(state["changed_files"], ["project/Jenkinsfile"])
@@ -330,16 +280,16 @@ class LiveTests(unittest.TestCase):
         self.assertIn("Saved earlier plan:", (run / "01-plan/request.md").read_text())
 
     def test_live_prompt_has_complete_schema(self):
-        run, status, state = self.run_mode()
+        run, _status, _state = self.run_mode()
         prompt = (run / "02-plan-review/request.md").read_text()
-        schemas = prompt.split("one alternative per line:\n", 1)[1].split("\nContext:", 1)[0]
+        schemas = prompt.split("Schemas, one per line:\n", 1)[1].split("\nContext:", 1)[0]
         schema = json.loads(schemas.splitlines()[0])
         self.assertNotIn("ACTION_REQUEST", schemas)
         self.assertIn("findings", schema["properties"])
         self.assertNotIn("quote", json.dumps(schema))
         planning = (run / "01-plan/request.md").read_text()
         self.assertIn(f"PLAN FILE: your result is the Markdown file {run / 'plan.md'}", planning)
-        self.assertRegex(planning, r"\[R1; R-[a-f0-9]+; kind=task\]\nReturn 2")
+        self.assertIn("[R1]\nReturn 2", planning)
         self.assertEqual(planning.count("Return 2"), 1)
         requests = planning.split("Request schemas, one per line:\n", 1)[1].split("\nContext:")[0]
         self.assertEqual(
@@ -357,14 +307,14 @@ class LiveTests(unittest.TestCase):
             + "\nFINAL_REQUIREMENT_7"
         )
         self.task.write_text(text)
-        run, status, state = self.run_mode(model_context_tokens=100000)
+        run, status, _state = self.run_mode(model_context_tokens=100000)
         self.assertEqual(status, "READY_FOR_REVIEW")
         for stage in ("01-plan", "02-plan-review", "03-implement", "05-review"):
             request = (run / stage / "request.md").read_text()
             context = json.loads(request.split("Context:\n", 1)[1])
             labelled = request.split("\n\n# Orchestrator instructions\n", 1)[0].split("\n", 1)[1]
-            unlabelled = re.sub(r"(?m)^\[R\d+; R-[a-f0-9]+; kind=task\]\n", "", labelled)
-            self.assertEqual(unlabelled, text.split("\n```\n", 1)[1])
+            unlabelled = re.sub(r"(?m)^\[R\d+\]\n", "", labelled)
+            self.assertEqual(unlabelled, "## Goal\n" + text.split("\n```\n", 1)[1].strip())
             self.assertEqual((run / "00-input/task.md").read_text(), text)
             self.assertNotIn("task_chunks", context)
             self.assertLess(max(map(len, request.splitlines())), 2000)
@@ -411,7 +361,7 @@ class LiveTests(unittest.TestCase):
         self.task.write_text(
             task.replace('"roots":', '"verification": ["Run the declared scenario"], "roots":', 1)
         )
-        run, status, state = self.run_mode()
+        run, _status, state = self.run_mode()
         self.assertEqual(len(state["review_limits"]), 2)
         report = (run / "report.md").read_text()
         self.assertIn("Review limitations: 02-plan-review", report)
@@ -456,7 +406,7 @@ class LiveTests(unittest.TestCase):
         self.assertIn("Result [02-plan-review]: APPROVE", done.stdout)
 
     def test_no_change_requires_independent_approval(self):
-        run, status, state = self.run_mode("no-change-rejected")
+        _run, status, state = self.run_mode("no-change-rejected")
         self.assertEqual(status, "BLOCKED")
         self.assertEqual([a["stage"] for a in state["attempts"]], ["planner", "plan-reviewer"])
         self.assertIn("return 1", (self.root / "hello.py").read_text())
@@ -471,7 +421,7 @@ class LiveTests(unittest.TestCase):
         self.assertIn("DECLINED", (run / "02-plan-review/tool-result.md").read_text())
 
     def test_repeated_denied_search_obeys_stage_time_without_writer(self):
-        run, status, state = self.run_mode("parent-twice", read_retries=0, timeout_seconds=1)
+        _run, status, state = self.run_mode("parent-twice", read_retries=0, timeout_seconds=1)
         self.assertEqual(status, "TIMEOUT")
         self.assertEqual([a["stage"] for a in state["attempts"]], ["planner", "plan-reviewer"])
         self.assertIn("return 1", (self.root / "hello.py").read_text())
@@ -582,7 +532,7 @@ class LiveTests(unittest.TestCase):
         )
 
     def test_permission_denied_retains_tool_input_after_operator_declines(self):
-        run, status, state = self.run_mode("denied", read_retries=0, timeout_seconds=1)
+        run, status, _state = self.run_mode("denied", read_retries=0, timeout_seconds=1)
         self.assertEqual(status, "TIMEOUT")
         events = (run / "02-plan-review/events.jsonl").read_text()
         self.assertIn("/outside/skills/SKILL.md", events)
@@ -590,7 +540,7 @@ class LiveTests(unittest.TestCase):
         self.assertFalse((run / "02-plan-review/result.json").exists())
 
     def test_ordered_layout_has_one_result_per_stage(self):
-        run, status, state = self.run_mode()
+        run, _status, state = self.run_mode()
         self.assertEqual(
             [s["directory"] for s in state["stages"]],
             ["01-plan", "02-plan-review", "03-implement", "04-check", "05-review"],
@@ -622,7 +572,9 @@ class LiveTests(unittest.TestCase):
             directory = run / record["directory"]
             self.assertTrue((directory / "result.json").exists())
             if record["mode"] == "model":
-                names = {p.name for p in directory.iterdir()} - {"plan.md"}
+                drafted = (directory / "decision-draft.json").is_file()
+                self.assertEqual(drafted, record["stage"] != "planner")
+                names = {p.name for p in directory.iterdir()} - {"plan.md", "decision-draft.json"}
                 self.assertEqual(
                     names,
                     {
@@ -676,7 +628,7 @@ class LiveTests(unittest.TestCase):
             validate_plan(canonical_plan(value, {"qa": self.root}), {"qa": self.root}, self.task)
 
     def test_many_calls_remain_metrics_without_extra_stage(self):
-        run, status, state = self.run_mode("many-calls")
+        _run, status, state = self.run_mode("many-calls")
         self.assertEqual(status, "READY_FOR_REVIEW")
         self.assertEqual(state["stages"][0]["mode"], "model")
         self.assertNotIn("tools", state["stages"][0]["budget"])
@@ -711,7 +663,7 @@ class LiveTests(unittest.TestCase):
             validate_plan(plan, {"project": self.root}, self.task)
 
     def test_new_file(self):
-        run, status, state = self.run_mode("new")
+        _run, status, state = self.run_mode("new")
         self.assertEqual(status, "READY_FOR_REVIEW")
         self.assertIsNone(state["preimages"]["project/new.py"])
         self.assertTrue((self.root / "new.py").exists())
@@ -779,7 +731,7 @@ class LiveTests(unittest.TestCase):
         self.assertIn("-    return 1", (run / "changes.diff").read_text())
 
     def test_resume_final_review_does_not_repeat_implementation(self):
-        run, status, state = self.run_mode("review-timeout")
+        run, status, state = self.run_mode("review-timeout", read_retries=0)
         self.assertEqual(status, "TIMEOUT")
         old_steps = len(state["stages"])
         _, status = self.continue_with_ok_model(run)
@@ -831,7 +783,7 @@ class LiveTests(unittest.TestCase):
         self.assertEqual(len(json.loads((run / "run.json").read_text())["stages"]), old_steps)
 
     def test_missing_checkpoint_cannot_continue(self):
-        run, status, state = self.run_mode("planner-timeout")
+        run, status, _state = self.run_mode("planner-timeout", read_retries=0)
         self.assertEqual(status, "TIMEOUT")
         (run / "checkpoint.json").unlink()
         _, status = self.continue_with_ok_model(run)
@@ -919,15 +871,7 @@ class LiveTests(unittest.TestCase):
                 configuration(self.task, self.settings)
 
     def isolated_repository(self):
-        from countersign.git import process
-
-        (self.root / ".git/HEAD").unlink()
-        (self.root / ".git").rmdir()
-        process.checked(self.root, ["init", "-b", "main"])
-        process.checked(self.root, ["config", "user.name", "Fixture"])
-        process.checked(self.root, ["config", "user.email", "fixture@example.invalid"])
-        process.checked(self.root, ["add", "."])
-        process.checked(self.root, ["commit", "-m", "Initial"])
+        process = self.real_repository()
         header = {"roots": {"project": str(self.root)}, "isolation": "worktree"}
         self.task.write_text(f"```countersign-task\n{json.dumps(header)}\n```\nReturn 2")
         return process
@@ -959,7 +903,9 @@ class LiveTests(unittest.TestCase):
 
     def test_isolated_run_continues_in_its_worktree(self):
         self.isolated_repository()
-        run, status, state = self.run_mode("review-timeout", worktree_base=str(self.base / "wt"))
+        run, status, state = self.run_mode(
+            "review-timeout", read_retries=0, worktree_base=str(self.base / "wt")
+        )
         self.assertEqual(status, "TIMEOUT")
         _, status = self.continue_with_ok_model(run)
         self.assertEqual(status, "READY_FOR_REVIEW")
@@ -1038,7 +984,7 @@ class LiveTests(unittest.TestCase):
         planner = [stage for stage in state["stages"] if stage["stage"] == "planner"]
         self.assertEqual([stage["mode"] for stage in planner], ["model"])
         prompt = (run / planner[0]["directory"] / "tool-result.md").read_text()
-        self.assertIn('"status": "LOCAL_REQUEST"', prompt)
+        self.assertIn('"status":"LOCAL_REQUEST"', prompt)
 
     def test_failed_writer_response_can_continue_with_an_operator_note(self):
         run, status, state = self.run_mode("writer-prose-always")
@@ -1134,7 +1080,8 @@ class LiveTests(unittest.TestCase):
         self.assertTrue(state["auto_continue"])
         self.assertIn("return 1", (self.root / "hello.py").read_text())
         request = (run / "01-plan/request.md").read_text()
-        self.assertIn("Decide split when the work is several such tasks", request)
+        self.assertIn("Choose split when it is several tasks", request)
+        self.assertIn("implemented directly from this plan", request)
         self.assertIn("Decision: split", (run / "plan.md").read_text())
 
     def test_design_discussion_leaves_a_reviewed_design_document(self):
@@ -1146,6 +1093,17 @@ class LiveTests(unittest.TestCase):
         self.assertIn("[Design document](design.md)", (run / "report.md").read_text())
         frozen = json.loads((run / "00-input/settings.json").read_text())
         self.assertIn("max_change_lines", frozen)
+
+    def test_question_report_and_index_carry_the_reviewed_answer(self):
+        header = {"roots": {"project": str(self.root)}, "read_only": True}
+        self.task.write_text(f"```countersign-task\n{json.dumps(header)}\n```\nWhat is returned?")
+        run, status, state = self.run_mode("no-change")
+        self.assertEqual(status, "NO_CHANGES_REQUIRED", state.get("summary"))
+        self.assertEqual(state["answer"], "Current source already returns 2")
+        report = (run / "report.md").read_text()
+        self.assertIn("## Answer\n\nCurrent source already returns 2", report)
+        self.assertNotIn("### Review limitations", report)
+        self.assertFalse((run / "design.md").exists())
 
     def test_context_overflow_continues_in_a_fresh_session(self):
         run, status, state = self.run_mode("context-overflow")
@@ -1191,7 +1149,7 @@ class LiveTests(unittest.TestCase):
         self.assertIn("return 1", (self.root / "hello.py").read_text())
 
     def test_failed_read_does_not_fail_the_stage(self):
-        run, status, state = self.run_mode("failed-read")
+        _run, status, state = self.run_mode("failed-read")
         self.assertEqual(status, "READY_FOR_REVIEW", state.get("summary"))
         planner = state["stages"][0]
         self.assertEqual(planner["status"], "RESULT_VALID")
@@ -1240,7 +1198,7 @@ class LiveTests(unittest.TestCase):
         self.assertEqual(config["roots"], {"project": self.root})
 
     def test_unknown_contract_cannot_continue(self):
-        run, status, state = self.run_mode("review-timeout")
+        run, status, state = self.run_mode("review-timeout", read_retries=0)
         self.assertEqual(status, "TIMEOUT")
         state["contract_version"] = 2
         (run / "run.json").write_text(json.dumps(state))

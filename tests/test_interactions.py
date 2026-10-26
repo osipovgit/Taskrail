@@ -10,8 +10,10 @@ import time
 import unittest
 from contextlib import ExitStack
 from pathlib import Path
-from unittest.mock import patch
+from types import SimpleNamespace
+from unittest.mock import MagicMock, patch
 
+from countersign.core import protected_paths
 from countersign.git import deadline, process
 from countersign.interactions import (
     access,
@@ -19,6 +21,7 @@ from countersign.interactions import (
     approvals,
     local,
     local_request,
+    local_route,
     read_only,
     transcripts,
 )
@@ -84,6 +87,42 @@ class InteractionTests(unittest.TestCase):
         self.assertEqual(ledger[0]["request"]["request"]["argv"], ["echo", "2"])
         self.assertIsNone(approvals.load(self.run))
 
+    def test_inline_shell_or_python_code_always_needs_a_personal_decision(self):
+        inline = (
+            ["bash", "-c", "id"],
+            ["sh", "-ec", "id"],
+            ["/usr/bin/python3", "-Ic", "1"],
+            ["env", "FOO=1", "bash", "-c", "id"],
+            ["timeout", "5", "sh", "-c", "id"],
+            ["env", "-S", "python3 -c 1"],
+        )
+        scripts = (["bash", "x.sh"], ["python3", "-m", "pytest", "-c", "x.ini"], ["ls", "-c"])
+        for argv in (*inline, *scripts):
+            with self.subTest(argv=argv):
+                approve = MagicMock(return_value=dict(decision="deny", alternative=""))
+                session = SimpleNamespace(
+                    active=(self.run, dict(role="reviewer")), environment=self.context
+                )
+                actions = SimpleNamespace(
+                    session=session,
+                    run=self.run,
+                    folder=self.run,
+                    approve=approve,
+                    local_result=lambda payload, answer: answer,
+                )
+                local_route.local_action(actions, self.request(argv))
+                personal = approve.call_args.kwargs["personal"]
+                self.assertEqual(personal, argv in inline)
+                notice = approve.call_args.args[0].get("notice", "")
+                self.assertEqual("Allow all actions never" in notice, argv in inline)
+        state = dict(auto_approve=True)
+        card = dict(decision="allow", alternative="")
+        with patch("countersign.interactions.approvals.wait", return_value=card) as wait:
+            request = self.request(["bash", "-c", "id"])
+            answer = approval_policy.decision(self.run, request, state, personal=True)
+        wait.assert_called_once()
+        self.assertNotIn("automatic", answer)
+
     def test_listing_commands_inside_the_roots_need_no_decision(self):
         roots = {"project": self.root}
         (self.root / "roles").mkdir()
@@ -136,7 +175,8 @@ class InteractionTests(unittest.TestCase):
                 self.assertFalse(read_only.command(self.request(argv), roots))
         state = {}
         with patch("countersign.interactions.approvals.wait") as wait:
-            answer = approval_policy.decision(self.run, self.request(["ls"]), state, roots)
+            scope = (roots, protected_paths.DEFAULT_PATTERNS)
+            answer = approval_policy.decision(self.run, self.request(["ls"]), state, scope)
         wait.assert_not_called()
         self.assertEqual((answer["decision"], answer["rule"]), ("allow", "read_only"))
         read = dict(tool="read", input=dict(filePath=str(self.root / "roles/main.yml")))
@@ -223,7 +263,8 @@ class InteractionTests(unittest.TestCase):
         target.write_text("safe\n")
         request = self.request(["ls", "listed.txt"])
         with patch.dict(os.environ, {"PATH": str(shadow)}):
-            decision = approval_policy.decision(self.run, request, {}, self.context["roots"])
+            scope = (self.context["roots"], protected_paths.DEFAULT_PATTERNS)
+            decision = approval_policy.decision(self.run, request, {}, scope)
             self.assertEqual(decision["rule"], "read_only")
             context = dict(self.context, automatic_read=True)
             result = local.execute(request, context)
@@ -286,18 +327,7 @@ class InteractionTests(unittest.TestCase):
         self.assertEqual(rights["edit"], "deny")
         self.assertEqual(rights["read"][str(allowed)], "allow")
 
-    def test_transcript_evidence_is_bound_to_actual_output(self):
-        stage = self.run / "01-plan"
-        stage.mkdir()
-        (stage / "events.jsonl").touch()
-        outcome = dict(status="SUCCEEDED", exit_code=0, stdout="lint passed")
-        transcripts.local_snapshot(self.run, stage, self.request(["echo", "ok"]), outcome)
-        paths = transcripts.confirmed_paths(self.run)
-        self.assertEqual(len(paths), 1)
-        Path(next(iter(paths))).write_text("{}")
-        self.assertEqual(transcripts.confirmed_paths(self.run), set())
-
-    def test_long_output_is_readable_line_by_line_and_trusted_while_unchanged(self):
+    def test_long_output_is_readable_line_by_line(self):
         stage = self.run / "01-plan"
         stage.mkdir()
         (stage / "events.jsonl").touch()
@@ -310,9 +340,6 @@ class InteractionTests(unittest.TestCase):
         self.assertEqual(text_file.read_text(), lines)
         self.assertIn(f"Full output files: {text_file}", response)
         self.assertFalse((self.run / "00-input/local/01-plan-0.stderr.txt").exists())
-        self.assertIn(str(text_file), transcripts.confirmed_paths(self.run))
-        text_file.write_text("edited\n")
-        self.assertNotIn(str(text_file), transcripts.confirmed_paths(self.run))
 
     def test_local_decisions_resume_same_session_and_exclude_long_wait(self):
         for role in ("planner", "reviewer", "implementer"):
@@ -339,7 +366,7 @@ class InteractionTests(unittest.TestCase):
                     now = [100.0]
                     calls = []
 
-                    def invoke(options):
+                    def invoke(options, *, calls=calls, now=now):
                         calls.append(options)
                         now[0] += 2
                         text = json.dumps(self.request([sys.executable, "--version"]))
@@ -352,7 +379,7 @@ class InteractionTests(unittest.TestCase):
                             else "{}",
                         )
 
-                    def decide(*_args):
+                    def decide(*_args, now=now, decision=decision):
                         now[0] += 7200
                         return dict(decision=decision, alternative="Inspect existing output")
 
@@ -360,7 +387,7 @@ class InteractionTests(unittest.TestCase):
                         stack.enter_context(
                             patch(
                                 "countersign.interactions.clock.time.monotonic",
-                                side_effect=lambda: now[0],
+                                side_effect=lambda *, now=now: now[0],
                             )
                         )
                         stack.enter_context(patch("countersign.interactions.clock.save_run"))
@@ -420,16 +447,18 @@ class InteractionTests(unittest.TestCase):
                 requests = []
                 installed_now = [False]
 
-                def invoke(_options):
+                def invoke(_options, *, responses=responses):
                     text = responses.pop(0)
                     return dict(status="OK", sessions=["same"], tokens={}, final_text=text)
 
-                def decide(_run, request):
+                def decide(
+                    _run, request, *, requests=requests, flag=installed_now, value=installed
+                ):
                     requests.append(request)
-                    installed_now[0] = installed
+                    flag[0] = value
                     return dict(decision="allow", alternative="")
 
-                def found(*_args, **_kwargs):
+                def found(*_args, installed_now=installed_now, **_kwargs):
                     return "/usr/bin/countersign-missing-tool" if installed_now[0] else None
 
                 with ExitStack() as stack:
@@ -512,11 +541,13 @@ class InteractionTests(unittest.TestCase):
                 local_request.checked_request(dict(request, cwd=cwd), roots)
 
     def test_expired_git_stage_never_starts_a_process(self):
-        with deadline.Deadline(0, self.run):
-            with patch("countersign.git.transport.subprocess.Popen") as launch:
-                with self.assertRaises(subprocess.TimeoutExpired):
-                    process.invoke(self.root, ["status"])
-                launch.assert_not_called()
+        with (
+            deadline.Deadline(0, self.run),
+            patch("countersign.git.transport.subprocess.Popen") as launch,
+        ):
+            with self.assertRaises(subprocess.TimeoutExpired):
+                process.invoke(self.root, ["status"])
+            launch.assert_not_called()
 
     def test_local_request_envelopes_preserve_arguments_and_reject_ambiguity(self):
         payload = self.request([sys.executable, "--version"])

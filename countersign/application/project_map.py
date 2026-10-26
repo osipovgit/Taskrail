@@ -6,7 +6,11 @@ the work is instead of exploring. An index at the top gives the line range of ea
 section, and each root's part stays within its share of MAP_LIMIT characters.
 """
 
+from functools import partial
+from itertools import starmap
+
 from countersign.application import project_files, requirement_hints
+from countersign.core import protected_paths
 from countersign.infrastructure.agent_sync import atomic_write
 
 NAME = "00-input/project-map.md"
@@ -24,27 +28,27 @@ HEADER = (
 NO_HINTS = "No requirement names a distinctive word found in the files."
 
 
-def prepare(run, roots, requirements):
+def prepare(run, roots, requirements, protected=protected_paths.DEFAULT_PATTERNS):
     """Write the map once per run; returns its path."""
     target = run / NAME
     if not target.exists():
-        atomic_write(target, render(roots, requirements).encode())
+        atomic_write(target, render(roots, requirements, protected).encode())
     return target
 
 
-def render(roots, requirements):
+def render(roots, requirements, protected=protected_paths.DEFAULT_PATTERNS):
     """The map: header, index, one section per root, then the requirement hints."""
     texts = {}
-    sections = []
-    for alias, root in roots.items():
-        sections.append(root_section(alias, root, texts, MAP_LIMIT // len(roots)))
+    share = MAP_LIMIT // len(roots)
+    section = partial(root_section, texts=texts, share=share, protected=protected)
+    sections = list(starmap(section, roots.items()))
     hints = requirement_hints.hint_lines(requirements, texts) or [NO_HINTS]
     return assembled([*sections, ["## Requirement hints", *hints]])
 
 
-def root_section(alias, root, texts, share):
+def root_section(alias, root, texts, share, protected):
     """`## alias: root` and one line per file until the root's share is used."""
-    names = project_files.listing(root)
+    names = project_files.listing(root, protected)
     lines = [f"## {alias}: {root}"]
     for count, name in enumerate(names):
         if sum(map(len, lines)) > share:
@@ -63,7 +67,7 @@ def file_line(shown, path, texts):
     count, marks, text = found
     if len(text) <= SEARCHED_SIZE and len(texts) < SEARCHED_FILES:
         texts[shown] = text
-    detail = ": {0}".format("; ".join(marks)) if marks else ""
+    detail = ": {}".format("; ".join(marks)) if marks else ""
     return f"- {shown} ({count} lines){detail}"[:LINE_LIMIT]
 
 

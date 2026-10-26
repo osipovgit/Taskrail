@@ -33,7 +33,7 @@ def remote_script(action):
 def file_commands(name, body):
     """Avoid executing file body during bundle creation."""
     return [
-        "mkdir -p -- {}".format(shlex.quote(str(PurePosixPath(name).parent))),
+        f"mkdir -p -- {shlex.quote(str(PurePosixPath(name).parent))}",
         "printf %s "
         + shlex.quote(base64.b64encode(body.encode("utf-8")).decode("ascii"))
         + " | base64 -d > "
@@ -82,7 +82,7 @@ def authentication(host):
             "PreferredAuthentications=publickey",
             "IdentitiesOnly=yes",
             "BatchMode=yes",
-            "IdentityFile={0}".format(identity),
+            f"IdentityFile={identity}",
         )
     else:
         options = (

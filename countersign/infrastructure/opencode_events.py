@@ -59,7 +59,7 @@ class EventTranslator:
         if returncode or self.failed or self.final_text is None:
             return None
         session, text = self.final_text.get(SESSION), self.final_text[PART]
-        stop_id = "{0}-stop".format(text.get("id", ""))
+        stop_id = "{}-stop".format(text.get("id", ""))
         part = dict(type="step-finish", reason=STOP, messageID=text.get("messageID"))
         part.update(id=stop_id, sessionID=session)
         return json.dumps(dict(type="step_finish", sessionID=session, part=part))
@@ -115,12 +115,12 @@ def file_arguments(tool, arguments, directory):
 def tool_error(message, tool, arguments):
     """Permission and missing-read classification match the 1.x messages."""
     if message.startswith(PERMISSION_PREFIX):
-        return "PermissionDeniedError: {0}".format(message)
+        return f"PermissionDeniedError: {message}"
     if tool != READ or message.startswith(READ_ERROR_PREFIX):
         return message
     first, newline, rest = message.partition("\n")
     if first.startswith(MISSING_PREFIX):
-        first = "{0}{1}".format(MISSING_PREFIX, arguments.get("filePath", ""))
+        first = "{}{}".format(MISSING_PREFIX, arguments.get("filePath", ""))
     first = re.sub(r"\(1 line\)$", "(1 lines)", first)
     return "".join((READ_ERROR_PREFIX, first, newline, rest))
 

@@ -16,7 +16,8 @@ from types import MappingProxyType
 from countersign.infrastructure.opencode_cli import RAW_EVENTS
 from countersign.infrastructure.opencode_events import EventTranslator
 
-READY_SECONDS = 60
+# A server reloads its provider catalog when agent profiles change; observed over 60 s.
+READY_SECONDS = 150
 POLL_SECONDS = 0.5
 CLOSE_SECONDS = 5
 PASSWORD_BYTES = 32
@@ -26,7 +27,7 @@ DIRECTORY = "--dir"
 LOG_LEVEL = "--log-level"
 # A stage-owned server shared by every turn of that stage.
 SHARED_SERVER = "COUNTERSIGN_OPENCODE_SERVER"
-PASSWORD = "OPENCODE_PASSWORD"
+AUTH_VARIABLE = "OPENCODE_PASSWORD"
 
 
 class Server:
@@ -40,7 +41,7 @@ class Server:
         self.process = None
         if self.url:
             return
-        self.env[PASSWORD] = secrets.token_urlsafe(PASSWORD_BYTES)
+        self.env[AUTH_VARIABLE] = secrets.token_urlsafe(PASSWORD_BYTES)
         self.process = subprocess.Popen(
             [*command, "serve", "--stdio", "--port", "0"],
             cwd=directory,
@@ -70,15 +71,18 @@ class Server:
         self.process.stdout.close()
 
     def agents(self, name=None):
-        """Agent configuration loads after the server reports readiness."""
+        """Agent configuration loads after the server reports readiness.
+
+        A slow request may use the rest of the deadline; a failed one is retried.
+        """
         deadline = time.monotonic() + READY_SECONDS
         while self.url and time.monotonic() < deadline:
-            listed = self.request("agent.list")
+            listed = self.request("agent.list", deadline - time.monotonic())
             names = {agent.get("id") for agent in listed}
             if listed and (name is None or name in names):
                 return listed
             time.sleep(POLL_SECONDS)
-        raise RuntimeError("opencode server did not load agent {0}".format(name or "list"))
+        raise RuntimeError("opencode server did not load agent {}".format(name or "list"))
 
     def listing(self):
         """The 1.x `agent list` shape: a name line followed by the effective rules."""
@@ -91,25 +95,30 @@ class Server:
                 )
                 for rule in agent.get("permissions", [])
             ]
-            title = "{0} ({1})\n".format(agent.get("id"), agent.get("mode", "all"))
+            title = "{} ({})\n".format(agent.get("id"), agent.get("mode", "all"))
             sys.stdout.write(title)
-            sys.stdout.write("  {0}\n".format(json.dumps(rules, indent=2)))
+            sys.stdout.write(f"  {json.dumps(rules, indent=2)}\n")
 
     def attachment(self):
         """Environment that lets later turns use this server instead of starting one."""
-        return {SHARED_SERVER: self.url or "", PASSWORD: self.env[PASSWORD]}
+        return {SHARED_SERVER: self.url or "", AUTH_VARIABLE: self.env[AUTH_VARIABLE]}
 
-    def request(self, operation):
-        completed = subprocess.run(
-            [*self.command, "api", "--server", self.url, operation, "--param"]
-            + ["directory={0}".format(self.directory)],
-            cwd=self.directory,
-            env=self.env,
-            stdin=subprocess.DEVNULL,
-            capture_output=True,
-            timeout=READY_SECONDS,
-            check=False,
-        )
+    def request(self, operation, timeout=READY_SECONDS):
+        """Data of one API operation; nothing when it fails or times out."""
+        argv = [*self.command, "api", "--server", self.url, operation]
+        argv += ["--param", f"directory={self.directory}"]
+        try:
+            completed = subprocess.run(
+                argv,
+                cwd=self.directory,
+                env=self.env,
+                stdin=subprocess.DEVNULL,
+                capture_output=True,
+                timeout=max(timeout, POLL_SECONDS),
+                check=False,
+            )
+        except subprocess.TimeoutExpired:
+            return []
         return json.loads(completed.stdout or b"{}").get("data") or []
 
 
@@ -153,7 +162,7 @@ def relay(server, arguments):
 
 
 def forward(line):
-    sys.stdout.write("{0}\n".format(line))
+    sys.stdout.write(f"{line}\n")
     sys.stdout.flush()
 
 

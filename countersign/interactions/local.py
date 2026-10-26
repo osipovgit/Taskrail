@@ -6,7 +6,7 @@ import subprocess
 import tempfile
 import time
 
-from countersign.core import control, json_response, schema
+from countersign.core import control, json_response, prompt_texts, protected_paths, schema
 from countersign.git import transport
 from countersign.infrastructure import environment as host_environment
 from countersign.infrastructure.process_group import stop_group
@@ -32,23 +32,30 @@ def extract(text):
     return payload
 
 
-def validate(payload, roots, automatic=False):
+def validate(payload, roots, automatic=False, protected=protected_paths.DEFAULT_PATTERNS):
     """A valid request whose executable is installed; returns argv with its absolute path."""
     argv = local_request.checked_request(payload, roots)
     if automatic:
-        schema.require(read_only.command(payload, roots), "Automatic read no longer qualifies")
+        still = read_only.command(payload, roots, protected)
+        schema.require(still, "Automatic read no longer qualifies")
     search_path = os.defpath if automatic else None
     executable = shutil.which(argv[0], path=search_path)
     schema.require(bool(executable), "Executable not installed on the orchestrator host")
     return [executable, *argv[1:]]
 
 
+def recheck(context):
+    """Whether an automatic read is rechecked, and against which protected patterns."""
+    protected = protected_paths.patterns(context.get("config", {}))
+    return context.get("automatic_read", False), protected
+
+
 def execute(payload, context):
     """Approval authorizes exact argv; execution still has a finite remaining deadline."""
     schema.require(context["timeout"] > 0, "Stage active time exhausted")
-    argv = context.get("effective_argv") or validate(
-        payload, context["roots"], context.get("automatic_read", False)
-    )
+    argv = context.get("effective_argv")
+    if not argv:
+        argv = validate(payload, context["roots"], *recheck(context))
     with tempfile.TemporaryFile() as output, tempfile.TemporaryFile() as errors:
         process = subprocess.Popen(
             argv,
@@ -86,20 +93,12 @@ def monitor(process, streams, context):
     schema.require(not transport.oversized(streams), "Local command output limit exceeded")
 
 
-def instructions():
+def instructions(stage):
     """Diagnostics run as the service user only after explicit personal approval."""
-    return (
-        "\nLocal commands are available to ALL roles through LOCAL_REQUEST: "
-        '{"schema_version":1,"status":"LOCAL_REQUEST","cwd":"/declared/root/or/a/directory/inside",'
-        '"argv":["ansible-lint","ansible-playbooks"],"reason":"Purpose, effects and expected result"}. '
-        "End the turn; the operator reviews exact argv and may allow, deny or suggest an alternative. "
-        "The same session resumes with command output. Do not declare shell unavailable. "
-        "Use this for linters, tests and diagnostics; planner/reviewer must not request source fixes. "
-        "Commands run without a shell; request bash explicitly if needed. Never request forbidden Git "
-        "operations, bypass access denials, or use local commands to run SSH/deployments; use their controlled routes. "
-        "User denial is feedback: skip that action, consider the alternative and continue feasible work. "
-        "Mandatory unresolved criteria still need honest gaps. Do not resubmit a denied action unchanged.\n"
-    )
+    advertised = [prompt_texts.text("routes.local")]
+    if stage != "implementer":
+        advertised.append(prompt_texts.text("routes.local.read_only"))
+    return " ".join(advertised)
 
 
 def reap(process):

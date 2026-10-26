@@ -189,8 +189,10 @@ class AccessManifestTests(unittest.TestCase):
         )
         self.assertEqual(set(git["required"]), set(payload))
         self.assertEqual(extract(json.dumps(payload)), payload)
-        self.assertIn("ENTIRE final assistant message", instructions())
-        self.assertIn("intentionally absent from the tool list", instructions())
+        self.assertIn("as your entire message", instructions("planner"))
+        self.assertIn("absence from your tool list is expected", instructions("planner"))
+        self.assertNotIn("push", instructions("reviewer"))
+        self.assertIn("A push waits for the operator's approval", instructions("implementer"))
         self.assertEqual(
             executor_contracts.ssh_schema()["properties"]["status"], {"const": "ACTION_REQUEST"}
         )

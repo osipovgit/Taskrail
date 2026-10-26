@@ -82,7 +82,7 @@ def model_stage(workflow):
     if outcome is None:
         return
     verdict, record = outcome
-    reference = "{0}/result.json".format(record["directory"])
+    reference = "{}/result.json".format(record["directory"])
     transitions.advance(
         workflow.flow, workflow.state, verdict, reference, workflow.config["max_repairs"]
     )

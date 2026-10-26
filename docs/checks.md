@@ -99,16 +99,16 @@ must be a runtime requirement of that task. The recipe owns the phase; parameter
 command and adapter overrides are rejected. Selecting the same recipe/criterion
 binding twice does not duplicate execution. Selecting an existing mandatory
 verification command binds that execution to criteria rather than rerunning it.
-Legacy prose checks remain visible and require planning; they are never guessed
-into executable commands.
+Written `Jenkins check:` and `Server check:` plan entries become the deferred
+verification of their delivery phase; they are never guessed into executable commands.
 
 Local checks run after syntax checks, including an approved no-change plan that
 selects them. Child tasks inherit only their assigned local checks. Integration
 review repeats the parent's local checks on the combined result. Fixed validation
 and server batches execute in code before review. A failed or unknown fixed
 batch stops; when all runtime criteria are covered by passed checks, the next
-model stage is the independent reviewer. Unbound legacy requirements retain the
-ordinary planning path.
+model stage is the independent reviewer. Runtime requirements without a selected
+recipe keep the ordinary planning path.
 
 ## Results and continuation
 

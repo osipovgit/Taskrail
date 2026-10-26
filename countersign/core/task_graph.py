@@ -1,8 +1,7 @@
-"""The dependency graph of planned tasks: checks, execution order and waves.
+"""The dependency graph of planned tasks: checks and execution order.
 
 Tasks run in topological order; among tasks that are ready at the same time, the
-plan's order decides. A wave holds the tasks whose longest dependency chain has the
-same length, so the tasks of one wave do not depend on each other.
+plan's order decides.
 """
 
 from countersign.core.schema import require
@@ -19,7 +18,7 @@ def order(steps):
     while waiting:
         ready = ready_tasks(waiting, ordered)
         if not ready:
-            raise ValueError("Tasks depend on each other in a cycle: {0}".format(cycle(waiting)))
+            raise ValueError(f"Tasks depend on each other in a cycle: {cycle(waiting)}")
         ordered.append(ready[0])
         waiting.pop(ready[0])
     return ordered
@@ -47,16 +46,6 @@ def cycle(waiting):
     return " -> ".join(path[path.index(path[-1]) :])
 
 
-def waves(steps):
-    """Task ID -> wave number, 1 for tasks without dependencies."""
-    needs = {step[IDENTIFIER]: step[DEPENDS] for step in steps}
-    levels = {}
-    for name in order(steps):
-        earlier = [levels[need] for need in needs[name]]
-        levels[name] = 1 + max(earlier, default=0)
-    return levels
-
-
 def ancestors(steps, name):
     """Every direct and transitive prerequisite of a task."""
     needs = {step[IDENTIFIER]: step[DEPENDS] for step in steps}
@@ -68,10 +57,3 @@ def ancestors(steps, name):
             found.add(current)
             pending.extend(needs[current])
     return found
-
-
-def plan_order(plan):
-    """The order of a stored plan's tasks, or [] without a plan or tasks."""
-    if not plan or not plan.get("steps"):
-        return []
-    return order(plan["steps"])

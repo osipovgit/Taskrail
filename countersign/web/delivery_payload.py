@@ -19,15 +19,20 @@ CRITERIA = "Every check below ran and its observed result is reported, or the re
 SCOPE = "This run checks a finished code change (run {0}); it changes no files."
 
 
-def payload(run, state, name, checks):
-    """Task form fields of one phase run; the checks are its runtime requirements."""
+def payload(run, state, name):
+    """Task form fields of one phase run; the checks are its runtime requirements.
+
+    Written checks become its deferred verification; selected recipes keep their typed
+    criterion IDs.
+    """
     draft = history.task_draft(run)
-    title = "{0} · {1}".format(draft["title"], TITLES[name])
+    title = "{} · {}".format(draft["title"], TITLES[name])
+    written = delivery_checks.written(run, state)[CHECK_KEYS[name]]
     fields = dict(
         title=title[:TITLE_LIMIT],
         goal=GOALS[name],
         criteria=CRITERIA,
-        verification="\n".join(legacy_verification(run, state, name, checks)),
+        verification="\n".join(written),
         constraints=draft["constraints"],
         split_context=brief(run, state, draft),
         roots=worktree_isolation.root_entries(state["roots"]),
@@ -42,22 +47,13 @@ def payload(run, state, name, checks):
 
 def typed_checks(run, state, name):
     """Phase checks keep parent runtime identities instead of extracting labels again."""
-    selected = []
-    for spec in delivery_checks.typed(run, state):
-        if spec["phase"] == name:
-            selected.append(spec)
+    specs = state.get(delivery_checks.SPECS, [])
+    selected = [spec for spec in specs if spec["phase"] == name]
     if not selected:
         return {}
     criteria = {criterion for entry in selected for criterion in entry["criteria"]}
     assigned = [entry for entry in state["requirements"] if entry["id"] in criteria]
     return dict(check_specs=selected, assigned_requirements=assigned, check_parent=run.name)
-
-
-def legacy_verification(run, state, name, checks):
-    """Display labels never create extra requirements beside typed criterion IDs."""
-    selected = typed_checks(run, state, name).get("check_specs", [])
-    labels = {"{id}: {recipe_id}".format(**spec) for spec in selected}
-    return [entry for entry in checks[CHECK_KEYS[name]] if entry not in labels]
 
 
 def brief(run, state, draft):

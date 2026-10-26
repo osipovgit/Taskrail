@@ -3,7 +3,7 @@
 import json
 from pathlib import Path
 
-from countersign.application import check_artifacts, source_tree
+from countersign.application import check_artifacts, source_ignores
 from countersign.application.git_state import git_metadata
 from countersign.core.files import atomic_json, digest
 from countersign.executor import protocol
@@ -14,15 +14,14 @@ IDENTITY_LENGTH = 20
 
 def source_identity(roots):
     """A check applies only while both its source and repository identity match."""
-    payload = dict(source=source_tree.snapshot(roots), git=git_metadata(roots))
+    payload = dict(source=source_ignores.current(roots), git=git_metadata(roots))
     return digest(json.dumps(payload, sort_keys=True).encode())
 
 
 def record(run, spec, request, outcome, context):
     """Publish evidence after the request and its source boundary have been verified."""
     entries = read(run)
-    identity = dict(check=spec["id"], sequence=len(entries), request=request)
-    result_id = "check-{0}".format(protocol.fingerprint(identity)[:IDENTITY_LENGTH])
+    result_id = result_name(spec, len(entries), request)
     path = run / "00-input/checks" / f"{result_id}.json"
     path.parent.mkdir(parents=True, exist_ok=True)
     entry = dict(
@@ -40,6 +39,13 @@ def record(run, spec, request, outcome, context):
     entries.append(entry)
     atomic_json(run / LEDGER, entries)
     return entry
+
+
+def result_name(spec, sequence, request):
+    """A short, stable ID for the nth result of one check request."""
+    identity = dict(check=spec["id"], sequence=sequence, request=request)
+    digest = protocol.fingerprint(identity)[:IDENTITY_LENGTH]
+    return f"check-{digest}"
 
 
 def read(run):

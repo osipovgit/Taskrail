@@ -4,11 +4,12 @@ import json
 import re
 from pathlib import Path
 
-from countersign.application import instruction_sources, session_budget, task_scope
+from countersign.application import instruction_sources, session_budget
 from countersign.application.input_config import input_configuration
-from countersign.application.task_roots import ROOTS, declared_roots
+from countersign.application.task_roots import ROOTS, declared_access
 from countersign.application.verify_settings import parse_commands
 from countersign.application.worktree_isolation import isolation_settings
+from countersign.core import task_markdown
 from countersign.core.runtime import DEFAULT_TIMEOUT, run_storage, settings_path
 from countersign.infrastructure.agent_sync import launch_settings
 
@@ -42,12 +43,11 @@ def configuration(task, settings=None, roots_override=None, checks_override=None
         design=meta.get(DESIGN) is True,
         decompose=meta.get("decompose") is True,
         phase=meta.get(PHASE) if meta.get(PHASE) in PHASES else None,
-        task_scope=task_scope.configured(meta, declared_roots(meta, path)),
+        **declared_access(meta, path, options),
         confirmed_change=meta.get("confirmed_change"),
         auto_approve=meta.get("auto_approve") is True,
         task=path,
         task_text=text,
-        roots=declared_roots(meta, path),
         source=agent_source(options, source.parent),
         verification=verification(meta),
         permission_worktree=permission_worktree(options),
@@ -64,7 +64,10 @@ def answer_only(meta):
 
 
 def task_header(text, options, roots_override):
-    """At most one fenced JSON header; restored roots replace the declared ones."""
+    """At most one fenced JSON header; restored roots replace the declared ones.
+
+    A Markdown task file without typed fields is read into them.
+    """
     headers = HEADER.findall(text)
     if len(headers) > 1:
         raise ValueError("Only one countersign-task header is supported")
@@ -73,7 +76,8 @@ def task_header(text, options, roots_override):
         raise ValueError("Task header and settings must be JSON objects")
     if roots_override is not None:
         meta[ROOTS] = roots_override
-    return meta
+    verification(meta)
+    return task_markdown.typed_input(text, meta)
 
 
 def agent_source(options, base):

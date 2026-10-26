@@ -42,13 +42,13 @@ def perform(servers, request):
 def trigger(server, request, job):
     """POST the build with form parameters; the queue item URL comes from Location."""
     parameterized = server["jobs"][request["job"]]["parameters"]
-    url = "{0}/{1}".format(job, "buildWithParameters" if parameterized else "build")
+    url = "{}/{}".format(job, "buildWithParameters" if parameterized else "build")
     form = urlencode(request["parameters"]).encode("utf-8")
     with jenkins_http.call(server, url, form=form) as response:
         match = QUEUE_ITEM.search(response.headers.get("Location", ""))
     if match is None:
         raise ValueError("Jenkins did not return a queue item")
-    return "{0}/queue/item/{1}/api/json".format(server["url"].rstrip("/"), match.group(1))
+    return "{}/queue/item/{}/api/json".format(server["url"].rstrip("/"), match.group(1))
 
 
 def followed(server, queue, job, deadline):

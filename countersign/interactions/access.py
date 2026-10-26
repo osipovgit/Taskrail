@@ -3,7 +3,7 @@
 import json
 from pathlib import Path
 
-from countersign.core import schema
+from countersign.core import protected_paths, schema
 from countersign.infrastructure.agent_sync import atomic_write
 
 READ = "read"
@@ -11,8 +11,8 @@ ALLOW = "allow"
 TOOLS = frozenset((READ, "glob", "grep", "list"))
 
 
-def target(call, roots):
-    """Only canonical paths within the user's declared roots are grantable."""
+def target(call, roots, protected=protected_paths.DEFAULT_PATTERNS):
+    """Only canonical, unprotected paths within the user's declared roots are grantable."""
     schema.require(call.get("tool") in TOOLS, "Only read/search permissions can be granted here")
     arguments = call.get("input", {})
     path = Path(arguments.get("filePath") or arguments.get("path") or "")
@@ -22,6 +22,7 @@ def target(call, roots):
         bool(ancestors.intersection(roots.values())),
         "Outside declared roots: provide an alternative inside a root",
     )
+    schema.require(not protected_paths.matches(path, protected), "Protected file: never readable")
     return path
 
 
@@ -39,7 +40,8 @@ def add_rights(rights, call, path):
 
 def grant_all(environment, calls):
     """Validate the entire set before changing the generated stage profile."""
-    paths = [target(call, environment["roots"]) for call in calls]
+    protected = protected_paths.patterns(environment.get("config", {}))
+    paths = [target(call, environment["roots"], protected) for call in calls]
     profile = environment["profile"]
     sections = profile.read_text()[4:].split("\n---", 1)
     settings = json.loads(sections[0])
@@ -58,7 +60,7 @@ def apply_all(environment, calls):
 
 def populate(rights, calls, paths):
     """Apply only the prevalidated targets."""
-    for call, path in zip(calls, paths):
+    for call, path in zip(calls, paths, strict=True):
         add_rights(rights, call, path)
 
 

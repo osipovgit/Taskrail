@@ -14,7 +14,7 @@ def stage_errors(state):
     for stage in state["stages"]:
         tool_errors = stage.get("tool_errors", [])
         if tool_errors or stage.get("errors"):
-            lines += ["", "## Stage errors: {0}".format(stage["directory"]), ""]
+            lines += ["", "## Stage errors: {}".format(stage["directory"]), ""]
             lines += error_lines(stage, tool_errors)
     return lines
 
@@ -30,12 +30,12 @@ def tool_error(error):
     """One denied or failed tool call."""
     arguments = json.dumps(error.get("input"), ensure_ascii=False)
     lines = [
-        "- Tool: {0}".format(error.get("tool")),
+        "- Tool: {}".format(error.get("tool")),
         f"  Input: `{arguments}`",
-        "  Error: {0}".format(error["error"]),
+        "  Error: {}".format(error["error"]),
     ]
     if error.get("resolution"):
-        lines.append("  Resolution: {0}".format(error["resolution"]))
+        lines.append("  Resolution: {}".format(error["resolution"]))
     if error.get("recovered_by"):
         proof = error["recovered_by"]
         event = proof["event_line"]
@@ -54,9 +54,23 @@ def not_verified(state):
     ]
     lines += [BULLET.format(text) for text in dict.fromkeys(state["unverified"])]
     for limit in state.get("review_limits", []):
-        lines += ["", "### Review limitations: {0}".format(limit["stage"]), ""]
+        if not limit["unverified"] and not limit["blocking_gaps"]:
+            continue
+        lines += ["", "### Review limitations: {}".format(limit["stage"]), ""]
         lines += [BULLET.format(text) for text in limit["unverified"]]
         lines += [f"- Blocking gap: {text}" for text in limit["blocking_gaps"]]
+    return lines
+
+
+def command_effects(state):
+    """Files approved local commands changed, kept apart from the agents' edits."""
+    effects = state.get("command_effects", [])
+    if not effects:
+        return []
+    lines = ["", "## Changed by approved commands", ""]
+    for effect in effects:
+        files = ", ".join(effect["files"])
+        lines.append("- {} (action {}): {}".format(effect["stage"], effect["action_id"], files))
     return lines
 
 

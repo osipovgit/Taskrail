@@ -9,7 +9,6 @@ ERROR_PREFIX = "Error: "
 SETTINGS_OPTION = "--settings"
 COMMAND_ARGUMENT = "command"
 DEFAULT_PORT = 8787
-STATUS_FIELDS = ("status", "stage", "summary", "changed_files")
 
 
 def check_command(argv):
@@ -22,7 +21,7 @@ def check_command(argv):
     failures = 0
     for passed, message in check(parser.parse_args(argv).settings):
         failures += not passed
-        sys.stdout.write("{0} {1}\n".format("OK  " if passed else "FAIL", message))
+        sys.stdout.write("{} {}\n".format("OK  " if passed else "FAIL", message))
     return 1 if failures else 0
 
 
@@ -63,24 +62,6 @@ def serve_command(argv):
     except (OSError, ValueError) as error:
         sys.stderr.write(f"{ERROR_PREFIX}{error}\n")
         return 2
-    return 0
-
-
-def status_command(argv):
-    """Display a saved run without launching a worker."""
-    parser = argparse.ArgumentParser(description="Read saved run status")
-    parser.add_argument(COMMAND_ARGUMENT)
-    parser.add_argument("run_dir", type=Path)
-    index = parser.parse_args(argv).run_dir / "run.json"
-    try:
-        state = json.loads(index.read_text())
-    except (OSError, ValueError) as error:
-        sys.stderr.write(f"{ERROR_PREFIX}{error}\n")
-        return 2
-    summary = json.dumps(
-        {key: state.get(key) for key in STATUS_FIELDS}, ensure_ascii=False, indent=2
-    )
-    sys.stdout.write(f"{summary}\n")
     return 0
 
 

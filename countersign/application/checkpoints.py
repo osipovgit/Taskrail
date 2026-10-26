@@ -55,9 +55,7 @@ def resume_available(run, state):
 
 def budget_paused(state):
     """Identify engine budget stops, for time, attempts or tokens."""
-    if state.get(STATUS) in {
+    return state.get(STATUS) in {
         "TOKEN_BUDGET_EXCEEDED",
         "STAGE_BUDGET_EXCEEDED",
-    }:
-        return True
-    return False
+    }

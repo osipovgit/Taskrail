@@ -2,76 +2,57 @@
 
 A run that changes code plans its Goal as tasks in plan.md. With Decision single the
 same run implements them; with Decision split each task becomes its own run (see
-plan_contract.splits), started in dependency order. Checks that must run after the
-change are listed under `## After the change` with fixed prefixes, so the server can
-run Jenkins validation and, after the operator confirms, server checks.
+plan_contract.splits), implemented in plan order directly from the reviewed plan.
+Checks that must run after the change are listed under `## After the change` with fixed
+prefixes, so the server can run Jenkins validation and, after the operator confirms,
+server checks. The texts live in core/prompt-texts.json.
 """
 
 from types import MappingProxyType
 
+from countersign.core.prompt_texts import text
+
 PLANNING_STAGES = frozenset(("planner", "plan-reviewer"))
-TASKS = (
-    "Plan the Goal as tasks. A task is one action: a single deliverable, with its own "
-    "tests and the documentation it makes necessary, that one implementation run and one "
-    "review can finish without compaction. Tasks are independent: one relies on another only through Depends "
-    "on, and each owns at least one requirement or a scoped part of one. A task survives "
-    "only if, with all its prerequisites done, it still has its own requirement and a "
-    "non-empty change; fold it into its owner otherwise. Never plan a task that only runs "
-    "checks or only updates documentation another task already owes. Two tasks may change "
-    "the same file only with an explicit dependency ordering them and distinct behavior. "
-    "A prerequisite may land unused "
-    "(built, tested and documented) for a later task that wires it in."
+PLANNER = "planner"
+DELIVERY_REVIEW = "mode.delivery.review"
+# A delivery phase's rule; check phases apply theirs to the stages after planning.
+PHASE_RULES = MappingProxyType(
+    {"integration": "mode.integration", "validation": DELIVERY_REVIEW, "server": DELIVERY_REVIEW}
 )
-CHECKS = (
-    "List each check that must run after the change under ## After the change: 'Jenkins "
-    "check: <server>/<job>: <parameters and expected result>' for a configured Jenkins job "
-    "that validates the finished change, or 'Server check: <what to run and the expected "
-    "result>' for a check on servers. Server checks run only after the operator confirms "
-    "the changes; never change server state before that."
-)
-SPLIT = (
-    "Decide split when the work is several such tasks: each runs as its own run with its "
-    "own planning, implementation and review, so this run only plans; research only what "
-    "you need to define and order the tasks, and each task run studies its own files."
-)
-ANSWER = "Write Decision: no change and no tasks, cover each requirement with done: or gap:, and put the answer in a ## Answer section."
-RULES = MappingProxyType(
-    {
-        "decompose": f"Split into tasks. {TASKS} {SPLIT} {CHECKS}",
-        "design": f"Design discussion: no edits. {ANSWER} The answer is a design document with the sections Context, Options, Trade-offs, Recommendation, Risks, Implementation outline and Open questions, grounded in cited source evidence. In a continued discussion, refine the earlier document according to the latest Goal.",
-        "read_only": f"Answer only: no edits. {ANSWER} It holds the evidence-based answer.",
-    }
-)
-CHANGE = (
-    "Change code. {0} Decide single when the work is one task or cannot be cut into such "
-    "tasks safely; this run then implements it. {1} {2}"
-)
-ATOMIC = (
-    "This is one reviewed child task. Choose single with exactly one task, or no change "
-    "when already satisfied. Never split again. Change only task_scope files. If the "
-    "contract needs more files or cannot fit one session without compaction, choose "
-    "blocked and explain the parent replanning required. The current contract and global "
-    "constraints are supplied here. Consult only specific missing sections of the sealed "
-    "parent-task.md when needed, never its full contents; implement only this child's criteria."
-)
+# Mode flag -> its rule for the planner; reviewing stages use the rule's .review form.
+READ_ONLY_FLAGS = MappingProxyType({"design": "mode.design", "read_only": "mode.answer"})
+PLANNING_RULES = frozenset(("mode.change", "mode.decompose"))
 
 
 def render(config, stage):
-    """The rule of the run's mode; a code change gets its planning rule while it plans."""
+    """The rule of the run's mode for one stage; an empty string when none applies."""
     if config.get("phase") == "task":
-        return f"\nMode of this run. {ATOMIC}\n"
-    if config.get("phase") == "integration":
-        return (
-            f"\nMode of this run. Independent integration review: no edits. {ANSWER} "
-            "Verify the original goal and every acceptance criterion against the combined "
-            "current source after all child tasks. Recheck interactions and regression risks; "
-            "child success reports are reference data, not proof. Request required local "
-            "diagnostics through LOCAL_REQUEST. Missing static acceptance evidence is a "
-            "gap, never success. Explicit runtime checks remain deferred to their delivery phase.\n"
-        )
-    for flag, rule in RULES.items():
-        if config.get(flag):
-            return f"\nMode of this run. {rule}\n"
-    if stage not in PLANNING_STAGES:
-        return ""
-    return "\nMode of this run. {0}\n".format(CHANGE.format(TASKS, SPLIT, CHECKS))
+        return task_rule(config, stage)
+    key = mode_key(config, stage)
+    if key in PLANNING_RULES:
+        return planning_rule(key)
+    return text(key) if key else ""
+
+
+def mode_key(config, stage):
+    """The catalog key of the rule, or None."""
+    phase = config.get("phase")
+    if phase in PHASE_RULES and (phase == "integration" or stage != PLANNER):
+        return PHASE_RULES[phase]
+    if config.get("decompose"):
+        return "mode.decompose"
+    flag = next((name for name in READ_ONLY_FLAGS if config.get(name)), None)
+    if flag:
+        suffix = "" if stage == PLANNER else ".review"
+        return READ_ONLY_FLAGS[flag] + suffix
+    return "mode.change" if stage in PLANNING_STAGES else None
+
+
+def planning_rule(key):
+    """A code change: the mode, what a task is and the checks after the change."""
+    return "\n".join((text(key), text("mode.tasks"), text("mode.checks")))
+
+
+def task_rule(config, stage):
+    """One task of a reviewed split: its implementer or reviewer; it is never planned again."""
+    return text(f"mode.task.{stage}", task=config["assigned_contract"]["task_id"])

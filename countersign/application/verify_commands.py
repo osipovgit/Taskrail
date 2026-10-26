@@ -30,7 +30,7 @@ def run_commands(workflow, folder):
 def command_roots(config):
     """Configured cwd -> effective root; an isolated run uses the source root's worktree."""
     roots = [str(root) for root in config["roots"].values()]
-    locations = dict(zip(roots, roots))
+    locations = {root: root for root in roots}
     for entry in config["worktrees"].values():
         locations[entry["source"]] = entry["worktree"]
     return locations
@@ -50,7 +50,7 @@ def outcome_record(command, outcome, recorded, log):
     """Readable legacy logs accompany the canonical immutable check evidence."""
     output = {name: outcome.get(name, "") for name in ("stdout", "stderr")}
     log.write_text("{stdout}\n--- stderr ---\n{stderr}".format(**output), encoding="utf-8")
-    detail = "exit {0}; evidence {1}".format(outcome.get("exit_code", "unknown"), recorded["path"])
+    detail = "exit {}; evidence {}".format(outcome.get("exit_code", "unknown"), recorded["path"])
     status = "PASS" if recorded["assessment"]["status"] == "passed" else FAIL
     if status == FAIL:
         detail = failure_detail(detail, output)
@@ -70,4 +70,5 @@ def check_record(command, status, detail):
 def failure_detail(detail, outcome):
     """Repair feedback ends with the output tail, where test runners report failures."""
     combined = "{stdout}{stderr}".format(**outcome)
-    return "{0}; output tail:\n{1}".format(detail, combined[-TAIL_CHARACTERS:])
+    tail = combined[-TAIL_CHARACTERS:]
+    return f"{detail}; output tail:\n{tail}"

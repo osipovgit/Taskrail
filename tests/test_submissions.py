@@ -107,7 +107,7 @@ class SubmissionTests(unittest.TestCase):
             thread.join(timeout=2)
 
         self.addCleanup(stop)
-        url = "http://127.0.0.1:%d" % server.server_port
+        url = f"http://127.0.0.1:{server.server_port}"
         with urlopen(url + "/api/session") as response:
             token = json.load(response)["token"]
         return url, {

@@ -64,7 +64,7 @@ def render(run, execution, state):
     paragraphs = "\n".join(
         f"{module['id']} v{module['version']}: {module['text']}" for module in selected
     )
-    return f"\n\nSelected instruction modules (within shared policy):\n{paragraphs}"
+    return f"Instruction modules:\n{paragraphs}"
 
 
 def observed_files(run):

@@ -15,7 +15,7 @@ def announce(record):
     """One progress line per attempt."""
     now = clock()
     model = record.get("model", "CLI default")
-    say("[{0}] [{1:02d}] {2} model={3}".format(now, record["number"], record["directory"], model))
+    say("[{}] [{:02d}] {} model={}".format(now, record["number"], record["directory"], model))
 
 
 def token_allowance(workflow):

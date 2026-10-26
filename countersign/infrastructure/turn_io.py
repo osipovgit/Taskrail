@@ -32,7 +32,7 @@ class TurnIO:
 
     def launch(self, command, model):
         """Never continue the global last session implicitly."""
-        argv = list(command) + ["run"]
+        argv = [*command, "run"]
         if model:
             argv += ["--model", model]
         if self.session_id:

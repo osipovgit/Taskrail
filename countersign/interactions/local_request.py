@@ -5,15 +5,18 @@ import os
 import shutil
 from pathlib import Path
 
-from countersign.core import json_response, schema
+from countersign.core import json_response, prompt_texts, schema
 from countersign.interactions import local_policy
 
 REQUEST_FIELDS = frozenset(("schema_version", "status", "cwd", "argv", "reason"))
 CORE_FIELDS = frozenset(("cwd", "argv"))
 
 
-def checked_request(payload, roots):
-    """A canonical cwd inside a declared root and explicit nonempty argument strings."""
+def checked_request(payload, roots, writer=True):
+    """A canonical cwd inside a declared root and explicit nonempty argument strings.
+
+    An inspecting stage (writer False) may not ask a tool to rewrite files.
+    """
     check_cwd(payload["cwd"], roots)
     argv = payload["argv"]
     schema.require(isinstance(argv, list) and bool(argv), "argv must be a nonempty list")
@@ -23,6 +26,8 @@ def checked_request(payload, roots):
         "Explain command purpose and effects",
     )
     local_policy.validate(argv)
+    if not writer:
+        local_policy.read_only(argv)
     return argv
 
 
@@ -53,7 +58,7 @@ def incomplete(text):
 def correction(text):
     """Feedback for an incomplete request; nothing was executed."""
     shown = json.dumps(json_response.extract(text, dict), ensure_ascii=False)
-    return INCOMPLETE.format(shown)
+    return prompt_texts.text("feedback.incomplete_local", shown=shown)
 
 
 def missing_executable(argv, automatic=False):
@@ -65,6 +70,3 @@ def missing_executable(argv, automatic=False):
 def valid_argument(argument):
     """Explicit nonempty strings are passed unchanged to exec."""
     return isinstance(argument, str) and bool(argument) and "\x00" not in argument
-
-
-INCOMPLETE = 'Your last response looks like a local command request but is not a complete LOCAL_REQUEST, so nothing was executed: {0}. A request needs "schema_version": 1 and "status": "LOCAL_REQUEST" next to cwd, argv and reason, as the entire response. Resend the complete request, or return your final result.'

@@ -1,7 +1,6 @@
 """Persist delivered executor output as attributable evidence, not model claims."""
 
 import json
-from pathlib import Path
 
 from countersign.application import evidence
 from countersign.core.files import atomic_json
@@ -37,11 +36,11 @@ def delivered(run, folder, path, text, outputs=None):
     atomic_json(run / evidence.OBSERVATIONS, index)
     notice = "Complete output."
     if clipped:
-        notice = "Output clipped; read omitted lines from the full text files: {0}".format(
+        notice = "Output clipped; read omitted lines from the full text files: {}".format(
             ", ".join((outputs or {}).values()) or str(path)
         )
     if outputs:
-        notice = "{0}\n{1}".format(notice, output_digest.summary(outputs))
+        notice = f"{notice}\n{output_digest.summary(outputs)}"
     return f"Evidence snapshot (cite this path, never tool-result.md): {path}\n{notice}\n{visible}"
 
 
@@ -72,32 +71,3 @@ def output_files(path, outcome):
             target.write_text(text, encoding="utf-8")
             files[name] = str(target)
     return files
-
-
-def confirmed_paths(run):
-    """Only matching successful local results can substantiate runtime claims."""
-    ledger = run / "local-execution.json"
-    entries = json.loads(ledger.read_text()) if ledger.exists() else []
-    confirmed = set()
-    for entry in entries:
-        path = Path(entry["path"])
-        if entry["result"].get("status") == "SUCCEEDED" and evidence.fingerprint(path):
-            if json.loads(path.read_text()) == entry:
-                confirmed.add(str(path))
-                confirmed.update(matching_outputs(entry))
-    return confirmed
-
-
-def matching_outputs(entry):
-    """Text copies whose content still equals the recorded output."""
-    recorded = entry["result"]
-    outputs = entry.get(OUTPUTS, {}).items()
-    return {target for name, target in outputs if unchanged(target, recorded[name])}
-
-
-def unchanged(target, text):
-    """A regular file that still holds exactly the recorded text."""
-    path = Path(target)
-    if evidence.fingerprint(path) is None:
-        return False
-    return path.read_bytes().decode("utf-8") == text

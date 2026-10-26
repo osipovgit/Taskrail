@@ -22,7 +22,7 @@ def render(path, outcome, outputs):
     ]
     digest = dict(list(outputs.items())[:DIGEST_STREAMS])
     digest = output_digest.summary(digest)
-    references = "Full output files: {0}".format(excerpt(", ".join(outputs.values())))
+    references = "Full output files: {}".format(excerpt(", ".join(outputs.values())))
     return "\n".join(
         [
             *map(excerpt, fields),
@@ -38,9 +38,8 @@ def excerpt(text):
     """A bounded head and tail retain short errors beside long progress streams."""
     if len(text) <= PREVIEW_CHARS * 2:
         return text
-    return "{0}\n[... omitted; read the saved output ...]\n{1}".format(
-        text[:PREVIEW_CHARS], text[-PREVIEW_CHARS:]
-    )
+    head, tail = text[:PREVIEW_CHARS], text[-PREVIEW_CHARS:]
+    return f"{head}\n[... omitted; read the saved output ...]\n{tail}"
 
 
 def ticket_streams(entry):
@@ -75,17 +74,18 @@ def ticket_preview(path, pending):
     """Only the latest ticket's bounded outcomes enter the next model turn."""
     outputs = ticket_outputs(path, pending)
     shown = (pending.get("id"), pending.get("status"), path)
-    previews = ["Ticket {0}: {1}; evidence: {2}".format(*shown)]
+    previews = ["Ticket {}: {}; evidence: {}".format(*shown)]
     for outcome in pending.get("results", []):
         shown = (outcome.get("target", "Jenkins"), outcome.get("status", "recorded"))
-        previews.append("Target {0}: {1}".format(*shown))
+        previews.append("Target {}: {}".format(*shown))
     previews.append(render(path, pending, outputs))
     for outcome in pending.get("results", []):
         shown = render(path, outcome, {})
         previews.append(excerpt(shown))
     shown = "\n".join(previews)
     if len(shown) > PREVIEW_LIMIT:
-        return "{0}\n[Preview clipped; read the ticket snapshot.]".format(shown[:PREVIEW_LIMIT])
+        clipped = shown[:PREVIEW_LIMIT]
+        return f"{clipped}\n[Preview clipped; read the ticket snapshot.]"
     return shown
 
 

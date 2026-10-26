@@ -3,19 +3,20 @@
 import json
 
 from countersign.application import execution_wait, jenkins_requests
+from countersign.core import prompt_texts
 from countersign.executor import client
 from countersign.interactions import events, transcripts
 from countersign.interactions.clock import ApprovalPause
 
 READ_SECONDS = 300
-REJECTED = (
-    "Jenkins request rejected, nothing was executed: {0}. Fix the request or continue without it."
-)
 
 
 def consume(actions, text):
     """Handle a JENKINS_REQUEST; any other response is left to the next route."""
-    payload = jenkins_requests.extract(text)
+    try:
+        payload = jenkins_requests.extract(text)
+    except ValueError as error:
+        return prompt_texts.text("feedback.jenkins_rejected", error=error)
     if payload is None:
         return None
     event = events.begin(actions.folder, "jenkins", payload)
@@ -33,7 +34,7 @@ def routed(actions, payload):
     try:
         request = checked(payload)
     except (OSError, ValueError, LookupError) as error:
-        return REJECTED.format(error)
+        return prompt_texts.text("feedback.jenkins_rejected", error=error)
     if request["operation"] == "build":
         return build(actions.session, request)
     return read(actions, request)

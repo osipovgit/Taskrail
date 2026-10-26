@@ -100,7 +100,7 @@ def report_lines(state):
 
 def save_snapshot(run, pending):
     """Keep completed ticket evidence at a stable, model-readable path."""
-    filename = "{}.json".format(protocol.label(pending[IDENTIFIER]))
+    filename = f"{protocol.label(pending[IDENTIFIER])}.json"
     destination = run / "00-input" / "ssh" / filename
     destination.parent.mkdir(parents=True, exist_ok=True)
     if destination.exists():

@@ -19,7 +19,7 @@ def hint_lines(requirements, texts):
         hints = [hint(word, texts) for word in distinctive(requirement["text"])]
         hints = [entry for entry in hints if entry]
         if hints:
-            lines.append("R{0} → {1}".format(number, "; ".join(hints)))
+            lines.append("R{} → {}".format(number, "; ".join(hints)))
     return lines
 
 
@@ -35,7 +35,7 @@ def hint(word, texts):
     found = mentions(word, texts)
     if not found:
         return ""
-    shown = "{0}: {1}".format(word, ", ".join(found[:FILES_PER_WORD]))
+    shown = "{}: {}".format(word, ", ".join(found[:FILES_PER_WORD]))
     more = len(found) - FILES_PER_WORD
     return f"{shown} (+{more} files)" if more > 0 else shown
 
@@ -55,4 +55,4 @@ def names_word(word, name, text):
 def mention(name, text, word):
     """`path:line` of the first line that names the word, or line 1 when the path does."""
     position = max(text.find(word), 0)
-    return "{0}:{1}".format(name, text.count("\n", 0, position) + 1)
+    return "{}:{}".format(name, text.count("\n", 0, position) + 1)

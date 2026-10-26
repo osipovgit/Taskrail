@@ -59,21 +59,26 @@ class DecisionContractTests(unittest.TestCase):
 
     def test_implementation_derives_files_steps_and_status(self):
         self.context.update(role="implementer", stage="implementer")
-        result = self.validate(self.decision())
+        with self.assertRaisesRegex(ValueError, "unknown fields: \\['findings'\\]"):
+            self.validate(self.decision())
+        writer = self.decision()
+        del writer["findings"]
+        result = self.validate(writer)
         self.assertEqual(result["status"], "IMPLEMENTED")
         self.assertEqual(result["changed_files"], [str(self.path)])
         self.assertEqual(result["completed_steps"], ["T1"])
         self.assertEqual(result["coverage"][0]["id"], "R-stable")
         self.assertEqual(result["schema_version"], 1)
         with self.assertRaisesRegex(ValueError, "unknown fields"):
-            self.validate(self.decision(changed_files=[]))
+            self.validate(dict(writer, changed_files=[]))
 
-    def test_legacy_result_is_still_validated_by_its_version(self):
+    def test_stored_records_and_other_versions_are_not_authored_decisions(self):
         result = self.validate(self.decision())
-        self.assertEqual(self.validate(result), result)
-        result["schema_version"] = 99
-        with self.assertRaisesRegex(ValueError, "Invalid enum"):
+        self.assertEqual(result["schema_version"], 1)
+        with self.assertRaisesRegex(ValueError, "FIELD_KEYS"):
             self.validate(result)
+        with self.assertRaisesRegex(ValueError, "Invalid enum"):
+            self.validate(dict(self.decision(), schema_version=99))
 
     def test_handles_only_cover_current_delivered_lines_of_this_stage(self):
         packet = source_packet.prepare(self.run, "reviewer", self.context["roots"])

@@ -212,7 +212,7 @@ class SourcePacketTests(unittest.TestCase):
         )
         self.config["task_spec"] = dict(fields=[dict(name="goal", text="Reviewed goal")])
         self.assertEqual(
-            context_projection.task_text(self.config, self.run), "## goal\nReviewed goal"
+            context_projection.task_text(self.config, self.run), "## Goal\nReviewed goal"
         )
         state = dict(
             contract_version=1,
@@ -246,7 +246,7 @@ class SourcePacketTests(unittest.TestCase):
         record = dict(role="planner")
         outcome = session_budget.admission({}, (folder, record), [self.path])
         self.assertTrue(outcome["admission_blocked"])
-        delivered = len("value = 1".encode()) * 2
+        delivered = len(b"value = 1") * 2
         self.assertEqual(
             record["context_budget"]["planned_input_bytes"], self.path.stat().st_size - delivered
         )

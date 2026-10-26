@@ -4,12 +4,13 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from typing import ClassVar
 
-from countersign.application import plan_write
-from countersign.core import task_lineage, task_spec
+from countersign.application import plan_write, reviewed_artifacts
+from countersign.core import task_lineage, task_markdown, task_spec
 from countersign.core.plan_document import payload
-from countersign.core.requirements import task_requirements
 from countersign.web import requests, task_form
+from countersign.web.history import TaskDraft
 
 
 class InputContractTests(unittest.TestCase):
@@ -35,17 +36,59 @@ class InputContractTests(unittest.TestCase):
         requirements = spec["requirements"]
         self.assertTrue(any("Keep the public API." in entry["text"] for entry in requirements))
         self.assertTrue(any("Reject invalid input." in entry["text"] for entry in requirements))
-        self.assertEqual(requirements, task_requirements(text, []))
         self.assertEqual(spec["fields"][1]["text"], goal)
-        self.assertEqual(spec["raw_input"], text)
 
-    def test_legacy_fences_and_user_policy_named_sections_are_not_discarded(self):
-        text = "# Task\n\n## Goal\nFix it.\n\n```text\n## Current behavior\n\n  preserve\n```\n\n## Workflow rules\nKeep API."
-        entries = task_requirements(text, [])
-        self.assertTrue(
-            any("## Current behavior\n\n  preserve" in entry["text"] for entry in entries)
+    def test_markdown_sections_become_the_typed_fields_of_the_form(self):
+        text = (
+            "```countersign-task\n{}\n```\n# Fix input\n\n## Goal\nFix it.\n\n"
+            "## Acceptance criteria\nRequirements:\n\n- Reject bad names.\n\n"
+            "```text\n## Current behavior\n\n  preserve\n```\n\n"
+            "## Known entry points\nsrc/api.py\n\n## Additional constraints\nKeep the API.\n\n"
+            "## Verification\n- Run the API twice\n"
         )
-        self.assertTrue(any("Keep API." in entry["text"] for entry in entries))
+        meta = task_markdown.typed_input(text, dict(verification=["Check the logs"]))
+        self.assertEqual(meta["verification"], ["Check the logs", "Run the API twice"])
+        spec = task_spec.resolve(text, meta)
+        fields = {field["name"]: field["text"] for field in spec["fields"]}
+        self.assertEqual(spec["fields"], task_spec.from_fields(fields)["fields"])
+        self.assertEqual(fields["title"], "Fix input")
+        self.assertEqual(fields["entry_points"], "src/api.py")
+        found = [
+            (entry["text"], entry.get("source", {}).get("field")) for entry in spec["requirements"]
+        ]
+        self.assertEqual(
+            found,
+            [
+                ("Fix it.", "goal"),
+                ("- Reject bad names.", "criteria"),
+                ("```text\n## Current behavior\n\n  preserve\n```", "criteria"),
+                ("Keep the API.", "constraints"),
+                ("Check the logs", None),
+                ("Run the API twice", None),
+            ],
+        )
+        prompt = task_spec.prompt_text(spec, spec["requirements"])
+        self.assertIn("Requirements:\n\n[R2]\n- Reject bad names.", prompt)
+        self.assertIn("[R4 constraint]\nKeep the API.", prompt)
+        self.assertTrue(reviewed_artifacts.typed_requirements(spec))
+
+    def test_unknown_or_stray_markdown_is_an_error_with_its_line(self):
+        for text, message in (
+            ("## Goal\nFix it.\n\n## Notes\nx", "line 4: unknown section 'Notes'"),
+            ("Intro\n\n## Goal\nFix it.", "line 1: text outside a section"),
+            ("## Goal\nA\n\n## Goal\nB", "line 4: repeated section 'Goal'"),
+            ("## Constraints\nKeep it.", "needs a Goal"),
+            ("```countersign-task\n{}\n```\n## Goal\nA\n## Workflow rules\nB", "line 6: unknown"),
+        ):
+            with self.subTest(text=text), self.assertRaisesRegex(ValueError, message):
+                task_markdown.typed_input(text, {})
+        plain_text = "# Fix\n\nReturn 2\n"
+        plain = task_spec.resolve(plain_text, task_markdown.typed_input(plain_text, {}))
+        self.assertEqual([entry["text"] for entry in plain["requirements"]], ["Return 2"])
+        older = TaskDraft("# Old\n\nIntro\n\n## Notes\nKeep X\n")
+        self.assertIsNone(older.typed)
+        self.assertEqual(older.fields()["goal"], "# Old\n\nIntro\n\n## Notes\nKeep X")
+        self.assertEqual(older.title("run"), "Old")
 
     def test_requirement_spans_preserve_fences_newlines_and_indentation(self):
         criterion = "Keep this exact layout:\r\n\r\n```text\r\n## Goal\r\n\r\n  value\r\n```"
@@ -126,7 +169,7 @@ class InputContractTests(unittest.TestCase):
 
 
 class StrictPlanTests(unittest.TestCase):
-    requirements = [dict(id="R-one", text="Fix it", kind="task")]
+    requirements: ClassVar[list] = [dict(id="R-one", text="Fix it", kind="task")]
     plan = (
         "# Plan\nDecision: single\nSummary: Fix it\n## Requirements\nR1 → T1\n"
         "## T1: Fix\nDepends on: none\nFiles: project/a.py\nDone when: It works\nVerify: Check it\n"

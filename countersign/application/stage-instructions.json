@@ -1,6 +1,0 @@
-{
-  "planner": "\nCurrent stage: planning.\n",
-  "plan-reviewer": "\nCurrent stage: plan review, including independent no-change validation when proposed_change_files is empty.\n",
-  "implementer": "\nCurrent stage: implementation.\n",
-  "reviewer": "\nCurrent stage: final implementation review.\n"
-}

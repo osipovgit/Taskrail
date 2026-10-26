@@ -202,6 +202,8 @@ class ServiceTests(unittest.TestCase):
         log.write_text("")
         current = self.home / ".local/share/countersign/current"
         first = current.resolve()
+        self.assertTrue((first / "countersign/deployment/settings_init.py").is_file())
+        self.assertFalse((first / "docs").exists())
         config = self.home / ".config/countersign/settings.json"
         options = json.loads(config.read_text())
         self.assertEqual(options["timeout_seconds"], 3600)

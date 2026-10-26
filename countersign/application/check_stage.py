@@ -19,7 +19,7 @@ def run_checks(workflow):
     state[CHECKS] = checks
     failed = any(check["status"] == "FAIL" for check in checks)
     workflow.finish_active("CHECK_FAILED" if failed else "CHECK_COMPLETED", checks)
-    state["results"][CHECKS] = "{0}/result.json".format(active[1]["directory"])
+    state["results"][CHECKS] = "{}/result.json".format(active[1]["directory"])
     workflow.guard.verify(
         "Source/Git changed during checks; verification commands must not write inside declared roots"
     )

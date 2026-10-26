@@ -11,7 +11,7 @@ from countersign.application.history_index import HistoryFile, section_lines, te
 from countersign.core import requirements
 from countersign.infrastructure.agent_sync import atomic_write
 
-MARKER = "{0}\n".format(requirements.HISTORY)
+MARKER = f"{requirements.HISTORY}\n"
 INLINE_BYTES = 24000
 EXCERPT_CHARS = 2000
 FILE_NAME = "00-input/history.md"
@@ -33,7 +33,7 @@ def prompt_task(task_text, run):
     turns = decoded_turns(encoded)
     if not turns:
         return task_text
-    return "{0}{1}{2}".format(current, MARKER, reference(turns, encoded, run))
+    return f"{current}{MARKER}{reference(turns, encoded, run)}"
 
 
 def reference(turns, encoded, run):
@@ -42,7 +42,7 @@ def reference(turns, encoded, run):
     history = HistoryFile(turns)
     atomic_write(path, "\n".join(history.lines()).encode("utf-8"))
     note = NOTE.format(len(turns), size(encoded), path, history.index_end)
-    return "{0}{1}\n".format(note, excerpt(turns[-1]))
+    return f"{note}{excerpt(turns[-1])}\n"
 
 
 def decoded_turns(encoded):
@@ -60,7 +60,7 @@ def decoded_turns(encoded):
 
 def excerpt(turn):
     """The run, goal and summary of one turn, each clipped to EXCERPT_CHARS."""
-    lines = ["### Run {0}".format(turn.get("run", ""))]
+    lines = ["### Run {}".format(turn.get("run", ""))]
     lines.extend(section_lines("Goal", clipped(turn.get("goal"))))
     lines.extend(section_lines("Summary", clipped(turn.get("summary"))))
     return "\n".join(lines)

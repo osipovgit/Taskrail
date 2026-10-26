@@ -9,6 +9,7 @@ MARKERS = ("**", "__", BACKTICK)
 DEPENDS = "depends"
 NOTES = "notes"
 VERIFY = "verify"
+READ = "read"
 KEYS = MappingProxyType(
     {
         "decision": "decision",
@@ -24,9 +25,11 @@ KEYS = MappingProxyType(
         "verification": VERIFY,
         "checks": VERIFY,
         NOTES: NOTES,
+        READ: READ,
+        "read first": READ,
     }
 )
-LISTS = frozenset(("files", "done", VERIFY, DEPENDS))
+LISTS = frozenset(("files", "done", VERIFY, DEPENDS, READ))
 CONTINUED = LISTS | {"notes"}
 
 

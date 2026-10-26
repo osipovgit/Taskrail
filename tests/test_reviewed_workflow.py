@@ -20,7 +20,9 @@ from countersign.web import (
 BASE = Path(__file__).resolve().parents[1]
 
 
-class ReviewedWorkflowTests(unittest.TestCase):
+class ReviewedFixture:
+    """A source tree, a run store and execute(), which submits a form like the browser."""
+
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory()
         self.addCleanup(self.temporary.cleanup)
@@ -62,6 +64,8 @@ class ReviewedWorkflowTests(unittest.TestCase):
         state = json.loads((run / "run.json").read_text())
         return run, status, state
 
+
+class ReviewedWorkflowTests(ReviewedFixture, unittest.TestCase):
     def test_two_atomic_children_then_one_combined_reviewer(self):
         fields = dict(
             goal="Return 2 and add the new module",
@@ -86,10 +90,20 @@ class ReviewedWorkflowTests(unittest.TestCase):
             linked[current["id"]] = child.name
             atomic_json(parent / "epic.json", dict(tasks=linked))
         before = {name: (self.root / name).read_bytes() for name in ("hello.py", "new.py")}
+        atomic_json(
+            parent / "epic.json", dict(tasks=linked, phases=dict(integration="integration"))
+        )
         review, status, review_state = self.execute(
             "integration", integration_review.payload(parent, state)
         )
         self.assertEqual(status, "NO_CHANGES_REQUIRED", review_state.get("summary"))
+        combined = (review / "changes.diff").read_text()
+        self.assertIn("+++ " + str(self.root / "new.py"), combined)
+        self.assertIn("--- " + str(self.root / "hello.py"), combined)
+        request = (review / "01-review/request.md").read_text()
+        self.assertIn("Mode: integration review of a finished split", request)
+        self.assertNotIn("Write Decision", request)
+        self.assertIn("T1: ", request.split("## Task split context", 1)[1])
         self.assertEqual([record["stage"] for record in review_state["attempts"]], ["reviewer"])
         self.assertEqual(review_state["review_outcome"]["source_effect"], "unchanged")
         self.assertEqual(before, {name: (self.root / name).read_bytes() for name in before})

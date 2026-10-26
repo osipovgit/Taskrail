@@ -47,7 +47,7 @@ class HistoryFile:
     def add(self, number, turn):
         """A turn's block, and its index entry with the line range of each section."""
         start = self.line() + 2
-        heading = "## Run {0}".format(turn.get("run", ""))
+        heading = "## Run {}".format(turn.get("run", ""))
         self.body.extend(["", heading])
         ranges = []
         for key, title in SECTIONS:
@@ -56,14 +56,14 @@ class HistoryFile:
 
     def entry(self, number, turn, start, ranges):
         """Run, the line range of the turn and of each section, and the goal's first line."""
-        where = "lines {0}-{1} ({2})".format(start, self.line(), ", ".join(ranges))
+        where = "lines {}-{} ({})".format(start, self.line(), ", ".join(ranges))
         return ENTRY.format(number, turn.get("run", ""), where, preview(turn))
 
     def section(self, title, field):
         """Append one section; returns its name and line range for the index."""
         first = self.line() + 2
         self.body.extend(section_lines(title, field))
-        return "{0} {1}-{2}".format(title.lower(), first, self.line())
+        return f"{title.lower()} {first}-{self.line()}"
 
     def line(self):
         """The number of the last line written so far."""
@@ -72,7 +72,7 @@ class HistoryFile:
 
 def section_lines(title, field):
     """A blank line, a heading, then the text split into lines a read returns whole."""
-    lines = ["", "### {0}".format(title)]
+    lines = ["", f"### {title}"]
     for line in (text_of(field).rstrip("\n") or "(none)").split("\n"):
         lines.extend(bounded(line))
     return lines

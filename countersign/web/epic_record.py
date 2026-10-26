@@ -32,9 +32,17 @@ def save(run, epic):
 
 
 def link(run, epic, place, child):
-    """Link a child run under epic[section][name] and write it before the child starts."""
+    """Link a child run under epic[section][name] and write it before the child starts.
+
+    A task keeps the list of every run started for it, so a retry can continue from
+    an earlier attempt's edits through an authenticated chain.
+    """
     section, name = place
-    epic.setdefault(section, {})[name] = child
+    links = epic.setdefault(section, {})
+    if section == "tasks":
+        earlier = [links[name]] if name in links else []
+        epic.setdefault("attempts", {}).setdefault(name, earlier).append(child)
+    links[name] = child
     save(run, epic)
 
 

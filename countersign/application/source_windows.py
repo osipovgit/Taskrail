@@ -4,6 +4,7 @@ import re
 from pathlib import Path
 
 from countersign.application import evidence, project_files
+from countersign.core import protected_paths
 from countersign.core.paths import tool_paths
 
 REFERENCE = re.compile(r"(.+?)(?::([1-9]\d*)(?:-([1-9]\d*))?)?")
@@ -31,13 +32,13 @@ def entry_points(spec):
 
 def observations(config, plan):
     """Ignore ambiguous or unavailable hints; normal model reads remain available."""
-    records = [
-        observe(reference, config["roots"]) for reference in dict.fromkeys(requests(config, plan))
-    ]
+    scope = (config["roots"], protected_paths.patterns(config))
+    references = dict.fromkeys(requests(config, plan))
+    records = [observe(reference, *scope) for reference in references]
     return [record for record in records if record is not None]
 
 
-def observe(reference, roots):
+def observe(reference, roots, protected):
     """Resolve one optional bounded line range within declared roots."""
     match = REFERENCE.fullmatch(tool_paths(reference, roots))
     if match is None:
@@ -45,24 +46,24 @@ def observe(reference, roots):
     start = int(match[2] or 1)
     maximum = start + WINDOW_LINES - 1
     last = min(int(match[3] or maximum), maximum)
-    return read_window(source_path(match[1], roots), start, last)
+    return read_window(source_path(match[1], roots, protected), start, last)
 
 
-def source_path(name, roots):
+def source_path(name, roots, protected=protected_paths.DEFAULT_PATTERNS):
     """Explicit canonical paths cannot escape roots, traverse symlinks or name secrets."""
     path = Path(name)
     if not path.is_absolute() and len(roots) == 1:
         path = next(iter(roots.values())) / path
     inside = any(root in path.parents for root in roots.values())
-    if inside and permitted(path):
+    if inside and permitted(path, protected):
         return path
     return None
 
 
-def permitted(path):
+def permitted(path, protected=protected_paths.DEFAULT_PATTERNS):
     """Only canonical, non-protected source paths can enter a packet."""
     canonical = path.resolve() == path and ".git" not in path.parts
-    return canonical and not project_files.protected(str(path))
+    return canonical and not protected_paths.matches(path, protected)
 
 
 def read_window(path, start, end):

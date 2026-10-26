@@ -7,11 +7,10 @@ from pathlib import Path
 from countersign.core.schema import require
 from countersign.executor import protocol
 
-IDENTITY = "identity_file"
-PASSWORD = "password"
 CONNECTION_FIELDS = frozenset(("hostname", "port", "username"))
 # Exactly one authentication field per host; key files stay in the executor's root-owned config.
-AUTH_FIELDS = (PASSWORD, IDENTITY)
+AUTH_FIELDS = ("password", "identity_file")
+PASSWORD, IDENTITY = AUTH_FIELDS
 KEY_DIRECTORY = "/etc/countersign-executor/"
 MAX_PORT = 65535
 PORT = "port"

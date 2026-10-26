@@ -47,9 +47,6 @@ WORKFLOW_RULES = (
     "Remote actions require the isolated SSH executor and personal approval of exact scripts and targets.",
 )
 
-# Historical drafts can contain this exact block; preserve explicitly submitted user text.
-COPIED_RULES = "\n".join(("### Workflow rules", *WORKFLOW_RULES[2:]))
-
 
 def build_task(payload, runs):
     """Return (task Markdown, title) for a validated form."""
@@ -81,7 +78,7 @@ def default_title(goal):
     line = goal.splitlines()[0].strip()
     if len(line) <= TITLE_WORDS:
         return line
-    return "{0}...".format(line[:TITLE_WORDS].rsplit(" ", 1)[0])
+    return "{}...".format(line[:TITLE_WORDS].rsplit(" ", 1)[0])
 
 
 def check_title(title):
@@ -115,4 +112,4 @@ def task_markdown(form, header):
     for field, heading in SECTIONS.items():
         if form[field]:
             sections.extend(["", f"## {heading}", form[field]])
-    return "{0}\n".format("\n".join([*sections, *WORKFLOW_RULES]))
+    return "{}\n".format("\n".join([*sections, *WORKFLOW_RULES]))

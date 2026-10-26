@@ -5,7 +5,6 @@ from pathlib import Path
 from types import MappingProxyType
 
 from countersign.core import schema_fields
-from countersign.core.json_response import extract
 from countersign.core.schema_fields import ContractError as ContractError
 
 KINDS = MappingProxyType(
@@ -59,14 +58,6 @@ def validate_scalar(payload, specification, path=""):
     minimum = specification.get("minimum")
     if minimum is not None:
         schema_fields.require(payload >= minimum, "FIELD_MINIMUM", path, "Number below minimum")
-
-
-def decode(response, role):
-    """Decode one unambiguous object; semantic and evidence gates remain strict."""
-    require(bool(response.strip()), "Empty final response; no JSON object received")
-    payload = extract(response, unique_fields)
-    validate(payload, SCHEMAS[role])
-    return payload
 
 
 def unique_fields(pairs):

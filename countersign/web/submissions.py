@@ -22,8 +22,12 @@ ID = "id"
 class TaskLauncher:
     """Owns the worker processes it started; the run locks guard every project."""
 
-    def __init__(self, base, settings=None):
-        """Workers write runs under base and use the given settings file."""
+    def __init__(self, base, settings=None, recover=True):
+        """Workers write runs under base and use the given settings file.
+
+        The managed service recovers launches its last process left behind; a CLI
+        command does not, because the service may be starting a worker meanwhile.
+        """
         self.base = Path(base).resolve()
         self.settings = settings_path(settings)
         if settings and not self.settings.is_file():
@@ -31,7 +35,8 @@ class TaskLauncher:
         self.lock = threading.RLock()
         self.workers = {}
         self.stopping = False
-        recover_launches(self.base)
+        if recover:
+            recover_launches(self.base)
 
     def route(self, path, payload):
         """Keep authenticated task and approval routing in the application boundary."""
@@ -119,7 +124,7 @@ def create_submission(base, launch):
     if (base / ".submissions").is_symlink():
         raise ValueError("Submission storage must not be a symlink")
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-    name = "{0}-{1}".format(stamp, os.urandom(4).hex())
+    name = "-".join((stamp, os.urandom(4).hex()))
     folder = base / ".submissions" / name
     folder.mkdir(parents=True, exist_ok=False)
     folder.joinpath(TASK_FILE).write_text(launch["text"], encoding="utf-8")

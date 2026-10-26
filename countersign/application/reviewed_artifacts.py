@@ -45,12 +45,14 @@ def seal(workflow):
 
 
 def parent(base, name):
-    """Old unsealed plans require ordinary child planning; modified sealed plans stop."""
+    """The sealed, independently approved split a child was started for."""
     run = run_path(base, name)
     state = document(run, "run.json")
     schema.require(state[STATUS] == "TASKS_READY", "Parent task is not an approved split")
-    if SEAL not in state or not typed_requirements(state):
-        return None
+    schema.require(
+        SEAL in state and typed_requirements(state),
+        "Parent split was planned by an older release; restart the parent task",
+    )
     encoded = read(run, state["results"]["plan"])
     schema.require(digest(encoded) == state[SEAL], "Reviewed parent plan changed; replan required")
     review = document(run, state["results"]["plan-review"])
@@ -61,7 +63,7 @@ def parent(base, name):
 
 
 def typed_requirements(state):
-    """Legacy text has no reliable field boundaries for inheriting global constraints."""
+    """Every task requirement names its field, so global constraints can be inherited."""
     entries = [entry for entry in state["requirements"] if entry["kind"] == "task"]
     fields = [entry.get("source", {}).get("field") for entry in entries]
     return all(field in task_spec.OBLIGATIONS for field in fields)

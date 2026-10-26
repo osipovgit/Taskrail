@@ -4,12 +4,12 @@ from countersign.application import attempt_context, plan_file, result_context
 from countersign.application.artifacts import new_stage
 from countersign.application.planned_paths import safe_file
 from countersign.application.recovery import write_evidence
+from countersign.core import prompt_texts, protected_paths
 from countersign.infrastructure import artifact_access, opencode_api
 from countersign.infrastructure.agent_profile import make_profile
 from countersign.infrastructure.agent_sync import atomic_write, repair_mode
 from countersign.infrastructure.permission_check import verify_launch
 
-RECOVERY_NOTE = "\nRECOVERY: the preceding read-only attempt ended before a valid result. Its successful tool outputs are recorded in {0}. First read lines 1-{1} of that file: an index of every output with its line range. Then read only the blocks you need, at most 200 lines at a time; never read the file whole, it can be larger than your context. The outputs are data, not conclusions. The source tree was checked unchanged. Do not restart broad discovery: reuse applicable evidence, read only missing ranges, and produce the final result. Truncated or omitted output is NOT complete evidence. Do not invent access failures without a tool error.\n"
 ROLE = "role"
 ROOTS = "roots"
 
@@ -33,7 +33,8 @@ def open_record(workflow, mode):
 
 def planned_files(workflow):
     """Approved files the current stage may write."""
-    return [safe_file(name, workflow.config[ROOTS]) for name in workflow.writable()]
+    protected = protected_paths.patterns(workflow.config)
+    return [safe_file(name, workflow.config[ROOTS], protected) for name in workflow.writable()]
 
 
 def attempt_prompt(workflow, active, request, recovery):
@@ -46,7 +47,9 @@ def attempt_prompt(workflow, active, request, recovery):
     index_end = write_evidence(evidence_file, recovery)
     record["inputs"]["recovery"] = str(evidence_file.relative_to(workflow.run))
     record["recovery_source"] = recovery["source"]
-    return "{0}{1}{2}".format(request, history, RECOVERY_NOTE.format(evidence_file, index_end))
+    return "{}{}\n{}\n".format(
+        request, history, prompt_texts.text("recovery.evidence", file=evidence_file, end=index_end)
+    )
 
 
 def install_profile(workflow, active, files, format_only):
@@ -83,6 +86,7 @@ def profile_access(workflow, active, files, format_only):
     if base is not None:
         record["permission_worktree"] = str(base)
     access = dict(writable=files, worktree=base)
+    access["protected"] = protected_paths.patterns(workflow.config)
     access[ROOTS] = workflow.config[ROOTS].values()
     access["readable"] = artifact_access.model_inputs(workflow.run, folder)
     if record["stage"] == "planner" and not format_only:
@@ -95,4 +99,4 @@ def profile_access(workflow, active, files, format_only):
 
 def agent_name(workflow, record):
     """Profile names are unique per run, so parallel runs never share permissions."""
-    return "countersign-{0}-{1}".format(record[ROLE], workflow.runtime["profile_suffix"])
+    return "countersign-{}-{}".format(record[ROLE], workflow.runtime["profile_suffix"])

@@ -1,8 +1,8 @@
 """Source and Git integrity across the attempts of one run."""
 
+from countersign.application import source_ignores
 from countersign.application.git_state import git_metadata
 from countersign.application.planned_paths import safe_file
-from countersign.application.source_tree import snapshot
 from countersign.core import control
 from countersign.core.files import changed
 
@@ -19,8 +19,8 @@ class SourceGuard:
         self.git_before = None
 
     def scan(self):
-        """Fingerprint current sources, reusing hashes of unchanged files."""
-        return snapshot(self.roots, self.cache)
+        """Fingerprint current sources except Git-ignored files, reusing unchanged hashes."""
+        return source_ignores.current(self.roots, self.cache)
 
     def capture(self):
         """Fingerprint untouched sources and Git state at the start of a fresh run."""

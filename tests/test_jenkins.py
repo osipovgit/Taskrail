@@ -9,6 +9,7 @@ import unittest
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from types import SimpleNamespace
+from typing import ClassVar
 from unittest.mock import patch
 from urllib.parse import parse_qs
 
@@ -41,7 +42,7 @@ BUILD = dict(READ, operation="build", build="new", parameters={"BRANCH": "main"}
 class FakeJenkins(BaseHTTPRequestHandler):
     """Answers like Jenkins for one job; records every request."""
 
-    log = []
+    log: ClassVar[list] = []
     queue_polls = 0
     build_polls = 0
 
@@ -110,7 +111,7 @@ class JenkinsTest(unittest.TestCase):
         self.addCleanup(self.http.server_close)
         self.addCleanup(self.http.shutdown)
         self.servers = json.loads(EXAMPLE.read_text())
-        self.servers["ci"]["url"] = "http://127.0.0.1:{0}".format(self.http.server_port)
+        self.servers["ci"]["url"] = f"http://127.0.0.1:{self.http.server_port}"
         self.temporary = tempfile.TemporaryDirectory()
         self.addCleanup(self.temporary.cleanup)
         self.root = Path(self.temporary.name)

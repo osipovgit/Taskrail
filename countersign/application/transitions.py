@@ -13,9 +13,6 @@ ALLOWED = "allowed"
 IMPLEMENTER = "implementer"
 REPAIRS = "repair_count"
 REVIEWER = "reviewer"
-INTEGRATION = "integration"
-PHASE = "phase"
-# Runs started before automatic splitting never split on their own.
 
 
 def planning(flow, state, verdict, limit):
@@ -50,15 +47,18 @@ def implementation(flow, state, verdict, limit):
 
 
 def result_review(flow, state, verdict, limit):
-    """Stop on approval or request only the missing approved work."""
+    """Stop on approval, or return the findings to the implementer while repairs remain.
+
+    A run without approved files (an integration review or a delivery check) has no
+    writer to repair anything, so its findings end the run for the operator.
+    """
     state["review_outcome"] = review_outcome.describe(verdict, state.get("changed_files", []))
     if verdict[STATUS] == "APPROVE":
         state.update(status=review_outcome.accepted_status(flow, state), summary=verdict[SUMMARY])
-    elif flow[REPAIRS] >= limit:
+    elif not flow[ALLOWED] or flow[REPAIRS] >= limit:
         state.update(status="CHANGES_REQUESTED", summary=verdict[SUMMARY])
     else:
-        fallback = REVIEWER if state.get(PHASE) == INTEGRATION else PLANNER
-        flow.update(feedback=verdict, stage=IMPLEMENTER if flow[ALLOWED] else fallback)
+        flow.update(feedback=verdict, stage=IMPLEMENTER)
         flow[REPAIRS] += 1
 
 

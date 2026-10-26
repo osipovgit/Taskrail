@@ -27,3 +27,12 @@ def server_checks_confirmed(run, change):
     record = read(run.parent / change)
     started = record.get("phases", {}).get("server")
     return bool(record.get("confirmed")) and started == run.name
+
+
+def attempts(epic, task):
+    """The runs started for one task of a split, oldest first."""
+    recorded = epic.get("attempts", {}).get(task)
+    if recorded:
+        return list(recorded)
+    current = epic.get("tasks", {}).get(task)
+    return [current] if current else []

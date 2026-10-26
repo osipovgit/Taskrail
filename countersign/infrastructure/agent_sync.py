@@ -28,6 +28,7 @@ def launch_settings(options, base):
         agent_env_allow=host_environment.agent_allowlist(options.get("agent_env_allow", [])),
         models=opencode_cli.role_models(options.get("models", {})),
         format_repair_tools=repair_setting(options.get("format_repair_tools", REPAIR_NONE)),
+        tool_output_dir=tool_output_setting(options.get("tool_output_dir")),
     )
     version = opencode_api.select(
         options.get("opencode_version", opencode_api.AUTO), command, validated["agent_env_allow"]
@@ -50,6 +51,16 @@ def atomic_write(path, content_bytes):
         stream.flush()
         os.fsync(stream.fileno())
     pending.replace(path)
+
+
+def tool_output_setting(setting):
+    """None for the opencode location, else an absolute directory; `~` is expanded."""
+    if setting is None:
+        return None
+    directory = Path(setting).expanduser() if isinstance(setting, str) else None
+    if directory is None or not directory.is_absolute():
+        raise ValueError("settings.tool_output_dir must be an absolute directory path")
+    return str(directory)
 
 
 def repair_setting(setting):

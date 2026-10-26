@@ -458,13 +458,15 @@ class GitExecutorTests(unittest.TestCase):
     def test_interrupted_write_is_unknown_and_cannot_be_replayed(self):
         argv = ["revert", "--no-edit", process.checked(self.root, ["rev-parse", "HEAD"]).strip()]
         record = dict(request=self.payload(argv), status="RUNNING")
-        with patch("countersign.git.execution.prepare", return_value=argv):
-            with patch("countersign.git.execution.settings", return_value=[]):
-                with patch(
-                    "countersign.git.process.invoke",
-                    side_effect=subprocess.TimeoutExpired(argv, 60),
-                ):
-                    execution.execute(record, [], "implementer", self.env)
+        with (
+            patch("countersign.git.execution.prepare", return_value=argv),
+            patch("countersign.git.execution.settings", return_value=[]),
+            patch(
+                "countersign.git.process.invoke",
+                side_effect=subprocess.TimeoutExpired(argv, 60),
+            ),
+        ):
+            execution.execute(record, [], "implementer", self.env)
         self.assertEqual(record["status"], "UNKNOWN")
         pending = json.loads((self.run / "git-execution.json").read_text())[0]
         self.assertEqual(pending["effective_argv"], argv)

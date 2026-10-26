@@ -5,7 +5,7 @@ import functools
 import sys
 from pathlib import Path
 
-from countersign import cli_service
+from countersign import cli_api, cli_service
 
 ERROR_PREFIX = "Error: "
 SETTINGS_OPTION = "--settings"
@@ -22,7 +22,10 @@ def main():
     commands = dict(
         web=cli_service.serve_command,
         serve=cli_service.serve_command,
-        status=cli_service.status_command,
+        status=cli_api.status_command,
+        submit=cli_api.submit_command,
+        decide=cli_api.decide_command,
+        action=cli_api.action_command,
         resume=resume_command,
         check=cli_service.check_command,
         init=cli_service.init_command,

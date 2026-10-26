@@ -38,6 +38,7 @@ SETTINGS_SNAPSHOT = (
     "isolation",
     "max_change_lines",
     "max_change_files",
+    "protected_paths",
 )
 
 
@@ -91,7 +92,7 @@ def run_directory(location, config):
         run = Path(location).expanduser().resolve()
     else:
         stamp = time.strftime("%Y%m%d-%H%M%S")
-        name = "{0}-{1}".format(stamp, os.urandom(4).hex())
+        name = "-".join((stamp, os.urandom(4).hex()))
         run = config["run_base"] / name
     if any(run.is_relative_to(root) for root in config[ROOTS].values()):
         raise ValueError("Run logs must be outside source roots")

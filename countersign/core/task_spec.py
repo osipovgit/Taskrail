@@ -1,7 +1,7 @@
 """Canonical user inputs, independent of Markdown headings and runtime policy."""
 
-from countersign.core import input_rendering, requirements
-from countersign.core.input_blocks import spans
+from countersign.core import input_rendering, requirements, task_labels
+from countersign.core.input_blocks import is_label, spans
 from countersign.core.task_lineage import checked_assignments, distinct
 
 VERSION = 1
@@ -14,6 +14,8 @@ TEXT = "text"
 FIELD_LIST = "fields"
 BODY = "body"
 CONTEXT = "context"
+TASK_SPEC = "task_spec"
+VERIFICATION = "verification"
 SPEC_KEYS = frozenset(("version", FIELD_LIST, ASSIGNED, BODY, CONTEXT))
 
 
@@ -24,17 +26,16 @@ def from_fields(form):
 
 
 def resolve(text, meta):
-    """Validate a typed input or import legacy Markdown without changing its source."""
-    supplied = meta.get("task_spec")
-    if supplied is None:
-        entries = requirements.task_requirements(text, meta.get("verification", []))
-        return dict(version=VERSION, raw_input=text, fields=[], requirements=entries)
-    spec = checked(supplied)
+    """Validate the typed input of a task file without changing its source.
+
+    A Markdown task file gets its typed fields from task_markdown.typed_input first.
+    """
+    spec = checked(meta.get(TASK_SPEC))
     input_rendering.verify(spec, text)
     entries = entries_for(spec)
-    deferred = meta.get("verification", [])
+    deferred = meta.get(VERIFICATION, [])
     entries.extend(requirements.requirement(check, "runtime") for check in deferred)
-    return dict(spec, raw_input=text, requirements=distinct(entries))
+    return dict(spec, requirements=distinct(entries))
 
 
 def checked(spec):
@@ -79,20 +80,20 @@ def entries_for(spec):
 
 
 def field_entries(field):
-    """Bind every requirement to a precise character range in its original field."""
+    """Bind every requirement to a precise character range in its original field.
+
+    A label line such as "Requirements:" or a lone heading only introduces the blocks
+    after it, so it is not a requirement of its own.
+    """
     text = field[TEXT]
     for start, end in spans(text):
+        if is_label(text[start:end]):
+            continue
         record = requirements.requirement(text[start:end], "task")
         source = dict(field=field[NAME], start=start, end=end)
         yield dict(record, source=source)
 
 
-def prompt_text(spec):
+def prompt_text(spec, entries=()):
     """Render user fields only; engine policy and typed transport stay outside the task."""
-    if not spec[FIELD_LIST]:
-        return requirements.HEADER.sub("", spec["raw_input"]).strip()
-    populated = [field for field in spec[FIELD_LIST] if field[TEXT]]
-    sections = ["## {name}\n{text}".format(**field) for field in populated]
-    if spec.get(CONTEXT):
-        sections.append("## Task split context\n{0}".format(spec[CONTEXT]))
-    return "\n\n".join(sections)
+    return task_labels.typed(spec, entries)

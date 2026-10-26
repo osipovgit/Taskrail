@@ -16,9 +16,7 @@ def ordered_writes(steps):
         ordered = depends(first, second, preceding) or depends(second, first, preceding)
         require(
             not shared or ordered,
-            "Tasks {0} and {1} share files; declare a dependency or combine their work".format(
-                first[IDENTIFIER], second[IDENTIFIER]
-            ),
+            f"Tasks {first[IDENTIFIER]} and {second[IDENTIFIER]} share files; declare a dependency or combine their work",
         )
 
 

@@ -39,7 +39,7 @@ CHANGE = "confirmed_change"
 # A split's task run, Jenkins validation and the server checks after confirmation.
 PHASES = frozenset(("", TASK, "integration", "validation", "server"))
 CHECK_PHASES = frozenset(("integration", "validation", "server"))
-TASK_ACTIONS = frozenset(("epic_pause", "epic_unpause"))
+TASK_ACTIONS = frozenset(("epic_pause", "epic_unpause", "epic_accept_sources"))
 RECORDED = (
     frozenset(
         (
@@ -146,20 +146,18 @@ class Submission:
             options.append(HEADER_OPTIONS[READ_ONLY])
         for name in (PHASE, CHANGE, check_parents.PARENT):
             if self.delivery[name]:
-                options.append('"{0}": "{1}"'.format(name, self.delivery[name]))
+                options.append(f'"{name}": "{self.delivery[name]}"')
         if self.delivery[SCOPE] is not None:
-            options.append('"task_scope": {0}'.format(json.dumps(self.delivery[SCOPE])))
+            options.append(f'"task_scope": {json.dumps(self.delivery[SCOPE])}')
         if self.delivery[ASSIGNED_CONTRACT] is not None:
-            options.append(
-                '"assigned_contract": {0}'.format(json.dumps(self.delivery[ASSIGNED_CONTRACT]))
-            )
+            options.append(f'"assigned_contract": {json.dumps(self.delivery[ASSIGNED_CONTRACT])}')
         if self.delivery[CHECK_SPECS]:
-            options.append('"check_specs": {0}'.format(json.dumps(self.delivery[CHECK_SPECS])))
+            options.append(f'"check_specs": {json.dumps(self.delivery[CHECK_SPECS])}')
         header = ", ".join([*options, ROOTS_KEY])
         sections = [text.replace(ROOTS_KEY, header, 1)]
         sections[0] = assign_requirements(sections[0], self.delivery)
         if self.delivery[CONTEXT]:
-            sections.append("\n## Task split context\n{0}\n".format(self.delivery[CONTEXT]))
+            sections.append(f"\n## Task split context\n{self.delivery[CONTEXT]}\n")
         if self.mode in CONTINUING:
             sections.extend([HISTORY_RULE, history.conversation(self.previous)])
         return "".join(sections)
@@ -232,4 +230,4 @@ def assign_requirements(text, delivery):
     meta = json.loads(header)
     meta["task_spec"][ASSIGNED_REQUIREMENTS] = delivery[ASSIGNED_REQUIREMENTS]
     meta["task_spec"][CONTEXT] = delivery[CONTEXT]
-    return "{0}\n{1}\n```{2}".format(start, json.dumps(meta, ensure_ascii=False, indent=2), rest)
+    return f"{start}\n{json.dumps(meta, ensure_ascii=False, indent=2)}\n```{rest}"

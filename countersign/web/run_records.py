@@ -6,6 +6,7 @@ from types import MappingProxyType
 from countersign.interactions import approval_policy
 from countersign.web import (
     delivery_launch,
+    epic_baseline,
     epic_launch,
     epic_record,
     integration_launch,
@@ -24,19 +25,26 @@ RECORDS = MappingProxyType(
 EPIC_NEXT = "epic_next"
 CONFIRM = "confirm"
 INTEGRATION = "integration_review"
+ACCEPT_SOURCES = "epic_accept_sources"
 PAUSES = MappingProxyType({"epic_pause": True, "epic_unpause": False})
-ACTIONS = frozenset((*RECORDS, *PAUSES, EPIC_NEXT, CONFIRM, INTEGRATION))
+LAUNCHES = MappingProxyType(
+    {
+        EPIC_NEXT: epic_launch.start_next,
+        CONFIRM: delivery_launch.confirm,
+        INTEGRATION: integration_launch.repeat,
+    }
+)
+ACTIONS = frozenset((*RECORDS, *PAUSES, *LAUNCHES, ACCEPT_SOURCES))
 
 
 def record(launcher, run, payload):
-    """Apply one action; the next epic task needs the launcher, a pause names its task."""
+    """Apply one action; launches need the launcher, task actions name their task."""
     action = payload["action"]
-    if action == EPIC_NEXT:
-        return epic_launch.start_next(launcher, run)
-    if action == CONFIRM:
-        return delivery_launch.confirm(launcher, run)
-    if action == INTEGRATION:
-        return integration_launch.repeat(launcher, run)
+    launch = LAUNCHES.get(action)
+    if launch:
+        return launch(launcher, run)
+    if action == ACCEPT_SOURCES:
+        return epic_baseline.accept(launcher, run, payload["task"])
     paused = PAUSES.get(action)
     if paused is not None:
         return epic_record.set_pause(run, payload["task"], paused)

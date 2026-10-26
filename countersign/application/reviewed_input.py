@@ -2,8 +2,8 @@
 
 import json
 
-from countersign.application import reviewed_artifacts
-from countersign.core import schema, task_graph, task_spec
+from countersign.application import child_brief, reviewed_artifacts
+from countersign.core import schema, task_spec
 from countersign.core.files import atomic_json, digest
 
 REFERENCE = "00-input/reviewed-task-spec.json"
@@ -20,7 +20,7 @@ def capture(workflow, parent, step):
     spec.update(
         requirements=entries,
         assigned_requirements=entries,
-        context=context(parent, step),
+        context=child_brief.context(parent, step),
         task_sha256=digest(workflow.config["task_text"].encode()),
     )
     atomic_json(workflow.run / REFERENCE, spec)
@@ -38,9 +38,10 @@ def fields(step, requirements):
         for entry in requirements
         if entry["kind"] == "task" and not global_constraint(entry)
     ]
+    heading = child_brief.heading(step)
     return dict(
-        title="{id}: {action}".format(**step),
-        goal=step["action"],
+        title=heading,
+        goal=heading,
         criteria="\n\n".join(criteria),
         entry_points="\n".join(step["files"]),
         constraints="\n\n".join(entry["text"] for entry in global_constraints),
@@ -59,22 +60,14 @@ def criterion(entry):
     return f"{text}\nOnly this assigned part: {scope}" if scope else text
 
 
-def context(parent, step):
-    """Use the authenticated contract, not a user-supplied sibling summary, for dispatch."""
-    dependencies = task_graph.ancestors(parent["plan"]["steps"], step["id"])
-    contract = dict(current_task=step, completed_prerequisites=sorted(dependencies))
-    return "Reviewed atomic task; earlier dependencies are verified complete.\n{0}".format(
-        json.dumps(contract)
-    )
-
-
 def restore(workflow):
     """Continue the sealed child projection without reopening a mutable parent run."""
     expected = workflow.state.get(SIGNATURE)
     if expected is None:
-        origin = workflow.state.get("contract_start", {}).get("origin")
-        required = workflow.state.get("phase") == "task" and origin == "reviewed-contract"
-        schema.require(not required, "Missing authenticated child input; restart required")
+        schema.require(
+            workflow.state.get("phase") != "task",
+            "Missing authenticated child input; restart required",
+        )
         return
     encoded = reviewed_artifacts.read(workflow.run, REFERENCE)
     schema.require(

@@ -32,7 +32,7 @@ def job_url(server, job):
     """The job's base URL; folders become nested /job/ segments."""
     path = server["jobs"][job]["path"]
     parts = [quote(part, safe="") for part in path.split("/")]
-    return "{0}/job/{1}".format(server["url"].rstrip("/"), "/job/".join(parts))
+    return "{}/job/{}".format(server["url"].rstrip("/"), "/job/".join(parts))
 
 
 def call(server, url, form=None, timeout=DEFAULT_TIMEOUT):
@@ -41,13 +41,13 @@ def call(server, url, form=None, timeout=DEFAULT_TIMEOUT):
     opener = build_opener(ProxyHandler({}), HTTPSHandler(context=context), NoRedirect)
     method = "GET" if form is None else "POST"
     request = Request(url, data=form, method=method)
-    request.add_header("Authorization", "Basic {0}".format(credentials(server)))
+    request.add_header("Authorization", f"Basic {credentials(server)}")
     return opener.open(request, timeout=timeout)
 
 
 def credentials(server):
     """The Basic authentication value of the configured account."""
-    account = "{0}:{1}".format(server["username"], server["token"])
+    account = "{}:{}".format(server["username"], server["token"])
     return base64.b64encode(account.encode("utf-8")).decode("ascii")
 
 

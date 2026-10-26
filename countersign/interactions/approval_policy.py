@@ -19,14 +19,17 @@ READ_ONLY = "read_only"
 OFF = "auto-approve.off"
 
 
-def decision(run, request, state, roots=None):
+def decision(run, request, state, scope=None, personal=False):
     """Approve read-only requests and, when allowed for this run, all others on record.
 
-    Without roots (the change limit) only the run's setting can approve automatically.
+    The scope holds the declared roots and protected patterns of the read-only route;
+    without one (the change limit) only the run's setting can approve automatically.
+    A personal request, such as a push to a remote or inline shell or Python code,
+    always waits for the operator.
     """
-    if roots is not None and read_only.request(request, roots):
+    if not personal and scope is not None and read_only.request(request, *scope):
         return automatic(run, request, READ_ONLY)
-    if enabled(run, state):
+    if not personal and enabled(run, state):
         return automatic(run, request, ALLOW_ALL)
     answer = approvals.wait(run, request)
     if answer.get("allow_all") and answer["decision"] == ALLOW:

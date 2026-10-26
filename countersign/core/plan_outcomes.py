@@ -1,12 +1,15 @@
 """The `## Requirements` lines of plan.md: each requirement's outcome and owners.
 
 An outcome is the tasks that deliver the requirement (a part names its scope),
-`done:` or `contradicted:` with cited lines, `runtime:` with a later check, or `gap:`.
+`all tasks` for an obligation every task keeps, `done:` or `contradicted:` with cited
+lines, `runtime` with an optional description of the later check, or `gap:`.
 """
 
 import re
 from pathlib import Path
 from types import MappingProxyType
+
+from countersign.core.plan_keys import uncode
 
 CITATION = re.compile(r"`?([^`\s,;]+):(\d+)(?:\s*-\s*(\d+))?`?")
 TASK_REFERENCE = re.compile(r"(T\d+)\s*(?:\[([^\]]*)\]|\(([^)]*)\))?\s*", re.IGNORECASE)
@@ -31,6 +34,12 @@ PREFIXES = MappingProxyType(
     }
 )
 CITED = frozenset((SATISFIED, "contradicted"))
+EVERY_TASK = frozenset(("all tasks", "all"))
+IDENTIFIER = "id"
+TEXT = "text"
+TASKS_ONLY = (
+    "line {line}: {label} needs only task IDs with optional [scope], or done:, runtime:, gap:"
+)
 
 
 class Coverage:
@@ -43,6 +52,7 @@ class Coverage:
         self.problems = []
         self.found = {"coverage": [], EVIDENCE: [], "unverified": [], "blocking_gaps": []}
         self.owners = {}
+        self.everyone = []
 
     def read(self, lines):
         """Every requirement line, then the requirements without one."""
@@ -64,30 +74,34 @@ class Coverage:
 
     def outcome(self, requirement, entry):
         """Tasks, done, contradicted, runtime or gap."""
-        kind, detail = classify(entry["text"])
+        kind, detail = classify(entry[TEXT])
         if kind is None:
             self.problems.append("line {line}: {label} has no outcome".format(**entry))
             return
         if kind == PLANNED:
             self.assign(requirement, entry)
-        evidence = self.cite(detail, entry[LINE]) if kind in CITED else []
-        explanation = "{0}: {1}".format(entry[LABEL], detail)
         if kind == DEFERRED:
+            detail = detail or requirement[TEXT]
             self.found["unverified"].append(detail)
+        evidence = self.cite(detail, entry[LINE]) if kind in CITED else []
+        explanation = f"{entry[LABEL]}: {detail}"
         if kind == GAP:
             self.found["blocking_gaps"].append(explanation)
-        record = dict(id=requirement["id"], outcome=kind, evidence_ids=evidence)
+        record = dict(id=requirement[IDENTIFIER], outcome=kind, evidence_ids=evidence)
         self.found["coverage"].append(dict(record, explanation=explanation))
 
     def assign(self, requirement, entry):
-        """`T1, T2 [scope]`: the tasks that deliver the requirement or a part of it."""
-        references = task_references(entry["text"])
+        """`T1, T2 [scope]` or `all tasks`: the tasks that deliver the requirement."""
+        if entry[TEXT].strip().casefold() in EVERY_TASK:
+            marker = dict(id=requirement[IDENTIFIER], line=entry[LINE])
+            self.everyone.append(dict(marker, label=entry[LABEL]))
+            return
+        references = task_references(entry[TEXT])
         if not references:
-            message = "line {line}: {label} needs only task IDs with optional [scope], or done:, runtime:, gap:"
-            self.problems.append(message.format(**entry))
+            self.problems.append(TASKS_ONLY.format(**entry))
         for task, scope in references:
             owned = self.owners.setdefault(task.upper(), [])
-            owned.append(dict(id=requirement["id"], scope=scope.strip()))
+            owned.append(dict(id=requirement[IDENTIFIER], scope=scope.strip()))
 
     def cite(self, detail, line):
         """Evidence entries for `path:from-to` citations; returns their IDs."""
@@ -99,16 +113,31 @@ class Coverage:
     def evidence(self, match):
         """One cited range as an evidence entry; returns its ID."""
         name, start, end = match
-        identifier = "E{0}".format(len(self.found[EVIDENCE]) + 1)
-        span = dict(line_start=int(start), line_end=int(end or start))
-        span.update(id=identifier, path=str(absolute(name, self.roots)))
+        number = len(self.found[EVIDENCE]) + 1
+        span = dict(
+            line_start=int(start),
+            line_end=int(end or start),
+            id=f"E{number}",
+            path=str(absolute(name, self.roots)),
+        )
         self.found[EVIDENCE].append(span)
-        return identifier
+        return span["id"]
+
+
+def cited_ranges(coverage, field):
+    """`Read:` ranges of a task as path:from-to; the plan must have read them."""
+    entries, line = field
+    cited = [uncode(entry) for entry in entries if not PLACEHOLDER.match(entry)]
+    if not cited:
+        return []
+    identifiers = set(coverage.cite(", ".join(cited), line))
+    spans = [entry for entry in coverage.found[EVIDENCE] if entry[IDENTIFIER] in identifiers]
+    return ["{path}:{line_start}-{line_end}".format(**entry) for entry in spans]
 
 
 def missing_labels(count, seen):
     """The labels R1..R<count> that have no line, comma-separated."""
-    labels = ["R{0}".format(number) for number in range(1, count + 1)]
+    labels = [f"R{number}" for number in range(1, count + 1)]
     return ", ".join(label for label in labels if label not in seen)
 
 
@@ -141,6 +170,8 @@ def classify(text):
     """(outcome, detail); planned keeps the whole text, None means no outcome."""
     if not text or PLACEHOLDER.match(text):
         return None, ""
+    if text.strip().casefold() in EVERY_TASK:
+        return PLANNED, text.strip()
     prefix, _, rest = text.partition(":")
     kind = PREFIXES.get(prefix.strip().casefold())
     return (kind, rest.strip()) if kind else (PLANNED, text)
