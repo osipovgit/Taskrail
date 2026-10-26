@@ -9,10 +9,8 @@ from contextlib import redirect_stdout
 from pathlib import Path
 from unittest.mock import patch
 
-from taskrail.core import task_markdown
 from taskrail.deployment.settings_init import main
 from taskrail.infrastructure.opencode_cli import COMMAND_ERROR
-from taskrail.web.history import TaskDraft
 
 BASE = Path(__file__).resolve().parents[1]
 
@@ -113,39 +111,6 @@ class SettingsInitTests(unittest.TestCase):
         for _ in range(2):
             self.initialize(agents="bundled")
         self.assertEqual(len(list(self.config.glob("settings.json.backup-*"))), 2)
-
-    def test_settings_of_a_countersign_installation_follow_the_rename(self):
-        home = "/home/user"
-        previous = dict(
-            command=[f"{home}/.local/bin/wrapper"],
-            agent_source=f"{home}/.local/share/countersign/current/countersign/agents",
-            run_base=f"{home}/.local/state/countersign/runs",
-            models={"planner": "provider/model"},
-            model_context_tokens=94208,
-        )
-        (self.config / "settings.json").write_text(json.dumps(previous))
-        (self.config / "service.env").write_text('PATH="/usr/bin"\nCOUNTERSIGN_WEB_PORT=8790\n')
-        self.initialize()
-        settings = self.settings()
-        self.assertEqual(
-            settings["agent_source"], f"{home}/.local/share/taskrail/current/taskrail/agents"
-        )
-        self.assertEqual(settings["run_base"], f"{home}/.local/state/taskrail/runs")
-        self.assertEqual(settings["models"], previous["models"])
-        environment = (self.config / "service.env").read_text()
-        self.assertEqual(environment, 'PATH="/usr/bin"\nTASKRAIL_WEB_PORT=8790\n')
-        before = (self.config / "settings.json").read_bytes()
-        self.initialize()
-        self.assertEqual((self.config / "settings.json").read_bytes(), before)
-
-    def test_tasks_saved_before_the_rename_keep_their_header(self):
-        text = (
-            '```countersign-task\n{"phase": "task", "roots": {"p": "/r"}}\n```\n'
-            "# Old task\n\n## Goal\nKeep working.\n"
-        )
-        self.assertEqual(TaskDraft(text).metadata["phase"], "task")
-        self.assertEqual(TaskDraft(text).metadata["roots"], {"p": "/r"})
-        self.assertIn("Keep working.", json.dumps(task_markdown.typed_input(text, {})))
 
     def test_invalid_commands_and_multiline_path_are_rejected_before_writing(self):
         supplied = self.home / "settings.json"

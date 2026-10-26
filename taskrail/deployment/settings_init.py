@@ -9,7 +9,6 @@ import sys
 from pathlib import Path
 
 from taskrail.cli_service import DEFAULT_PORT
-from taskrail.deployment import rename
 from taskrail.infrastructure.opencode_cli import DEFAULT_COMMAND, validate_command
 
 SETTINGS = "settings.json"
@@ -127,7 +126,6 @@ def parsed(argv):
 def main(argv=None):
     """Create settings and the service environment once; switch roles only when asked."""
     arguments = parsed(argv)
-    rename.follow(arguments.config)
     installation = Installation(arguments.source, arguments.config, arguments.app)
     installation.initialize(arguments.supplied)
     if arguments.agents == "bundled":

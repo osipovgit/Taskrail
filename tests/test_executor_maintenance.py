@@ -57,63 +57,6 @@ class MaintenanceStepsTests(unittest.TestCase):
             STATE=str(self.state),
         )
 
-    def migrate(self, root):
-        for name in ("getent", "id", "groupmod", "usermod"):
-            stub = Path(self.environment["PATH"].split(os.pathsep)[0]) / name
-            stub.write_text(f'#!/bin/sh\nprintf "{name} %s\\n" "$*" >> "$LOG"\n')
-            stub.chmod(0o755)
-        script = (
-            'set -euo pipefail; source "$1"; lock_executor_maintenance "$2"; '
-            'migrate_previous_executor "$3" "$4" "$5"'
-        )
-        new_config, new_state = root / "etc/taskrail-executor", root / "var/lib/taskrail-executor"
-        arguments = [str(LIBRARY), str(self.lock), str(new_config), str(new_state), str(root)]
-        result = subprocess.run(
-            ["bash", "-c", script, "migrate", *arguments],
-            env=self.environment,
-            capture_output=True,
-            text=True,
-            timeout=30,
-        )
-        return result, new_config, new_state
-
-    def previous_executor(self, root, status):
-        old = "countersign-executor"
-        (root / f"etc/{old}").mkdir(parents=True)
-        (root / f"etc/{old}/hosts.json").write_text("{}")
-        (root / f"var/lib/{old}").mkdir(parents=True)
-        (root / f"var/lib/{old}/t1.json").write_text(json.dumps(dict(status=status)))
-        (root / "etc/systemd/system").mkdir(parents=True)
-        (root / f"etc/systemd/system/{old}.service").write_text("[Unit]\n")
-        (root / f"opt/{old}").mkdir(parents=True)
-
-    def test_a_previous_executor_moves_once_with_its_credentials_and_journal(self):
-        root = Path(self.state.parent) / "root"
-        self.previous_executor(root, "SUCCEEDED")
-        result, config, state = self.migrate(root)
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual((config / "hosts.json").read_text(), "{}")
-        self.assertTrue((state / "t1.json").is_file())
-        self.assertFalse((root / "etc/countersign-executor").exists())
-        self.assertFalse((root / "etc/systemd/system/countersign-executor.service").exists())
-        self.assertFalse((root / "opt/countersign-executor").exists())
-        log = self.log.read_text()
-        self.assertIn("stop countersign-executor.service", log)
-        self.assertIn("groupmod -n taskrail-executor-clients countersign-executor-clients", log)
-        self.assertIn("usermod -l taskrail-executor countersign-executor", log)
-        again, _, _ = self.migrate(root)
-        self.assertEqual(again.returncode, 0, again.stderr)
-        self.assertEqual(self.log.read_text(), log)
-
-    def test_a_previous_executor_with_a_running_action_is_not_moved(self):
-        root = Path(self.state.parent) / "root"
-        self.previous_executor(root, "RUNNING")
-        result, config, _ = self.migrate(root)
-        self.assertNotEqual(result.returncode, 0)
-        self.assertIn("reconcile it first", result.stderr)
-        self.assertFalse(config.exists())
-        self.assertTrue((root / "etc/countersign-executor/hosts.json").is_file())
-
     def maintain(self, *statuses, **environment):
         script = (
             'set -euo pipefail; source "$1"; lock_executor_maintenance "$2"; shift 2; '

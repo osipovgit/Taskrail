@@ -36,7 +36,6 @@ config=/etc/taskrail-executor
 state=/var/lib/taskrail-executor
 unit_file=/etc/systemd/system/taskrail-executor.service
 marker=$config/maintenance
-migrate_previous_executor "$config" "$state" ""
 getent group taskrail-executor >/dev/null || groupadd --system taskrail-executor
 id taskrail-executor >/dev/null 2>&1 || useradd --system --gid taskrail-executor --home-dir /nonexistent --shell /usr/sbin/nologin taskrail-executor
 getent group taskrail-executor-clients >/dev/null || groupadd --system taskrail-executor-clients
