@@ -9,9 +9,8 @@ import re
 from pathlib import Path
 from types import MappingProxyType
 
-from countersign.core.plan_keys import uncode
+from countersign.core import plan_citations
 
-CITATION = re.compile(r"`?([^`\s,;]+):(\d+)(?:\s*-\s*(\d+))?`?")
 TASK_REFERENCE = re.compile(r"(T\d+)\s*(?:\[([^\]]*)\]|\(([^)]*)\))?\s*", re.IGNORECASE)
 TASK_SEPARATOR = re.compile(r"\s*[,;]\s*")
 PLACEHOLDER = re.compile(r"^<.*>$")
@@ -103,11 +102,13 @@ class Coverage:
             owned = self.owners.setdefault(task.upper(), [])
             owned.append(dict(id=requirement[IDENTIFIER], scope=scope.strip()))
 
-    def cite(self, detail, line):
+    def cite(self, detail, line, explanation=True):
         """Evidence entries for `path:from-to` citations; returns their IDs."""
-        found = CITATION.findall(detail)
-        if not found:
-            self.problems.append(f"line {line}: cite the lines as <path>:<from>-<to>")
+        try:
+            found = plan_citations.parse(detail, explanation)
+        except ValueError as error:
+            self.problems.append(f"line {line}: {error}")
+            return []
         return [self.evidence(match) for match in found]
 
     def evidence(self, match):
@@ -127,10 +128,10 @@ class Coverage:
 def cited_ranges(coverage, field):
     """`Read:` ranges of a task as path:from-to; the plan must have read them."""
     entries, line = field
-    cited = [uncode(entry) for entry in entries if not PLACEHOLDER.match(entry)]
+    cited = [entry for entry in entries if not PLACEHOLDER.match(entry)]
     if not cited:
         return []
-    identifiers = set(coverage.cite(", ".join(cited), line))
+    identifiers = set(coverage.cite(", ".join(cited), line, explanation=False))
     spans = [entry for entry in coverage.found[EVIDENCE] if entry[IDENTIFIER] in identifiers]
     return ["{path}:{line_start}-{line_end}".format(**entry) for entry in spans]
 

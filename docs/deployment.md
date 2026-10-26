@@ -229,7 +229,9 @@ countersign resume /absolute/path/run
 Closing the browser does not stop work. Service shutdown requests an interruption
 checkpoint and waits for cleanup; forced shutdown can leave a stale checkpoint.
 Tasks never resume silently. Continue checks source/Git metadata, task, role and
-preimage integrity. Restart from the UI creates a fresh baseline if these changed.
+preimage integrity. A standalone UI restart creates a fresh baseline. For a split
+child, inspect and explicitly accept current files on its parent before retrying;
+restart retains the approved assignment and does not bypass source checks.
 
 Back up config/state while workflows are stopped; project source needs its own
 backup. `systemctl --user disable --now countersign` disables startup without

@@ -232,6 +232,16 @@ Notes: optional pointers for the implementer
 - Server check: run ansible-playbook --check site.yml on the controller
 ```
 
+A `done:` or `contradicted:` outcome starts with an explicit citation list, then an
+optional explanation in parentheses. Separate files with commas or semicolons;
+`/exact/read/path:7-42,43-156,157-169` cites all three ranges of the same file.
+Backtick-quote the whole citation for paths containing spaces. References inside
+the explanation are prose, not additional evidence. `Read:` accepts only citation
+lists, without explanations. Paths are absolute, root-alias-relative, or relative
+to the only declared root; basenames are never searched for or guessed. Every
+explicit range still needs matching observed current lines. A diff alone does not
+establish that an unrun check passed.
+
 `runtime` may be followed by `: <check>`; without it the requirement text is the check.
 `all tasks` makes the requirement an obligation of every task (it needs at least one
 task). `Read:` lists `path:from-to` ranges the planner read; they are validated like any

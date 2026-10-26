@@ -383,6 +383,38 @@ async function main() {
   assert.ok(all(nodes.chat).some((node) => node.textContent === 'Mode: Split into tasks'));
   console.log('Budget continuation and deletion controls passed.');
 
+  const assigned = {
+    ...state.currentRun,
+    id: 'child',
+    phase: 'task',
+    actions: { restart: true },
+  };
+  app.render(assigned);
+  const restartChild = all(nodes.chat).find((node) => node.textContent === 'Restart reviewed task');
+  assert.equal(restartChild.disabled, false);
+  const calls = [];
+  state.selected = assigned.id;
+  state.sessionToken = 'test-token';
+  nodes.runs = new Node('nav');
+  nodes.filter = { value: '' };
+  globalThis.document.querySelectorAll = () => [];
+  globalThis.fetch = async (url, options) => {
+    calls.push([url, options?.body && JSON.parse(options.body)]);
+    const value =
+      url === '/api/actions'
+        ? { id: 'retry', status: 'STARTING' }
+        : url === '/api/runs'
+          ? []
+          : { ...assigned, id: 'retry' };
+    return { ok: true, json: async () => value };
+  };
+  state.composing = false;
+  await restartChild.onclick();
+  assert.deepEqual(calls[0], ['/api/actions', { id: 'child', action: 'restart' }]);
+  assert.equal(state.selected, 'retry');
+  assert.equal(state.composing, false);
+  console.log('Assigned task restart uses the action API without opening a detached draft.');
+
   const toolToggle = all(nodes.chat).find((node) => node.type === 'checkbox');
   assert.equal(toolToggle, undefined);
 
