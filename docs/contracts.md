@@ -114,7 +114,8 @@ version/handle registry separately from model-visible input. Approved plan conte
 contains decisions and task contracts, omitting repeated coverage, read lists and
 prior verdicts. Empty optional context fields are omitted.
 Operator notes, interrupted-writer instructions and actionable earlier feedback
-remain available when a run continues.
+remain available when a run continues. A split task's first request also carries
+`outside_changes`: the files changed outside the split's tasks before it started.
 `observations.json` keeps the complete validation ledger; `evidence.json` is a
 bounded recovery subset of at most 60 records that never removes observations
 needed for validation. An oversized record is skipped without dropping other useful

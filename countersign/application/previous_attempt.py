@@ -1,9 +1,17 @@
 """A retry of a split task continues from the edits of its earlier attempts."""
 
-from countersign.application import inherited_preimages, reviewed_artifacts
+from countersign.application import inherited_preimages, outside_changes, reviewed_artifacts
 from countersign.core import prompt_texts
 
 FAILED = frozenset(("FAIL",))
+
+
+def start(workflow, earlier, outside):
+    """Continue from earlier attempts and name what changed outside the split's tasks."""
+    if earlier:
+        continue_from(workflow, earlier)
+    if outside:
+        outside_changes.announce(workflow, outside)
 
 
 def continue_from(workflow, earlier):

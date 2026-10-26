@@ -80,9 +80,13 @@ failed can be started again with **Start S-n again**. The new attempt continues 
 the failed attempt's edits: its implementer is told the earlier outcome, review findings
 and failed checks, and its diff compares against the original files. Every run started
 for a task is recorded as an attempt, and the server checks the chain of attempts
-before reusing the reviewed contract. If you edit the projects between two tasks on
-purpose, the next task refuses to start with "accept the current files"; **Accept
-current files for S-n** records the current files as that task's starting point.
+before reusing the reviewed contract. Files or Git state changed outside the split's
+tasks (by you, your IDE or another tool) never stop a task. The task gets their list
+first: its implementer reads them, keeps an assigned change that is already there,
+changes them as its task requires and keeps edits unrelated to it. The task's report
+and card name them under **Changed outside this task**, and the integration review
+sees them for each task, because the task's diff may include those edits. Edits made
+while a stage of a task is running still stop that stage.
 Marking a task's run done counts it as finished for scheduling, but reusing an approved
 child contract requires actual accepted prerequisite results; a done mark cannot supply
 that proof.
@@ -138,11 +142,10 @@ Resume retains frozen task/agent snapshots, approved scope and original preimage
 A run frozen by a release with other response schemas, or a child without a sealed
 reviewed parent, stays viewable but cannot continue: Restart it (or its parent). If source or Git metadata changed after
 the checkpoint, continuation refuses to
-proceed. For a split child, open the parent split, inspect the changes and explicitly
-use **Accept current files for Tn**, then retry that task. Replan the parent when
-its scope or requirements changed. Restart reviewed task retains source integrity
-checks and never accepts external edits implicitly. Standalone restart and follow-up
-establish a fresh baseline; none of these actions revert earlier changes.
+proceed. For a split child, use **Restart reviewed task**: the new attempt starts from
+the current files and names the files changed outside the split. Replan the parent
+when its scope or requirements changed. Standalone restart and follow-up establish a
+fresh baseline; none of these actions revert earlier changes.
 
 A child restart uses the parent's sealed plan, typed requirements, effective roots
 and file scope. The new attempt is linked before its worker starts; completed,
@@ -203,8 +206,8 @@ anything. `/api/tasks` accepts the task fields plus the booleans `read_only`,
 `allow`, `deny` or `alternative`; an `allow` may add `"allow_all": true`. Commands and settings stay server-owned. Reads use
 `GET /api/session`, `/api/runs`, `/api/run` and `/api/analytics`. `/api/actions` also
 accepts `epic_next`, `epic_auto_on`, `epic_auto_off`, `confirm`, `integration_review`,
-`done`, `reopen`, `revoke_auto_approve`, and with a `"task"` field `epic_pause`,
-`epic_unpause` and `epic_accept_sources`.
+`done`, `reopen`, `revoke_auto_approve`, and with a `"task"` field `epic_pause` and
+`epic_unpause`.
 
 ## Automation from the CLI
 

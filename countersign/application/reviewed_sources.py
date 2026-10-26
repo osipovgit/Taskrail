@@ -1,58 +1,58 @@
-"""Check the ordered source lineage before reusing a parent's approved contract.
+"""Follow the source lineage of a split before reusing a parent's approved contract.
 
 Tasks of a split run in plan order, so every task starts from the source the earlier
 tasks left. Each run started for a task is an attempt; the chain passes through every
 attempt that ran a stage, and only the last attempt of an earlier task must have an
-independently approved result. A retry of the current task therefore continues from
-its earlier attempts' edits, and an operator baseline accepts intended edits between
-tasks.
+independently approved result. A retry of the current task continues from its earlier
+attempts' edits.
+
+Files or Git state that changed between two links of the chain were changed outside
+the split's tasks, by the operator or another tool. They do not stop a task: its
+implementer and its report name them, because a later task may find its work already
+done there or may need to change those files too.
 """
 
-from countersign.application import reviewed_artifacts
+from countersign.application import outside_changes, reviewed_artifacts
 from countersign.core import delivery_record, schema, task_graph
 
 FINISHED = frozenset(("READY_FOR_REVIEW", "NO_CHANGES_REQUIRED"))
 ACTIVE = frozenset(("STARTING", "RUNNING"))
 STATUS = "status"
 CHECKPOINT = "checkpoint.json"
-EXPECTED = "expected"
-GIT = "git_before"
+EXPECTED = outside_changes.EXPECTED
+GIT = outside_changes.GIT
 
 
 def verify(parent, task_id, workflow):
-    """The current source must be where the chain of earlier attempts left it.
+    """(earlier attempts of this task that ran, changes made outside the split's tasks).
 
-    Returns the earlier attempts of the current task that ran, oldest first.
+    The changes are None when the source is exactly where the chain left it.
     """
     roots = parent["state"]["roots"]
     schema.require(roots == workflow.state["roots"], "Parent roots changed")
+    drift = outside_changes.Drift()
+    start = after_earlier_tasks(parent, task_id, drift)
+    checkpoint, earlier = chain(parent, own_attempts(parent, task_id, workflow), start, drift)
+    drift.between(checkpoint, {EXPECTED: workflow.guard.expected, GIT: workflow.guard.git_before})
+    return earlier, drift.summary()
+
+
+def own_attempts(parent, task_id, workflow):
+    """The earlier runs started for this task, oldest first."""
     attempts = delivery_record.attempts(parent["epic"], task_id)
-    earlier_attempts = [run for run in attempts if run != workflow.run.name]
-    checkpoint, earlier = chain(
-        parent, task_id, earlier_attempts, after_earlier_tasks(parent, task_id)
-    )
-    schema.require(
-        checkpoint[EXPECTED] == workflow.guard.expected,
-        "Sources changed since reviewed task prerequisites; accept the current files for "
-        "this task or replan the parent",
-    )
-    schema.require(
-        checkpoint[GIT] == workflow.guard.git_before,
-        "Git changed since reviewed task prerequisites; parent replanning required",
-    )
-    return earlier
+    return [run for run in attempts if run != workflow.run.name]
 
 
-def after_earlier_tasks(parent, task_id):
+def after_earlier_tasks(parent, task_id, outside):
     """The checkpoint where the tasks before this one in plan order left the source."""
     checkpoint = reviewed_artifacts.document(parent["run"], CHECKPOINT)
     order = task_graph.order(parent["plan"]["steps"])
     for name in order[: order.index(task_id)]:
-        checkpoint = completed_task(parent, name, checkpoint)
+        checkpoint = completed_task(parent, name, checkpoint, outside)
     return checkpoint
 
 
-def completed_task(parent, name, checkpoint):
+def completed_task(parent, name, checkpoint, outside):
     """An earlier task: its attempts in order, the last one independently approved."""
     names = delivery_record.attempts(parent["epic"], name)
     schema.require(bool(names), "Earlier task has not completed; parent replanning required")
@@ -60,41 +60,33 @@ def completed_task(parent, name, checkpoint):
     state = reviewed_artifacts.document(child, "run.json")
     schema.require(state[STATUS] in FINISHED, "Earlier task has no accepted result")
     verify_review(child, state["results"])
-    return chain(parent, name, names, checkpoint)[0]
+    return chain(parent, names, checkpoint, outside)[0]
 
 
-def chain(parent, task, names, checkpoint):
-    """(checkpoint after the attempts, the attempts that ran), with any operator baseline.
-
-    A baseline replaces the chain at the attempt count it was accepted at.
-    """
-    baseline = parent["epic"].get("baselines", {}).get(task)
+def chain(parent, names, checkpoint, outside):
+    """(checkpoint after the attempts, the attempts that ran)."""
     ran = []
-    for index, name in enumerate(names):
-        checkpoint = attempt(parent, name, rebased(baseline, index, checkpoint), ran)
-    return rebased(baseline, len(names), checkpoint), ran
+    for name in names:
+        checkpoint = attempt(parent, name, checkpoint, ran, outside)
+    return checkpoint, ran
 
 
-def rebased(baseline, index, checkpoint):
-    """The operator's accepted source when the chain reaches its position."""
-    if baseline and baseline["after"] == index:
-        return baseline
-    return checkpoint
-
-
-def attempt(parent, name, checkpoint, ran):
+def attempt(parent, name, checkpoint, ran, outside):
     """The checkpoint after one attempt; an attempt that ran a stage is added to ran.
 
-    An attempt that never ran a stage changed nothing. Any other attempt must have
-    started exactly where the chain stood and must not be running.
+    An attempt that never ran a stage changed nothing. Any other attempt must not be
+    running; what changed between the chain and its start was changed outside the tasks.
     """
     child = reviewed_artifacts.run_path(parent["run"].parent, name)
     if not child.joinpath(CHECKPOINT).is_file():
         return checkpoint
     state = reviewed_artifacts.document(child, "run.json")
     schema.require(state[STATUS] not in ACTIVE, "An attempt of this task is still running")
-    before = reviewed_artifacts.document(child, "00-input/manifest.json")
-    schema.require(before == checkpoint[EXPECTED], "Prerequisite source lineage changed")
+    started = {
+        EXPECTED: reviewed_artifacts.document(child, "00-input/manifest.json"),
+        GIT: reviewed_artifacts.document(child, "00-input/git-metadata.json"),
+    }
+    outside.between(checkpoint, started)
     ran.append(child)
     return reviewed_artifacts.document(child, CHECKPOINT)
 
