@@ -65,39 +65,6 @@ for path in sorted(state.glob('*.json')):
 PY
 }
 
-# Move an executor installed under the previous project name (Countersign) to the
-# Taskrail names once: its configuration, credentials, host keys and journal stay; the
-# groups and the service account are renamed, so IDs and memberships are kept. ROOT is
-# empty on a real system and a test directory in the tests.
-migrate_previous_executor() { # CONFIG STATE ROOT
-    local old=countersign-executor root=${3-}
-    if [[ ! -d $root/etc/$old || -e $1 ]]; then
-        return 0
-    fi
-    executor_unit=$old.service
-    begin_maintenance "$root/etc/$old/maintenance" "$root/var/lib/$old" "$root/etc/systemd/system/$old.service" RUNNING
-    systemctl disable "$old.service" 2>/dev/null || true
-    rm -f -- "$root/etc/systemd/system/$old.service" "$root/usr/local/bin/$old-approve"
-    rm -rf -- "$root/etc/systemd/system/$old.service.d" "$root/opt/$old"
-    leave_maintenance "$root/etc/$old/maintenance"
-    executor_unit=taskrail-executor.service
-    mv -T -- "$root/etc/$old" "$1"
-    if [[ -d $root/var/lib/$old ]]; then
-        mv -T -- "$root/var/lib/$old" "$2"
-    fi
-    if getent group "$old-clients" >/dev/null; then
-        groupmod -n taskrail-executor-clients "$old-clients"
-    fi
-    if id "$old" >/dev/null 2>&1; then
-        usermod -l taskrail-executor "$old"
-    fi
-    if getent group "$old" >/dev/null; then
-        groupmod -n taskrail-executor "$old"
-    fi
-    systemctl daemon-reload
-    printf 'Moved the Countersign executor to %s and %s.\n' "$1" "$2"
-}
-
 # Stop an installed service; a failed or incomplete stop fails the caller.
 stop_executor() { # UNIT_FILE
     if [[ ! -e $1 ]]; then

@@ -16,18 +16,6 @@ bash deploy/install.sh
 bash deploy/install.sh --wait=3600 --autostart=keep
 ```
 
-An installation made under the previous project name, Countersign, moves to the Taskrail
-names on its first update: `~/.config/countersign` and `~/.local/state/countersign`
-become `~/.config/taskrail` and `~/.local/state/taskrail` (settings, roles and run
-history are kept), folder names inside the kept settings and `COUNTERSIGN_*` service
-variables are rewritten, and the old user service and command are removed. The old
-application folder `~/.local/share/countersign` only holds earlier releases; delete it
-yourself when the new version works. Stored runs and task files that still open with
-a `countersign-task` header are read as before. `sudo bash deploy/install-executor.sh`
-moves an installed executor the same way: `/etc/countersign-executor` and its journal
-move to the `taskrail-executor` paths and the service account and groups are renamed,
-keeping their IDs and memberships; it refuses while an action runs.
-
 Interactive installation asks about startup at login only when `--autostart` is
 omitted (and boot startup was not requested). Explicit `--autostart=keep` never
 prompts, including in a terminal. Unattended installs need

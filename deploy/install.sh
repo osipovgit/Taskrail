@@ -13,27 +13,6 @@ service=taskrail.service
 source "$source_dir/deploy/options.sh"
 systemctl --user show-environment >/dev/null
 "$python_bin" -c 'import sys; assert sys.version_info >= (3, 10), "Python 3.10+ is required"'
-# An installation under the previous project name (Countersign) moves to the Taskrail
-# folders once: settings, roles and run history are kept, never copied or deleted.
-previous_state="$HOME/.local/state/countersign"
-previous_config="$HOME/.config/countersign"
-if [[ -d $previous_state && ! -e $state_dir ]]; then
-    exec 6>"$previous_state/live.lock"
-    flock -w "$wait_seconds" 6 || {
-        echo 'Stop the active task of the Countersign installation first' >&2
-        exit 1
-    }
-    systemctl --user disable --now countersign.service 2>/dev/null || true
-    exec 6>&-
-    mv -T -- "$previous_state" "$state_dir"
-fi
-if [[ -d $previous_config && ! -e $config_dir ]]; then
-    mv -T -- "$previous_config" "$config_dir"
-fi
-if [[ -e $unit_dir/countersign.service ]]; then
-    systemctl --user disable --now countersign.service 2>/dev/null || true
-    rm -f -- "$unit_dir/countersign.service" "$HOME/.local/bin/countersign"
-fi
 mkdir -p "$app_dir/releases" "$config_dir" "$state_dir/runs" "$unit_dir" "$HOME/.local/bin"
 # Serialize installers. Never switch releases underneath an active workflow.
 exec 8>"$app_dir/install.lock"
