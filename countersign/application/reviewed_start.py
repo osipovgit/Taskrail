@@ -39,7 +39,7 @@ def child(workflow):
     assignment = workflow.config["assigned_contract"]
     parent = reviewed_artifacts.parent(workflow.run.parent, assignment["parent_run"])
     step = assigned_step(parent, assignment["task_id"])
-    earlier = reviewed_sources.verify(parent, step["id"], workflow)
+    lineage = reviewed_sources.verify(parent, step["id"], workflow)
     verify_requirements(parent, step, workflow)
     check_configuration.adopt(workflow, parent["run"], parent["state"])
     reviewed_input.capture(workflow, parent, step)
@@ -50,8 +50,7 @@ def child(workflow):
         workflow, planned_checks.inherit(parent["state"], workflow.state[REQUIREMENTS])
     )
     install(workflow, plan, "implementer")
-    if earlier:
-        previous_attempt.continue_from(workflow, earlier)
+    previous_attempt.start(workflow, *lineage)
 
 
 def assigned_step(parent, task_id):

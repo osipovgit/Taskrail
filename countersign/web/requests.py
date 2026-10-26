@@ -39,7 +39,7 @@ CHANGE = "confirmed_change"
 # A split's task run, Jenkins validation and the server checks after confirmation.
 PHASES = frozenset(("", TASK, "integration", "validation", "server"))
 CHECK_PHASES = frozenset(("integration", "validation", "server"))
-TASK_ACTIONS = frozenset(("epic_pause", "epic_unpause", "epic_accept_sources"))
+TASK_ACTIONS = frozenset(("epic_pause", "epic_unpause"))
 RECORDED = (
     frozenset(
         (

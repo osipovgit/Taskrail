@@ -17,9 +17,6 @@ const STEP_TEXT = {
   done: 'Done',
 };
 
-// The lineage error of a task whose files changed after the earlier tasks.
-const SOURCES_CHANGED = 'accept the current files';
-
 function taskControls(delivery, actions) {
   const controls = el('div', undefined, 'run-actions');
   const again = delivery.tasks.some((task) => task.id === delivery.next && task.run);
@@ -41,8 +38,6 @@ function taskControls(delivery, actions) {
     el('span', ' Start the next task automatically after each successful one'),
   );
   controls.append(next, autoLabel);
-  const accept = acceptButton(delivery, actions);
-  if (accept) controls.append(accept);
   if (['integration_failed', 'confirm'].includes(delivery.step)) {
     const repeat = el('button', 'Repeat integration review');
     repeat.type = 'button';
@@ -50,18 +45,6 @@ function taskControls(delivery, actions) {
     controls.append(repeat);
   }
   return controls;
-}
-
-// After intended edits between two tasks, the next task may start from the current files.
-function acceptButton(delivery, actions) {
-  const ready = delivery.tasks.find((task) => task.id === delivery.next);
-  const reasons = [delivery.launch_error, ready && ready.summary];
-  if (!reasons.some((text) => text && text.includes(SOURCES_CHANGED))) return null;
-  const accept = el('button', 'Accept current files for ' + delivery.next);
-  accept.type = 'button';
-  accept.title = 'Start the next task from the files as they are now, including your edits.';
-  accept.onclick = () => actions.act('epic_accept_sources', { task: delivery.next });
-  return accept;
 }
 
 function confirmationBlock(delivery, actions) {

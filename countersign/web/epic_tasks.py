@@ -21,7 +21,9 @@ ACTIVE = frozenset(("STARTING", "RUNNING"))
 SUMMARY_LIMIT = 400
 TITLE_LIMIT = 120
 IDENTIFIER = "id"
-NOT_STARTED = MappingProxyType(dict(status=None, summary="", changed_files=(), done=False))
+NOT_STARTED = MappingProxyType(
+    dict(status=None, summary="", changed_files=(), outside_files=(), done=False)
+)
 STEP_FIELDS = MappingProxyType(
     {
         "goal": "action",
@@ -87,6 +89,7 @@ def outcome(child):
     status = lifecycle.display_status(child, state)
     outcome = dict(status=status, summary=summary, done=run_groups.marked(child, state))
     outcome["changed_files"] = state.get("changed_files", [])
+    outcome["outside_files"] = (state.get("outside_changes") or {}).get("files", [])
     return outcome
 
 

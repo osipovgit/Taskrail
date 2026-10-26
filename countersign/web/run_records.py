@@ -6,7 +6,6 @@ from types import MappingProxyType
 from countersign.interactions import approval_policy
 from countersign.web import (
     delivery_launch,
-    epic_baseline,
     epic_launch,
     epic_record,
     integration_launch,
@@ -25,7 +24,6 @@ RECORDS = MappingProxyType(
 EPIC_NEXT = "epic_next"
 CONFIRM = "confirm"
 INTEGRATION = "integration_review"
-ACCEPT_SOURCES = "epic_accept_sources"
 PAUSES = MappingProxyType({"epic_pause": True, "epic_unpause": False})
 LAUNCHES = MappingProxyType(
     {
@@ -34,7 +32,7 @@ LAUNCHES = MappingProxyType(
         INTEGRATION: integration_launch.repeat,
     }
 )
-ACTIONS = frozenset((*RECORDS, *PAUSES, *LAUNCHES, ACCEPT_SOURCES))
+ACTIONS = frozenset((*RECORDS, *PAUSES, *LAUNCHES))
 
 
 def record(launcher, run, payload):
@@ -43,8 +41,6 @@ def record(launcher, run, payload):
     launch = LAUNCHES.get(action)
     if launch:
         return launch(launcher, run)
-    if action == ACCEPT_SOURCES:
-        return epic_baseline.accept(launcher, run, payload["task"])
     paused = PAUSES.get(action)
     if paused is not None:
         return epic_record.set_pause(run, payload["task"], paused)
