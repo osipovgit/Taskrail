@@ -6,7 +6,7 @@ from countersign.application import run_locks
 from countersign.application.checkpoints import budget_paused, resume_available
 from countersign.core.files import atomic_json
 from countersign.interactions import approval_policy, approvals
-from countersign.web import run_groups
+from countersign.web import run_family, run_groups
 from countersign.web.history import read_artifact
 
 RUN_INDEX = "run.json"
@@ -103,7 +103,7 @@ def actions(run, state, busy):
         stop=running and not requested,
         stop_requested=requested,
         delete=not running and state.get(STATUS) != "STARTING" and idle,
-        followup=(run / RUN_INDEX).is_file() and not running and idle,
+        followup=idle and run_family.can_follow_up(run, state),
         restart=(run / RUN_INDEX).is_file() and idle,
         resume=can_resume and idle,
         resume_budget=can_resume and idle,

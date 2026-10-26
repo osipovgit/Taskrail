@@ -3,7 +3,7 @@
 from operator import itemgetter
 from types import MappingProxyType
 
-from countersign.web import delivery_state, history, lifecycle, run_groups
+from countersign.web import delivery_state, history, lifecycle, run_family, run_groups
 from countersign.web.run_files import contained, read_json
 
 SUMMARY_LIMIT = 500
@@ -25,8 +25,10 @@ def list_runs(base):
 
 
 def run_entry(path):
-    """A readable run directory, or None."""
+    """A readable run directory, or None; a task or phase run is shown in its parent."""
     if path.is_symlink() or not path.is_dir():
+        return None
+    if run_family.shown_inside(path.parent, path):
         return None
     try:
         return run_summary(path)
@@ -49,6 +51,7 @@ def run_summary(path):
         summary=state.get("summary", "")[:SUMMARY_LIMIT],
     )
     summary.update(delivery_state.list_fields(path, state, summary["group"]))
+    summary.update(run_family.member_fields(path))
     return summary
 
 
@@ -86,7 +89,9 @@ def pending_entry(folder):
         launch = read_json(contained(folder, "launch.json"))
     except (OSError, ValueError):
         return None
-    if not isinstance(launch, dict) or launch.get("resume"):
+    # A continuation, task or phase launch is shown in its own or its parent's card.
+    shown_elsewhere = run_family.shown_inside(folder.parent.parent, folder)
+    if not isinstance(launch, dict) or launch.get("resume") or shown_elsewhere:
         return None
     if not REQUIRED_LAUNCH_FIELDS.issubset(launch):
         return None

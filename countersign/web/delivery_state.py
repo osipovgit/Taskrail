@@ -14,6 +14,7 @@ from countersign.web import (
     history,
     integration_review,
     lifecycle,
+    run_attempts,
 )
 
 NOT_DELIVERY = ("read_only", "design", "phase")
@@ -26,6 +27,8 @@ def view(run, state):
         return None
     epic = epic_tasks.record(run)
     split = epic_progress.view(run, state)
+    if split is not None:
+        run_attempts.add_task_attempts(run, epic, split["tasks"])
     delivery = dict(split or {}, status=lifecycle.display_status(run, state))
     delivery["phases"] = phases(run, epic)
     integration_review.invalidate(delivery, epic)
@@ -46,9 +49,11 @@ def container(run):
 
 
 def phases(run, epic):
-    """Each recorded phase: its run, status and summary, or why it was skipped."""
+    """Each recorded phase: its run, status, summary and earlier attempts, or why it was skipped."""
     recorded = epic.get("phases", {})
-    return {name: phase(run, entry) for name, entry in recorded.items()}
+    views = {name: phase(run, entry) for name, entry in recorded.items()}
+    run_attempts.add_phase_attempts(run, epic, views)
+    return views
 
 
 def phase(run, entry):

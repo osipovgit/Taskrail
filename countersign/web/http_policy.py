@@ -22,7 +22,17 @@ SCRIPTS = frozenset(
         "/theme.js",
         *(
             f"/modules/{name}.js"
-            for name in ("analytics", "app", "dom", "epic", "monitor", "stages", "state", "task")
+            for name in (
+                "analytics",
+                "app",
+                "dom",
+                "epic",
+                "graph",
+                "monitor",
+                "stages",
+                "state",
+                "task",
+            )
         ),
     )
 )

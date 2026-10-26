@@ -11,7 +11,16 @@ from test_reviewed_workflow import ReviewedFixture
 from countersign.application import transitions
 from countersign.application.live import execute_task
 from countersign.core.files import atomic_json
-from countersign.web import epic_baseline, epic_launch, epic_tasks, requests
+from countersign.web import (
+    delivery_state,
+    epic_baseline,
+    epic_launch,
+    epic_tasks,
+    lifecycle,
+    requests,
+    run_list,
+)
+from countersign.web.run_view import run_view
 from countersign.web.submissions import TaskLauncher
 
 FIELDS = dict(goal="Return 2 and add the new module", criteria="Both outputs work")
@@ -96,10 +105,31 @@ class SplitRecoveryTests(ReviewedFixture, unittest.TestCase):
         self.assertIn("-    return 1", (retry / "changes.diff").read_text())
         with self.assertRaisesRegex(ValueError, "latest attempt"):
             launcher.action(dict(id=child.name, action="restart"))
-        with self.assertRaisesRegex(ValueError, "assigned task"):
-            requests.Submission(
-                dict(parent_run=child.name, submission_mode="restart", **FIELDS), self.runs
-            )
+        # A task run never becomes a detached planner or conversation.
+        for mode in ("restart", "followup", "answer", "design"):
+            with self.subTest(mode=mode), self.assertRaisesRegex(ValueError, "belongs to a split"):
+                requests.Submission(
+                    dict(parent_run=child.name, submission_mode=mode, **FIELDS), self.runs
+                )
+        child_state = json.loads((child / "run.json").read_text())
+        self.assertFalse(lifecycle.actions(child, child_state, busy=False)["followup"])
+        listed = [entry["id"] for entry in run_list.list_runs(self.runs)]
+        self.assertNotIn(child.name, listed)
+        self.assertNotIn(retry.name, listed)
+        parent_entry = next(
+            entry for entry in run_list.list_runs(self.runs) if entry["id"] == parent.name
+        )
+        self.assertEqual(parent_entry["members"], sorted([child.name, retry.name]))
+        delivery = delivery_state.view(parent, json.loads((parent / "run.json").read_text()))
+        first = delivery["tasks"][0]
+        self.assertEqual(
+            (first["run"], [entry["run"] for entry in first["attempts"]]),
+            (retry.name, [child.name]),
+        )
+        self.assertEqual(first["attempts"][0]["status"], "INVALID_RESULT")
+        self.assertEqual(
+            run_view(self.runs, retry.name)["parent"], dict(run=parent.name, slot="T1")
+        )
 
     def test_checkpoint_drift_needs_explicit_acceptance_even_on_child_restart(self):
         parent, state = self.split()

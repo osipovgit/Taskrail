@@ -19,6 +19,7 @@ UI updates read the ordered stage index and public event stream.
 | `executor/` | Separate system service: peer-authenticated socket, immutable tickets, root-only approval, SSH transport, Jenkins client |
 | `web/server.py`, `http_handler.py`, `http_policy.py` | Loopback HTTP API, request checks and static resources |
 | `web/run_view.py`, `run_list.py`, `run_files.py`, `run_messages.py`, `run_sources.py` | Bounded, contained run views for the dashboard |
+| `web/run_family.py`, `run_attempts.py` | Task and phase runs shown in their parent's card, with every earlier attempt |
 | `web/service.py`, `health.py` | Managed process lifecycle and bounded readiness check |
 | `web/submissions.py`, `worker.py` | Validated task creation and detached workflow launch |
 | `web/history.py`, `requests.py`, `lifecycle.py` | Editable task drafts, conversation history and lifecycle controls |

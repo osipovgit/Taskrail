@@ -556,6 +556,64 @@ class TaskControlTests(unittest.TestCase):
         self.finish("server-1", "READY_FOR_REVIEW")
         self.assertEqual(delivery()["step"], "done")
 
+    def phase_run(self, name, phase, status):
+        """A finished phase run whose task names its delivery, like a launched one."""
+        header = dict(phase=phase, check_parent="original", roots={"project": str(self.repo)})
+        child = self.runs / name
+        (child / "00-input").mkdir(parents=True, exist_ok=True)
+        task = f"```countersign-task\n{json.dumps(header)}\n```\n# {phase}\n"
+        (child / "00-input/task.md").write_text(task)
+        state = dict(status=status, summary=f"{name} failed\ndetails", phase=phase, stages=[])
+        state["roots"] = header["roots"]
+        (child / "run.json").write_text(json.dumps(state))
+
+    def test_a_restarted_phase_stays_in_its_delivery_with_earlier_attempts(self):
+        (self.run / "plan.json").write_text(
+            json.dumps(dict(status="PLAN_READY", unverified=["Jenkins check: ci/tests: passes"]))
+        )
+        offers = dict(jenkins={"ci": {}})
+        with (
+            patch.object(delivery_launch, "executor_offers", return_value=offers),
+            self.launching("validation-1"),
+        ):
+            delivery_launch.advance(self.launcher)
+        self.phase_run("validation-1", "validation", "TOOL_ERROR")
+        self.assertEqual(run_view(self.runs, "original")["delivery"]["step"], "validation_failed")
+        listed = {run["id"]: run for run in list_runs(self.runs)}
+        self.assertNotIn("validation-1", listed)
+        self.assertEqual(listed["original"]["members"], ["validation-1"])
+        failed = run_view(self.runs, "validation-1")
+        self.assertEqual(failed["parent"], dict(run="original", slot="validation"))
+        self.assertFalse(failed["actions"]["followup"])
+        with (
+            patch.object(delivery_launch, "executor_offers", return_value=offers),
+            self.launching("validation-2") as launch,
+        ):
+            result = self.launcher.action(dict(id="validation-1", action="restart"))
+        self.assertEqual(result["id"], "validation-2")
+        self.assertIn('"phase": "validation"', launch.call_args.args[0]["text"])
+        record = json.loads((self.run / "epic.json").read_text())
+        self.assertEqual(record["phases"], dict(validation="validation-2"))
+        self.assertEqual(
+            record["phase_attempts"], dict(validation=["validation-1", "validation-2"])
+        )
+        self.phase_run("validation-2", "validation", "RUNNING")
+        phase = run_view(self.runs, "original")["delivery"]["phases"]["validation"]
+        self.assertEqual(phase["run"], "validation-2")
+        self.assertEqual(
+            phase["attempts"],
+            [dict(run="validation-1", status="TOOL_ERROR", reason="validation-1 failed")],
+        )
+        with self.assertRaisesRegex(ValueError, "latest attempt"):
+            self.launcher.action(dict(id="validation-1", action="restart"))
+        with self.assertRaisesRegex(ValueError, "Stop the phase"):
+            self.launcher.action(dict(id="validation-2", action="restart"))
+        with self.assertRaisesRegex(ValueError, "belongs to a split or delivery"):
+            requests.Submission(
+                dict(self.payload, parent_run="validation-2", submission_mode="followup"),
+                self.runs,
+            )
+
     def test_delivery_phases_are_skipped_without_an_executor_and_wait_when_unreachable(self):
         unverified = ["Jenkins check: ci/tests: passes"]
         (self.run / "plan.json").write_text(

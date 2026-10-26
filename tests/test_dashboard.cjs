@@ -30,7 +30,11 @@ class Node {
   }
 }
 const monitor = new Node('aside');
-globalThis.document = { createElement: (tag) => new Node(tag), getElementById: () => monitor };
+globalThis.document = {
+  createElement: (tag) => new Node(tag),
+  createElementNS: (namespace, tag) => new Node(tag),
+  getElementById: () => monitor,
+};
 globalThis.location = { hash: '' };
 const staticDir = path.join(__dirname, '../countersign/web/static');
 const moduleNames = ['state', 'dom', 'stages', 'monitor', 'app'];
@@ -271,7 +275,10 @@ async function main() {
   console.log('Run groups and the Needs you highlight passed.');
 
   const { deliverySection } = await load('epic');
+  const graph = await load('graph');
   const acted = [];
+  const picked = [];
+  const embedded = [];
   const delivery = {
     step: 'confirm',
     confirmed: false,
@@ -279,7 +286,9 @@ async function main() {
     next: 'S-2',
     auto_continue: false,
     checks: { jenkins: ['ci/tests: passes'], server: ['health returns 200'] },
-    phases: { validation: { run: 'val-1', status: 'NO_CHANGES_REQUIRED', summary: 'Passed' } },
+    phases: {
+      validation: { run: 'val-1', status: 'NO_CHANGES_REQUIRED', summary: 'Passed', attempts: [] },
+    },
     tasks: [
       {
         id: 'S-1',
@@ -287,51 +296,146 @@ async function main() {
         status: 'READY_FOR_REVIEW',
         run: 'child-1',
         summary: 'Done',
+        attempts: [{ run: 'child-0', status: 'INVALID_RESULT', reason: 'Duplicate coverage ID' }],
       },
       {
         id: 'S-2',
         title: 'Document hello',
+        goal: 'Describe hello in the README',
+        done_when: ['README mentions hello'],
+        files: ['README.md'],
+        depends_on: ['S-1'],
         status: null,
         run: null,
         summary: '',
         pause_before: false,
+        attempts: [],
       },
     ],
   };
-  const panel = deliverySection(delivery, {
-    act: (action, extra) => acted.push(extra ? action + ' ' + extra.task : action),
-    open: (id) => acted.push('open ' + id),
-  });
-  const panelButtons = all(panel).filter((n) => n.tagName === 'button');
+  const layout = graph.graphLayout(delivery);
   assert.deepEqual(
-    panelButtons.map((n) => n.textContent),
-    ['Open run', 'Start S-2', 'Repeat integration review', 'Open run', 'Confirm changes'],
+    layout.nodes.map((node) => [node.label, node.status, node.column, node.row]),
+    [
+      ['S-1 · Change hello', 'READY_FOR_REVIEW', 0, 0],
+      ['S-2 · Document hello', 'NEXT', 1, 0],
+      ['Integration review', 'WAITING', 2, 0],
+      ['Jenkins validation', 'CHECK_COMPLETED', 3, 0],
+      ['Your confirmation', 'CONFIRM', 4, 0],
+      ['Server checks', 'WAITING', 5, 0],
+    ],
   );
-  panelButtons.forEach((button) => button.onclick());
-  const toggle = all(panel)
-    .filter((n) => n.type === 'checkbox')
-    .at(-1);
+  assert.deepEqual(layout.edges, [
+    ['S-1', 'S-2'],
+    ['S-2', 'integration'],
+    ['integration', 'validation'],
+    ['validation', 'confirm'],
+    ['confirm', 'server'],
+  ]);
+  const actions = (focus, child = null) => ({
+    act: (action, extra) => acted.push(extra ? action + ' ' + extra.task : action),
+    pick: (key) => picked.push(key),
+    focus,
+    child,
+    embed: (view) => {
+      embedded.push(view.id);
+      return [new Node('section')];
+    },
+  });
+  const panel = deliverySection(delivery, actions(''));
+  const svg = all(panel).find((n) => n.tagName === 'svg');
+  assert.equal(svg.children.filter((n) => n.tagName === 'path').length, 5);
+  const graphNodes = all(panel).filter((n) => n.className?.startsWith('graph-node'));
+  assert.deepEqual(
+    graphNodes.map((n) => n.className),
+    [
+      'graph-node tone-good',
+      'graph-node tone-attention',
+      'graph-node tone-pending',
+      'graph-node tone-good',
+      'graph-node tone-attention',
+      'graph-node tone-pending',
+    ],
+  );
+  assert.equal(graphNodes[0].style.left, '0px');
+  assert.equal(graphNodes[1].style.left, '244px');
+  assert.ok(all(graphNodes[0]).some((n) => n.textContent === '↻ 1'));
+  graphNodes.forEach((node) => node.onclick());
+  assert.deepEqual(picked, [
+    'child-1',
+    'task:S-2',
+    'phase:integration',
+    'val-1',
+    'phase:confirm',
+    'phase:server',
+  ]);
+  assert.ok(
+    all(panel).some((n) => n.textContent === 'Select a task or phase to see its run here.'),
+  );
+  const controls = all(panel)
+    .filter((n) => n.tagName === 'button' && !(n.className || '').startsWith('graph-node'))
+    .map((n) => n.textContent);
+  assert.deepEqual(controls, ['Start S-2', 'Repeat integration review', 'Confirm changes']);
+  all(panel)
+    .filter((n) =>
+      ['Start S-2', 'Repeat integration review', 'Confirm changes'].includes(n.textContent),
+    )
+    .forEach((button) => button.onclick());
+  const toggle = all(panel).find((n) => n.type === 'checkbox');
   toggle.checked = true;
   toggle.onchange();
-  const pause = all(panel).filter((n) => n.type === 'checkbox')[0];
+  assert.ok(all(panel).some((n) => n.textContent === 'Delivery · Waiting for your confirmation'));
+
+  // A planned task shows its plan and the pause choice in the card.
+  const planned = deliverySection(delivery, actions('task:S-2'));
+  assert.ok(all(planned).some((n) => n.textContent === 'README mentions hello'));
+  const pause = all(planned)
+    .filter((n) => n.type === 'checkbox')
+    .at(-1);
   pause.checked = true;
   pause.onchange();
   assert.deepEqual(acted, [
-    'open child-1',
     'epic_next',
     'integration_review',
-    'open val-1',
     'confirm',
     'epic_auto_on',
     'epic_pause S-2',
   ]);
-  assert.ok(all(panel).some((n) => n.textContent === 'Delivery · Waiting for your confirmation'));
-  assert.ok(all(panel).some((n) => n.textContent.includes('each action needs root approval')));
+  const serverPanel = deliverySection(delivery, actions('phase:server'));
+  assert.ok(
+    all(serverPanel).some((n) => n.textContent.includes('each action needs root approval')),
+  );
+
+  // A started task opens its run inside the card; earlier attempts collapse into one line.
+  picked.length = 0;
+  const opened = deliverySection(delivery, actions('child-1', { id: 'child-1' }));
+  assert.deepEqual(embedded, ['child-1']);
+  const attempts = all(opened).find((n) => n.className === 'attempts');
+  assert.equal(attempts.children[0].textContent, '1 earlier attempt · #1 Invalid result');
+  assert.ok(all(attempts).some((n) => n.textContent === ' Duplicate coverage ID'));
+  all(attempts)
+    .find((n) => n.textContent === 'Open')
+    .onclick();
+  all(opened)
+    .find((n) => n.textContent === 'Close')
+    .onclick();
+  assert.deepEqual(picked, ['child-0', '']);
+  const older = deliverySection(delivery, actions('child-0', null));
+  assert.ok(all(older).some((n) => n.textContent === 'Show the current attempt'));
+  assert.ok(all(older).some((n) => n.textContent === 'Loading the run…'));
+  assert.ok(all(older).some((n) => n.className === 'graph-node tone-good selected'));
+
+  // A run that waits for your decision is shown without a click.
+  const awaiting = structuredClone(delivery);
+  awaiting.tasks[1] = { ...awaiting.tasks[1], run: 'child-2', status: 'WAITING_APPROVAL' };
+  assert.equal(graph.attentionRun(awaiting), 'child-2');
+  assert.equal(graph.attentionRun(delivery), '');
+
   const quiet = { step: 'implementing', confirmed: false, checks: { jenkins: [], server: [] } };
   assert.equal(deliverySection(quiet, {}), null);
   const blockedDelivery = deliverySection(
     { ...delivery, step: 'integration_failed', launch_error: 'Child contract is too large' },
-    { act: () => {}, open: () => {} },
+    actions(''),
   );
   assert.ok(all(blockedDelivery).some((n) => n.textContent === 'Integration review'));
   assert.ok(all(blockedDelivery).some((n) => n.textContent === 'Child contract is too large'));
@@ -346,12 +450,12 @@ async function main() {
         'Sources changed since reviewed task prerequisites; accept the current files for ' +
         'this task or replan the parent',
     },
-    { act: (action, extra) => accepted.push([action, extra]), open: () => {} },
+    { ...actions(''), act: (action, extra) => accepted.push([action, extra]) },
   );
   const accept = all(changedSources).find((n) => n.textContent === 'Accept current files for S-2');
   accept.onclick();
   assert.deepEqual(accepted, [['epic_accept_sources', { task: 'S-2' }]]);
-  console.log('Delivery panel passed.');
+  console.log('Delivery graph, in-card runs and collapsed attempts passed.');
 
   // A budget-paused run exposes both continuation choices and reversible deletion.
   for (const name of ['reply-goal', 'send-reply', 'monitor']) nodes[name] = new Node('div');
@@ -414,6 +518,78 @@ async function main() {
   assert.equal(state.selected, 'retry');
   assert.equal(state.composing, false);
   console.log('Assigned task restart uses the action API without opening a detached draft.');
+
+  // A task or phase run opens inside its parent's card, with its own decision and actions.
+  const { parseHash } = await load('state');
+  assert.deepEqual(parseHash('#a%2Fb/c'), { selected: 'a/b', focus: 'c' });
+  assert.deepEqual(parseHash('#solo'), { selected: 'solo', focus: '' });
+  const base = { ...assigned, phase: null, parent: null, pending_approval: null };
+  const familyTasks = [
+    delivery.tasks[0],
+    { ...delivery.tasks[1], run: 'child-2', status: 'WAITING_APPROVAL' },
+  ];
+  const parentView = {
+    ...base,
+    id: 'parent',
+    actions: { delete: true },
+    delivery: { ...delivery, step: 'needs_you', tasks: familyTasks },
+  };
+  const childView = {
+    ...base,
+    id: 'child-2',
+    phase: 'task',
+    parent: { run: 'parent', slot: 'S-2' },
+    actions: { restart: true, delete: true },
+    pending_approval: { ticket: 't-9', request: { argv: ['make', 'test'], cwd: '/p' } },
+  };
+  const requested = [];
+  const posted = [];
+  globalThis.fetch = async (url, options) => {
+    if (options?.body) posted.push([url, JSON.parse(options.body)]);
+    else requested.push(url);
+    const id = new URL(url, 'http://local').searchParams.get('id');
+    const value = options?.body ? { id: 'child-2' } : id === 'parent' ? parentView : childView;
+    return { ok: true, json: async () => value };
+  };
+  state.selected = 'child-2';
+  state.focus = '';
+  state.last = '';
+  await app.refreshRun();
+  assert.equal(state.selected, 'parent');
+  assert.equal(state.focus, 'child-2');
+  assert.equal(globalThis.location.hash, 'parent/child-2');
+  assert.deepEqual(requested, ['/api/run?id=child-2', '/api/run?id=parent', '/api/run?id=child-2']);
+  const familyButtons = all(nodes.chat).filter((n) => n.tagName === 'button');
+  const deletes = familyButtons.filter((n) => n.textContent === 'Delete from history');
+  assert.deepEqual(
+    deletes.map((n) => n.hidden),
+    [false, true],
+  );
+  assert.ok(familyButtons.some((n) => n.textContent === 'Restart reviewed task' && !n.hidden));
+  assert.ok(all(nodes.chat).some((n) => n.textContent?.includes('"make"')));
+  all(nodes.chat).find((n) => n.className === 'approval-alternative').blur = () => {};
+  await familyButtons.find((n) => n.textContent === 'Allow').onclick();
+  assert.deepEqual(posted[0], [
+    '/api/decision',
+    { id: 'child-2', ticket: 't-9', decision: 'allow', alternative: '' },
+  ]);
+  // Without a choice, the run that waits for you is shown in the card.
+  state.focus = '';
+  state.last = '';
+  requested.length = 0;
+  state.selected = 'parent';
+  await app.refreshRun();
+  assert.deepEqual(requested, ['/api/run?id=parent', '/api/run?id=child-2']);
+  assert.equal(state.focus, '');
+  app.render({ ...base, id: 'phase-run', phase: 'validation', actions: { restart: true } });
+  assert.ok(all(nodes.chat).some((n) => n.textContent === 'Restart this phase' && !n.hidden));
+  state.runs = [{ id: 'parent', title: 'Split work', members: ['child-2'], group: 'running' }];
+  nodes.filter.value = 'child-2';
+  app.menu();
+  assert.ok(all(nodes.runs).some((n) => n.textContent === 'Split work'));
+  nodes.filter.value = '';
+  state.runs = [];
+  console.log('Task and phase runs open inside the parent card with their own decisions.');
 
   const toolToggle = all(nodes.chat).find((node) => node.type === 'checkbox');
   assert.equal(toolToggle, undefined);

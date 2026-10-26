@@ -725,24 +725,140 @@ label:has(> input[type='checkbox']) .hint {
   padding-left: 20px;
 }
 
-/* Task splits */
-.epic-tasks {
+/* Task and phase graph */
+.graph-scroll {
+  overflow-x: auto;
   margin: 8px 0 12px;
-  padding-left: 22px;
+  padding-bottom: 4px;
 }
 
-.epic-tasks li {
-  margin: 8px 0;
+.graph {
+  position: relative;
 }
 
-.epic-tasks strong {
-  margin-right: 8px;
+.graph-edges {
+  position: absolute;
+  inset: 0;
+  overflow: visible;
 }
 
-.epic-tasks button {
-  margin-left: 6px;
+.graph-edges path {
+  fill: none;
+  stroke: var(--border);
+  stroke-width: 1.5;
+}
+
+.graph-edges polygon {
+  fill: var(--muted);
+}
+
+.graph-node {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-left-width: 4px;
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--fg);
+  text-align: left;
+  overflow: hidden;
+}
+
+.graph-node strong {
+  max-width: 100%;
+  overflow: hidden;
+  font-size: 12.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.graph-node .badge {
+  margin: 0;
+}
+
+.graph-node.selected {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.graph-node.tone-good {
+  border-left-color: var(--good-fg);
+}
+
+.graph-node.tone-bad {
+  border-left-color: var(--bad-fg);
+}
+
+.graph-node.tone-active {
+  border-left-color: var(--accent);
+}
+
+.graph-node.tone-attention {
+  border-left-color: var(--warn);
+  background: var(--warn-bg);
+}
+
+.graph-node.tone-pending {
+  border-left-color: var(--border);
+  color: var(--muted);
+}
+
+.graph-retries {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  color: var(--muted);
+  font-size: 11.5px;
+}
+
+.graph-panel {
+  margin: 12px 0;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+}
+
+.graph-panel-head {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+}
+
+.graph-panel-head h4 {
+  margin: 0;
+  font-size: 14px;
+}
+
+.graph-panel-head button {
+  margin-left: auto;
   padding: 2px 10px;
   font-size: 12.5px;
+}
+
+.attempts {
+  margin: 8px 0;
+  font-size: 12.5px;
+}
+
+.attempts summary {
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.attempts li {
+  margin: 4px 0;
+}
+
+.attempts button {
+  margin-left: 6px;
+  padding: 1px 8px;
+  font-size: 12px;
 }
 
 .epic-auto {
