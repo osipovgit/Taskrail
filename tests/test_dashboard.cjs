@@ -317,7 +317,7 @@ async function main() {
   assert.deepEqual(
     layout.nodes.map((node) => [node.label, node.status, node.column, node.row]),
     [
-      ['S-1 · Change hello', 'READY_FOR_REVIEW', 0, 0],
+      ['S-1 · Change hello', 'COMPLETED', 0, 0],
       ['S-2 · Document hello', 'NEXT', 1, 0],
       ['Integration review', 'WAITING', 2, 0],
       ['Jenkins validation', 'CHECK_COMPLETED', 3, 0],
@@ -524,7 +524,7 @@ async function main() {
     id: 'child-2',
     phase: 'task',
     parent: { run: 'parent', slot: 'S-2' },
-    actions: { restart: true, delete: true },
+    actions: { restart: true, delete: true, done: true, reopen: true },
     pending_approval: { ticket: 't-9', request: { argv: ['make', 'test'], cwd: '/p' } },
   };
   const requested = [];
@@ -551,6 +551,9 @@ async function main() {
     [false, true],
   );
   assert.ok(familyButtons.some((n) => n.textContent === 'Restart reviewed task' && !n.hidden));
+  for (const label of ['Mark as done', 'Move back from Done']) {
+    assert.ok(familyButtons.filter((n) => n.textContent === label).every((n) => n.hidden));
+  }
   assert.ok(all(nodes.chat).some((n) => n.textContent?.includes('"make"')));
   all(nodes.chat).find((n) => n.className === 'approval-alternative').blur = () => {};
   await familyButtons.find((n) => n.textContent === 'Allow').onclick();

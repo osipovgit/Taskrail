@@ -269,7 +269,7 @@ function actionButtons(data, embedded = false) {
   for (const [action, label] of ACTIONS) {
     const assignedRestart = action === 'restart' && Boolean(assigned);
     const button = el('button', assignedRestart ? assigned[0] : label);
-    const available = data.actions?.[action] && !(embedded && action === 'delete');
+    const available = data.actions?.[action] && !(embedded && PARENT_ONLY.has(action));
     button.disabled = state.actionPending || !available;
     // Unavailable actions are hidden rather than shown disabled.
     button.hidden = !available;
@@ -332,10 +332,15 @@ function outsideSection(outside) {
   return section;
 }
 
+// Inside a split, a finished task is completed; only the whole delivery waits for review.
+const EMBEDDED_LABELS = { READY_FOR_REVIEW: 'COMPLETED' };
+// Done marks belong to the parent: its card is what you review and file away.
+const PARENT_ONLY = new Set(['delete', 'done', 'reopen']);
+
 // The parent's header, or a compact header for a run shown inside its parent's card.
 function runHeader(data, embedded) {
   const nodes = embedded
-    ? [el('p', data.id, 'muted run-id'), badge(data.status || '')]
+    ? [el('p', data.id, 'muted run-id'), badge(EMBEDDED_LABELS[data.status] || data.status || '')]
     : [
         el('h2', state.runs.find((run) => run.id === data.id)?.title || data.id),
         el('p', data.id, 'muted run-id'),

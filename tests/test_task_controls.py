@@ -373,7 +373,10 @@ class TaskControlTests(unittest.TestCase):
         self.assertEqual(entry["group"], "attention")
 
     def test_split_requires_independent_combined_review_and_fresh_source(self):
-        self.make_epic()
+        epic = self.make_epic()
+        plan = json.loads((epic / "plan.json").read_text())
+        plan["unverified"] = ["Server check: health returns 200"]
+        (epic / "plan.json").write_text(json.dumps(plan))
         with self.launching("child-1"):
             self.launcher.action(dict(id="epic", action="epic_next"))
         self.finish("child-1", "READY_FOR_REVIEW")
@@ -659,9 +662,15 @@ class TaskControlTests(unittest.TestCase):
             delivery_launch.advance(self.launcher)
         view = run_view(self.runs, "original")["delivery"]
         self.assertEqual(view["phases"]["validation"]["status"], "skipped")
-        self.assertEqual(view["step"], "confirm")
-        self.launcher.action(dict(id="original", action="confirm"))
-        self.assertEqual(run_view(self.runs, "original")["delivery"]["step"], "done")
+        # Without server checks nothing changes servers: no confirmation, only your review.
+        self.assertEqual(view["step"], "review")
+        entry = next(run for run in list_runs(self.runs) if run["id"] == "original")
+        self.assertEqual(entry["group"], "review")
+        with self.assertRaisesRegex(ValueError, "waits for confirmation"):
+            self.launcher.action(dict(id="original", action="confirm"))
+        self.launcher.action(dict(id="original", action="done"))
+        entry = next(run for run in list_runs(self.runs) if run["id"] == "original")
+        self.assertEqual(entry["group"], "done")
 
     def test_allow_all_actions_can_be_revoked_from_the_ui(self):
         index = self.run / "run.json"
