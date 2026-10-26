@@ -4,7 +4,7 @@ import json
 import re
 from pathlib import Path
 
-from countersign.application import instruction_sources, session_budget
+from countersign.application import context_windows, instruction_sources
 from countersign.application.input_config import input_configuration
 from countersign.application.task_roots import ROOTS, declared_access
 from countersign.application.verify_settings import parse_commands
@@ -117,7 +117,7 @@ def permission_worktree(options):
 def limits(options):
     """Clamp numeric settings to their supported ranges; read the retry policy."""
     return dict(
-        **session_budget.settings(options),
+        **context_windows.settings(options),
         stage_seconds=max(1, int(options.get("stage_timeout_seconds", DEFAULT_TIMEOUT * 4))),
         stage_attempts=max(1, int(options.get("max_stage_attempts", 6))),
         max_observed_tokens=max(0, int(options.get("max_observed_tokens", 0))),

@@ -129,10 +129,23 @@ for 2.x. Profiles allow every declared path in both forms and deny everything el
 
 ## Context limits
 
-Automatic compaction is disabled for every role, including the implementer. Set
-`model_context_tokens` (default `94208`) no higher than the smallest context window
-of the configured role models; `context_reserve_tokens` (default `8192`) must be
-positive and smaller than that window. Keep the provider's own model limits accurate.
+Automatic compaction is disabled for every role, including the implementer.
+`model_context_tokens` (default `94208`) is one window for every model, or an object
+with a window per `provider/model` name and an optional `default` for unlisted
+models (a missing `default` is `94208`):
+
+```json
+"model_context_tokens": {
+  "provider/fast-model": 100000,
+  "provider/review-model": 200000,
+  "default": 65536
+}
+```
+
+Each stage uses the window of its role's model from `models`. Keep each window no
+higher than the model's real context window. `context_reserve_tokens` (default `8192`)
+must be positive and smaller than every window. Keep the provider's own model limits
+accurate.
 
 Before any role starts, the server counts the request and frozen role instructions;
 writer admission also counts approved read/edit input files. Exact source lines already

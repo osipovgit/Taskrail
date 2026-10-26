@@ -2,40 +2,20 @@
 
 from pathlib import Path
 
-from countersign.application import evidence, source_packet
+from countersign.application import context_windows, evidence, source_packet
 from countersign.application.planned_paths import safe_file
 from countersign.core.paths import readable_source
 from countersign.infrastructure import agent_profile
 from countersign.infrastructure.context_overflow import STATUS
 
-MODEL_CONTEXT = "model_context_tokens"
-CONTEXT_RESERVE = "context_reserve_tokens"
-DEFAULT_CONTEXT = 94208
-DEFAULT_RESERVE = 8192
 BYTES_PER_TOKEN = 1
 FRAMING_TOKENS = 1024
-
-
-def settings(options):
-    """A positive context window and nonzero headroom smaller than that window."""
-    context = int(options.get(MODEL_CONTEXT, DEFAULT_CONTEXT))
-    reserve = int(options.get(CONTEXT_RESERVE, DEFAULT_RESERVE))
-    if context <= 0 or reserve <= 0 or reserve >= context:
-        raise ValueError("context_reserve_tokens must be positive and below model_context_tokens")
-    return {MODEL_CONTEXT: context, CONTEXT_RESERVE: reserve}
-
-
-def capacity(config):
-    """Input capacity keeps the configured reserve for responses and future tool output."""
-    limits = settings(config)
-    return limits[MODEL_CONTEXT] - limits[CONTEXT_RESERVE]
 
 
 def admission(config, active, files):
     """Refuse an oversized request for any role before spending a model turn."""
     folder, record = active
-    stage = record.get("stage", record["role"])
-    estimate = measured(config, folder, files, stage)
+    estimate = measured(config, folder, files, record)
     record["context_budget"] = estimate
     if estimate["estimated_input_tokens"] < estimate["input_capacity_tokens"]:
         return None
@@ -69,8 +49,12 @@ def plan_inputs(plan, roots, role="implementer"):
     return sorted(set(paths))
 
 
-def measured(config, folder, files, stage="implementer"):
-    """Estimate UTF-8 input bytes without relying on a provider-specific tokenizer."""
+def measured(config, folder, files, record):
+    """Estimate UTF-8 input bytes without relying on a provider-specific tokenizer.
+
+    The stage record names the role, whose model chooses the context window.
+    """
+    stage = record.get("stage", record["role"])
     existing = [path for path in set(map(Path, files)) if path.is_file()]
     role = agent_profile.body(folder / "agent.md")
     request = folder / "request.md"
@@ -84,7 +68,7 @@ def measured(config, folder, files, stage="implementer"):
         bytes_per_token=BYTES_PER_TOKEN,
         framing_tokens=FRAMING_TOKENS,
         estimated_input_tokens=sum(sizes.values()) + FRAMING_TOKENS,
-        input_capacity_tokens=capacity(config),
+        input_capacity_tokens=context_windows.role_capacity(config, record["role"]),
     )
 
 

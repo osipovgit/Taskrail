@@ -8,7 +8,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from countersign.application import session_budget
+from countersign.application import context_windows, session_budget
 from countersign.application.attempt_retries import Retries
 from countersign.application.attempt_session import launch_options
 from countersign.application.live import execute_task
@@ -39,15 +39,42 @@ class SessionBudgetTests(unittest.TestCase):
         configured = limits({})
         self.assertEqual(configured["model_context_tokens"], 94208)
         self.assertEqual(configured["context_reserve_tokens"], 8192)
-        self.assertEqual(session_budget.capacity(configured), 86016)
+        self.assertEqual(context_windows.capacity(configured), 86016)
         for context, reserve in ((0, 1), (10, 0), (10, 10), (10, 11)):
             with (
                 self.subTest(context=context, reserve=reserve),
                 self.assertRaisesRegex(ValueError, "context_reserve_tokens"),
             ):
-                session_budget.settings(
+                context_windows.settings(
                     dict(model_context_tokens=context, context_reserve_tokens=reserve)
                 )
+
+    def test_each_model_gets_its_own_window_and_unlisted_models_the_default(self):
+        windows = {"lab/small": 32768, "lab/large": 200000, "default": 65536}
+        config = limits(dict(model_context_tokens=windows))
+        self.assertEqual(context_windows.capacity(config, "lab/small"), 32768 - 8192)
+        self.assertEqual(context_windows.capacity(config, "lab/large"), 200000 - 8192)
+        self.assertEqual(context_windows.capacity(config, "lab/other"), 65536 - 8192)
+        self.assertEqual(context_windows.capacity(config, None), 65536 - 8192)
+        listed_only = limits(dict(model_context_tokens={"lab/small": 32768}))
+        self.assertEqual(context_windows.capacity(listed_only, "lab/other"), 94208 - 8192)
+        for invalid in ({}, {"lab/small": 4096}):
+            with self.subTest(invalid=invalid), self.assertRaises(ValueError):
+                limits(dict(model_context_tokens=invalid))
+
+    def test_admission_uses_the_window_of_the_role_model(self):
+        (self.root / "agent.md").write_text("Read-only role")
+        (self.root / "request.md").write_text("x" * 30000)
+        windows = {"lab/small": 20000, "lab/large": 200000}
+        config = dict(model_context_tokens=windows, models={"planner": "lab/small"})
+        record = dict(role="planner")
+        self.assertEqual(
+            session_budget.admission(config, (self.root, record), [])["status"],
+            "CONTEXT_EXCEEDED",
+        )
+        self.assertEqual(record["context_budget"]["input_capacity_tokens"], 20000 - 8192)
+        config["models"]["planner"] = "lab/large"
+        self.assertIsNone(session_budget.admission(config, (self.root, record), []))
 
     def test_writer_admission_counts_frozen_role_and_distinct_planned_bytes(self):
         (self.root / "request.md").write_text("request")
