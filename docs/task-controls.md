@@ -9,7 +9,7 @@
 | Continue with extra budget | Eligible checkpoint; explicit confirmation | Add two attempts and one attempt timeout to the interrupted stage; retain consumption |
 | Continue interrupted run | Eligible checkpoint and unchanged source | Append new attempts to the same run, starting at the interrupted stage; a stage that reported **Blocked** can continue too, with your note answering its question; an interrupted or blocked implementer first inspects its existing edits |
 | Send a follow-up Goal | Previous run stopped, no active run on its projects | Snapshot prior public evidence and start a new run from planning |
-| Answer only | New or follow-up submission | Research and independent review, no implementation |
+| Answer only | New or follow-up submission | Research and independent review, no implementation; the reviewed answer opens the report and is the `answer` of `countersign status` |
 | Design discussion | New or follow-up submission | Like Answer only, but the reviewed summary is a design document, saved as `design.md`; follow-ups refine it, a **Change code** follow-up implements it |
 | Confirm changes | A finished code change, after integration review for a split and any Jenkins validation | Accept the change; server checks, if any, start only now |
 | Mark as done / Move back from Done | Stopped run | Move the run to the Done group, or return it to its computed group; nothing else changes |
@@ -34,20 +34,24 @@ Every **Change code** task goes through the same steps:
 
 1. **Planning.** The planner chooses one atomic task (`single`) or several (`split`).
    Each task owns a deliverable, exact files, requirements or scoped parts, acceptance
-   results, checks and dependencies. It must fit one implementation session without
-   compaction. Plan review checks completeness, independence and ordering.
+   results, checks, dependencies and the line ranges its implementer reads first. It
+   must fit one implementation session without compaction. Tasks run one after another
+   in plan order; a later task sees the earlier changes. Plan review checks
+   completeness, self-containment and ordering.
 2. **Implementation and review.** A single task runs here. A split finishes planning
    as **Tasks ready**; the service starts child runs in dependency order, using the
    same roots or worktrees. A child starts directly at implementation after the server
    authenticates the approved parent plan, criteria, file scope and prerequisite
-   source/Git snapshots; independent result review still follows. Unsealed historical
-   parents retain child planning. Each child may refine its implementation, but cannot split
-   again or expand its parent's reviewed file scope. A contract that cannot be met
+   source/Git snapshots; independent result review still follows. A child is never
+   planned again: it cannot split or expand its parent's reviewed file scope. A contract that cannot be met
    reports the required parent replanning instead of launching nested tasks.
 3. **Integration review for a split.** A separate read-only run checks the original
    goal and every acceptance criterion against the combined source, including
-   interactions between tasks. The server prepares its scope and starts one independent
-   reviewer, preceded by configured local checks when present.
+   interactions between tasks. The server prepares its scope, writes the combined diff
+   of all task runs against the files before the split to its `changes.diff`, lists the
+   files each task changed and starts one independent reviewer, preceded by configured
+   local checks when present. Findings end the review as **Changes requested**; there
+   is no writer to repair them, so the review is not repeated automatically.
    Child success reports and manual done marks cannot bypass this phase. It runs
    even without an SSH/Jenkins executor and must finish `NO_CHANGES_REQUIRED`.
 4. **Jenkins validation.** Planned `Jenkins check:` entries run when Jenkins is
@@ -64,9 +68,16 @@ one (**Start the next task automatically after each successful one** is on); it 
 at the first task that does not finish successfully, and before a task marked **Pause
 before this task**, for example when you want to review the code before a task that
 checks it on a server. **Start S-n** starts the next task by hand; a task whose run
-failed can be started again with **Start S-n again**, and marking a task's run done
-counts it as finished for scheduling. Reusing an approved child contract additionally
-requires actual accepted prerequisite results; a done mark cannot supply that proof.
+failed can be started again with **Start S-n again**. The new attempt continues from
+the failed attempt's edits: its implementer is told the earlier outcome, review findings
+and failed checks, and its diff compares against the original files. Every run started
+for a task is recorded as an attempt, and the server checks the chain of attempts
+before reusing the reviewed contract. If you edit the projects between two tasks on
+purpose, the next task refuses to start with "accept the current files"; **Accept
+current files for S-n** records the current files as that task's starting point.
+Marking a task's run done counts it as finished for scheduling, but reusing an approved
+child contract requires actual accepted prerequisite results; a done mark cannot supply
+that proof.
 Each child gets its complete current contract and a bounded index of its
 prerequisites and an immutable `00-input/parent-task.md` containing the complete
 parent input, reviewed task contracts, checks, notes and recorded outcomes. The
@@ -114,8 +125,8 @@ so instead of rejecting the request. Install the program, then **Allow** the sam
 command, or **Deny**.
 
 Resume retains frozen task/agent snapshots, approved scope and original preimages.
-A historical child without a recorded `task_scope` must be started again from its
-parent plan; its old artifacts are preserved. If source or Git metadata changed after
+A run frozen by a release with other response schemas, or a child without a sealed
+reviewed parent, stays viewable but cannot continue: Restart it (or its parent). If source or Git metadata changed after
 the checkpoint, continuation refuses to
 proceed. Restart and follow-up establish a new baseline from current sources; they
 never revert earlier changes.
@@ -169,7 +180,30 @@ anything. `/api/tasks` accepts the task fields plus the booleans `read_only`,
 `worktree`, `design` and `auto_approve`, and optionally `parent_run` with `submission_mode`
 `restart`, `followup`, `answer` or `design`; without a parent the mode is `new`. `/api/decision` answers one pending approval ticket with
 `allow`, `deny` or `alternative`; an `allow` may add `"allow_all": true`. Commands and settings stay server-owned. Reads use
-`GET /api/session`, `/api/runs`, `/api/run` and `/api/analytics`.
+`GET /api/session`, `/api/runs`, `/api/run` and `/api/analytics`. `/api/actions` also
+accepts `epic_next`, `epic_auto_on`, `epic_auto_off`, `confirm`, `integration_review`,
+`done`, `reopen`, `revoke_auto_approve`, and with a `"task"` field `epic_pause`,
+`epic_unpause` and `epic_accept_sources`.
+
+## Automation from the CLI
+
+When the browser cannot be used, for example a chat bot on the server, the CLI starts
+and controls runs through the same launcher, validation and run store. Each command
+prints one JSON object and returns at once; the task runs in a detached worker.
+
+```sh
+countersign submit --root shop=/srv/shop --goal @goal.md --mode answer --allow-all
+countersign status RUN                       # status, answer, worker activity, approval, delivery step
+countersign decide RUN alternative --text "Use tox instead"
+countersign action RUN resume --note "python3 is installed now"
+countersign submit --json payload.json       # the fields of POST /api/tasks
+```
+
+`--mode` is `change`, `answer`, `design` or `split`; `--followup RUN` and `--restart RUN`
+continue a conversation; a text option may name a file as `@FILE`. `action` accepts the
+`/api/actions` actions; `action RUN restart` only prints the saved `draft`, which
+`submit --json - --restart RUN` launches after any edits. Automatic steps of a split (the next task, integration review,
+Jenkins validation, server checks after confirmation) need the managed service.
 
 ## Decisions and continuation
 
@@ -193,7 +227,8 @@ recorded in the same ledger with `"automatic": true`. The run shows an **All act
 allowed** badge and a **Stop allowing all actions** button, which takes effect before
 the next decision and also on Continue. A choice made on a card lasts until the worker
 exits; Continue asks again unless the task form enabled it and it was not stopped.
-Read-only requests never ask ([access](access.md#local-approval)). SSH tickets and
+Read-only requests never ask ([access](access.md#local-approval)). Pushes and inline
+shell or Python code from agents (`bash -c`, `python -c`) always ask. SSH tickets and
 Jenkins builds always keep root-only approval.
 
 Git and approved local actions resume the same opencode session inside one stage. A

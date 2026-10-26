@@ -2,13 +2,19 @@
 
 import json
 
-from countersign.application import check_configuration, reviewed_artifacts, run_state
+from countersign.application import (
+    check_configuration,
+    integration_changes,
+    reviewed_artifacts,
+    run_state,
+)
 from countersign.core import delivery_record
 from countersign.core.files import digest
 from countersign.core.schema import require
 
 PARENT = "check_parent"
-PHASES = frozenset(("integration", "validation", "server"))
+INTEGRATION = "integration"
+PHASES = frozenset((INTEGRATION, "validation", "server"))
 FINISHED = frozenset(("READY_FOR_REVIEW", "NO_CHANGES_REQUIRED", "TASKS_READY"))
 REQUIREMENTS = "requirements"
 SPECS = "check_specs"
@@ -40,6 +46,8 @@ def adopt(workflow, resume=False):
     verify(workflow, parent, state)
     check_configuration.adopt(workflow, parent, state)
     workflow.state[SEAL] = receipt(workflow)
+    if workflow.config[PHASE] == INTEGRATION:
+        integration_changes.capture(workflow, parent)
 
 
 def restored(workflow):
@@ -82,7 +90,7 @@ def verify(workflow, parent, state):
 
 def selected_specs(state, phase):
     """Integration repeats local checks; delivery runs only its declared remote phase."""
-    selected = "check" if phase == "integration" else phase
+    selected = "check" if phase == INTEGRATION else phase
     return [spec for spec in state.get(SPECS, []) if spec[PHASE] == selected]
 
 
@@ -91,7 +99,7 @@ def verify_requirements(workflow, state, specs):
     original = {entry["id"]: entry for entry in state[REQUIREMENTS]}
     current = {entry["id"]: entry for entry in workflow.state[REQUIREMENTS]}
     criteria = {criterion for spec in specs for criterion in spec["criteria"]}
-    if workflow.config[PHASE] == "integration":
+    if workflow.config[PHASE] == INTEGRATION:
         criteria = set(original)
     require(criteria <= original.keys(), "Unknown parent check requirement")
     require(

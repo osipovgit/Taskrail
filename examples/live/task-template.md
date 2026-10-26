@@ -1,5 +1,5 @@
 ```countersign-task
-{"roots":{"project":"~/src/my-project"},"verification":["Deferred runtime check: action and expected result"]}
+{"roots":{"project":"~/src/my-project"}}
 ```
 
 # Short task title
@@ -16,12 +16,9 @@ Describe the problem, reproduction steps, and relevant errors, if known.
 
 ## Known entry points
 - project/path/to/file (optional).
-Discover related files and the minimum change scope within the declared roots.
 
 ## Constraints
 Preserve existing user changes and compatibility. Avoid unrelated changes.
-Read-only Git history is allowed. Do not change Git state, publish, or deploy.
 
 ## Verification
-Run available built-in syntax checks and static review. Do not execute deferred
-runtime checks from verification; list them as unverified in the report.
+- Deferred runtime check: action and expected result

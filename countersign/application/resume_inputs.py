@@ -5,14 +5,20 @@ from countersign.application.artifacts import finish_stage
 
 
 def verify_preimages(run, state, before):
-    """A preimage must still be the byte version recorded at the start."""
+    """A preimage must still be the byte version recorded at the start or inherited."""
     for name, reference in state["preimages"].items():
         if reference:
             source_bytes = (run / reference).read_bytes()
-            signature = before.get(name) or ""
-            expected = signature.rsplit(":", 1)[-1]
+            expected = recorded_digest(name, state, before)
             if instruction_sources.fingerprint(source_bytes) != expected:
                 raise ValueError("Saved preimage changed; cannot continue safely")
+
+
+def recorded_digest(name, state, before):
+    """An inherited preimage's digest, or the file's digest when the run started."""
+    inherited = state.get("inherited_preimages", {}).get(name)
+    signature = before.get(name) or ""
+    return inherited or signature.rsplit(":", 1)[-1]
 
 
 def observations(run, state, stage, roots):

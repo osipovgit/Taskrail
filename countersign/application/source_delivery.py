@@ -18,9 +18,10 @@ def public(packet):
 def append(packet, entry):
     """Trim a window to the remaining serialized budget, avoiding repeated positions."""
     entry[LINES] = novel_lines(packet, entry)
-    entry["handle"] = "S{0}".format(len(packet) + 1)
+    position = len(packet) + 1
+    entry["handle"] = f"S{position}"
     while entry[LINES]:
-        proposed = public(packet + [entry])
+        proposed = public([*packet, entry])
         rendered = json.dumps(proposed, ensure_ascii=False, indent=2)
         if len(rendered.encode()) <= PACKET_BYTES:
             packet.append(entry)

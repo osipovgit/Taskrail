@@ -12,18 +12,12 @@ from countersign.application import (
 from countersign.application.artifacts import save_run
 from countersign.application.checkpoints import load_checkpoint
 from countersign.application.workflow_state import FLOW_KEYS, STAGE
-from countersign.core import control
+from countersign.core import control, prompt_texts
 from countersign.core.files import atomic_json, digest
 from countersign.interactions import approval_policy
 from countersign.observability.progress import clock
 
 INPUTS = "00-input"
-OPERATOR_NOTE = "The operator wrote operator_note when continuing this run, for example after installing a missing tool. Use it to choose another way to finish; the task, approved scope and policy still apply."
-INTERRUPTED_WRITER = (
-    "An earlier implementation was interrupted. Inspect current files and preimages, "
-    + "preserve applied changes, and finish only missing approved work. "
-    + "Do not blindly replay edits."
-)
 
 
 def start(workflow, resume):
@@ -32,6 +26,7 @@ def start(workflow, resume):
     Allowing all actions comes from the task header unless the operator revoked it; a
     choice made on an approval card lasts until the worker exits.
     """
+    instruction_sources.adopt_texts(workflow.run)
     if resume:
         restore(workflow, validated_checkpoint(workflow), resume)
     else:
@@ -94,10 +89,10 @@ def continuation_feedback(previous, stage, note):
     """An interrupted writer inspects before editing; an operator note is passed verbatim."""
     feedback = dict(previous_feedback=previous)
     if stage == "implementer":
-        feedback.update(interrupted=True, instruction=INTERRUPTED_WRITER)
+        feedback.update(interrupted=True, instruction=prompt_texts.text("note.interrupted_writer"))
     if note:
         feedback["operator_note"] = note
-        feedback["note_rule"] = OPERATOR_NOTE
+        feedback["note_rule"] = prompt_texts.text("note.operator")
     return feedback
 
 

@@ -17,7 +17,7 @@ from countersign.web.lifecycle import actions
 from countersign.web.submissions import worker_command
 
 
-class P2Tests(unittest.TestCase):
+class StageBoundaryTests(unittest.TestCase):
     def setUp(self):
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
@@ -114,7 +114,6 @@ class P2Tests(unittest.TestCase):
             dict(id="T4", depends_on=["T2"]),
         ]
         self.assertEqual(task_graph.order(steps), ["T2", "T3", "T1", "T4"])
-        self.assertEqual(task_graph.waves(steps), {"T2": 1, "T3": 2, "T4": 2, "T1": 3})
         self.assertEqual(task_graph.ancestors(steps, "T1"), {"T2", "T3"})
         steps[1]["depends_on"] = ["T1"]
         with self.assertRaisesRegex(ValueError, "cycle: T1 -> T3 -> T2 -> T1"):

@@ -3,6 +3,8 @@
 import json
 from pathlib import Path
 
+REASONED = frozenset(("gap", "not_evaluated", "contradicted", "deferred"))
+
 
 def absolute(name, roots):
     if Path(name).is_absolute():
@@ -11,10 +13,26 @@ def absolute(name, roots):
     return str(Path(roots[alias]) / relative)
 
 
-def enrich(value, context, target, prompt, read_wrapper=False):
-    role = context["stage"]
+def attempt(args):
+    """The server's record of this attempt, saved next to the request file."""
+    request = Path(args[args.index("--file") + 1])
+    return json.loads((request.parent / "stage.json").read_text())
+
+
+def earlier_invalid(run, record):
+    """An earlier attempt of the same stage returned an invalid result."""
+    stages = json.loads((run / "run.json").read_text())["stages"]
+    return any(
+        entry["stage"] == record["stage"] and entry["status"] == "INVALID_RESULT"
+        for entry in stages
+        if entry["number"] < record["number"]
+    )
+
+
+def enrich(value, context, target, role, observed=True, read_wrapper=False):
+    """Fixture value with coverage and evidence; observed emits the cited read first."""
     evidence = []
-    if "FORMAT REPAIR ONLY" not in prompt and "SYNTHESIS ONLY" not in prompt:
+    if observed:
         content = target.read_text()
         content = "\n".join(
             f"{number}: {line}" for number, line in enumerate(content.splitlines(), 1)
@@ -97,24 +115,41 @@ def enrich(value, context, target, prompt, read_wrapper=False):
             if value["proposed_change_files"]
             else []
         )
-    elif role == "implementer":
-        value["completed_steps"] = [step["id"] for step in context["plan"]["steps"]]
-        manifest = json.loads((Path(context["task_file"]).parent / "manifest.json").read_text())
-        import hashlib
-
-        value["changed_files"] = []
-        for name in context["allowed_files"]:
-            path = Path(name)
-            for alias, root in context["roots"].items():
-                if Path(root) in path.parents:
-                    key = alias + "/" + str(path.relative_to(root))
-                    prior = (manifest.get(key) or "").rsplit(":", 1)[-1] or None
-                    current = (
-                        hashlib.sha256(path.read_bytes()).hexdigest() if path.exists() else None
-                    )
-                    if prior != current:
-                        value["changed_files"].append(name)
     return value
+
+
+def decision(value, role):
+    """The compact V2 decision an implementer or reviewer authors for a fixture value.
+
+    Evidence no outcome cites is attached to the first outcome, so it is still validated.
+    """
+    cited = {
+        claim["id"]: "{path}:{line_start}-{line_end}".format(**claim) for claim in value["evidence"]
+    }
+    outcomes = []
+    used = set()
+    for entry in value["coverage"]:
+        authored = dict(
+            requirement=entry["id"],
+            result=entry["outcome"],
+            evidence=[cited[name] for name in entry["evidence_ids"]],
+        )
+        if entry["outcome"] in REASONED:
+            authored["reason"] = entry["explanation"]
+        used.update(entry["evidence_ids"])
+        outcomes.append(authored)
+    if outcomes:
+        outcomes[0]["evidence"].extend(cited[name] for name in cited if name not in used)
+    gaps = value["blocking_gaps"] if value["status"] == "BLOCKED" else []
+    authored = dict(
+        schema_version=2, outcomes=outcomes, missing_inputs=list(gaps), summary=value["summary"]
+    )
+    if role != "implementer":
+        authored["findings"] = [
+            dict(requirement=entry["criterion"], evidence=[cited["E1"]], problem=entry["evidence"])
+            for entry in value.get("findings", [])
+        ]
+    return authored
 
 
 CHECK_PREFIXES = ("Jenkins check:", "Server check:")
@@ -136,10 +171,10 @@ def plan_text(value, context):
     lines += ["", "## Requirements"]
     evidence = {entry["id"]: entry for entry in value.get("evidence", [])}
     for entry in value.get("coverage", []):
-        label = "R{0}".format(requirements.index(entry["id"]) + 1)
+        label = "R{}".format(requirements.index(entry["id"]) + 1)
         lines.append(f"- {label} → {outcome(entry, steps, names, evidence, value)}")
     for step in steps:
-        lines += ["", "## {0}: {1}".format(names[step["id"]], step["action"].split(":")[0])]
+        lines += ["", "## {}: {}".format(names[step["id"]], step["action"].split(":")[0])]
         depends = ", ".join(names[name] for name in step.get("depends_on", [])) or "none"
         lines += [f"Depends on: {depends}", "Files: " + ", ".join(step["files"])]
         lines += ["Done when:", f"- {step['action']}", "Verify:"]
@@ -160,7 +195,7 @@ def outcome(entry, steps, names, evidence, value):
     if kind in ("satisfied", "contradicted"):
         cited = [evidence[name] for name in entry["evidence_ids"] if name in evidence]
         spans = ["{path}:{line_start}-{line_end}".format(**item) for item in cited]
-        return "{0}: {1}".format("done" if kind == "satisfied" else kind, ", ".join(spans))
+        return "{}: {}".format("done" if kind == "satisfied" else kind, ", ".join(spans))
     if kind == "deferred":
         return "runtime: " + (value.get("unverified") or ["Run the runtime check"])[0]
     return "gap: " + (value.get("blocking_gaps") or ["Missing input"])[0]

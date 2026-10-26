@@ -57,4 +57,4 @@ def view(run, state):
 def progress(entries):
     """Finished tasks out of all tasks, as shown in the run list."""
     count = sum(finished(task) for task in entries)
-    return "{0}/{1}".format(count, len(entries))
+    return f"{count}/{len(entries)}"

@@ -50,7 +50,7 @@ def start_next(launcher, run, automatic=False):
 def payload(run, state, entries, task):
     """Task form fields of one task run."""
     draft = history.task_draft(run)
-    title = "{0} · {1}: {2}".format(draft["title"], task[IDENTIFIER], task["title"])
+    title = "{} · {}: {}".format(draft["title"], task[IDENTIFIER], task["title"])
     done_when = "; ".join(task["done_when"])
     return dict(
         title=title[:TITLE_LIMIT],

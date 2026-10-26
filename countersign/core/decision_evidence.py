@@ -27,7 +27,8 @@ class Citations:
         claim = parsed(reference)
         span = (claim["path"], claim["line_start"], claim["line_end"])
         claim["path"] = self.resolve(*span)
-        identifier = "E{0}".format(len(self.entries) + 1)
+        number = len(self.entries) + 1
+        identifier = f"E{number}"
         self.entries.append(dict(claim, id=identifier))
         self.known[reference] = identifier
         return identifier

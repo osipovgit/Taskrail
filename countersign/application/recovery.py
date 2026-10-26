@@ -121,8 +121,8 @@ def write_evidence(destination, evidence):
     """
     head = [
         *HEADER,
-        "Source events: {0}".format(evidence["source"]),
-        "Omitted successful outputs due to size limit: {0}".format(evidence["omitted"]),
+        "Source events: {}".format(evidence["source"]),
+        "Omitted successful outputs due to size limit: {}".format(evidence["omitted"]),
     ]
     blocks = [evidence_block(*numbered) for numbered in enumerate(evidence["records"], 1)]
     index = index_lines(evidence["records"], blocks, len(head))

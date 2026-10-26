@@ -54,7 +54,7 @@ def token_totals(attempts):
 def new_stage(run, state, stage, attempt=NO_DETAILS):
     """Open the next numbered stage folder; attempt may name role, mode and model."""
     number = len(state["stages"]) + 1
-    folder = "{0:02d}-{1}".format(number, PHASES[stage])
+    folder = "-".join((format(number, "02d"), PHASES[stage]))
     run.joinpath(folder).mkdir()
     record = stage_record(number, folder, stage, attempt, state["results"])
     state["stages"].append(record)

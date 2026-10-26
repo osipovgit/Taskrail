@@ -55,9 +55,9 @@ def activity_detail(kind, part):
     if kind == "tool_use":
         return tool_detail(part)
     if kind == "text" and isinstance(part.get("text"), str):
-        return "Message: {0}".format(part["text"])
+        return "Message: {}".format(part["text"])
     if kind == "step_finish":
-        return "Model step finished: {0!s}".format(part.get("reason", UNKNOWN))
+        return "Model step finished: {!s}".format(part.get("reason", UNKNOWN))
     return FIXED_DETAILS.get(kind)
 
 
@@ -71,7 +71,7 @@ def tool_detail(part):
         return None
     target = arguments.get("filePath") or arguments.get("path") or ""
     tool = part.get("tool", UNKNOWN)
-    return "Tool {0}: {1} {2}".format(tool, state.get("status", UNKNOWN), target)
+    return "Tool {}: {} {}".format(tool, state.get("status", UNKNOWN), target)
 
 
 class Progress:
@@ -91,10 +91,8 @@ class Progress:
         if self.last:
             observed = datetime.fromisoformat(self.last["observed_at"])
             age = max(0, (datetime.now().astimezone() - observed).total_seconds())
-            activity = "waiting for next public opencode event; last: %s (%ds ago)" % (
-                self.last["detail"],
-                age,
-            )
+            detail = self.last["detail"]
+            activity = f"waiting for next public opencode event; last: {detail} ({int(age)}s ago)"
         else:
             activity = "waiting for the first public opencode event"
-        return "  [%s] waiting %.0fs; events=%d bytes; %s" % (clock(), elapsed, size, activity)
+        return f"  [{clock()}] waiting {elapsed:.0f}s; events={size} bytes; {activity}"

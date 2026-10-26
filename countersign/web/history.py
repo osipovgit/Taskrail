@@ -2,20 +2,11 @@
 
 import json
 import re
-from types import MappingProxyType
 
 from countersign.application import worktree_isolation
-from countersign.core import requirements, task_spec
+from countersign.core import task_markdown, task_spec
+from countersign.core.input_header import HEADER
 
-FIELDS = MappingProxyType(
-    {
-        "goal": "Goal",
-        "criteria": "Acceptance criteria",
-        "current_behavior": "Current behavior",
-        "entry_points": "Known entry points",
-        "constraints": "Additional constraints",
-    }
-)
 HISTORY = "\n## Conversation history\n"
 TASK_FILE = "00-input/task.md"
 GOAL = "goal"
@@ -43,45 +34,31 @@ def read_artifact(run, relative):
 
 
 class TaskDraft:
-    """Decode editable sections without discarding user instructions."""
+    """Editable fields of a task file, read like a new task of the same file."""
 
     def __init__(self, original):
-        header = re.search(r"(?ms)^```countersign-task\s*\n(.*?)^```\s*$", original)
+        header = HEADER.search(original)
         self.metadata = json.loads(header[1]) if header else {}
-        self.typed = None
-        if "task_spec" in self.metadata:
-            self.typed = task_spec.resolve(original, self.metadata)
         self.body = original[header.end() :] if header else original
-        fragments = re.split(r"(?m)^## ([^\n]+)\n", self.body)
-        titles = fragments[1::2]
-        paragraphs = fragments[2::2]
-        self.sections = dict(zip(titles, paragraphs))
-        self.preamble = re.sub(r"(?m)^# [^\n]*\n?", "", fragments[0]).strip()
+        self.typed = self.read(original)
+
+    def read(self, original):
+        """The resolved typed input, or None for an older Markdown file with other sections."""
+        try:
+            return task_spec.resolve(original, task_markdown.typed_input(original, self.metadata))
+        except ValueError:
+            if task_spec.TASK_SPEC in self.metadata:
+                raise
+            return None
 
     def fields(self):
-        """Preserve unknown sections as additional constraints."""
+        """The typed fields; a file the task reader rejects is offered whole as the Goal."""
         if self.typed is not None:
             return {field["name"]: field["text"] for field in self.typed["fields"]}
-        draft = {}
-        for key, title in FIELDS.items():
-            draft[key] = self.sections.get(title, "").strip()
-        draft[GOAL] = draft[GOAL] or self.body.strip()
-        draft["criteria"] = draft["criteria"] or "Address the Goal and report verification limits."
-        draft["constraints"] = self.constraints(draft["constraints"])
-        return draft
-
-    def constraints(self, original):
-        """Retain custom rules, including rules from imported task files."""
-        paragraphs = [original]
-        if self.sections.get("Goal") and self.preamble:
-            paragraphs.append(self.preamble)
-        for title, section in self.sections.items():
-            if title not in {*FIELDS.values(), *requirements.SERVER_TITLES}:
-                paragraphs.append(f"### {title}\n{section}")
-        return "\n\n".join(paragraphs).strip()
+        return dict(dict.fromkeys(task_spec.FIELDS, ""), goal=self.body.strip())
 
     def title(self, fallback):
-        """Find the original title without interpreting its content."""
+        """The title field, or the first `# ` line of a file the task reader rejects."""
         if self.typed is not None:
             return self.fields().get("title") or fallback
         for line in self.body.splitlines():

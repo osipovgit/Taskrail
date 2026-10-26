@@ -3,11 +3,13 @@
 import hashlib
 import json
 
+from countersign.core import prompt_texts
 from countersign.core.files import atomic_json
 from countersign.core.schema import SCHEMAS, require
 from countersign.infrastructure.agent_sync import atomic_write
 
 ROLES = ("planner", "implementer", "reviewer")
+CONTRACT = "00-input/contract.json"
 
 
 def validate_role_source(path):
@@ -44,19 +46,31 @@ def verify(run, state):
             raise ValueError("Saved agent instructions changed; restart required")
 
 
-def freeze_contract(run, policy, instructions, state):
-    """Only the first launch captures a contract; resumes retain those exact bytes."""
-    path = run / "00-input/contract.json"
+def freeze_contract(run, policy, state):
+    """Only the first launch captures a contract; resumes retain those exact bytes.
+
+    The contract holds the policy, every model-facing text and the response schemas;
+    a continuation adopts its frozen texts.
+    """
+    path = run / CONTRACT
     if not path.exists():
-        atomic_json(path, {"policy": policy, "instructions": instructions, "schemas": SCHEMAS})
+        atomic_json(path, dict(policy=policy, texts=prompt_texts.release(), schemas=SCHEMAS))
     signature = fingerprint(path.read_bytes())
     if state.get("contract_sha256", signature) != signature:
         raise ValueError("Saved instruction policy changed; restart required")
     state["contract_sha256"] = signature
     saved = json.loads(path.read_text())
-    if saved["schemas"] != SCHEMAS:
+    if saved["schemas"] != SCHEMAS or "texts" not in saved:
         raise ValueError("Saved contract differs from this release; restart for fresh validation")
+    prompt_texts.ACTIVE.adopt(saved["texts"])
     return saved
+
+
+def adopt_texts(run):
+    """Use the run's frozen texts, or this release's texts before the contract exists."""
+    path = run / CONTRACT
+    saved = json.loads(path.read_text()) if path.is_file() else {}
+    prompt_texts.ACTIVE.adopt(saved.get("texts") or prompt_texts.release())
 
 
 def imported_draft(run, stage):

@@ -27,12 +27,12 @@ def warning_text(warning):
 def announce_verdict(record, verdict):
     """Status, summary, findings and what remains unverified."""
     now = clock()
-    say("  [{0}] Result [{1}]: {2}".format(now, record["directory"], verdict[STATUS]))
+    say("  [{}] Result [{}]: {}".format(now, record["directory"], verdict[STATUS]))
     if record[SUMMARY]:
-        say("  {0}".format(record[SUMMARY].replace("\n", "\n  ")))
+        say("  {}".format(record[SUMMARY].replace("\n", "\n  ")))
     for finding in verdict.get("findings", []):
-        say(
-            "  Finding: {0} — {1}".format(finding.get("criterion", ""), finding.get("evidence", ""))
-        )
+        criterion = finding.get("criterion", "")
+        evidence = finding.get("evidence", "")
+        say(f"  Finding: {criterion} — {evidence}")
     for text in verdict.get("blocking_gaps", []) + verdict.get("unverified", []):
         say(f"  Not verified: {text}")

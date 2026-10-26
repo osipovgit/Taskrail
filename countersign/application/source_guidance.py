@@ -3,6 +3,7 @@
 from pathlib import Path
 
 from countersign.application import source_views, source_windows
+from countersign.core import protected_paths
 from countersign.core.paths import tool_paths
 
 VIEW_LIMIT = 5
@@ -11,9 +12,9 @@ VIEW_LIMIT = 5
 def inputs(config, plan, run):
     """Prepare only exact approved input paths, never discover files from task prose."""
     views = []
+    scope = (config["roots"], run, protected_paths.patterns(config))
     paths = dict.fromkeys(
-        source_path(reference, config["roots"], run)
-        for reference in source_windows.requests(config, plan)
+        source_path(reference, *scope) for reference in source_windows.requests(config, plan)
     )
     for path in filter(None, paths):
         view = prepared(path, run, config["roots"])
@@ -24,12 +25,12 @@ def inputs(config, plan, run):
     return views
 
 
-def source_path(reference, roots, run):
+def source_path(reference, roots, run, protected):
     """Resolve a source reference under the same access rules as source packets."""
     match = source_windows.REFERENCE.fullmatch(tool_paths(reference, roots))
     if match and source_views.directory(run) in Path(match[1]).parents:
         return Path(match[1])
-    return source_windows.source_path(match[1], roots) if match else None
+    return source_windows.source_path(match[1], roots, protected) if match else None
 
 
 def prepared(path, run, roots):

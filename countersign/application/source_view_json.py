@@ -25,7 +25,7 @@ def formatted(text):
         remaining -= len(piece.encode("utf-8"))
         require(remaining >= 0, "Formatted JSON exceeds the source view size limit")
         pieces.append(piece)
-    rendered = "{0}\n".format("".join(pieces))
+    rendered = "{}\n".format("".join(pieces))
     require(
         all(len(line) <= MAX_LINE for line in rendered.splitlines()),
         "A JSON scalar exceeds the source view line limit",
@@ -42,15 +42,15 @@ def fragments(text):
     """Change whitespace only outside quoted strings in an already validated document."""
     depth = 0
     for match in TOKENS.finditer(text):
-        token = match[0]
-        if token in {"}", "]"}:
+        symbol = match[0]
+        if symbol in {"}", "]"}:
             depth -= 1
-            yield "\n{0}".format("  " * depth)
-        yield token
-        if token in {"{", "["}:
+            yield "\n{}".format("  " * depth)
+        yield symbol
+        if symbol in {"{", "["}:
             depth += 1
-            yield "\n{0}".format("  " * depth)
-        elif token == ",":
-            yield "\n{0}".format("  " * depth)
-        elif token == ":":
+            yield "\n{}".format("  " * depth)
+        elif symbol == ",":
+            yield "\n{}".format("  " * depth)
+        elif symbol == ":":
             yield " "

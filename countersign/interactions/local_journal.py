@@ -66,3 +66,12 @@ def update(run, entry, outcome):
     journal = records(run)
     journal = [entry if prior[IDENTIFIER] == identity else prior for prior in journal]
     atomic_json(run / NAME, journal)
+
+
+def record_effects(run, identity, names):
+    """Add the source files an executed action changed to its journal entry."""
+    journal = records(run)
+    for entry in journal:
+        if entry[IDENTIFIER] == identity:
+            entry["effects"] = sorted(names)
+    atomic_json(run / NAME, journal)

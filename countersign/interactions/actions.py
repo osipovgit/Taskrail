@@ -4,27 +4,24 @@ import json
 import re
 from pathlib import Path
 
-from countersign.application import response_format
-from countersign.core import json_response
-from countersign.git import dispatch, requests
-from countersign.git.deadline import Deadline
+from countersign.core import json_response, prompt_texts, protected_paths
+from countersign.git import dispatch
 from countersign.interactions import (
     access,
     approval_policy,
+    command_effects,
     events,
-    jenkins,
-    local_actions,
     local_request,
-    remote,
+    request_routes,
     transcripts,
 )
 from countersign.interactions.clock import ApprovalPause
-from countersign.interactions.local import extract
 
-MAX_CORRECTIONS = 2
-NARRATION = 'Your last message did not follow the advertised response format, so nothing was executed. Executor requests are JSON objects, not XML or tool-call markup. A local command is {{"schema_version": 1, "status": "LOCAL_REQUEST", "cwd": "...", "argv": ["..."], "reason": "..."}}; a Git command is {{"schema_version": 1, "status": "GIT_REQUEST", "root": "...", "argv": ["..."], "reason": "..."}}. Follow the instructions in {0}. {1}'
-MISSING_PROGRAM = "{0} is not installed on the orchestrator host. Install it, then Allow to run this exact command; or Deny."
+PUSH_NOTICE = (
+    "Pushes the current commit to a remote repository. Allow all actions does not cover pushes."
+)
 REQUEST_NAME = re.compile(r"(?:GIT|LOCAL|ACTION|JENKINS)_REQUEST")
+CORRECTIONS = "corrections"
 
 
 class Actions:
@@ -43,18 +40,8 @@ class Actions:
             return self.access_action(outcome)
         if outcome["status"] != "OK":
             return None
-        response = run_git(self, outcome)
-        text = outcome["final_text"]
-        if response is None:
-            payload = extract(text)
-            response = (
-                remote.consume(self.session, text) if payload is None else run_local(self, payload)
-            )
-        if response is None:
-            response = jenkins.consume(self, text)
-        if response is None:
-            response = incomplete_request(self, text)
-        return response
+        routed = request_routes.route(self, outcome)
+        return routed or incomplete_request(self, outcome["final_text"])
 
     def git_action(self, outcome):
         """Use the existing policy and checkpointed Git executor."""
@@ -63,11 +50,23 @@ class Actions:
         if not effect:
             return None
         session.environment.update(expected=effect[0], git_before=effect[1])
-        session.state["git_effect"] = effect
-        entry = session.state["git_jobs"][-1]
-        path = Path(entry["output_file"])
-        text = path.read_text()
-        return transcripts.delivered(self.run, self.folder, path, text)
+        session.state[command_effects.SOURCE_EFFECT] = effect
+        path = Path(session.state["git_jobs"][-1]["output_file"])
+        return transcripts.delivered(self.run, self.folder, path, path.read_text())
+
+    def push_refusal(self, payload):
+        """Feedback when the operator does not approve a push; None to run it.
+
+        Only the implementer may push; the Git policy rejects anyone else's push.
+        """
+        writer = self.session.active[1]["role"] == "implementer"
+        if payload["argv"][0] != "push" or not writer:
+            return None
+        decision = self.approve(dict(payload, notice=PUSH_NOTICE), personal=True)
+        if decision["decision"] == "allow":
+            return None
+        reason = decision.get("alternative") or "declined."
+        return prompt_texts.text("feedback.push_declined", reason=reason)
 
     def access_action(self, outcome):
         """Declined reads return feedback; an approved scope remains read-only."""
@@ -78,39 +77,16 @@ class Actions:
             answer = access.apply_all(self.session.environment, calls)
         text = json.dumps(answer)
         events.append(self.folder, "permission", dict(calls=calls), text)
-        return f"{text}\nDo not repeat denied calls. Continue with the user decision or permitted alternatives."
+        return "{}\n{}".format(text, prompt_texts.text("feedback.access"))
 
-    def local_action(self, payload):
-        """Review exact argv and recheck sources immediately before execution."""
-        try:
-            local_request.checked_request(payload, self.session.environment["roots"])
-        except ValueError as error:
-            return self.local_result(payload, dict(status="REJECTED", reason=str(error)))
-        answer = local_actions.previous(self.run, payload)
-        if answer is not None:
-            return self.local_result(payload, answer)
-        decision = self.approve(dict(payload, **install_notice(payload)))
-        if decision["decision"] != "allow":
-            answer = local_actions.execute(self.run, self.folder, payload, {}, decision)
-            return self.local_result(payload, answer)
-        context = dict(self.session.environment)
-        context["automatic_read"] = decision.get("rule") == "read_only"
-        if local_request.missing_executable(payload["argv"], context["automatic_read"]):
-            reason = "Executable is still not installed on the orchestrator host"
-            return self.local_result(payload, dict(status="REJECTED", reason=reason))
-        self.session.check_sources()
-        context["timeout"] = self.session.clock.remaining()
-        answer = local_actions.execute(self.run, self.folder, payload, context, decision)
-        response = self.local_result(payload, answer)
-        self.session.check_sources()
-        return response
-
-    def approve(self, payload):
+    def approve(self, payload, personal=False):
         """Pause only approval time, with no deadline for the operator."""
         request = dict(stage=self.folder.name, **payload)
-        roots = self.session.environment["roots"]
+        environment = self.session.environment
+        protected = protected_paths.patterns(environment.get("config", {}))
+        scope = (environment["roots"], protected)
         with ApprovalPause(self.session):
-            return approval_policy.decision(self.run, request, self.session.state, roots)
+            return approval_policy.decision(self.run, request, self.session.state, scope, personal)
 
     def local_result(self, payload, answer):
         """Keep command results in the public transcript and evidence ledger."""
@@ -125,17 +101,15 @@ def incomplete_request(actions, text):
     answers in plan.md, so its final text is not narration; the plan check corrects it.
     """
     context = actions.session.context
-    if context["corrections"] >= MAX_CORRECTIONS:
+    if context[CORRECTIONS] >= request_routes.MAX_CORRECTIONS:
         return None
     if local_request.incomplete(text):
         feedback = local_request.correction(text)
     elif not_json(text) and narrated(actions, text):
-        feedback = NARRATION.format(
-            actions.folder / "request.md", response_format.finish(actions.session.active[1]["role"])
-        )
+        feedback = prompt_texts.text("feedback.narration", request=actions.folder / "request.md")
     else:
         return None
-    context["corrections"] += 1
+    context[CORRECTIONS] += 1
     events.append(actions.folder, "correction", dict(response=text), feedback)
     return feedback
 
@@ -158,41 +132,3 @@ def not_json(text):
     except ValueError:
         return True
     return False
-
-
-def install_notice(payload):
-    """Let the operator install a missing program and allow the same command."""
-    program = local_request.missing_executable(payload["argv"])
-    if program is None:
-        return {}
-    return dict(notice=MISSING_PROGRAM.format(program))
-
-
-def run_local(actions, payload):
-    """Keep a visible running call even during approval or process execution."""
-    event = events.begin(actions.folder, "local_command", payload)
-    try:
-        response = actions.local_action(payload)
-    except BaseException:
-        events.finish(actions.folder, event, "Interrupted; inspect local effects before retrying.")
-        raise
-    events.finish(actions.folder, event, response)
-    return response
-
-
-def run_git(actions, outcome):
-    """Show Git execution immediately and share the stage deadline across probes."""
-    payload = requests.extract(outcome["final_text"])
-    if payload is None:
-        return None
-    event = events.begin(actions.folder, "git", payload)
-    try:
-        with Deadline(actions.session.clock.remaining(), actions.run):
-            response = actions.git_action(outcome)
-    except BaseException:
-        events.finish(
-            actions.folder, event, "Interrupted; inspect the Git action journal before retrying."
-        )
-        raise
-    events.finish(actions.folder, event, response)
-    return response

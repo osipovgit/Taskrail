@@ -81,9 +81,11 @@ class DeploymentResetTests(unittest.TestCase):
     def test_release_and_supplied_settings_in_cache_are_protected(self):
         cache = self.home / ".cache/countersign"
         for protected in (cache / "release", cache / "settings.json"):
-            with self.subTest(protected=protected):
-                with self.assertRaisesRegex(ValueError, "outside reset directories"):
-                    prepare(self.home, [protected])
+            with (
+                self.subTest(protected=protected),
+                self.assertRaisesRegex(ValueError, "outside reset directories"),
+            ):
+                prepare(self.home, [protected])
 
     def test_generated_profile_inside_a_declared_source_is_protected(self):
         profile = self.profiles / "countersign-planner.md"
@@ -118,9 +120,11 @@ class DeploymentResetTests(unittest.TestCase):
         result = subprocess.run(
             [
                 "make",
+                "--old-file=tool-versions",
                 "lint-shell",
                 f"SHELL_SCRIPTS={valid} {invalid}",
                 "SHELLCHECK=/bin/true",
+                "SHFMT=/bin/true",
             ],
             cwd=BASE,
             capture_output=True,

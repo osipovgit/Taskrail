@@ -2,6 +2,7 @@
 
 from countersign.application import check_diagnostics, check_results
 from countersign.application.check_selection import selected as selected
+from countersign.core import protected_paths
 from countersign.interactions import approval_policy, local_actions
 
 
@@ -13,7 +14,7 @@ def execute(workflow, folder, check):
     outcome = local_actions.previous(workflow.run, request, context)
     if outcome is None:
         decision = approval_policy.decision(
-            workflow.run, request, workflow.state, workflow.config["roots"]
+            workflow.run, request, workflow.state, read_scope(workflow.config)
         )
         workflow.guard.verify("Source changed while waiting for verification approval")
         outcome = local_actions.execute(workflow.run, folder, request, context, decision)
@@ -31,6 +32,11 @@ def execute(workflow, folder, check):
     return outcome, recorded
 
 
+def read_scope(config):
+    """The roots and protected patterns of the automatic read-only route."""
+    return config["roots"], protected_paths.patterns(config)
+
+
 def request_for(check):
     """Render the exact local command before the operator sees its approval."""
     command = check["recipe"]["request"]
@@ -39,7 +45,7 @@ def request_for(check):
         schema_version=1,
         cwd=command["cwd"],
         argv=command["argv"],
-        reason="Configured verification check: {0}".format(check["spec"]["id"]),
+        reason="Configured verification check: {}".format(check["spec"]["id"]),
     )
 
 

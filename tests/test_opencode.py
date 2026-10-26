@@ -6,13 +6,20 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from countersign.core.source_claims import supports
-from countersign.infrastructure import environment, opencode_api, opencode_cli
+from countersign.core import protected_paths
+from countersign.core.source_claims import matching_positions
+from countersign.infrastructure import (
+    environment,
+    opencode_api,
+    opencode_cli,
+    opencode_server,
+    permission_check,
+)
 from countersign.infrastructure.agent_profile import make_profile
 from countersign.infrastructure.agent_sync import launch_settings
 from countersign.infrastructure.event_summary import parse_events
 from countersign.infrastructure.opencode_events import EventTranslator
-from countersign.infrastructure.permission_check import verify_launch, verify_permissions
+from countersign.infrastructure.permission_check import verify_launch
 from countersign.infrastructure.profile_rules import permissions
 from countersign.infrastructure.runner import run_agent
 
@@ -43,6 +50,9 @@ if args[:1] == ["api"]:
     calls = state / "api-calls"
     count = int(calls.read_text()) if calls.exists() else 0
     calls.write_text(str(count + 1))
+    if not count and os.environ.get("FAKE_SLOW_API"):
+        import time
+        time.sleep(float(os.environ["FAKE_SLOW_API"]))
     rules = [
         {"action": "*", "resource": "*", "effect": "allow"},
         {"action": "*", "resource": "*", "effect": "deny"},
@@ -268,7 +278,7 @@ class DenialTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
             script = root / "cli.py"
-            script.write_text("print({0!r})\n".format(json.dumps(event)))
+            script.write_text(f"print({json.dumps(event)!r})\n")
             prompt = root / "request.md"
             prompt.write_text("task")
             result = run_agent(
@@ -300,7 +310,7 @@ class PermissionListTests(unittest.TestCase):
                 action="allow",
             )
             listing = "build (primary)\n  []\nmanaged (primary)\n  " + json.dumps(
-                expected + [guard], indent=2
+                [*expected, guard], indent=2
             )
             script = root / "cli.py"
             script.write_text(
@@ -309,10 +319,49 @@ class PermissionListTests(unittest.TestCase):
                 + ")\n"
             )
             with mock.patch.dict(os.environ, {"XDG_DATA_HOME": str(root / "data")}):
-                actual = verify_permissions(
-                    [sys.executable, str(script)], root, "managed", expected, root / "log"
-                )
-            self.assertEqual(actual, expected + [guard])
+                launch = dict(command=[sys.executable, str(script)], agent_env_allow=())
+                actual = verify_launch(launch, root, "managed", expected, root / "log")
+                self.assertEqual(actual, [*expected, guard])
+                launch["tool_output_dir"] = str(root / "custom-cli/tool-output")
+                with self.assertRaisesRegex(ValueError, "differ"):
+                    verify_launch(launch, root, "managed", expected, root / "log")
+            elsewhere = dict(launch, tool_output_dir=str(root / "data/opencode/tool-output"))
+            self.assertEqual(
+                verify_launch(elsewhere, root, "managed", expected, root / "log"), actual
+            )
+
+    def test_slow_listing_blocks_with_a_clear_preflight_error(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            script = root / "cli.py"
+            script.write_text("import time\ntime.sleep(30)\n")
+            launch = dict(command=[sys.executable, str(script)], agent_env_allow=())
+            with (
+                mock.patch.object(permission_check, "LISTING_SECONDS", 0.2),
+                self.assertRaisesRegex(ValueError, "no model launched"),
+            ):
+                verify_launch(launch, root, "managed", [], root / "log")
+
+    def test_tool_output_dir_must_be_absolute(self):
+        with tempfile.TemporaryDirectory() as temp:
+            settings = dict(
+                opencode_version="1.x", tool_output_dir="~/.local/share/custom-cli/tool-output"
+            )
+            launch = launch_settings(settings, Path(temp))
+            self.assertEqual(
+                launch["tool_output_dir"], str(Path.home() / ".local/share/custom-cli/tool-output")
+            )
+            self.assertIsNone(
+                launch_settings(dict(opencode_version="1.x"), Path(temp))["tool_output_dir"]
+            )
+            for invalid in ("relative/tool-output", 3, ["/x"]):
+                with (
+                    self.subTest(invalid=invalid),
+                    self.assertRaisesRegex(ValueError, "tool_output_dir"),
+                ):
+                    launch_settings(
+                        dict(opencode_version="1.x", tool_output_dir=invalid), Path(temp)
+                    )
 
 
 class TranslationTests(unittest.TestCase):
@@ -381,6 +430,14 @@ class TranslationTests(unittest.TestCase):
         failing.translate(json.dumps(dict(type="error", error=dict(message="boom"))))
         self.assertIsNone(failing.finish(0))
         self.assertEqual(failing.translate("not json"), "not json")
+
+
+def supports(record, claim, excerpt):
+    """Every cited position is in the returned output of this file, with the excerpt's text."""
+    if record["input"]["filePath"] != claim["path"]:
+        return False
+    expected = dict(enumerate(excerpt.split("\n"), claim["line_start"]))
+    return len(matching_positions(record, expected)) == len(expected)
 
 
 class CitationTests(unittest.TestCase):
@@ -521,7 +578,7 @@ class SelectionTests(unittest.TestCase):
     def version(self, output):
         with tempfile.TemporaryDirectory() as temp:
             script = Path(temp) / "cli.py"
-            script.write_text("print({0!r})\n".format(output))
+            script.write_text(f"print({output!r})\n")
             return opencode_api.select("auto", [sys.executable, str(script)])
 
     def test_auto_trusts_only_an_exact_version_line(self):
@@ -567,7 +624,9 @@ class ProfileTests(unittest.TestCase):
             self.assertEqual(rules["read"][str(artifact)], "allow")
             self.assertEqual(rules["read"]["../run/request.md"], "allow")
             self.assertNotIn(str(artifact.parent) + "/*", rules["read"])
-            self.assertEqual(read[-2:], [(".env", "deny"), (".env.*", "deny")])
+            protected = [(pattern, "deny") for pattern in protected_paths.DEFAULT_PATTERNS]
+            self.assertEqual(read[-len(protected) :], protected)
+            self.assertIn(("*/.env", "deny"), protected)
 
     def test_subdirectory_root_never_allows_its_whole_worktree(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -600,8 +659,23 @@ class AdapterTests(unittest.TestCase):
             dict(permission="bash", pattern="*", action="deny"),
         ]
         log = self.root / "permissions.log"
-        verify_permissions(self.command, self.workspace, "managed", expected, log)
+        launch = dict(command=self.command, agent_env_allow=())
+        verify_launch(launch, self.workspace, "managed", expected, log)
         self.assertGreaterEqual(int((self.root / "api-calls").read_text()), 2)
+
+    def test_a_slow_configuration_reload_is_waited_for_within_the_budget(self):
+        fake = [sys.executable, str(self.root / "fake_v2.py")]
+        with mock.patch.dict(os.environ, {"FAKE_SLOW_API": "1.5"}):
+            with (
+                mock.patch.object(opencode_server, "READY_SECONDS", 0.5),
+                opencode_server.Server(fake, str(self.workspace)) as server,
+                self.assertRaisesRegex(RuntimeError, "did not load agent managed"),
+            ):
+                server.agents("managed")
+            (self.root / "api-calls").unlink()
+            with opencode_server.Server(fake, str(self.workspace)) as server:
+                self.assertEqual(server.agents("managed")[0]["id"], "managed")
+        self.assertEqual((self.root / "api-calls").read_text(), "2")
 
     def test_run_translates_events_and_keeps_the_raw_stream(self):
         prompt = self.root / "request.md"
@@ -627,7 +701,7 @@ class AdapterTests(unittest.TestCase):
         raw = (self.root / "attempt" / "events.raw.jsonl").read_text()
         self.assertIn('"partID": "prt_1"', raw)
         events = (self.root / "attempt" / "events.jsonl").read_text()
-        self.assertIn('"filePath": "{0}/a.py"'.format(self.workspace), events)
+        self.assertIn(f'"filePath": "{self.workspace}/a.py"', events)
 
     def test_turns_attach_to_the_stage_server(self):
         prompt = self.root / "request.md"

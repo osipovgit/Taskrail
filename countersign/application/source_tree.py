@@ -6,6 +6,7 @@ from pathlib import Path
 from countersign.core.files import stream_digest
 
 PERMISSIONS = 0o777
+NOTHING = frozenset()
 SKIP = frozenset(
     (
         ".git",
@@ -23,23 +24,25 @@ SKIP = frozenset(
 )
 
 
-def snapshot(roots, cache=None):
+def snapshot(roots, cache=None, ignored=NOTHING):
     """Map alias paths to content fingerprints; links are recorded, never followed."""
     known = {} if cache is None else cache
-    return {
-        label(alias, root, path): fingerprint(path, known)
-        for alias, root in roots.items()
-        for path in sources(Path(root))
-    }
+    found = {}
+    for alias, root in roots.items():
+        for path in sources(Path(root), Path(root), alias, ignored):
+            found[label(alias, root, path)] = fingerprint(path, known)
+    return found
 
 
-def sources(directory):
-    """Yield files and links below a directory, skipping generated and VCS folders."""
+def sources(directory, root, alias, ignored):
+    """Yield files and links below a directory, skipping generated, VCS and ignored ones."""
     for entry in listing(directory):
-        if not entry.is_dir() or entry.is_symlink():
+        name = label(alias, root, entry)
+        nested = entry.is_dir() and not entry.is_symlink()
+        if not nested and name not in ignored:
             yield entry
-        elif entry.name not in SKIP:
-            yield from sources(entry)
+        if nested and entry.name not in SKIP and f"{name}/" not in ignored:
+            yield from sources(entry, root, alias, ignored)
 
 
 def listing(directory):
@@ -73,7 +76,7 @@ def cached_fingerprint(path, cache):
     if previous and previous[0] == stamp:
         return previous[1]
     mode = stamp[-2] & PERMISSIONS
-    signature = "{0:o}:{1}".format(mode, stream_digest(path))
+    signature = ":".join((format(mode, "o"), stream_digest(path)))
     cache[str(path)] = (stamp, signature)
     return signature
 

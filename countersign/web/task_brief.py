@@ -66,7 +66,7 @@ def current_contract(task):
     """Checks and notes are essential input and cannot silently become a truncated pointer."""
     checks = "\n".join(task["checks"])
     notes = task.get("notes", "")
-    text = "Current task:\n{0}\nAction: {1}\nChecks:\n{2}\nNotes:\n{3}".format(
+    text = "Current task:\n{}\nAction: {}\nChecks:\n{}\nNotes:\n{}".format(
         task_line(task, task), task["goal"], checks, notes
     )
     if len(text) > CONTRACT_BUDGET:
@@ -78,7 +78,7 @@ def current_contract(task):
 
 def task_line(task, current):
     """One task: current, later by title only, or finished with its outcome."""
-    label = "{0}: {1}".format(task[IDENTIFIER], task["title"])
+    label = "{}: {}".format(task[IDENTIFIER], task["title"])
     if task is current:
         return f"- {label} (current task)"
     if task["status"] is None:

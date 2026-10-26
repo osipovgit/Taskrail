@@ -2,16 +2,26 @@
 
 | Owner | Responsibility |
 |---|---|
-| `countersign/agents/*.md` | Role-specific method; no duplicate schema or budget |
-| `application/policy.md` | Shared trust, paths, recovery and execution boundaries |
-| `application/stage-instructions.json` | Stage-specific objective |
-| `application/mode_rules.py` | Mode rule (Change code with its decomposition rules, Answer only, Design discussion, forced Split into tasks) from the task header, for browser and CLI tasks |
-| `core/result-schemas.json` | Exact machine-readable response shape |
+| `countersign/agents/*.md` | Role-specific method; no duplicate schema, policy or budget |
+| `application/policy.md` | Execution boundaries, in `## All stages` and per-stage sections; each stage reads only its sections |
+| `core/prompt-texts.json` | Every other model-facing text: stage and mode rules, plan format, response routing, executor routes, feedback and recovery notes |
+| `application/instruction-modules.json` | Reading and language guidance selected per stage |
+| `core/result-schemas.json` | Exact machine-readable response shapes, per role |
 | `00-input/` | Frozen task, role sources and effective contract for this run |
 
+Code selects texts by key and fills in `$placeholders`; it does not hold model-facing
+prose. `00-input/contract.json` freezes the policy, the prompt texts and the schemas on the
+first launch, and a continuation uses that frozen copy, so an update never changes the
+instructions of a running task. A continuation is refused when the release's schemas
+differ from the frozen ones.
+
+A request has three parts: `# Task` with the task fields under readable headings and a
+label before each requirement block (`[R1]`, `[R2 runtime]`, `[R3 constraint]`, placed at
+the requirement's own field and offset), the stage's instructions, and a compact Context
+JSON. Stable requirement IDs stay server-side; the model uses labels.
+
 Implementers and reviewers author compact decisions with `"schema_version": 2`.
-The server derives canonical stored results with version 1; an explicit adapter also
-accepts historical version 1 model responses under the original validation gates.
+The server derives canonical stored results with version 1.
 Executor requests retain version 1. Unknown wire versions and unsupported run or
 checkpoint versions are rejected. These responses contain one JSON object. The planner writes
 `plan.md` and ends with `DONE`; its executor requests still use JSON. Continuations
@@ -24,8 +34,9 @@ metadata are labels; the engine resolves them.
 
 Every stored final result contains status, summary, coverage, evidence, unverified
 and blocking_gaps. Requirement IDs belong to substantive task blocks and are
-assigned by the server. Titles, standard section headings, current behavior and
-known entry points remain context rather than separate acceptance obligations.
+assigned by the server. Titles, section headings, single label lines ending with
+`:`, current behavior and known entry points remain context rather than separate
+acceptance obligations.
 The prompt shows the task once, with labels before its requirement blocks;
 the original task snapshot remains verbatim. Typed fields provide the requirement
 boundaries; their Markdown headings cannot change authority. Only authenticated
@@ -178,7 +189,9 @@ untouched response.
 ## Plan file
 
 The planner's only writable file is `<run>/plan.md`. The server writes its template on
-the first attempt (one `R<n> →` line per requirement) and reads it when the session
+the first attempt (one `R<n> →` line per requirement, with `runtime` already filled in
+for runtime requirements and, when the run may change code, `all tasks` for global
+constraints) and reads it when the session
 ends; the file survives an interrupted or overflowing session. After a context
 stop, a fully validated ready proposal advances to independent plan review; an
 invalid one supplies exact validation errors to the bounded recovery attempt.
@@ -200,12 +213,14 @@ Summary: one or two sentences (an answer or design document goes in ## Answer)
 ## Requirements
 - R1 → T1 [roles/ntp], T2 [roles/web]
 - R2 → done: project/README.md:12-18
-- R3 → runtime: ansible-playbook --check site.yml passes
-- R4 → gap: the Jenkins job name is not in the task
+- R3 → runtime
+- R4 → all tasks
+- R5 → gap: the Jenkins job name is not in the task
 
 ## T1: Fix lint in roles/ntp
 Depends on: none
 Files: project/roles/ntp/tasks/main.yml, project/roles/ntp/defaults/main.yml (new)
+Read: project/roles/ntp/tasks/main.yml:1-40, project/.ansible-lint:1-12
 Done when:
 - ansible-lint roles/ntp reports no var-naming findings
 Verify:
@@ -216,6 +231,12 @@ Notes: optional pointers for the implementer
 - Jenkins check: ci/ansible-lint: BRANCH=main passes
 - Server check: run ansible-playbook --check site.yml on the controller
 ```
+
+`runtime` may be followed by `: <check>`; without it the requirement text is the check.
+`all tasks` makes the requirement an obligation of every task (it needs at least one
+task). `Read:` lists `path:from-to` ranges the planner read; they are validated like any
+citation and delivered as source to the task's implementer, so a split task, which is
+implemented directly from the reviewed plan, starts with the planner's findings.
 
 Keys accept Markdown emphasis and list fields accept bullet styles. Field values
 retain literal underscores, backticks and command text; a complete code wrapper
@@ -256,12 +277,28 @@ unchanged. See [access](access.md) and [Git access](git-access.md).
 {"schema_version":1,"status":"LOCAL_REQUEST","cwd":"/absolute/declared/root","argv":["python3","-m","unittest"],"reason":"Run the unit tests without changing source"}
 ```
 
-A LOCAL_REQUEST may be surrounded by prose or a Markdown fence; no field or
-argument is changed. Multiple objects, duplicate keys, arrays and malformed JSON
-are rejected. `cwd` is a declared root or an existing directory inside one. A
+Every request type is recognized the same way (`interactions/request_envelope.py`):
+exactly one JSON object whose `status` names a request, with prose or a Markdown fence
+around it ignored; no field or argument is changed. Only a Git request that can change
+state must be the entire response. A request with a wrong shape (an unknown or missing
+field, a wrong version, an empty reason, a wrapped Git write) runs nothing: the same
+session is told what to fix, at most twice per session, and after that the turn ends as
+an invalid result. Multiple objects, duplicate keys and malformed JSON are not requests.
+`cwd` is a declared root or an existing directory inside one. A
 response with `cwd` and `argv` but without `"status": "LOCAL_REQUEST"` or
 `schema_version` executes nothing; the same session is told what is missing, at most
-twice per stage. A turn that ends without its valid stage result or an executor
+twice per stage. Planner and reviewer stages cannot request `--fix`, `--write`,
+in-place or `sed -i` options; such a request is rejected before approval.
+
+An approved command may still change files. Files Git ignores (caches, reports, build
+output) are not source and are never fingerprinted. Other changed files are adopted
+into the run's source state, recorded with the action in `local-actions.json` and the
+run state, listed in the report under **Changed by approved commands**, and named to the
+session, which is told whether it may keep them. Git metadata changed by a command
+still stops the run. A push through GIT_REQUEST waits for the operator's personal
+decision; **Allow all actions** does not cover it.
+
+A turn that ends without its valid stage result or an executor
 request (for example, only announcing its next step or using tool-call markup) gets
 a reminder of the stage-specific format in the same session, within the same limit,
 before repair is tried. Every continuation also names the stage
@@ -346,8 +383,8 @@ These bindings are reviewed with the plan. The engine materializes a closed
 `check_specs` record per selection: `id`, `recipe_id`, assigned runtime `criteria`,
 `phase` and empty `parameters`. Task headers may supply the same typed records.
 Tasks cannot introduce recipes, override commands or supply parameter overrides.
-Legacy free-text verification remains explicit deferred work where no configured
-recipe is selected. The existing approval route still decides whether an exact
+Written verification remains explicit deferred work where no configured recipe is
+selected. The existing approval route still decides whether an exact
 configured request may execute; selection grants no permission. Local checks run
 after edits, Jenkins validation uses its delivery phase, and server checks require
 the operator's confirmation of the changes.

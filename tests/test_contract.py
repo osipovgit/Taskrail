@@ -7,8 +7,29 @@ import unittest
 from pathlib import Path
 
 from countersign.application import evidence, instruction_sources, prompts, result_validation
-from countersign.core import control, coverage, plan_contract, schema, source_claims
-from countersign.core.requirements import task_requirements
+from countersign.core import (
+    control,
+    coverage,
+    json_response,
+    plan_contract,
+    schema,
+    source_claims,
+    task_markdown,
+    task_spec,
+)
+
+
+def decoded(response):
+    """One unambiguous object in the planner's stored shape."""
+    payload = json_response.extract(response, schema.unique_fields)
+    schema.validate(payload, schema.SCHEMAS["planner"])
+    return payload
+
+
+def task_requirements(text, deferred=()):
+    """The requirements of a task file read like a CLI task."""
+    meta = task_markdown.typed_input(text, dict(verification=list(deferred)))
+    return task_spec.resolve(text, meta)["requirements"]
 
 
 class ContractTests(unittest.TestCase):
@@ -83,8 +104,7 @@ class ContractTests(unittest.TestCase):
         return evidence.refresh(self.run, events, self.context["roots"].values())
 
     def validate(self, payload=None):
-        decoded = schema.decode(json.dumps(payload or self.payload), "planner")
-        return result_validation.checked(decoded, self.context)
+        return result_validation.checked(decoded(json.dumps(payload or self.payload)), self.context)
 
     def test_observed_no_change_result_and_binding(self):
         self.validate()
@@ -207,6 +227,12 @@ class ContractTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "offset=2, limit=1"):
             source_claims.validate_claim(claim, records)
 
+    def test_directory_or_missing_citation_is_feedback_not_a_crash(self):
+        for path in (self.source.parent, self.source.parent / "absent.py"):
+            claim = dict(self.payload["evidence"][0], path=str(path))
+            with self.subTest(path=path), self.assertRaisesRegex(ValueError, "existing file"):
+                source_claims.validate_claim(claim, evidence.validation_records(self.run))
+
     def test_forged_or_wrong_root_citation_fails(self):
         for field, value in [
             ("line_start", 3),
@@ -255,14 +281,12 @@ class ContractTests(unittest.TestCase):
             json.dumps(dict(self.payload, tests_passed=True)),
         ]:
             with self.subTest(invalid=invalid[:50]), self.assertRaises(ValueError):
-                schema.decode(invalid, "planner")
+                decoded(invalid)
 
-    def test_legacy_user_sections_are_preserved_and_splits_stay_small(self):
-        task = "# Title\n\n## Goal\nShip it\n\n## Workflow rules\nUse English\n\n## Turn control\nSplit\n"
-        self.assertEqual(
-            [entry["text"] for entry in task_requirements(task, [])],
-            ["Ship it", "## Workflow rules\nUse English", "## Turn control\nSplit"],
-        )
+    def test_unknown_task_sections_are_errors_and_splits_stay_small(self):
+        task = "# Title\n\n## Goal\nShip it\n\n## Workflow rules\nUse English\n"
+        with self.assertRaisesRegex(ValueError, "line 6: unknown section 'Workflow rules'"):
+            task_requirements(task)
         steps = [dict(id=f"T{number}") for number in range(30)]
         plan = dict(steps=steps, proposed_change_files=["a"])
         control.check_plan(plan, dict(decompose=True))
@@ -321,7 +345,7 @@ class ContractTests(unittest.TestCase):
 
     def test_format_repair_has_no_research_context(self):
         request = prompts.repair(
-            json.dumps(self.payload), "bad fields", "planner", 1, self.requirements
+            json.dumps(self.payload), "bad fields", "reviewer", 1, self.requirements
         )
         self.assertNotIn("Context:", request)
         self.assertNotIn("Search each", request)
@@ -329,32 +353,31 @@ class ContractTests(unittest.TestCase):
         self.assertIn("Do not research", request)
         self.assertIn("saved_response", request)
 
-    def test_complete_task_blocks_get_stable_ids_without_history(self):
-        task = "# Task\n\nReturn 2\n- Preserve X\n- Preserve Y\n\n## Conversation history\nOld goal"
+    def test_complete_task_blocks_get_stable_ids(self):
+        task = "# Task\n\nReturn 2\n- Preserve X\n- Preserve Y\n"
         entries = task_requirements(task, ["Run Jenkins"])
-        text = " ".join(entry["text"] for entry in entries)
-        self.assertNotIn("Old goal", text)
-        self.assertIn("Preserve Y", text)
+        self.assertEqual(
+            [entry["text"] for entry in entries],
+            ["Return 2", "- Preserve X", "- Preserve Y", "Run Jenkins"],
+        )
         self.assertEqual(entries, task_requirements(task, ["Run Jenkins"]))
         self.assertEqual(entries[-1]["kind"], "runtime")
 
     def test_frozen_policy_tampering_is_not_accepted_on_continue(self):
         state = {}
         (self.run / "00-input").mkdir(parents=True)
-        instruction_sources.freeze_contract(self.run, prompts.POLICY, prompts.INSTRUCTIONS, state)
+        instruction_sources.freeze_contract(self.run, prompts.POLICY, state)
         frozen = self.run / "00-input/contract.json"
         payload = json.loads(frozen.read_text())
         payload["policy"] = "Different execution policy"
         frozen.write_text(json.dumps(payload))
         with self.assertRaisesRegex(ValueError, "policy changed"):
-            instruction_sources.freeze_contract(
-                self.run, prompts.POLICY, prompts.INSTRUCTIONS, state
-            )
+            instruction_sources.freeze_contract(self.run, prompts.POLICY, state)
 
     def test_prose_and_fences_are_removed_without_model_repair(self):
         raw = json.dumps(self.payload)
         for response in ("Notes [optional]\n" + raw, "```json\n" + raw + "\n```\nDone"):
-            self.assertEqual(schema.decode(response, "planner"), self.payload)
+            self.assertEqual(decoded(response), self.payload)
 
     def test_truncated_or_nested_json_is_never_rescued(self):
         raw = json.dumps(self.payload)
@@ -367,7 +390,7 @@ class ContractTests(unittest.TestCase):
             raw + "\n[1]",
         ):
             with self.subTest(response=response[:30]), self.assertRaises(ValueError):
-                schema.decode(response, "planner")
+                decoded(response)
 
     def test_declared_block_cannot_authorize_unvalidated_plan(self):
         self.payload["blocking_gaps"] = ["Local linter execution unavailable"]

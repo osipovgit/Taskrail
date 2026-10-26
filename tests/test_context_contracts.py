@@ -5,12 +5,11 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from countersign.application import execution_evidence, execution_wait, prompts, response_format
+from countersign.application import execution_wait, prompts, response_format
+from countersign.core import prompt_texts, task_markdown, task_spec
 from countersign.core.files import atomic_json
 from countersign.core.plan_document import payload
-from countersign.core.requirements import labelled_task, task_requirements
 from countersign.infrastructure import artifact_access
-from countersign.infrastructure.agent_profile import RUNTIME_RULES
 from countersign.interactions import transcripts
 
 PLAN = """**Decision:** split
@@ -77,15 +76,18 @@ class ContextContractTests(unittest.TestCase):
             response_format.continuation("planner", "/run/request.md"),
             response_format.correction("planner", "missing R1"),
         ):
-            self.assertIn("plan.md", text)
-            self.assertIn("end with DONE", text)
             self.assertNotIn("corrected final JSON", text)
-        self.assertNotIn("attached JSON contract", RUNTIME_RULES)
+        continuation = response_format.continuation("planner", "/run/request.md")
+        self.assertIn("plan.md", continuation)
+        self.assertIn("reply DONE", continuation)
+        self.assertIn("only the windows named in the feedback", continuation)
+        self.assertIn("formatted source view", continuation)
+        self.assertNotIn("attached JSON contract", prompt_texts.text("profile.runtime_rules"))
         self.assertIn("one JSON object", response_format.finish("reviewer"))
         feedback = response_format.correction("planner", "no matching observed read")
-        self.assertIn("only the missing windows", feedback)
-        self.assertIn("only if its content needs correction", feedback)
-        self.assertIn("formatted source view", feedback)
+        self.assertIn("no matching observed read", feedback)
+        self.assertNotIn("corrections", feedback)
+        self.assertIn('"corrections"', response_format.correction("reviewer", "bad"))
 
     def test_requirements_exclude_navigation_but_task_keeps_all_context(self):
         text = (
@@ -93,7 +95,9 @@ class ContextContractTests(unittest.TestCase):
             "- Return 400.\n\n## Current behavior\nReturns 500.\n\n"
             "## Known entry points\nsrc/api.py\n\n## Additional constraints\nKeep Unicode.\n"
         )
-        entries = task_requirements(text, ["Run the integration check"])
+        meta = task_markdown.typed_input(text, dict(verification=["Run the integration check"]))
+        spec = task_spec.resolve(text, meta)
+        entries = spec["requirements"]
         self.assertEqual(
             [entry["text"] for entry in entries],
             [
@@ -103,8 +107,13 @@ class ContextContractTests(unittest.TestCase):
                 "Run the integration check",
             ],
         )
-        shown = labelled_task(text, entries)
-        for expected in ("Returns 500.", "src/api.py", "# API", "Run the integration check"):
+        shown = task_spec.prompt_text(spec, entries)
+        for expected in (
+            "Returns 500.",
+            "src/api.py",
+            "## Title\nAPI",
+            "Run the integration check",
+        ):
             self.assertIn(expected, shown)
         root = self.run / "source"
         root.mkdir()
@@ -115,7 +124,7 @@ class ContextContractTests(unittest.TestCase):
             checks=[],
             preimages={},
         )
-        config = dict(task_text=text, roots={"project": root})
+        config = dict(task_text=text, task_spec=spec, roots={"project": root})
         request = prompts.make_request(config, ("planner", None, [], None), state, self.run)
         self.assertEqual(request.count("Reject invalid names."), 1)
         self.assertEqual(request.count("Run the integration check"), 1)
@@ -147,12 +156,13 @@ class ContextContractTests(unittest.TestCase):
 
     def test_labels_preserve_multiline_requirement_bytes(self):
         block = "Preserve __name__ identifiers\r\nand `shell` quotes."
-        text = f"# Goal\r\n\r\n{block}\r\n"
-        requirements = task_requirements(text, [])
+        text = f"## Goal\r\n\r\n{block}\r\n"
+        spec = task_spec.resolve(text, task_markdown.typed_input(text, {}))
+        requirements = spec["requirements"]
         self.assertEqual(requirements[0]["text"], block)
-        shown = labelled_task(text, requirements)
+        shown = task_spec.prompt_text(spec, requirements)
         self.assertEqual(shown.count(block), 1)
-        self.assertTrue(shown.endswith(f"{block}\r\n"))
+        self.assertTrue(shown.endswith(f"[R1]\n{block}"))
 
     def test_remote_delivery_is_delta_only_and_snapshots_are_immutable(self):
         entries = [
@@ -172,11 +182,9 @@ class ContextContractTests(unittest.TestCase):
         self.assertIn("output-9", response)
         self.assertLess(len(response), 6000)
         output = snapshot.with_suffix(".1-output.txt")
-        self.assertIn(str(output), execution_evidence.confirmed_paths(self.run))
         execution_wait.resume(self.run, {"attempts": []})
         self.assertEqual(snapshot.read_bytes(), saved)
         output.write_text("changed")
-        self.assertNotIn(str(output), execution_evidence.confirmed_paths(self.run))
         with self.assertRaisesRegex(ValueError, "snapshot changed"):
             execution_wait.resume(self.run, {"attempts": []})
 

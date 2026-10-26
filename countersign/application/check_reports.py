@@ -1,17 +1,16 @@
 """Structured test report parsing, separate from execution and model verdicts."""
 
 from types import MappingProxyType
-from xml.etree import ElementTree
+
+from countersign.application import report_xml
 
 COUNTS = MappingProxyType(dict(passed="passCount", failed="failCount", skipped="skipCount"))
 BUILD_RESULTS = frozenset(("SUCCESS", "FAILURE", "UNSTABLE", "ABORTED", "NOT_BUILT"))
 
 
 def junit(text):
-    """Parse test cases without accepting DTDs or externally defined entities."""
-    if "<!DOCTYPE" in text.upper() or "<!ENTITY" in text.upper():
-        raise ValueError("DTD is not a test report")
-    document = ElementTree.fromstring(text)
+    """Parse test cases; the parser refuses DTDs, so no entity can be declared or expanded."""
+    document = report_xml.tree(text)
     if document.tag not in {"testsuite", "testsuites"}:
         raise ValueError("Expected JUnit report")
     cases = list(document.iter("testcase"))

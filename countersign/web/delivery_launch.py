@@ -12,7 +12,6 @@ from types import MappingProxyType
 
 from countersign.executor import client, protocol
 from countersign.web import (
-    delivery_checks,
     delivery_payload,
     delivery_state,
     epic_launch,
@@ -82,11 +81,8 @@ def start_phase(launcher, run, name):
             epic.setdefault(PHASES, {})[name] = UNAVAILABLE[name]
             return dict(id=run.name, status="PHASE_RECORDED")
         state = json.loads(history.read_artifact(run, INDEX))
-        checks = delivery_checks.checks(run, state)
         link = partial(epic_record.link, run, epic, (PHASES, name))
-        return launcher.submit(
-            delivery_payload.payload(run, state, name, checks), before_start=link
-        )
+        return launcher.submit(delivery_payload.payload(run, state, name), before_start=link)
 
 
 def confirm(launcher, run):

@@ -7,12 +7,11 @@ and large or binary files are listed without their content.
 
 import os
 import re
-from fnmatch import fnmatch
 from pathlib import Path
 from types import MappingProxyType
 
+from countersign.core import protected_paths
 from countersign.git import process
-from countersign.infrastructure.artifact_access import PROTECTED_READ_PATTERNS
 
 SKIPPED = frozenset(
     (".git", "node_modules", ".venv", "venv", "__pycache__", ".tox", ".idea", "dist", "build")
@@ -24,6 +23,14 @@ LANDMARK_CHARACTERS = 60
 YAML_TASK = re.compile(r"(?m)^\s*- name:\s*(.+)$")
 YAML_KEY = re.compile(r"(?m)^([A-Za-z_][\w.-]*):")
 YAML = (YAML_TASK, YAML_KEY)
+GROOVY_MODIFIERS = r"(?m)^[ \t]*(?:(?:public|private|protected|static|final|abstract)[ \t]+)*"
+GROOVY = (
+    re.compile(r"(?m)^[ \t]*stage[ \t]*\([ \t]*['\"]([^'\"\n]+)['\"]"),
+    re.compile(rf"{GROOVY_MODIFIERS}(?:class|interface|enum|trait)[ \t]+(\w+)"),
+    re.compile(rf"{GROOVY_MODIFIERS}(?:def|void)[ \t]+(\w+)[ \t]*\("),
+)
+# Dockerfile and Jenkinsfile have no suffix; variants such as Dockerfile.prod match too.
+NAMED_FILES = frozenset(("dockerfile", "jenkinsfile"))
 LANDMARKS = MappingProxyType(
     {
         ".py": (re.compile(r"(?m)^\s*(?:async\s+)?(?:def|class)\s+(\w+)"),),
@@ -32,16 +39,43 @@ LANDMARKS = MappingProxyType(
         ".md": (re.compile(r"(?m)^(#{1,3}\s+.+)$"),),
         ".sh": (re.compile(r"(?m)^(?:function\s+)?([\w-]+)\s*\(\)"),),
         ".js": (re.compile(r"(?m)^(?:export\s+)?(?:async\s+)?function\s+(\w+)"),),
+        ".ts": (
+            re.compile(
+                r"(?m)^(?:export[ \t]+)?(?:default[ \t]+)?(?:declare[ \t]+)?"
+                r"(?:abstract[ \t]+)?(?:async[ \t]+)?"
+                r"(?:function\*?|class|interface|type|enum|namespace)[ \t]+(\w+)"
+            ),
+            re.compile(r"(?m)^export[ \t]+(?:const|let)[ \t]+(\w+)"),
+        ),
+        ".java": (
+            re.compile(
+                r"(?m)^[ \t]*(?:(?:public|protected|private|abstract|final|static|sealed)"
+                r"[ \t]+)*(?:class|interface|enum|record|@interface)[ \t]+(\w+)"
+            ),
+            re.compile(
+                r"(?m)^[ \t]+(?:public|protected|private)[ \t]+[^=;(){}\n]*?\b(\w+)[ \t]*\("
+            ),
+        ),
+        ".go": (re.compile(r"(?m)^(?:func[ \t]+(?:\([^)\n]*\)[ \t]*)?|type[ \t]+)(\w+)"),),
+        ".tf": (
+            re.compile(
+                r'(?m)^((?:resource|data|module|variable|output|provider)(?:[ \t]+"[^"\n]*"){1,2})'
+            ),
+        ),
+        ".j2": (re.compile(r"\{%-?\s*(?:block|macro)\s+(\w+)"),),
+        ".groovy": GROOVY,
+        "jenkinsfile": GROOVY,
+        "dockerfile": (re.compile(r"(?im)^[ \t]*((?:FROM|ENTRYPOINT|CMD)[ \t]+.+)$"),),
     }
 )
 
 
-def listing(root):
+def listing(root, protected=protected_paths.DEFAULT_PATTERNS):
     """Paths of the root's source files relative to it, sorted; protected ones left out."""
     names = git_files(root)
     if names is None:
         names = walked(root)
-    return sorted(name for name in names if not protected(name))
+    return sorted(name for name in names if not protected_name(name, protected))
 
 
 def git_files(root):
@@ -68,9 +102,9 @@ def directory_files(root, directory, folders, files):
     return [base.joinpath(file_name).as_posix() for file_name in files]
 
 
-def protected(name):
-    """A file the model may never read, such as .env."""
-    return any(fnmatch(f"/{name}", pattern) for pattern in PROTECTED_READ_PATTERNS)
+def protected_name(name, protected=protected_paths.DEFAULT_PATTERNS):
+    """A file the model may never read, such as .env, named relative to its root."""
+    return protected_paths.matches(f"/{name}", protected)
 
 
 def described(path):
@@ -82,13 +116,16 @@ def described(path):
     if b"\x00" in raw[:BINARY_PROBE]:
         return None
     text = raw.decode("utf-8", errors="replace")
-    marks = landmarks(path.suffix.lower(), text)
+    marks = landmarks(path.name, text)
     return len(text.splitlines()), marks, text
 
 
-def landmarks(suffix, text):
-    """The first task names, keys, definitions or headings of a file, clipped."""
+def landmarks(name, text):
+    """The first task names, keys, definitions, stages or headings of a file, clipped."""
+    lowered = name.lower()
+    base = lowered.partition(".")[0]
+    kind = base if base in NAMED_FILES else Path(lowered).suffix
     marks = []
-    for pattern in LANDMARKS.get(suffix, ()):
+    for pattern in LANDMARKS.get(kind, ()):
         marks.extend(pattern.findall(text))
     return [mark.strip()[:LANDMARK_CHARACTERS] for mark in marks[:LANDMARK_LIMIT]]

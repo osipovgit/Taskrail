@@ -36,10 +36,11 @@ def close(workflow):
         state["report_error"] = str(error)
     state["finished_at"] = clock()
     design_document(workflow)
+    record_answer(workflow)
     report(workflow.run, state)
     for profile in workflow.runtime["profiles"]:
         profile.unlink(missing_ok=True)
-    say("Status: {0}\nReport: {1}".format(state[STATUS], workflow.run / "report.md"))
+    say("Status: {}\nReport: {}".format(state[STATUS], workflow.run / "report.md"))
 
 
 def refresh_changes(workflow):
@@ -53,10 +54,23 @@ def refresh_changes(workflow):
 
 def design_document(workflow):
     """A finished design discussion leaves its reviewed document as design.md."""
+    summary = reviewed_summary(workflow, "design")
+    if summary is not None:
+        workflow.run.joinpath(DESIGN_FILE).write_text(f"{summary}\n", encoding="utf-8")
+
+
+def record_answer(workflow):
+    """A finished question keeps its reviewed answer in the run index and report."""
+    summary = reviewed_summary(workflow, "read_only")
+    if summary is not None:
+        workflow.state["answer"] = summary
+
+
+def reviewed_summary(workflow, flag):
+    """The approved plan's summary when a run of this mode finished without edits."""
     plan = workflow.state["results"].get("plan")
     finished = workflow.state[STATUS] == "NO_CHANGES_REQUIRED"
-    if not workflow.config.get("design") or not finished or not plan:
-        return
+    if not workflow.config.get(flag) or not finished or not plan:
+        return None
     plan_json = workflow.run.joinpath(plan).read_text(encoding="utf-8")
-    summary = json.loads(plan_json)["summary"]
-    workflow.run.joinpath(DESIGN_FILE).write_text(f"{summary}\n", encoding="utf-8")
+    return json.loads(plan_json)["summary"]

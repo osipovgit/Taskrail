@@ -5,7 +5,6 @@ import unittest
 from pathlib import Path
 
 from countersign.application.history_file import INLINE_BYTES, MARKER, prompt_task
-from countersign.core.requirements import task_requirements
 
 CURRENT = "```countersign-task\n{}\n```\n# Next\n\n## Goal\nReturn 3\n\n## Current turn\nRule\n"
 
@@ -53,7 +52,6 @@ class HistoryFileTests(unittest.TestCase):
         self.assertIn("Return 2\nSecond goal line", inline)
         self.assertIn("Summary of turn 2", inline)
         self.assertNotIn("+new 2 0", inline)
-        self.assertEqual(task_requirements(prompt, []), task_requirements(text, []))
 
     def test_index_names_the_lines_of_each_turn_and_section(self):
         sizes = (900, 30)

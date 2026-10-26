@@ -3,9 +3,21 @@
 import re
 from pathlib import Path
 
+from countersign.application import task_scope
+from countersign.core import protected_paths
+
 ROOTS = "roots"
 ALIAS = re.compile("[A-Za-z0-9_-]+")
 WILDCARDS = frozenset("*?\n\r")
+
+
+def declared_access(meta, task, options):
+    """Declared roots, protected path entries and a child's writable task scope."""
+    roots = declared_roots(meta, task)
+    protected = protected_paths.configured(options)
+    patterns = protected_paths.read_patterns(protected)
+    scope = task_scope.configured(meta, roots, patterns)
+    return {ROOTS: roots, protected_paths.KEY: protected, task_scope.KEY: scope}
 
 
 def declared_roots(meta, task):

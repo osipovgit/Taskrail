@@ -4,6 +4,29 @@ The CLI accepts a UTF-8 Markdown file with an optional fenced `countersign-task`
 JSON header. The rest of the Markdown describes the task. The browser form
 generates this file; users do not need to write JSON.
 
+## Markdown task files
+
+After the header comes an optional `# Title` line, then either plain text, which is
+the whole Goal, or these `##` sections, each at most once:
+
+| Section | Field |
+|---|---|
+| `## Goal` | Required. Expected behavior and its purpose |
+| `## Acceptance criteria` | Observable conditions for a satisfactory result |
+| `## Current behavior` | Context: the problem and errors, if known |
+| `## Known entry points` | Context: suggested files |
+| `## Constraints` or `## Additional constraints` | Rules every task of a split keeps |
+| `## Verification` | Deferred runtime checks, one per line; they join the header's `verification` |
+
+The sections become the same typed fields the browser submits, so CLI tasks get the
+same requirement labels, global constraints and sealed split children. Every
+paragraph and top-level list item of Goal, Acceptance criteria and Constraints is a
+requirement; a single line ending with `:` (such as `Requirements:`) or a lone
+heading only introduces the blocks after it. Headings inside code fences are text.
+Any other `#` or `##` heading, a repeated section, and text outside the sections
+(once a section exists) are errors that name their line. See
+[`examples/live`](../examples/live) for complete task files.
+
 ## Browser fields
 
 | Field | Content |
@@ -73,11 +96,10 @@ submitted file remain stored verbatim. Requirements retain stable content IDs an
 source character ranges. A scoped child requirement retains its parent ID and exact
 text; global constraints apply unchanged to every child. Task prompts contain user
 fields once, without the JSON transport or copied server policy. Restart drafts use
-the typed fields directly. Legacy Markdown remains supported: unknown user sections
-and code fences are preserved, while standard context sections do not become goals.
-Legacy parent requirements without typed field provenance retain full child planning;
-the workflow cannot infer which old text was a global constraint. Authenticated typed
-children use a sealed `00-input/reviewed-task-spec.json` projection on first launch and
+the typed fields directly; a task file of an older release that the Markdown reader
+rejects is offered whole as the Goal. A split whose parent requirements lack typed
+field provenance or a sealed reviewed plan cannot start children; restart the parent.
+Authenticated typed children use a sealed `00-input/reviewed-task-spec.json` projection on first launch and
 Continue; the original submission remains unchanged in `00-input/task.md`.
 Continue resolves check IDs against the run's sealed recipe catalog, so removing
 a recipe from current settings cannot replace or lose an

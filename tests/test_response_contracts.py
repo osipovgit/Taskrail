@@ -1,4 +1,4 @@
-"""Regressions from an expensive planning run and interactive deployment."""
+"""Response envelopes, role contracts, format repair requests and installer prompts."""
 
 import json
 import os
@@ -7,13 +7,20 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from countersign.application import instruction_sources, prompts
-from countersign.core import schema
+from countersign.application import decision_adapter, instruction_sources, prompts
+from countersign.core import json_response, schema
 
 BASE = Path(__file__).resolve().parents[1]
 
 
-class PlanningRegressions(unittest.TestCase):
+def decoded(response):
+    """One unambiguous object in the planner's stored shape."""
+    payload = json_response.extract(response, schema.unique_fields)
+    schema.validate(payload, schema.SCHEMAS["planner"])
+    return payload
+
+
+class ResponseContractTests(unittest.TestCase):
     def payload(self):
         return dict(
             schema_version=1,
@@ -33,7 +40,7 @@ class PlanningRegressions(unittest.TestCase):
         payload = self.payload()
         encoded = json.dumps(payload)
         for response in (encoded, "```json\n" + encoded + "\n```", "```\n" + encoded + "\n```"):
-            self.assertEqual(schema.decode(response, "planner"), payload)
+            self.assertEqual(decoded(response), payload)
         for response in (
             encoded + "\n" + encoded,
             "```json\n" + encoded + "\n" + encoded + "\n```",
@@ -41,9 +48,9 @@ class PlanningRegressions(unittest.TestCase):
             encoded.replace('"schema_version": 1', '"schema_version": 1, "schema_version": 1'),
         ):
             with self.subTest(response=response), self.assertRaises(ValueError):
-                schema.decode(response, "planner")
+                decoded(response)
         with self.assertRaisesRegex(ValueError, "Empty final response"):
-            schema.decode(" \n", "planner")
+            decision_adapter.stage_decision(" \n", {})
 
     def test_roles_fail_before_model_launch_and_bundled_roles_pass(self):
         for role in instruction_sources.ROLES:
@@ -56,27 +63,25 @@ class PlanningRegressions(unittest.TestCase):
 
     def test_repair_retains_assigned_ids_without_research_permissions(self):
         requirements = [dict(id="R7", kind="task", text="Fix only the requested role")]
-        request = prompts.repair(
-            json.dumps(self.payload()), "bad criteria", "planner", 1, requirements
-        )
-        self.assertIn('"id": "R7"', request)
-        self.assertIn("Do not research", request)
-        self.assertIn("Missing evidence requires gap/BLOCKED", request)
-        self.assertIn("schema_version=1", request)
-        self.assertIn("coverage and step criteria", request)
-        self.assertNotIn("schema_version=2", request)
-        self.assertNotIn("Author semantic decisions", request)
-        self.assertNotIn("source research", request)
-        self.assertNotIn("at most 60", prompts.INSTRUCTIONS["planner"])
-        for role in ("implementer", "reviewer"):
-            request = prompts.repair("{}", "Missing outcomes", role, 1, requirements)
+        schemas = dict(implementer="implementer-decision", reviewer="decision")
+        schemas["plan-reviewer"] = "decision"
+        for stage, name in schemas.items():
+            request = prompts.repair("{}", "Missing outcomes", stage, 1, requirements)
             self.assertIn('"id": "R7"', request)
             self.assertIn("Do not research", request)
-            self.assertIn("schema_version=2", request)
-            self.assertNotIn("coverage and step criteria", request)
+            self.assertIn("schema_version 2", request)
+            self.assertNotIn("source research", request)
             contract = request.split("\nSchema:\n", 1)[1].split("\nAssigned requirements:", 1)[0]
-            self.assertEqual(json.loads(contract), schema.SCHEMAS["decision"])
+            self.assertEqual(json.loads(contract), schema.SCHEMAS[name])
+        self.assertIn(
+            "cannot edit files", prompts.repair("{}", "x", "implementer", 1, requirements)
+        )
+        self.assertIn(
+            "planned (an approved task", prompts.repair("{}", "x", "plan-reviewer", 1, [])
+        )
 
+
+class InstallerOptionTests(unittest.TestCase):
     def test_explicit_keep_does_not_prompt_on_terminal(self):
         for arguments, prompts_expected, expected in (
             (["--autostart=keep", "--wait=3600"], False, "keep:3600"),
@@ -98,8 +103,7 @@ class PlanningRegressions(unittest.TestCase):
                             *arguments,
                         ],
                         stdin=slave,
-                        stdout=subprocess.PIPE,
-                        stderr=subprocess.PIPE,
+                        capture_output=True,
                         text=True,
                         timeout=5,
                         check=True,

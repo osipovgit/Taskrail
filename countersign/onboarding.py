@@ -76,7 +76,7 @@ def permission_result(launch):
             return False, f"Permission enforcement could not be verified: {error}"
         finally:
             profile.unlink(missing_ok=True)
-    return True, "Permission rules enforced; profiles in {0}".format(launch["destination"])
+    return True, "Permission rules enforced; profiles in {}".format(launch["destination"])
 
 
 def storage_result(explicit):
@@ -101,7 +101,7 @@ def init(opencode=None, models=(), repair=None, force=False):
     settings["format_repair_tools"] = repair or ask("format repair tools (none/read)", "none")
     launch_settings(settings, target.parent)
     target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_text("{0}\n".format(json.dumps(settings, indent=2)))
+    target.write_text(f"{json.dumps(settings, indent=2)}\n")
     target.chmod(PRIVATE_FILE)
     return target
 
