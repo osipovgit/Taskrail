@@ -9,7 +9,15 @@ from pathlib import Path
 
 from taskrail.core.files import atomic_json
 from taskrail.core.runtime import settings_path
-from taskrail.web import history, lifecycle, parent_context, requests, restarts, run_records
+from taskrail.web import (
+    history,
+    lifecycle,
+    parent_context,
+    requests,
+    restarts,
+    run_records,
+    split_approvals,
+)
 from taskrail.web.launch_records import LAUNCH_ERROR, LAUNCH_FILE, announce, recover_launches
 from taskrail.web.run_activity import BusyError, require_idle, run_sources
 from taskrail.web.task_form import build_task
@@ -43,7 +51,9 @@ class TaskLauncher:
         if path == "/api/decision":
             lifecycle.approvals.validate_decision(payload)
             run = history.checked_run(self.base, payload["id"])
-            return lifecycle.approvals.decide(run, payload)
+            recorded = lifecycle.approvals.decide(run, payload)
+            split_approvals.granted(run, payload)
+            return recorded
         if path == "/api/tasks":
             return self.submit(payload)
         return self.action(payload)

@@ -3,20 +3,20 @@
 from functools import partial
 from types import MappingProxyType
 
-from taskrail.interactions import approval_policy
 from taskrail.web import (
     delivery_launch,
     epic_launch,
     epic_record,
     integration_launch,
     run_groups,
+    split_approvals,
 )
 
 RECORDS = MappingProxyType(
     {
         "done": partial(run_groups.mark, done=True),
         "reopen": partial(run_groups.mark, done=False),
-        "revoke_auto_approve": approval_policy.revoke,
+        "revoke_auto_approve": split_approvals.revoke,
         "epic_auto_on": partial(epic_record.set_auto, enabled=True),
         "epic_auto_off": partial(epic_record.set_auto, enabled=False),
     }

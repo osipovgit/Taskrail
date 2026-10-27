@@ -102,8 +102,10 @@ parent input, reviewed task contracts, checks, notes and recorded outcomes. The
 artifact manifest grants read access; parent deletion does not remove this context.
 Required acceptance text is never replaced by a truncated summary. An oversized
 submission fails visibly and pauses auto-continue instead of looping silently.
-**Allow all actions** on the parent applies to subsequently started children and checks
-unless revoked. Unconfigured Jenkins/SSH phases are shown as skipped; integration
+**Allow all actions** covers the whole split or delivery: given in the task form, on a
+decision of the parent or on a decision of any task or phase run, it applies to every
+task and check run started afterwards. **Stop allowing all actions** in any of these runs
+revokes it for the parent too. Unconfigured Jenkins/SSH phases are shown as skipped; integration
 review is never skipped. **Repeat integration review** starts a new read-only review
 when the earlier one stopped or its evidence is stale; it also invalidates later
 validation and confirmation. Earlier phase links remain in the parent's history.

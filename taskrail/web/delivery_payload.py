@@ -3,8 +3,7 @@
 from types import MappingProxyType
 
 from taskrail.application import worktree_isolation
-from taskrail.interactions import approval_policy
-from taskrail.web import delivery_checks, epic_tasks, history
+from taskrail.web import delivery_checks, epic_tasks, history, split_approvals
 from taskrail.web.delivery_steps import CHECK_KEYS, SERVER, VALIDATION
 
 TITLE_LIMIT = 160
@@ -36,7 +35,7 @@ def payload(run, state, name):
         constraints=draft["constraints"],
         split_context=brief(run, state, draft),
         roots=worktree_isolation.root_entries(state["roots"]),
-        auto_approve=approval_policy.at_start(run, draft),
+        auto_approve=split_approvals.allows_all(run, draft),
         phase=name,
     )
     if name == SERVER:

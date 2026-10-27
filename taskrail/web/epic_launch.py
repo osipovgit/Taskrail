@@ -10,13 +10,13 @@ import json
 from functools import partial
 
 from taskrail.application import worktree_isolation
-from taskrail.interactions import approval_policy
 from taskrail.web import (
     epic_progress,
     epic_record,
     epic_tasks,
     history,
     parent_context,
+    split_approvals,
     task_brief,
 )
 from taskrail.web.run_activity import BusyError
@@ -73,7 +73,7 @@ def payload(run, state, entries, task):
         assigned_contract=dict(parent_run=run.name, task_id=task[IDENTIFIER]),
         assigned_requirements=task_brief.assigned_requirements(state, task),
         roots=worktree_isolation.root_entries(state["roots"]),
-        auto_approve=approval_policy.at_start(run, draft),
+        auto_approve=split_approvals.allows_all(run, draft),
         phase="task",
     )
 

@@ -4,9 +4,8 @@ import re
 from pathlib import Path
 
 from taskrail.core.paths import tool_paths
-from taskrail.interactions import approval_policy
 from taskrail.observability.progress import clock
-from taskrail.web import delivery_state, history, lifecycle, run_family
+from taskrail.web import delivery_state, history, lifecycle, run_family, split_approvals
 from taskrail.web.run_activity import run_busy
 from taskrail.web.run_files import contained, optional_json, stage_telemetry, text_tail
 from taskrail.web.run_messages import public_messages
@@ -104,7 +103,7 @@ def context_view(run, submission, state):
         conversation=history.previous_messages(run) if started else [],
         draft=history.task_draft(run) if run.joinpath("run.json").exists() else None,
         actions=lifecycle.actions(run, state, run_busy(run)),
-        auto_approve=approval_policy.active(run, state),
+        auto_approve=split_approvals.shown(run, state),
         delivery=delivery_state.view(run, state),
         pending_approval=lifecycle.pending_approval(run),
         task=text_tail(task),
