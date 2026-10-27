@@ -8,35 +8,62 @@ export function messageCard(message) {
   node.append(header, el('div', message.text, 'text'));
   return node;
 }
-export function renderPlan(parent, steps) {
+// Requirement ID -> its request label (R1, R2, ...) and full text.
+function requirementNames(requirements) {
+  return new Map(
+    (requirements || []).map((entry, index) => [
+      entry.id,
+      { label: 'R' + (index + 1), text: entry.text },
+    ]),
+  );
+}
+function requirementLine(id, named) {
+  const entry = named.get(id);
+  return entry ? entry.label + ': ' + entry.text : id;
+}
+export function renderPlan(parent, steps, requirements) {
   if (!steps?.length) return;
+  const named = requirementNames(requirements);
   parent.append(el('h3', 'Plan'));
   for (const step of steps) {
     const box = el('div', undefined, 'message');
     box.append(el('strong', step.id + ' · ' + step.action));
     list(box, 'Files', step.files);
-    list(box, 'Criteria', step.criteria);
+    list(
+      box,
+      'Criteria',
+      step.criteria?.map((id) => requirementLine(id, named)),
+    );
     list(box, 'Dependencies', step.depends_on);
     list(box, 'Checks', step.checks);
     parent.append(box);
   }
 }
-export function renderCoverage(parent, entries) {
+const outcomeLabel = (outcome) =>
+  outcome.charAt(0).toUpperCase() + outcome.slice(1).replaceAll('_', ' ');
+// Collapsed: each requirement's label, outcome and full text; a routine assessment adds nothing.
+export function renderCoverage(parent, entries, requirements) {
   if (!entries?.length) return;
-  parent.append(el('h3', 'Requirement coverage'));
+  const named = requirementNames(requirements);
+  const counts = {};
+  for (const entry of entries) counts[entry.outcome] = (counts[entry.outcome] || 0) + 1;
+  const tally = Object.entries(counts)
+    .map(([outcome, count]) => count + ' ' + outcomeLabel(outcome).toLowerCase())
+    .join(', ');
+  const fold = el('details', undefined, 'coverage');
+  fold.append(el('summary', 'Requirement coverage · ' + tally));
   for (const entry of entries) {
     const box = el('div', undefined, 'message');
-    box.append(
-      el(
-        'strong',
-        entry.id + ' · ' + (entry.outcome === 'not_evaluated' ? 'Not evaluated' : entry.outcome),
-      ),
-    );
-    box.append(el('p', entry.explanation, 'text'));
+    const name = named.get(entry.id);
+    box.append(el('strong', (name?.label || entry.id) + ' · ' + outcomeLabel(entry.outcome)));
+    if (name) box.append(el('p', name.text, 'text'));
+    if (entry.explanation && !entry.explanation.startsWith('Agent assessment:'))
+      box.append(el('p', entry.explanation, 'text muted'));
     if (entry.evidence_ids?.length)
       box.append(el('small', 'Evidence: ' + entry.evidence_ids.join(', ')));
-    parent.append(box);
+    fold.append(box);
   }
+  parent.append(fold);
 }
 export function stageProvenance(parent, stage) {
   if (!stage.agent_source) return;
@@ -68,19 +95,39 @@ export function stageClockLabel(stage, now = Date.now()) {
   if (stage.status === 'WAITING_APPROVAL') label += ' · Waiting for approval';
   return label;
 }
-// The session's latest input against its model's context window; the peak once finished.
+// Rough size of the text a session received: about four characters per token.
+const CHARACTERS_PER_TOKEN = 4;
+// The session's context against its model's window: the input the provider reported for
+// the latest step plus what arrived since, or, without reports, the request and every
+// text and tool call. '≈' marks an estimate; a finished stage shows its peak.
+export function contextUse(stage) {
+  const budget = stage.context_budget || {};
+  const telemetry = stage.telemetry || {};
+  const running = stage.status === 'RUNNING';
+  const reported = running ? telemetry.last_input : telemetry.peak_input;
+  if (Number.isFinite(reported)) {
+    const pending = running ? telemetry.unreported_characters || 0 : 0;
+    return { tokens: reported + pending / CHARACTERS_PER_TOKEN, estimated: pending > 0 };
+  }
+  if (!Number.isFinite(telemetry.observed_characters) || !Number.isFinite(budget.request_bytes))
+    return null;
+  const sent = budget.request_bytes + (budget.role_bytes || 0) + telemetry.observed_characters;
+  return { tokens: sent / CHARACTERS_PER_TOKEN + (budget.framing_tokens || 0), estimated: true };
+}
 export function stageContextLabel(stage) {
   const capacity = stage.context_budget?.input_capacity_tokens;
-  const used =
-    stage.status === 'RUNNING' ? stage.telemetry?.last_input : stage.telemetry?.peak_input;
-  if (!Number.isFinite(capacity) || capacity <= 0 || !Number.isFinite(used)) return '';
-  const share = Math.round((100 * used) / capacity);
+  const use = contextUse(stage);
+  if (!Number.isFinite(capacity) || capacity <= 0 || !use) return '';
+  const tokens = Math.round(use.tokens);
+  const about = use.estimated ? '≈' : '';
   const prefix = stage.status === 'RUNNING' ? 'Context ' : 'Peak context ';
   return (
     prefix +
-    share +
+    about +
+    Math.round((100 * tokens) / capacity) +
     '% · ' +
-    used.toLocaleString('en-GB') +
+    about +
+    tokens.toLocaleString('en-GB') +
     ' of ' +
     capacity.toLocaleString('en-GB') +
     ' tokens'
@@ -112,7 +159,7 @@ export function warningLines(warnings) {
   );
 }
 
-export function stageCard(stage) {
+export function stageCard(stage, requirements = []) {
   const card = el('section', undefined, stage.status === 'RUNNING' ? 'running' : '');
   const heading = el('div', undefined, 'stage-header');
   const meta = el('div', undefined, 'stage-meta muted');
@@ -158,8 +205,8 @@ export function stageCard(stage) {
     const conclusion = el('div', undefined, 'conclusion-header');
     conclusion.append(el('h3', 'Conclusion'), timeNode(stage.finished_at));
     card.append(conclusion, el('div', result.summary || '', 'text'));
-    renderPlan(card, result.steps);
-    renderCoverage(card, result.coverage);
+    renderPlan(card, result.steps, requirements);
+    renderCoverage(card, result.coverage, requirements);
     list(card, 'Completed steps', result.completed_steps);
     list(card, 'Changed files', result.changed_files);
     detail(

@@ -212,40 +212,64 @@ async function main() {
   assert.equal(nodes['task-mode'].value, 'answer');
   console.log('Restart prefill and clean new-task form passed without launching a worker.');
 
-  const structured = stages.stageCard({
-    ...stage,
-    contract_version: 1,
-    agent_source: '/custom/agents/reviewer.md',
-    agent_sha256: 'role-hash',
-    contract_sha256: 'contract-hash',
-    instruction_sha256: 'request-hash',
-    budget: { attempts_remaining: 1, timeout: 3600 },
-    telemetry,
-    result: {
-      summary: 'Validated',
-      steps: [
-        {
-          id: 'S1',
-          action: 'Fix behavior',
-          files: ['/repo/a.py'],
-          criteria: ['R1'],
-          checks: ['Static review'],
-          depends_on: [],
-        },
-      ],
-      coverage: [
-        {
-          id: 'R1',
-          outcome: 'satisfied',
-          evidence_ids: ['E1'],
-          explanation: '<script>source only</script>',
-        },
-      ],
-      evidence: [],
+  const requirements = [
+    { id: 'R-000000000001', text: 'Return 2 from hello' },
+    { id: 'R-000000000002', text: 'Keep the user comment' },
+  ];
+  const structured = stages.stageCard(
+    {
+      ...stage,
+      contract_version: 1,
+      agent_source: '/custom/agents/reviewer.md',
+      agent_sha256: 'role-hash',
+      contract_sha256: 'contract-hash',
+      instruction_sha256: 'request-hash',
+      budget: { attempts_remaining: 1, timeout: 3600 },
+      telemetry,
+      result: {
+        summary: 'Validated',
+        steps: [
+          {
+            id: 'S1',
+            action: 'Fix behavior',
+            files: ['/repo/a.py'],
+            criteria: ['R-000000000001'],
+            checks: ['Static review'],
+            depends_on: [],
+          },
+        ],
+        coverage: [
+          {
+            id: 'R-000000000001',
+            outcome: 'satisfied',
+            evidence_ids: ['E1'],
+            explanation: '<script>source only</script>',
+          },
+          {
+            id: 'R-000000000002',
+            outcome: 'not_evaluated',
+            evidence_ids: [],
+            explanation: 'Agent assessment: not_evaluated.',
+          },
+        ],
+        evidence: [],
+      },
     },
-  });
+    requirements,
+  );
   assert.ok(all(structured).some((n) => n.textContent === 'S1 · Fix behavior'));
-  assert.ok(all(structured).some((n) => n.textContent === 'R1 · satisfied'));
+  assert.ok(all(structured).some((n) => n.textContent === 'R1 · Satisfied'));
+  assert.ok(all(structured).some((n) => n.textContent === 'R2 · Not evaluated'));
+  assert.ok(all(structured).some((n) => n.textContent === 'Keep the user comment'));
+  assert.ok(all(structured).some((n) => n.textContent === 'R1: Return 2 from hello'));
+  assert.ok(!all(structured).some((n) => n.textContent.startsWith('Agent assessment')));
+  const coverage = all(structured).find((n) => n.className === 'coverage');
+  assert.equal(coverage.tagName, 'details');
+  assert.ok(!coverage.open);
+  assert.equal(
+    coverage.children[0].textContent,
+    'Requirement coverage · 1 satisfied, 1 not evaluated',
+  );
   assert.ok(all(structured).some((n) => n.textContent === '<script>source only</script>'));
   assert.ok(
     all(structured).some((n) =>
@@ -666,7 +690,7 @@ async function main() {
   const folds = taskPanel.children.filter((node) => node.tagName === 'details');
   assert.deepEqual(
     folds.map((node) => node.querySelector('summary').children[0].textContent),
-    ['Original task', 'Requirement IDs'],
+    ['Original task', 'Requirements'],
   );
   assert.ok(
     all(taskPanel)
@@ -725,7 +749,7 @@ async function main() {
     all(nodes.chat).find((node) => node.tagName === 'pre').textContent,
     'Legacy task text',
   );
-  assert.ok(!all(nodes.chat).some((node) => node.textContent === 'Requirement IDs'));
+  assert.ok(!all(nodes.chat).some((node) => node.textContent === 'Requirements'));
   console.log(
     'Task preview: structured text, collapsed IDs, historical context, source fallback and polling passed.',
   );
@@ -786,6 +810,27 @@ async function main() {
       telemetry: { last_input: 1, peak_input: 43008 },
     }),
     'Peak context 50% · 43,008 of 86,016 tokens',
+  );
+  assert.equal(
+    stages.stageContextLabel({
+      status: 'RUNNING',
+      context_budget: { input_capacity_tokens: 86016 },
+      telemetry: { last_input: 43008, unreported_characters: 4000 },
+    }),
+    'Context ≈51% · ≈44,008 of 86,016 tokens',
+  );
+  assert.equal(
+    stages.stageContextLabel({
+      status: 'RUNNING',
+      context_budget: {
+        input_capacity_tokens: 10000,
+        request_bytes: 12000,
+        role_bytes: 2000,
+        framing_tokens: 1024,
+      },
+      telemetry: { observed_characters: 6000 },
+    }),
+    'Context ≈60% · ≈6,024 of 10,000 tokens',
   );
   assert.equal(stages.stageContextLabel({ status: 'RUNNING', telemetry: {} }), '');
   assert.equal(

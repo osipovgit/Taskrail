@@ -401,7 +401,7 @@ export function runBody(data, embedded = false, child = null) {
   }
   if (data.outside_changes) nodes.push(outsideSection(data.outside_changes));
   nodes.push(taskSection(data));
-  for (const stage of data.stages) nodes.push(stageCard(stage));
+  for (const stage of data.stages) nodes.push(stageCard(stage, data.requirements));
   nodes.push(materialsSection(data));
   return nodes;
 }
