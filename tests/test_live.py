@@ -563,6 +563,7 @@ class LiveTests(LiveFixture, unittest.TestCase):
                 "observations.json",
                 "budgets.json",
                 "plan.md",
+                "progress.md",
                 "source-packet-planner.json",
                 "source-packet-plan-reviewer.json",
                 "source-packet-implementer.json",
@@ -674,6 +675,13 @@ class LiveTests(LiveFixture, unittest.TestCase):
         reviews = [entry for entry in state["attempts"] if entry["stage"] == "plan-reviewer"]
         self.assertGreater(len(reviews), 1, state["attempts"])
         self.assertIn("Free usage limit reached", state["summary"])
+
+    def test_a_review_may_cite_the_original_file_it_compared(self):
+        run, status, state = self.run_mode("review-preimage")
+        self.assertEqual(status, "READY_FOR_REVIEW", state.get("summary"))
+        review = next(stage for stage in state["stages"] if stage["stage"] == "reviewer")
+        result = json.loads((run / review["directory"] / "result.json").read_text())
+        self.assertIn("00-input/preimages/project/hello.py", result["evidence"][0]["path"])
 
     def test_a_turn_the_provider_broke_off_continues_in_the_same_session(self):
         run, status, state = self.run_mode("provider-interrupted")
@@ -848,6 +856,23 @@ class LiveTests(LiveFixture, unittest.TestCase):
         _, status, state = self.run_mode("syntax")
         self.assertEqual(status, "READY_FOR_REVIEW")
         self.assertEqual(len(state["attempts"]), 5)
+
+    def test_an_added_token_fails_the_check_and_is_repaired(self):
+        run, status, state = self.run_mode("secret-added")
+        self.assertEqual(status, "READY_FOR_REVIEW", state.get("summary"))
+        first = json.loads((run / "04-check/result.json").read_text())
+        failed = [check for check in first if check["status"] == "FAIL"]
+        self.assertEqual(len(failed), 1, first)
+        self.assertIn("a GitHub token", failed[0]["detail"])
+        self.assertNotIn("x" * 36, json.dumps(first))
+        self.assertNotIn("TOKEN", (self.root / "hello.py").read_text())
+
+    def test_a_repair_that_leaves_the_same_failure_stops_at_once(self):
+        _, status, state = self.run_mode("syntax-stuck")
+        self.assertEqual(status, "CHECK_FAILED")
+        self.assertIn("same checks failing", state["summary"])
+        writers = [entry for entry in state["attempts"] if entry["stage"] == "implementer"]
+        self.assertEqual(len(writers), 2, state["attempts"])
 
     def verify_command(self, code, **options):
         return dict(cwd=str(self.root), argv=[sys.executable, "-c", code], **options)

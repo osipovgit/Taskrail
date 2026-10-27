@@ -29,6 +29,7 @@ export const statuses = {
   CHECK_COMPLETED: 'Checks complete',
   PASS: 'Passed',
   FAIL: 'Error',
+  WARN: 'Warning',
   SKIPPED: 'Skipped',
   TIMEOUT: 'Timed out',
   NOT_STARTED: 'Not started',

@@ -1,5 +1,7 @@
 """Explicit semantic decisions mapped onto canonical requirement identities."""
 
+from collections import Counter
+
 from taskrail.core import coverage, schema
 
 IDENTIFIER = "id"
@@ -7,12 +9,29 @@ REASONS = frozenset(("gap", "not_evaluated", "contradicted", "deferred"))
 
 
 def requirement_id(name, requirements):
-    """Short labels are stage-local aliases; canonical IDs never depend on labels."""
+    """Short labels are stage-local aliases; canonical IDs never depend on labels.
+
+    A split task's requirement may also be named by its parent's ID when that names
+    exactly one of them.
+    """
     numbered = enumerate(requirements, 1)
     aliases = {f"R{index}": entry[IDENTIFIER] for index, entry in numbered}
+    aliases.update(parent_aliases(requirements))
     aliases.update({entry[IDENTIFIER]: entry[IDENTIFIER] for entry in requirements})
     schema.require(name in aliases, f"Unknown requirement: {name}")
     return aliases[name]
+
+
+def parent_aliases(requirements):
+    """Parent ID -> the only requirement derived from it."""
+    parents = Counter(entry.get("parent_id") for entry in requirements)
+    unique = {parent for parent, count in parents.items() if count == 1}
+    unique.discard(None)
+    return {
+        entry["parent_id"]: entry[IDENTIFIER]
+        for entry in requirements
+        if entry.get("parent_id") in unique
+    }
 
 
 def outcome(entry, requirements, claims):

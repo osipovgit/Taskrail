@@ -101,8 +101,6 @@ async function main() {
     tool_calls: 1,
     tool_errors: 0,
     repeated_reads: 0,
-    compaction_completed: 0,
-    compaction_markers: 0,
     usage_steps: 1,
     model_steps: 1,
     timeline: [
@@ -129,7 +127,7 @@ async function main() {
     monitoring: {},
   });
   assert.ok(all(monitor).some((n) => n.textContent === '100'));
-  assert.ok(all(monitor).some((n) => n.textContent === 'Unknown / not observed'));
+  assert.ok(!all(monitor).some((n) => /Compaction/.test(n.textContent)));
   assert.ok(all(monitor).some((n) => n.textContent === 'By stage'));
   console.log('Monitoring and tool-call timeline passed.');
 
@@ -771,20 +769,25 @@ async function main() {
       },
       Date.parse('2026-10-15T00:05:05Z'),
     ),
-    'planner · 5 min 5 s / 1 h · 54 min 55 s left',
+    'planner · 5 min 5 s / 1 h',
   );
-  assert.match(
-    stages.stageClockLabel(
-      {
-        role: 'planner',
-        status: 'RUNNING',
-        started_at: '2026-10-15T00:00:00Z',
-        budget: { timeout: 60 },
-      },
-      Date.parse('2026-10-15T00:05:05Z'),
-    ),
-    /Timeout pending/,
+  assert.equal(
+    stages.stageContextLabel({
+      status: 'RUNNING',
+      context_budget: { input_capacity_tokens: 86016 },
+      telemetry: { last_input: 43008, peak_input: 50000 },
+    }),
+    'Context 50% · 43,008 of 86,016 tokens',
   );
+  assert.equal(
+    stages.stageContextLabel({
+      status: 'RESULT_VALID',
+      context_budget: { input_capacity_tokens: 86016 },
+      telemetry: { last_input: 1, peak_input: 43008 },
+    }),
+    'Peak context 50% · 43,008 of 86,016 tokens',
+  );
+  assert.equal(stages.stageContextLabel({ status: 'RUNNING', telemetry: {} }), '');
   assert.equal(
     stages.stageClockLabel({
       role: 'planner',
@@ -873,6 +876,8 @@ async function main() {
           failed: 1,
           format_repairs: 1,
           recoveries: 0,
+          first_try: 1,
+          first_try_measured: 4,
           tokens: 9,
           elapsed_seconds: 3,
         },
@@ -884,6 +889,7 @@ async function main() {
   assert.ok(all(nodes.chat).some((n) => n.textContent === '50%'));
   assert.ok(all(nodes.chat).some((n) => n.textContent === 'Timed out: 1'));
   assert.ok(all(nodes.chat).some((n) => n.textContent === 'p/m'));
+  assert.ok(all(nodes.chat).some((n) => n.textContent === '25% of 4'));
   console.log('Analytics view passed.');
 }
 

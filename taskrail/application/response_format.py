@@ -9,7 +9,7 @@ the executor is installed. The texts live in core/prompt-texts.json.
 import json
 from pathlib import Path
 
-from taskrail.application import executor_contracts, plan_file
+from taskrail.application import executor_contracts, plan_file, progress_file
 from taskrail.core import protected_paths, schema
 from taskrail.core.prompt_texts import text
 from taskrail.executor import protocol
@@ -54,6 +54,8 @@ def section(stage, state, run, config):
     else:
         alternatives.insert(0, own_schema(stage, state))
         rules = decisions(stage)
+        if stage == IMPLEMENTER:
+            rules = "\n".join((progress_file.instructions(run), rules))
         routing = text("format.routing")
     return "\n".join([rules, routing, *map(schema_line, alternatives)])
 

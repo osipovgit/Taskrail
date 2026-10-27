@@ -6,11 +6,11 @@ from taskrail.application import (
     access_recovery,
     attempt_context,
     evidence,
-    plan_file,
     plan_recovery,
     prompts,
     result_preview,
     session_budget,
+    stage_artifacts,
 )
 from taskrail.application.attempt_launch import (
     attempt_prompt,
@@ -72,7 +72,7 @@ class StageAttempts:
         workflow.guard.verify("Source/Git changed before retry; recorded evidence is stale")
         folder, record = open_record(workflow, self.retries.mode())
         record["writable_files"] = [str(path) for path in planned_files(workflow)]
-        plan_access(workflow, record)
+        stage_artifacts.record_access(workflow, record)
         recovery = None if self.format_only else self.recovery
         prompt = attempt_prompt(workflow, (folder, record), self.request, recovery)
         attempt_context.save_request(folder, record, prompt, workflow)
@@ -165,7 +165,7 @@ def previous_corrections(workflow):
 
 
 def evidence_roots(workflow):
-    """Sources and executor output snapshots that reads may cite."""
+    """Sources, executor output snapshots and original files that reads may cite."""
     run = workflow.run
     inputs = run / "00-input"
     return [
@@ -174,6 +174,7 @@ def evidence_roots(workflow):
         inputs / "ssh",
         inputs / "local",
         inputs / "source-views",
+        inputs / "preimages",
     ]
 
 
@@ -183,11 +184,3 @@ def fail(state, record, outcome):
     detail = outcome.get("contract_error") or errors or outcome[STATUS]
     summary = "Stage {} failed: {}".format(record["directory"], detail)
     state.update(status=outcome[STATUS], summary=summary)
-
-
-def plan_access(workflow, record):
-    """Publish the planner artifact before saving the same access contract to disk."""
-    if record["stage"] == "planner":
-        read_only = bool(workflow.config.get("read_only"))
-        target = plan_file.prepare(workflow.run, workflow.state["requirements"], read_only)
-        record["writable_files"].append(str(target))

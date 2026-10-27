@@ -1,6 +1,6 @@
 """Prepare one model attempt: record, prompt, closed permission profile and allowance."""
 
-from taskrail.application import attempt_context, plan_file, result_context
+from taskrail.application import attempt_context, result_context, stage_artifacts
 from taskrail.application.artifacts import new_stage
 from taskrail.application.planned_paths import safe_file
 from taskrail.application.recovery import write_evidence
@@ -89,8 +89,7 @@ def profile_access(workflow, active, files, format_only):
     access["protected"] = protected_paths.patterns(workflow.config)
     access[ROOTS] = workflow.config[ROOTS].values()
     access["readable"] = artifact_access.model_inputs(workflow.run, folder)
-    if record["stage"] == "planner" and not format_only:
-        plan_file.grant(access, workflow.run, workflow.state["requirements"])
+    stage_artifacts.grant(access, workflow, record, format_only)
     if format_only:
         earlier = artifact_access.stage_recoveries(workflow.run, workflow.state, record)
         access["readable"].extend(earlier)

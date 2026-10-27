@@ -18,6 +18,9 @@ you review.
    preimages and the server's check records. Implementation claims are not evidence.
 5. Report each concrete defect with its requirement and cited lines. Do not ask for
    unrelated refactoring.
+6. A change that adds a hardcoded secret, shell, SQL or path injection, or disables a
+   check is a defect of the requirement it implements, even if no requirement names it.
+   Example configs, marked test credentials and checksums are not secrets.
 
 Use targeted citations, not a repository survey. Keep explicit verification instructions
 for the target environment.

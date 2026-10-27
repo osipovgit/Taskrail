@@ -61,6 +61,11 @@ reviewers accept that recorded choice.
 - Implementer: semantic outcomes for every assigned criterion and required missing
   inputs. The server derives changed_files from the source scan and completed_steps
   from the accepted approved contract. IMPLEMENTED cannot retain unfinished work.
+  Besides its allowed files it keeps `<run>/progress.md` (Done, Remaining, Verify),
+  which survives an interrupted, timed-out or overflowing session: a later session
+  reads it first and does not re-check finished work. It is a note, never evidence.
+  The implementer re-reads each edited block once, at the end, to cite it; independent
+  review checks the result instead of repeated self-checks.
 - Reviewer: semantic outcomes, findings grounded in observed references, and missing
   inputs. The server derives input completeness and aggregate verdict. Plan review
   can approve planned work; result and no-change review cannot. An approval cannot
@@ -91,7 +96,9 @@ must have reached the model. A clipped prefix cannot prove an unseen suffix.
 One citation may combine several windows of the same current source version. The
 binding records every contributing observation and its exact line ranges, retaining
 the primary event fields for compatibility. Repeated partial reads do not erase
-earlier complete observations.
+earlier complete observations. Besides the declared roots, a citation may name source
+views, executor snapshots and the preimages under `00-input/preimages`: the original
+files a review compares, for example to show a removed line.
 
 Oversized JSON can have a server-created `source_views` entry: a losslessly formatted
 copy under `00-input/source-views`. Search and read only relevant view windows and cite
@@ -154,7 +161,9 @@ not inferred. The complete merged candidate passes every normal gate again befor
 it can advance the workflow. A correction has no execution or permission effects.
 
 Format repair receives the saved response, the validation error, the schema and the
-server-assigned requirements. Each stage gets at most one. It has no tools (or
+server-assigned requirements under the request's `R<n>` labels. Each stage gets at most
+one. Validation errors name requirements by these labels as well; a split task's
+requirement may also be named by its parent's ID when that ID names exactly one. It has no tools (or
 read-only tools with `format_repair_tools: read`, which may also re-read the
 `recovery.md` evidence of earlier attempts of the same stage), never edits, even for the
 implementer, cannot invent requirement IDs or quotations, and must not research. An

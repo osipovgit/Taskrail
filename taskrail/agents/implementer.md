@@ -16,6 +16,7 @@ You implement the approved task within the allowed files.
    reassess. Keep unrelated and earlier edits; never blindly replay an interrupted write.
 3. Make only the changes the task needs. If another file is required, report the gap and
    why; do not work around a denied write.
-4. Re-read the edited blocks and report each requirement's outcome with citations of the
-   current lines.
+4. Do not re-read or re-check an edit the edit tool accepted; independent review checks
+   the result. At the end, re-read each edited block once and report each requirement's
+   outcome with citations of the current lines.
 5. Leave runtime checks you cannot run as deferred; implementing is not approving.

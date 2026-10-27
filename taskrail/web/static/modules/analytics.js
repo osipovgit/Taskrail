@@ -3,8 +3,14 @@ import { get } from './app.js';
 import { durationLabel, el, showError, statuses } from './dom.js';
 import { state } from './state.js';
 
+// First try: model attempts accepted without a same-session correction, of those measured.
+const firstTry = (totals) =>
+  totals.first_try_measured
+    ? `${Math.round((100 * totals.first_try) / totals.first_try_measured)}% of ${totals.first_try_measured}`
+    : 'n/a';
 const COLUMNS = [
   ['attempts', 'Attempts'],
+  ['first_try', 'First try', firstTry],
   ['failed', 'Failed'],
   ['format_repairs', 'Format repairs'],
   ['recoveries', 'Recoveries'],
@@ -21,7 +27,12 @@ function table(title, groups) {
   grid.append(head);
   for (const [name, totals] of Object.entries(groups)) {
     const row = el('tr');
-    row.append(el('td', name), ...COLUMNS.map(([key]) => el('td', String(totals[key] ?? 0))));
+    row.append(
+      el('td', name),
+      ...COLUMNS.map(([key, , format]) =>
+        el('td', format ? format(totals) : String(totals[key] ?? 0)),
+      ),
+    );
     grid.append(row);
   }
   section.append(grid);

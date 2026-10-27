@@ -24,7 +24,14 @@ class AnalyticsTests(unittest.TestCase):
                     stages=[
                         stage("planner", "INVALID_RESULT", model="p/m", tokens=dict(total=40)),
                         stage("planner", "RESULT_VALID", model="p/m", mode="format-repair"),
-                        stage("implementer", "RESULT_VALID", elapsed_seconds=5.25),
+                        stage(
+                            "implementer",
+                            "RESULT_VALID",
+                            elapsed_seconds=5.25,
+                            result_corrections=0,
+                        ),
+                        stage("implementer", "RESULT_VALID", result_corrections=2),
+                        stage("implementer", "INVALID_RESULT", result_corrections=3),
                     ],
                 ),
                 "b": dict(
@@ -48,7 +55,10 @@ class AnalyticsTests(unittest.TestCase):
         model = totals["models"]["p/m"]
         self.assertEqual((model["attempts"], model["failed"], model["format_repairs"]), (2, 1, 1))
         self.assertEqual(model["tokens"], 40)
-        self.assertEqual(totals["models"]["opencode default"]["attempts"], 2)
+        self.assertEqual(totals["models"]["opencode default"]["attempts"], 4)
+        implementer = totals["stages"]["implementer"]
+        self.assertEqual((implementer["first_try"], implementer["first_try_measured"]), (1, 3))
+        self.assertEqual(totals["stages"]["planner"]["first_try_measured"], 0)
         self.assertEqual(totals["stages"]["reviewer"]["recoveries"], 1)
         self.assertEqual(totals["stages"]["implementer"]["elapsed_seconds"], 5.2)
 

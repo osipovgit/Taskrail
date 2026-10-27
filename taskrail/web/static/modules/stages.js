@@ -64,14 +64,27 @@ export function stageClockLabel(stage, now = Date.now()) {
       : stage.elapsed_seconds;
   let label = stage.role || 'System';
   if (Number.isFinite(elapsed)) label += ' · ' + durationLabel(elapsed);
-  if (Number.isFinite(limit)) {
-    label += ' / ' + durationLabel(limit).replace(' h 0 min 0 s', ' h');
-    if (running && Number.isFinite(elapsed))
-      label +=
-        ' · ' + (elapsed < limit ? durationLabel(limit - elapsed) + ' left' : 'Timeout pending');
-  }
+  if (Number.isFinite(limit)) label += ' / ' + durationLabel(limit).replace(' h 0 min 0 s', ' h');
   if (stage.status === 'WAITING_APPROVAL') label += ' · Waiting for approval';
   return label;
+}
+// The session's latest input against its model's context window; the peak once finished.
+export function stageContextLabel(stage) {
+  const capacity = stage.context_budget?.input_capacity_tokens;
+  const used =
+    stage.status === 'RUNNING' ? stage.telemetry?.last_input : stage.telemetry?.peak_input;
+  if (!Number.isFinite(capacity) || capacity <= 0 || !Number.isFinite(used)) return '';
+  const share = Math.round((100 * used) / capacity);
+  const prefix = stage.status === 'RUNNING' ? 'Context ' : 'Peak context ';
+  return (
+    prefix +
+    share +
+    '% · ' +
+    used.toLocaleString('en-GB') +
+    ' of ' +
+    capacity.toLocaleString('en-GB') +
+    ' tokens'
+  );
 }
 export function tickStageTimers() {
   if (preserveSelection()) return;
@@ -110,6 +123,8 @@ export function stageCard(stage) {
   );
   timer.csStage = stage;
   meta.append(timer);
+  const contextUse = stageContextLabel(stage);
+  if (contextUse) meta.append(el('span', contextUse, 'stage-context'));
   heading.append(
     el('h3', String(stage.number).padStart(2, '0') + ' · ' + (names[stage.stage] || stage.stage)),
     meta,

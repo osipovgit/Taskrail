@@ -121,7 +121,7 @@ class Steps:
 
 
 class Timeline:
-    """The latest public entries; explicit compaction markers are counted separately."""
+    """The latest public entries; explicit compaction markers are also kept apart."""
 
     def __init__(self):
         """An empty timeline."""
@@ -139,24 +139,15 @@ class Timeline:
             self.omitted += 1
 
     def compaction(self, kind, stamp):
-        """Only explicit structured markers count; prose never proves compaction."""
-        completed = kind == "session.compacted"
-        text = "Compaction marker observed; completion not confirmed"
-        if completed:
-            text = "Compaction completed (explicit event)"
-        entry = dict(kind="compaction", timestamp=stamp, completed=completed, text=text)
+        """Automatic compaction is off, so an explicit marker stops the session."""
+        text = "Compaction marker observed; the session stops"
+        entry = dict(kind="compaction", timestamp=stamp, text=text)
         self.compactions.append(entry)
         return entry
 
     def summary(self):
-        """Entries and compaction counts."""
-        return dict(
-            compaction_completed=sum(entry["completed"] for entry in self.compactions),
-            compaction_markers=len(self.compactions),
-            compaction_coverage="unknown",
-            timeline=self.entries,
-            timeline_omitted=self.omitted,
-        )
+        """The public entries."""
+        return dict(timeline=self.entries, timeline_omitted=self.omitted)
 
 
 def tool_entry(part, call, stamp):

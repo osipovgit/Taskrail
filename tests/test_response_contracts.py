@@ -61,13 +61,17 @@ class ResponseContractTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "Outdated role instructions.*planner.md"):
                 instruction_sources.validate_role_source(path)
 
-    def test_repair_retains_assigned_ids_without_research_permissions(self):
-        requirements = [dict(id="R7", kind="task", text="Fix only the requested role")]
+    def test_repair_names_requirements_by_label_without_research_permissions(self):
+        requirements = [
+            dict(id="R-0a1b2c3d4e5f", parent_id="R-ffffffffffff", kind="task", text="Fix it")
+        ]
         schemas = dict(implementer="implementer-decision", reviewer="decision")
         schemas["plan-reviewer"] = "decision"
         for stage, name in schemas.items():
-            request = prompts.repair("{}", "Missing outcomes", stage, 1, requirements)
-            self.assertIn('"id": "R7"', request)
+            request = prompts.repair("{}", "No outcome for R-0a1b2c3d4e5f", stage, 1, requirements)
+            self.assertIn('"R1": {', request)
+            self.assertIn("No outcome for R1", request)
+            self.assertNotIn("R-", request)
             self.assertIn("Do not research", request)
             self.assertIn("schema_version 2", request)
             self.assertNotIn("source research", request)

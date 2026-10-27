@@ -187,8 +187,16 @@ removed automatically. See [task format](task-format.md#worktree-isolation).
 For criterion-bound recipes, structured reports and model-free check batches, see
 [deterministic verification](checks.md).
 
+Before any command, the check stage compares each approved file with its preimage and
+scans only the added lines. A private key, a GitHub, AWS, Slack or `sk-` style API key
+fails the check, so the implementer removes it before review; a literal assigned to a
+secret-like name (templated values such as `{{ vault_pw }}` excepted) and leftover
+debugging (`console.log`, `debugger`, `breakpoint()`, `pdb`) are warnings the review
+sees. A finding names the line and the kind, never the matched text.
+
 `verify_commands` lists project checks that run in the check stage after every
-implementation whose changed files pass the built-in syntax checks:
+implementation whose changed files pass the built-in syntax checks and the added-line
+scan:
 
 ```json
 {
@@ -206,7 +214,10 @@ runs only for runs whose declared roots include its `cwd`; in a
 as the service user, with the filtered environment and the local command policy (no
 Git, SSH or privilege commands). `timeout_seconds` defaults to 600 (at most 3600).
 Output is kept in `verify-NN.log` of the check stage; a nonzero exit is a failed
-check whose output tail goes back to the implementer, within `max_repairs`. Commands
+check whose output tail goes back to the implementer, within `max_repairs`. When a
+repair leaves exactly the same checks failing (run-specific evidence paths and
+durations aside), the run stops with `CHECK_FAILED` instead of repeating it; a timed-out
+check is always repaired again. Commands
 must not write inside declared roots (generated folders such as `__pycache__`,
 `node_modules` or `.pytest_cache` are ignored): any other change stops the run.
 
