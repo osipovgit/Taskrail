@@ -8,6 +8,7 @@ After Allow the files are checked at once; after Deny they stay unchecked.
 """
 
 import shutil
+from pathlib import Path
 
 from taskrail.application import builtin_checks, yaml_check
 from taskrail.application.planned_paths import safe_file
@@ -19,6 +20,8 @@ ALLOWED = "allowed"
 PACKAGE = "PyYAML"
 PIP = "pip"
 INSTALL_SECONDS = 600
+# The uv installer puts uv here, which a service started at boot may not have on PATH.
+USER_BIN = str(Path.home() / ".local" / "bin")
 OUTPUT_LINES = 2
 OUTPUT_TAIL = 400
 REASON = "Install PyYAML so the check stage can syntax-check YAML files"
@@ -89,7 +92,7 @@ def installer():
         if yaml_check.completed(python, "-m", PIP, "--version").returncode == 0:
             pip = [python, "-m", PIP, "install", "--disable-pip-version-check"]
             return [*pip, "--no-input", "--target", target, PACKAGE]
-    uv = shutil.which("uv")
+    uv = shutil.which("uv") or shutil.which("uv", path=USER_BIN)
     if uv is None:
         return None
     checker = yaml_check.pythons()[0]
