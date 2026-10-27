@@ -78,12 +78,16 @@ def launch_options(workflow, active, allowance, format_only):
     )
 
 
-def validated(workflow, record, outcome):
-    """Parse the final response; a plan must also pass path and scope checks."""
+def validated(workflow, record, outcome, deliver_lines=False):
+    """Parse the final response; a plan must also pass path and scope checks.
+
+    deliver_lines: only while a correction turn of the same session follows.
+    """
     roots = workflow.config[ROOTS]
     environment = dict(
         roots=roots, run=workflow.run, plan=workflow.flow["plan"], check_config=workflow.config
     )
+    environment["deliver_lines"] = deliver_lines
     verdict = result_context.parse(outcome, record, workflow.state, environment)
     if record["stage"] == "planner":
         verdict = canonical_plan(verdict, roots)

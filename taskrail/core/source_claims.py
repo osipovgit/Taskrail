@@ -7,7 +7,7 @@ Every cited line must be current and must have reached the model in full.
 import hashlib
 from pathlib import Path
 
-from taskrail.core import prompt_texts, source_lines
+from taskrail.core import citation_errors, prompt_texts, source_lines
 from taskrail.core.schema import require
 from taskrail.core.source_lines import returned_lines as returned_lines
 
@@ -24,11 +24,8 @@ def validate_claim(claim, records):
         missing=dict(enumerate(excerpt.split("\n"), claim["line_start"])),
     )
     proofs = observed_ranges(claim, records, current)
-    require(
-        not current[MISSING],
-        f"{label}: no matching observed read returned these lines; "
-        + source_lines.missing_feedback(current[MISSING]),
-    )
+    if current[MISSING]:
+        raise citation_errors.MissingLines(claim, current[MISSING], source_hash)
     return {
         "claim_id": claim["id"],
         "excerpt": excerpt[:SHOWN_SOURCE],

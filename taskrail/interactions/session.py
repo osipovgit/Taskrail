@@ -12,7 +12,7 @@ from taskrail.interactions.clock import StageClock
 
 SESSION_ID = "session_id"
 TOKENS = "tokens"
-MAX_RESULT_CORRECTIONS = 2
+MAX_RESULT_CORRECTIONS = 3
 ROLE = "role"
 RESULT_CORRECTIONS = "result_corrections"
 VALIDATION_ERRORS = "validation_errors"
@@ -131,7 +131,7 @@ class StageSession:
 
 
 def result_feedback(session, outcome):
-    """Return a final result that fails validation to the same session, twice per stage.
+    """Return a final result that fails validation to the same session, three times per stage.
 
     The session still has its context and tools; a later format repair has neither.
     """

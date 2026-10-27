@@ -133,9 +133,12 @@ and does not waive required evidence. Permission denials, failed writes, and err
 after or without a final answer keep their safeguards.
 
 A final result that fails validation first goes back to the same session, at most
-twice per stage. Schema failures identify a stable error code and JSON pointer;
-provenance errors identify up to five failing citations and bounded missing windows,
-so existing observations need not be reread. Repeated identical planner rejection
+three times per stage. Schema failures identify a stable error code and JSON pointer;
+provenance errors identify up to five failing citations. When a citation's lines never
+reached the session in full, the correction carries their current text (at most 60
+lines per citation, never from a protected file) and records it as read, so the session
+only checks its claim against it instead of reading again or restarting; otherwise it
+names the bounded missing windows. Repeated identical planner rejection
 after same-session correction stops automatic fresh research retries. The session
 keeps its context and tools. For a rejected V2 decision it may replace only the erroneous
 field instead of regenerating every outcome:

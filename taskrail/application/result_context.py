@@ -24,6 +24,7 @@ def parse(outcome, record, state, environment):
             plan=environment["plan"],
             changed=tool_paths(state["changed_files"], environment[ROOTS]),
             check_config=environment.get("check_config", {}),
+            deliver_lines=environment.get("deliver_lines", False),
         ),
     )
 
