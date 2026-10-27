@@ -882,6 +882,13 @@ async function main() {
       (n) => n.className === 'approval-notice' && n.textContent === 'missing-tool is not installed',
     ),
   );
+  assert.ok(all(installCard).some((n) => n.textContent.includes('This is not a sandbox')));
+  const manualCard = app.approvalCard({
+    ticket: 'manual-ticket',
+    request: { status: 'MANUAL_STEP', notice: 'Install it yourself' },
+  });
+  assert.ok(all(manualCard).some((n) => n.textContent.startsWith('Nothing runs from this card')));
+  assert.ok(!all(manualCard).some((n) => n.textContent.includes('This is not a sandbox')));
   const waitingStage = {
     ...stage,
     status: 'WAITING_APPROVAL',

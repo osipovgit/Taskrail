@@ -165,6 +165,20 @@ class YamlInstallTests(unittest.TestCase):
         self.assertIn(str(yaml_check.TARGET), shown["notice"])
         self.assertFalse(asked.call_args.kwargs["personal"])
 
+    def test_a_failed_install_names_the_last_error_lines(self):
+        stderr = (
+            "WARNING: Retrying after connection broken\nERROR: No version\n\nERROR: None found\n"
+        )
+        allow = dict(decision="allow", alternative="")
+        with (
+            patch.object(yaml_install, "installer", return_value=["pip", "install", "PyYAML"]),
+            patch.object(yaml_install.approval_policy, "decision", return_value=allow),
+            patch.object(yaml_install.local_actions, "execute", return_value=dict(stderr=stderr)),
+        ):
+            skipped = self.resolve()
+        expected = f"{yaml_install.STILL_MISSING}: ERROR: No version ERROR: None found"
+        self.assertEqual(skipped["detail"], expected)
+
     def test_without_an_installer_the_operator_installs_it_and_always_decides(self):
         allow = dict(decision="allow", alternative="")
         with (
@@ -173,7 +187,10 @@ class YamlInstallTests(unittest.TestCase):
         ):
             still = self.resolve()
         self.assertTrue(asked.call_args.kwargs["personal"])
-        self.assertIn("sudo apt install python3-yaml", asked.call_args.args[1]["notice"])
+        shown = asked.call_args.args[1]
+        self.assertIn("sudo apt install python3-yaml", shown["notice"])
+        self.assertEqual(shown["status"], yaml_install.MANUAL_STEP)
+        self.assertNotIn("argv", shown)
         self.assertEqual(still["detail"], yaml_install.STILL_MISSING)
 
     def test_an_unknown_kind_names_its_suffix(self):

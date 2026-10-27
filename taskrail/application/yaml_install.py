@@ -14,10 +14,12 @@ from taskrail.application.planned_paths import safe_file
 from taskrail.interactions import approval_policy, local_actions
 
 DECISION = "yaml_install"
+MANUAL_STEP = "MANUAL_STEP"
 ALLOWED = "allowed"
 PACKAGE = "PyYAML"
 PIP = "pip"
 INSTALL_SECONDS = 600
+OUTPUT_LINES = 2
 OUTPUT_TAIL = 400
 REASON = "Install PyYAML so the check stage can syntax-check YAML files"
 OFFER = "PyYAML is missing, so changed YAML files can't be syntax-checked. Allow installs it into {0} for this and later runs; Deny leaves them unchecked."
@@ -61,20 +63,23 @@ def install(workflow, folder):
 
 
 def request(workflow, command):
-    """The local request, and the same request with the notice the operator reads."""
+    """The local request, if any, and what the operator reads; a manual step runs nothing."""
+    if command is None:
+        return None, dict(status=MANUAL_STEP, schema_version=1, reason=REASON, notice=MANUAL)
     root = next(iter(workflow.config["roots"].values()))
     payload = dict(status="LOCAL_REQUEST", schema_version=1, cwd=str(root), reason=REASON)
-    payload["argv"] = command or ["python3", "-m", PIP, "install", PACKAGE]
-    notice = OFFER.format(yaml_check.TARGET) if command else MANUAL
-    return payload, dict(payload, notice=notice)
+    payload["argv"] = command
+    return payload, dict(payload, notice=OFFER.format(yaml_check.TARGET))
 
 
 def run_install(workflow, folder, payload, decision):
-    """Run the approved install; the end of its error output when it reports one."""
+    """Run the approved install; the last lines of its error output when it reports one."""
     context = dict(roots=workflow.config["roots"], run=workflow.run, timeout=INSTALL_SECONDS)
     outcome = local_actions.execute(workflow.run, folder, payload, context, decision)
     output = outcome.get("stderr") or outcome.get("reason") or ""
-    return str(output)[-OUTPUT_TAIL:]
+    stripped = map(str.strip, str(output).splitlines())
+    lines = [line for line in stripped if line]
+    return " ".join(lines[-OUTPUT_LINES:])[-OUTPUT_TAIL:]
 
 
 def installer():
