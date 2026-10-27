@@ -7,6 +7,14 @@ import { preserveSelection, state } from './state.js';
 import { taskSection } from './task.js';
 
 const approvalDrafts = new Map();
+const LOCAL_NOTE =
+  'Local programs run as the application user and may execute project code. Review the exact command and its effects. This is not a sandbox.';
+const APPROVAL_NOTES = {
+  JENKINS_REQUEST:
+    'A read-only Jenkins request: build status, console log or test results. Starting a build always needs root approval in a terminal.',
+  MANUAL_STEP:
+    'Nothing runs from this card. Do the step yourself on this host, then Allow to continue; Deny continues without it.',
+};
 
 export async function get(url) {
   const response = await fetch(url, { cache: 'no-store' });
@@ -117,15 +125,9 @@ export function approvalCard(pending, runId = state.selected) {
     el('p', 'The stage timer is paused. Waiting has no time limit.'),
   );
   if (pending.request?.notice) card.append(el('p', pending.request.notice, 'approval-notice'));
-  const jenkins = pending.request?.status === 'JENKINS_REQUEST';
   card.append(
     el('pre', JSON.stringify(pending.request, null, 2)),
-    el(
-      'p',
-      jenkins
-        ? 'A read-only Jenkins request: build status, console log or test results. Starting a build always needs root approval in a terminal.'
-        : 'Local programs run as the application user and may execute project code. Review the exact command and its effects. This is not a sandbox.',
-    ),
+    el('p', APPROVAL_NOTES[pending.request?.status] || LOCAL_NOTE),
   );
   const input = el('textarea', undefined, 'approval-alternative');
   input.placeholder = 'Suggest an alternative action';

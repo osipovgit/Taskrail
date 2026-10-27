@@ -192,7 +192,8 @@ construction) from the service's Python, a system `python3` or
 `~/.local/state/taskrail/python`. When no Python has it, the check stage asks once per
 run: with pip or uv, **Allow** installs PyYAML into that directory (Allow all actions
 covers it) and later runs use it; without either, install it yourself (for example
-`sudo apt install python3-yaml`) and Allow, which is always a personal decision. The
+`sudo apt install python3-yaml`) and Allow; that card runs nothing and is always a
+personal decision. The
 files are checked at once after Allow; after Deny they stay `SKIPPED` as not checked.
 
 Before any command, the check stage compares each approved file with its preimage and
