@@ -78,6 +78,27 @@ export function tickStageTimers() {
   for (const node of document.querySelectorAll('.stage-clock'))
     node.textContent = stageClockLabel(node.csStage, Date.now() + state.serverClockOffset);
 }
+// Identical warnings collapse into one line with their count and the files they name.
+export function warningLines(warnings) {
+  const groups = new Map();
+  for (const w of warnings || []) {
+    const text =
+      w.resolution ||
+      (w.input?.filePath || '') + ': ' + w.error + ' → subsequent full read confirmed';
+    const group = groups.get(text) || { count: 0, files: [] };
+    const file = w.resolution && w.input?.filePath;
+    if (file && !group.files.includes(file)) group.files.push(file);
+    group.count += 1;
+    groups.set(text, group);
+  }
+  return [...groups].map(
+    ([text, group]) =>
+      (group.count > 1 ? group.count + ' × ' : '') +
+      text +
+      (group.files.length ? ' Files: ' + group.files.join(', ') : ''),
+  );
+}
+
 export function stageCard(stage) {
   const card = el('section', undefined, stage.status === 'RUNNING' ? 'running' : '');
   const heading = el('div', undefined, 'stage-header');
@@ -143,15 +164,7 @@ export function stageCard(stage) {
     }
   }
   list(card, 'Errors', stage.errors);
-  list(
-    card,
-    'Warnings',
-    (stage.warnings || []).map(
-      (w) =>
-        w.resolution ||
-        (w.input?.filePath || '') + ': ' + w.error + ' → subsequent full read confirmed',
-    ),
-  );
+  list(card, 'Warnings', warningLines(stage.warnings));
   if (stage.contract_error) card.append(el('p', stage.contract_error, 'text'));
   const events =
     stage.telemetry?.timeline ||

@@ -22,6 +22,7 @@ from taskrail.infrastructure.opencode_events import EventTranslator
 from taskrail.infrastructure.permission_check import verify_launch
 from taskrail.infrastructure.profile_rules import permissions
 from taskrail.infrastructure.runner import run_agent
+from taskrail.interactions import provider_resume
 
 RECORDER = """
 import json, os, sys
@@ -594,6 +595,28 @@ class RealStreamTests(unittest.TestCase):
                 result = parse_events(events)
                 self.assertEqual(result["provider_limit"], expected[name])
                 self.assertEqual(len(result["errors"]), 1)
+
+    def test_only_a_turn_the_provider_alone_broke_off_is_continued(self):
+        gateway = "{'name': 'APIError', 'data': {'message': 'Retries exhausted'}}"
+        broken = dict(status="TOOL_ERROR", sessions=["ses1"], errors=[gateway], tool_errors=[])
+        cases = {
+            "provider": (broken, {}, True),
+            "failed tool": (dict(broken, tool_errors=[dict(error=gateway)]), {}, False),
+            "denied": (dict(broken, permission=True), {}, False),
+            "answered": (dict(broken, final_text="{}"), {}, False),
+            "quota kept": (dict(broken, provider_limit=True), {}, True),
+            "quota stops": (
+                dict(broken, provider_limit=True),
+                dict(stop_on_provider_limit=True),
+                False,
+            ),
+            "overflow": (dict(broken, status="CONTEXT_EXCEEDED"), {}, False),
+            "two sessions": (dict(broken, sessions=["ses1", "ses2"]), {}, False),
+        }
+        for name, (outcome, config, continued) in cases.items():
+            with self.subTest(name=name):
+                errors = provider_resume.interruptions(outcome, config)
+                self.assertEqual(errors, [gateway] if continued else [])
 
 
 class SelectionTests(unittest.TestCase):

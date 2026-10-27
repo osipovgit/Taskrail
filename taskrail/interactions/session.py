@@ -6,7 +6,7 @@ from taskrail.core import control
 from taskrail.core.files import atomic_json, changed
 from taskrail.infrastructure import opencode_api
 from taskrail.infrastructure.runner import run_agent
-from taskrail.interactions import events, request_limits
+from taskrail.interactions import events, provider_resume, request_limits
 from taskrail.interactions.actions import Actions
 from taskrail.interactions.clock import StageClock
 
@@ -51,6 +51,7 @@ class StageSession:
             if request_limits.check(self, outcome):
                 return self.finished(outcome)
             response = Actions(self).route(outcome) or result_feedback(self, outcome)
+            response = response or provider_resume.response(self, outcome)
             if response is None:
                 return self.finished(outcome)
             if not self.continue_context(outcome, response):

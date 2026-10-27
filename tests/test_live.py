@@ -675,6 +675,17 @@ class LiveTests(LiveFixture, unittest.TestCase):
         self.assertGreater(len(reviews), 1, state["attempts"])
         self.assertIn("Free usage limit reached", state["summary"])
 
+    def test_a_turn_the_provider_broke_off_continues_in_the_same_session(self):
+        run, status, state = self.run_mode("provider-interrupted")
+        self.assertEqual(status, "READY_FOR_REVIEW")
+        writers = [entry for entry in state["attempts"] if entry["stage"] == "implementer"]
+        self.assertEqual(len(writers), 1, state["attempts"])
+        implementer = next(stage for stage in state["stages"] if stage["role"] == "implementer")
+        self.assertEqual(implementer["session_turns"], 2)
+        note = (run / implementer["directory"] / "tool-result.md").read_text()
+        self.assertIn("The provider broke off your previous turn", note)
+        self.assertIn("Retries exhausted", note)
+
     def test_stop_on_provider_limit_ends_the_stage_without_retries(self):
         _run, status, state = self.run_mode("provider-quota", stop_on_provider_limit=True)
         reviews = [entry for entry in state["attempts"] if entry["stage"] == "plan-reviewer"]

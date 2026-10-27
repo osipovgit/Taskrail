@@ -329,7 +329,17 @@ them whole. An exhausted provider quota or billing limit (`provider.quota`, "usa
 limit", "insufficient quota", HTTP 402) is retried like a broken transport by default.
 With `stop_on_provider_limit: true` it stops the stage at once, because a new session
 would fail the same way; Continue the run after the limit resets. A short rate limit
-is always retried. Denial means the command is
+is always retried.
+
+When the provider or its gateway breaks off a turn (an error with no answer, no failed
+tool and no permission denial), the same session continues after a pause of 1, 3 and
+then 5 minutes, at most three times per stage, for every role including the
+implementer. The session keeps its context and the changes it already made, which the
+source guard has checked; it is told the error and asked to continue from where it
+stopped. The pause does not count as active stage time, and Stop still works. This is
+not a new writer, so nothing is replayed; when the continuations are spent the stage
+ends as before and Continue stays available. Under `stop_on_provider_limit: true` an
+exhausted quota is not continued. Denial means the command is
 skipped; consider the operator's alternative. Format repair cannot request execution.
 
 All roles disable automatic compaction. `model_context_tokens` (one window, or one per
