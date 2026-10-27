@@ -61,9 +61,12 @@ class LiveFixture:
 
     def run_mode(self, mode="ok", **overrides):
         self.configure_mode(mode, **overrides)
-        with patch(
-            "taskrail.interactions.approvals.wait",
-            return_value=dict(decision="deny", alternative="Use permitted source paths"),
+        with (
+            patch(
+                "taskrail.interactions.approvals.wait",
+                return_value=dict(decision="deny", alternative="Use permitted source paths"),
+            ),
+            patch("taskrail.interactions.provider_resume.WAITS", (0, 0, 0)),
         ):
             run, status = execute_task(self.task, self.settings, run_dir=self.base / "result")
         state = json.loads((run / "run.json").read_text())

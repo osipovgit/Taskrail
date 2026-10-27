@@ -62,6 +62,19 @@ async function main() {
       truncated: false,
     },
   };
+  const missing = 'Unsuccessful exploratory read recorded as an observation.';
+  assert.deepEqual(
+    stages.warningLines([
+      { resolution: missing, input: { filePath: '/p/a.py' } },
+      { resolution: missing, input: { filePath: '/p/b.py' } },
+      { resolution: missing, input: { filePath: '/p/a.py' } },
+      { input: { filePath: '/p/c.py' }, error: 'Offset 9' },
+    ]),
+    [
+      '3 × ' + missing + ' Files: /p/a.py, /p/b.py',
+      '/p/c.py: Offset 9 → subsequent full read confirmed',
+    ],
+  );
   const card = stages.stageCard(stage);
   function all(node) {
     return [node, ...node.children.flatMap(all)];

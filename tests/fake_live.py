@@ -559,6 +559,11 @@ if mode == "context-overflow" and role == "planner" and record["mode"] == "model
     overflow = dict(type="error", error=dict(name="APIError", data=dict(message=message)))
     print(json.dumps(dict(overflow, sessionID="ses1")))
     sys.exit(0)
+if mode == "provider-interrupted" and role == "implementer" and not continued:
+    target.write_text(target.read_text().replace("return 1", "return 2"))
+    gateway = dict(name="APIError", data=dict(message="Retries exhausted", isRetryable=False))
+    print(json.dumps(dict(type="error", error=gateway, sessionID="ses1")))
+    sys.exit(0)
 if mode == "provider-quota" and role == "plan-reviewer":
     quota = dict(type="provider.quota", message="Free usage limit reached.", status=429)
     print(json.dumps(dict(type="error", error=quota, sessionID="ses1")))
