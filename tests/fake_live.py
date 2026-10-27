@@ -376,6 +376,13 @@ elif role == "implementer":
         (root / "new.py").write_text("VALUE = 2\n")
     if mode == "git":
         (root / ".git/HEAD").write_text("corrupted")
+    if mode == "secret-added":
+        kept = [line for line in target.read_text().splitlines(True) if "TOKEN" not in line]
+        if not context.get("feedback"):
+            kept.append('TOKEN = "' + "ghp_" + "x" * 36 + '"\n')
+        target.write_text("".join(kept))
+    if mode == "syntax-stuck":
+        target.write_text("def broken(\n")
     if mode == "syntax" and not context.get("feedback"):
         target.write_text("def broken(\n")
     if mode == "syntax" and context.get("feedback"):
@@ -439,6 +446,8 @@ if mode == "format-unavailable" and role == "plan-reviewer" and format_only:
             )
         )
 
+if mode == "review-preimage" and role == "reviewer":
+    target = run / "00-input/preimages/project/hello.py"
 value = enrich(
     value, context, target, role, observed=not format_only, read_wrapper=mode == "wrapped-no-change"
 )

@@ -128,6 +128,7 @@ class StageSession:
         outcome[VALIDATION_ERRORS] = self.context[VALIDATION_ERRORS]
         record = self.active[1]
         record.update(session_turns=self.context["turns"], paused_seconds=self.clock.paused)
+        record[RESULT_CORRECTIONS] = self.context[RESULT_CORRECTIONS]
         return outcome
 
 

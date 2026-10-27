@@ -10,6 +10,7 @@ from taskrail.application import evidence, instruction_sources, prompts, result_
 from taskrail.core import (
     control,
     coverage,
+    decision_fields,
     json_response,
     plan_contract,
     schema,
@@ -345,6 +346,18 @@ class ContractTests(unittest.TestCase):
         payload["completed_steps"] = []
         with self.assertRaisesRegex(ValueError, "Incomplete"):
             plan_contract.validate_completion(payload, plan, [])
+
+    def test_a_split_task_requirement_may_be_named_by_its_unique_parent_id(self):
+        requirements = [
+            dict(id="R-aaaaaaaaaaaa", parent_id="R-111111111111", kind="task", text="A"),
+            dict(id="R-bbbbbbbbbbbb", parent_id="R-222222222222", kind="task", text="B"),
+            dict(id="R-cccccccccccc", parent_id="R-222222222222", kind="task", text="C"),
+        ]
+        name = decision_fields.requirement_id
+        self.assertEqual(name("R-111111111111", requirements), "R-aaaaaaaaaaaa")
+        self.assertEqual(name("R2", requirements), "R-bbbbbbbbbbbb")
+        with self.assertRaisesRegex(ValueError, "Unknown requirement: R-222222222222"):
+            name("R-222222222222", requirements)
 
     def test_format_repair_has_no_research_context(self):
         request = prompts.repair(

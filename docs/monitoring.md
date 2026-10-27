@@ -12,12 +12,11 @@ time and observed tokens; stage cards show time allowances and instruction prove
 | Wall time | Start to finish/current time, including pauses |
 | Tool calls/errors | Distinct observed calls and latest status |
 | Repeated reads | Identical read arguments within an attempt |
-| Compaction | Explicit structured markers only; `opencode run` usually emits none, so it shows as unknown |
 | Failed-attempt usage | Usage without a validated result; not a semantic quality score |
 
-Missing usage or compaction events means **unknown**, not zero. A context percentage
-requires verified endpoint limits, complete latest-request usage and output reserve;
-the model name and cumulative spend cannot supply it. Cost currency/rates are not
+Missing usage means **unknown**, not zero. The stage context
+percentage uses the configured window (`model_context_tokens` minus the reserve) and the
+latest reported input; cumulative spend cannot supply it. Cost currency/rates are not
 verified. Provider quotas, not these counters, enforce billing limits.
 
 ## Server settings
@@ -54,8 +53,9 @@ Cumulative usage has no warning threshold. Counters are for comparison, not cont
 
 **Analytics** in the task list (CLI: `taskrail analytics`) sums every run in the
 run store: outcomes and success rate, recorded model time, reported tokens and
-continuations, and per model and per stage the attempts, failed attempts, format
-repairs, recoveries, tokens and time. Runs in the trash are not counted. Missing
+continuations, and per model and per stage the attempts, the first-try share (model
+attempts the server accepted without a same-session correction, of those that recorded
+their corrections), failed attempts, format repairs, recoveries, tokens and time. Runs in the trash are not counted. Missing
 usage is reported as zero tokens, so compare models only on runs with telemetry.
 
 ## Artifacts
@@ -109,15 +109,16 @@ telemetry; event logs alone cannot separate them.
 A single unambiguous JSON object is decoded locally despite surrounding prose or
 Markdown. Semantic coverage and source checks still apply to work proposals.
 Explicit blockers produce a safe BLOCKED result with the unvalidated draft saved;
-they never authorize implementation or approval. A repair call receives the original requirement IDs and cannot research
-or manufacture missing evidence. Compaction remains unknown without a structured
-marker; narrative recap text is not proof of a compaction event.
+they never authorize implementation or approval. A repair call receives the requirements under their `R<n>` labels and cannot research
+or manufacture missing evidence. Automatic compaction is off; an explicit compaction
+marker stops the session, and narrative recap text is not proof of one.
 
-Stage headers display `planner · 5 min 5 s / 1 h · 54 min 55 s left` while running.
-The clock updates once per second using server clock alignment without rebuilding
-message nodes. Selection pauses DOM timer updates. Terminal stages keep the recorded
-elapsed duration and effective attempt limit. `Timeout pending` means the UI clock
-reached the limit; only the worker can establish the final timeout status. The launch
+Stage headers display `planner · 5 min 5 s / 1 h`: active time and its limit. The
+clock updates once per second using server clock alignment without rebuilding message
+nodes. Selection pauses DOM timer updates. Terminal stages keep the recorded elapsed
+duration and effective attempt limit; only the worker establishes a timeout. Below the
+clock, `Context 55% · 47,310 of 86,016 tokens` compares the session's latest reported
+input with its model's input capacity (`Peak context` once the stage ended). The launch
 counter is retained internally for recovery control but is not displayed in stage cards.
 
 Git/local executor operations appear in the activity log as tool calls. They retain

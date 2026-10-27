@@ -2,7 +2,7 @@
 
 from types import MappingProxyType
 
-from taskrail.application import review_outcome
+from taskrail.application import check_repeats, review_outcome
 from taskrail.core import plan_contract
 
 PLAN_REVIEW = "plan-reviewer"
@@ -13,6 +13,7 @@ ALLOWED = "allowed"
 IMPLEMENTER = "implementer"
 REPAIRS = "repair_count"
 REVIEWER = "reviewer"
+CHECKS = "checks"
 
 
 def planning(flow, state, verdict, limit):
@@ -100,12 +101,18 @@ def advance(flow, state, verdict, reference, limit):
 
 def checked(flow, state, limit):
     """Route failed built-in checks to bounded repair, never to approval."""
-    failed = any(check[STATUS] == "FAIL" for check in state["checks"])
+    checks = state[CHECKS]
+    failed = any(check[STATUS] == "FAIL" for check in checks)
     if failed:
         if not flow[ALLOWED] or flow[REPAIRS] >= limit:
             state.update(status="CHECK_FAILED", summary="Checks failed after the last repair")
+        elif check_repeats.repeated(flow.get("feedback"), checks):
+            state.update(
+                status="CHECK_FAILED",
+                summary="The repair left the same checks failing; another would repeat it",
+            )
         else:
-            flow.update(stage=IMPLEMENTER, feedback={"checks": state["checks"]})
+            flow.update(stage=IMPLEMENTER, feedback={CHECKS: checks})
             flow[REPAIRS] += 1
     else:
         flow["stage"] = REVIEWER

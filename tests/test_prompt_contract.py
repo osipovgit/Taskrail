@@ -79,6 +79,14 @@ class RequestBudgetTests(LiveFixture, unittest.TestCase):
         self.assertNotIn("push", requests["05-review"].split("Local commands:")[0])
         self.assertNotIn('"findings"', requests["03-implement"])
         self.assertEqual(requests["01-plan"].count("as your entire message"), 3)
+        progress = run / "progress.md"
+        self.assertIn(
+            f"PROGRESS FILE: {progress}", requests["03-implement"].replace("/B", str(self.base))
+        )
+        self.assertNotIn("PROGRESS FILE", requests["05-review"])
+        self.assertIn("## Remaining", progress.read_text())
+        profile = json.loads((run / "03-implement/agent.md").read_text().split("---")[1])
+        self.assertEqual(profile["permission"]["edit"][str(progress)], "allow")
 
 
 if __name__ == "__main__":

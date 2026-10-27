@@ -14,8 +14,6 @@ export function renderMonitor(data) {
   let calls = 0,
     errors = 0,
     repeats = 0,
-    compactions = 0,
-    markers = 0,
     reported = 0,
     steps = 0;
   for (const row of rows) {
@@ -24,8 +22,6 @@ export function renderMonitor(data) {
     calls += t.tool_calls;
     errors += t.tool_errors;
     repeats += t.repeated_reads;
-    compactions += t.compaction_completed;
-    markers += t.compaction_markers;
     reported += t.usage_steps;
     steps += t.model_steps;
   }
@@ -73,11 +69,6 @@ export function renderMonitor(data) {
     'Tokens in repeat attempts',
     fmt(retries.reduce((n, r) => n + r.telemetry.tokens.total, 0)),
   );
-  metric(
-    'Compaction completed',
-    compactions ? fmt(compactions) + ' observed' : 'Unknown / not observed',
-  );
-  metric('Compaction markers', fmt(markers));
   const failed = rows.filter((r) => /ERROR|BLOCKED|FAIL|INVALID|TIMEOUT/.test(r.status));
   metric(
     'Tokens in failed attempts',
@@ -97,13 +88,6 @@ export function renderMonitor(data) {
     el(
       'p',
       'Usage updates on reported step completions. In-flight or interrupted usage may be missing. Cumulative tokens are not context size. Cache/reasoning categories may overlap provider totals.',
-      'hint',
-    ),
-  );
-  panel.append(
-    el(
-      'p',
-      'Compaction requires an explicit structured event. No marker does not prove no compaction; this CLI may omit it. No cost estimate without verified prices.',
       'hint',
     ),
   );
@@ -146,7 +130,6 @@ export function renderMonitor(data) {
           last_reported_input: t.last_input,
           peak_reported_input: t.peak_input,
           reported_cost_unverified: t.reported_cost,
-          compaction_completed: t.compaction_completed,
           usage_coverage: t.usage_coverage,
         },
         null,

@@ -20,7 +20,7 @@ from taskrail.core import (
 from taskrail.core.files import atomic_json
 from taskrail.git.requests import output_directory
 
-EVIDENCE_FILES = "declared roots, verified source views or executor snapshots (not run artifacts such as changes.diff or recovery.md)"
+EVIDENCE_FILES = "declared roots, verified source views, preimages or executor snapshots (not run artifacts such as changes.diff or recovery.md)"
 PLAN_FILES = "declared roots (files_read and proposed_change_files name project files; cite executor snapshots only in evidence)"
 EVIDENCE = "evidence"
 
@@ -28,14 +28,22 @@ EVIDENCE = "evidence"
 def validate(response, context):
     """Return a versioned result only after all independent validations pass.
 
-    A planner's problems name requirements by their plan labels.
+    Problems name requirements by the R<n> labels of the request.
     """
-    if context["stage"] != plan_result.PLANNER:
-        return checked(decision_adapter.stage_decision(response, context), context)
     try:
-        return checked(plan_result.stage_result(context), context)
+        return checked(decoded(response, context), context)
     except ValueError as error:
-        raise ValueError(plan_file.labelled(str(error), context["requirements"])) from error
+        message = plan_file.labelled(str(error), context["requirements"])
+        if message == str(error):
+            raise
+        raise ValueError(message) from error
+
+
+def decoded(response, context):
+    """The planner's result comes from its plan file, every other from its response."""
+    if context["stage"] == plan_result.PLANNER:
+        return plan_result.stage_result(context)
+    return decision_adapter.stage_decision(response, context)
 
 
 def checked(payload, context):
@@ -62,6 +70,7 @@ def checked(payload, context):
                 local_evidence=run / "00-input/local",
                 check_evidence=run / "00-input/checks",
                 source_views=run / "00-input/source-views",
+                preimages=run / "00-input/preimages",
             ),
             EVIDENCE_FILES,
         )

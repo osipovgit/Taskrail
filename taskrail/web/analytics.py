@@ -12,6 +12,7 @@ RECOVERY_MODES = frozenset(("access-recovery", "research-recovery"))
 DEFAULT_MODEL = "opencode default"
 ELAPSED = "elapsed_seconds"
 TOKENS = "tokens"
+CORRECTIONS = "result_corrections"
 
 
 def analytics(base):
@@ -65,16 +66,25 @@ def grouped(states, key):
     for state in states:
         for record in state.get("stages", []):
             empty = dict(attempts=0, failed=0, format_repairs=0, recoveries=0, tokens=0)
+            empty.update(first_try=0, first_try_measured=0)
             entry = totals.setdefault(key(record), dict(empty, elapsed_seconds=0))
             add(entry, record)
     return totals
 
 
 def add(entry, record):
-    """Count one stage record."""
+    """Count one stage record.
+
+    A model attempt that recorded its same-session corrections counts toward the
+    first-try share: valid without any correction.
+    """
     mode = record.get("mode")
+    accepted = record.get("status") in STAGE_OK
+    measured = mode == "model" and CORRECTIONS in record
     entry["attempts"] += 1
-    entry["failed"] += record.get("status") not in STAGE_OK
+    entry["failed"] += not accepted
+    entry["first_try_measured"] += measured
+    entry["first_try"] += measured and accepted and not record[CORRECTIONS]
     entry["format_repairs"] += mode == "format-repair"
     entry["recoveries"] += mode in RECOVERY_MODES
     entry[TOKENS] += total_tokens(record.get(TOKENS))

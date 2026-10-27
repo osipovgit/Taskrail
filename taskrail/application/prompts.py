@@ -15,6 +15,7 @@ from taskrail.application import (
     instruction_modules,
     instruction_sources,
     mode_rules,
+    plan_file,
     policy_sections,
     response_format,
 )
@@ -82,16 +83,19 @@ def contract(stage, version):
 
 
 def repair(response, error, stage, version, requirements):
-    """Conversion cannot inherit research directives or introduce new evidence."""
+    """Conversion cannot inherit research directives or introduce new evidence.
+
+    Requirements appear under the same R<n> labels as in the stage request.
+    """
     return "\n".join(
         (
             prompt_texts.text("repair.header"),
             repair_rules(stage),
-            f"Previous response was invalid: {error}",
+            f"Previous response was invalid: {plan_file.labelled(error, requirements)}",
             "Schema:",
             contract(stage, version),
             "Assigned requirements:",
-            context_json(requirements),
+            context_json(plan_file.labelled_requirements(requirements)),
             saved_response_prompt(response),
         )
     )
