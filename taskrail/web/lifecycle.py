@@ -6,7 +6,7 @@ from taskrail.application import run_locks
 from taskrail.application.checkpoints import budget_paused, resume_available
 from taskrail.core.files import atomic_json
 from taskrail.interactions import approval_policy, approvals
-from taskrail.web import run_family, run_groups
+from taskrail.web import run_groups, start_controls
 from taskrail.web.history import read_artifact
 
 RUN_INDEX = "run.json"
@@ -93,25 +93,24 @@ def require_resumable(run):
         raise ValueError(reason)
 
 
-def actions(run, state, busy):
-    """Expose state-dependent controls without weakening checkpoint checks."""
-    idle = not busy
+def actions(run, state, activity):
+    """Expose state-dependent controls without weakening checkpoint checks.
+
+    Starting a worker waits for every run on an overlapping project; Done, Delete and
+    a restart draft only need this run, and for Delete its split, to be stopped.
+    """
     running = state.get(STATUS) == "RUNNING"
     requested = running and (run / "stop.request").exists()
-    can_resume, reason = resume_available(run, state)
+    stopped = not running and not activity.held
     return dict(
+        start_controls.starts(run, state, activity),
         stop=running and not requested,
         stop_requested=requested,
-        delete=not running and state.get(STATUS) != "STARTING" and idle,
-        followup=idle and run_family.can_follow_up(run, state),
-        restart=(run / RUN_INDEX).is_file() and idle,
-        resume=can_resume and idle,
-        resume_budget=can_resume and idle,
+        delete=stopped and state.get(STATUS) != "STARTING" and not activity.family,
         budget_paused=budget_paused(state),
-        done=not running and idle and not run_groups.marked(run, state),
+        done=stopped and not run_groups.marked(run, state),
         reopen=run_groups.marked(run, state),
         revoke_auto_approve=approval_policy.active(run, state),
-        resume_reason=reason,
     )
 
 

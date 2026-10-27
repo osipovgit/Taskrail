@@ -282,6 +282,11 @@ function actionButtons(data, embedded = false) {
         : runAction(action, {}, data.id);
     actions.append(button);
   }
+  // Continuing waits for another run on the same project; the other controls stay usable.
+  if (data.actions?.waiting_for)
+    actions.append(
+      el('p', data.actions.waiting_for + '. Continue becomes available when it stops.', 'muted'),
+    );
   if (data.actions?.resume) {
     const note = el('textarea', undefined, 'resume-note');
     note.id = 'resume-note';

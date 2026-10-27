@@ -1,8 +1,10 @@
 """Whether a run or a run on an overlapping project is active, from the run locks."""
 
 import json
+from typing import NamedTuple
 
 from taskrail.application import lock_resources, run_locks
+from taskrail.web import epic_tasks, run_family
 from taskrail.web.history import read_artifact
 
 RUN_INDEX = "run.json"
@@ -17,12 +19,24 @@ def run_sources(run):
     return list(index.get("roots", {}).values())
 
 
-def run_busy(run):
-    """The run's worker or a run on an overlapping project or repository is active."""
-    if run_held(run):
-        return True
+class Activity(NamedTuple):
+    """What keeps a run's controls from acting now."""
+
+    # The run's own worker is active.
+    held: bool = False
+    # A task or phase run of its split or delivery is active.
+    family: bool = False
+    # Why a new worker of this run cannot start yet: a run on an overlapping project.
+    waiting: str | None = None
+
+
+def activity(run):
+    """The run's own worker, the runs of its split and the projects it would lock."""
+    held = run_held(run)
+    members = run_family.members(epic_tasks.record(run))
+    family = any(run_held(run.parent / name) for name in members)
     sources = run_sources(run) if (run / RUN_INDEX).is_file() else []
-    return run_locks.conflict(sources) is not None
+    return Activity(held, family, None if held else run_locks.conflict(sources))
 
 
 class BusyError(ValueError):

@@ -14,7 +14,12 @@ from taskrail.application import (
 )
 from taskrail.core import task_graph
 from taskrail.web.lifecycle import actions
+from taskrail.web.run_activity import Activity
 from taskrail.web.submissions import worker_command
+
+IDLE = Activity()
+HELD = Activity(held=True)
+WAITING = Activity(waiting="Another task is running on /project")
 
 
 class StageBoundaryTests(unittest.TestCase):
@@ -53,22 +58,37 @@ class StageBoundaryTests(unittest.TestCase):
         )
         (self.run / "run.json").write_text(json.dumps(state))
         (self.run / "checkpoint.json").write_text(json.dumps(dict(stage="planner")))
-        controls = actions(self.run, state, False)
+        controls = actions(self.run, state, IDLE)
         self.assertTrue(controls["resume_budget"])
         self.assertTrue(controls["delete"])
         self.assertTrue(controls["budget_paused"])
-        self.assertFalse(actions(self.run, state, True)["resume_budget"])
-        self.assertFalse(actions(self.run, state, True)["delete"])
+        self.assertFalse(actions(self.run, state, HELD)["resume_budget"])
+        self.assertFalse(actions(self.run, state, HELD)["delete"])
         state["status"] = "BLOCKED"
-        self.assertTrue(actions(self.run, state, False)["resume"])
+        self.assertTrue(actions(self.run, state, IDLE)["resume"])
         (self.run / "checkpoint.json").write_text(json.dumps(dict(stage="implementer")))
-        self.assertTrue(actions(self.run, state, False)["resume"])
+        self.assertTrue(actions(self.run, state, IDLE)["resume"])
         state["status"] = "BLOCKED_PERMISSION"
-        self.assertFalse(actions(self.run, state, False)["resume"])
+        self.assertFalse(actions(self.run, state, IDLE)["resume"])
         (self.run / "checkpoint.json").unlink()
         state["status"] = "INTERRUPTED"
-        self.assertFalse(actions(self.run, state, False)["resume"])
-        self.assertTrue(actions(self.run, state, False)["delete"])
+        self.assertFalse(actions(self.run, state, IDLE)["resume"])
+        self.assertTrue(actions(self.run, state, IDLE)["delete"])
+
+    def test_a_run_on_the_same_project_holds_back_only_starting_a_worker(self):
+        state = dict(contract_version=1, status="BLOCKED", stages=[dict(mode="model")])
+        (self.run / "run.json").write_text(json.dumps(state))
+        (self.run / "checkpoint.json").write_text(json.dumps(dict(stage="planner")))
+        controls = actions(self.run, state, WAITING)
+        self.assertFalse(controls["resume"] or controls["resume_budget"] or controls["followup"])
+        self.assertEqual(controls["waiting_for"], "Another task is running on /project")
+        for usable in ("restart", "done", "delete"):
+            self.assertTrue(controls[usable], usable)
+        self.assertIsNone(actions(self.run, state, IDLE)["waiting_for"])
+        self.assertFalse(actions(self.run, state, Activity(family=True))["delete"])
+        phase = dict(state, phase="task")
+        self.assertFalse(actions(self.run, phase, WAITING)["restart"])
+        self.assertTrue(actions(self.run, phase, IDLE)["restart"])
 
     def test_worker_budget_flag_is_explicit(self):
         normal = worker_command(self.run, self.run, self.run / "missing", True, False)

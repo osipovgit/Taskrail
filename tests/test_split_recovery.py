@@ -19,6 +19,7 @@ from taskrail.web import (
     integration_review,
     lifecycle,
     requests,
+    run_activity,
     run_list,
 )
 from taskrail.web.run_view import run_view
@@ -121,7 +122,7 @@ class SplitRecoveryTests(ReviewedFixture, unittest.TestCase):
                     dict(parent_run=child.name, submission_mode=mode, **FIELDS), self.runs
                 )
         child_state = json.loads((child / "run.json").read_text())
-        self.assertFalse(lifecycle.actions(child, child_state, busy=False)["followup"])
+        self.assertFalse(lifecycle.actions(child, child_state, run_activity.Activity())["followup"])
         listed = [entry["id"] for entry in run_list.list_runs(self.runs)]
         self.assertNotIn(child.name, listed)
         self.assertNotIn(retry.name, listed)
