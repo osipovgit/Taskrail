@@ -1,5 +1,6 @@
 """Landmarks of infrastructure and application files, and the optional YAML syntax check."""
 
+import os
 import sys
 import tempfile
 import unittest
@@ -178,6 +179,21 @@ class YamlInstallTests(unittest.TestCase):
             skipped = self.resolve()
         expected = f"{yaml_install.STILL_MISSING}: ERROR: No version ERROR: None found"
         self.assertEqual(skipped["detail"], expected)
+
+    def test_uv_in_the_user_bin_is_found_without_it_on_path(self):
+        with tempfile.TemporaryDirectory() as directory:
+            uv = Path(directory) / "uv"
+            uv.write_text("#!/bin/sh\n")
+            uv.chmod(0o755)
+            self.available.append(sys.executable)
+            no_pip = SimpleNamespace(returncode=1)
+            with (
+                patch.dict(os.environ, PATH=os.devnull),
+                patch.object(yaml_install, "USER_BIN", directory),
+                patch.object(yaml_check, "completed", return_value=no_pip),
+            ):
+                command = yaml_install.installer()
+        self.assertEqual(command[:3], [str(uv), "pip", "install"])
 
     def test_without_an_installer_the_operator_installs_it_and_always_decides(self):
         allow = dict(decision="allow", alternative="")
