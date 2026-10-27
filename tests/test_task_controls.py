@@ -372,6 +372,34 @@ class TaskControlTests(unittest.TestCase):
         entry = next(run for run in list_runs(self.runs) if run["id"] == "epic")
         self.assertEqual(entry["group"], "attention")
 
+    def test_allow_all_given_in_a_task_run_covers_the_whole_split(self):
+        epic = self.make_epic()
+        task = (epic / "00-input/task.md").read_text()
+        (epic / "00-input/task.md").write_text(task.replace('"auto_approve": true, ', ""))
+        with self.launching("child-1") as launch:
+            self.launcher.action(dict(id="epic", action="epic_next"))
+        first = launch.call_args.args[0]["text"]
+        self.assertNotIn('"auto_approve"', first)
+        child = self.runs / "child-1"
+        (child / "00-input").mkdir(parents=True)
+        (child / "00-input/task.md").write_text(first)
+        state = dict(status="RUNNING", summary="", roots={"project": str(self.repo)}, stages=[])
+        (child / "run.json").write_text(json.dumps(state))
+        request = dict(status="LOCAL_REQUEST", argv=["make"], cwd=str(self.repo))
+        atomic_json(child / "pending-approval.json", dict(ticket="t1", request=request))
+        decision = dict(id="child-1", ticket="t1", decision="allow", alternative="", allow_all=True)
+        self.launcher.route("/api/decision", decision)
+        self.assertTrue(run_view(self.runs, "epic")["auto_approve"])
+        (child / "pending-approval.json").unlink()
+        self.finish("child-1", "READY_FOR_REVIEW")
+        (child / "00-input/task.md").write_text(first)
+        with self.launching("child-2") as launch:
+            self.launcher.action(dict(id="epic", action="epic_next"))
+        self.assertIn('"auto_approve": true', launch.call_args.args[0]["text"])
+        self.launcher.action(dict(id="child-1", action="revoke_auto_approve"))
+        self.assertFalse(run_view(self.runs, "epic")["auto_approve"])
+        self.assertTrue((epic / "auto-approve.off").exists())
+
     def test_split_requires_independent_combined_review_and_fresh_source(self):
         epic = self.make_epic()
         plan = json.loads((epic / "plan.json").read_text())

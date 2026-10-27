@@ -7,8 +7,7 @@ from pathlib import Path
 from taskrail.application import outside_changes, run_locks, worktree_isolation
 from taskrail.application.source_guard import SourceGuard
 from taskrail.core.files import digest
-from taskrail.interactions import approval_policy
-from taskrail.web import epic_tasks, history, parent_context, task_form
+from taskrail.web import epic_tasks, history, parent_context, split_approvals, task_form
 from taskrail.web.run_activity import BusyError
 
 NAME = "integration"
@@ -41,7 +40,7 @@ def payload(run, state):
         roots=worktree_isolation.root_entries(state["roots"]),
         phase=NAME,
         read_only=True,
-        auto_approve=approval_policy.at_start(run, draft),
+        auto_approve=split_approvals.allows_all(run, draft),
         split_context=changes_by_task(entries),
         parent_context=parent_context.snapshot(run, entries),
         check_specs=[spec for spec in state.get("check_specs", []) if spec["phase"] == "check"],
