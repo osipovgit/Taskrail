@@ -16,10 +16,13 @@ def check_command(argv):
     parser = argparse.ArgumentParser(description=check_command.__doc__)
     parser.add_argument(COMMAND_ARGUMENT)
     parser.add_argument(SETTINGS_OPTION)
+    from taskrail.application.yaml_check import health
     from taskrail.onboarding import check
 
+    lines = check(parser.parse_args(argv).settings)
+    lines.append(health())
     failures = 0
-    for passed, message in check(parser.parse_args(argv).settings):
+    for passed, message in lines:
         failures += not passed
         sys.stdout.write("{} {}\n".format("OK  " if passed else "FAIL", message))
     return 1 if failures else 0
