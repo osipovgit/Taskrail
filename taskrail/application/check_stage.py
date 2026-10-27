@@ -1,6 +1,6 @@
 """The check stage between implementation and independent review."""
 
-from taskrail.application import added_lines, change_limit, transitions
+from taskrail.application import added_lines, change_limit, transitions, yaml_install
 from taskrail.application.artifacts import new_stage
 from taskrail.application.builtin_checks import syntax_checks
 from taskrail.application.verify_commands import run_commands
@@ -29,7 +29,9 @@ def run_checks(workflow):
 def collect(workflow, folder):
     """Commands run only after every changed file passed its syntax and added-line scan."""
     roots = workflow.config["roots"]
-    checks = syntax_checks(roots, workflow.state["changed_files"])
+    checks = yaml_install.resolve(
+        workflow, folder, syntax_checks(roots, workflow.state["changed_files"])
+    )
     checks.extend(added_lines.scan(workflow.run, roots, workflow.state["preimages"]))
     if any(check["status"] == "FAIL" for check in checks):
         return checks

@@ -35,7 +35,7 @@ folders.
 | Git mutation | `GIT_REQUEST` final response | Implementer, approved scope, bounded command grammar |
 | Remote inspection/change | `ACTION_REQUEST` final response | Configured SSH targets; exact script root-approved; inspection only before you confirm a change, server checks after it; never the implementer |
 | Jenkins | `JENKINS_REQUEST` final response | Configured jobs; reads approved in the UI, builds root-approved |
-| Local checks | Built-in syntax checks (`.py`, `.json`, `.sh`; `.yml`/`.yaml` with PyYAML from the service's Python or a system `python3`, safe composer only; `taskrail check` names which); `LOCAL_REQUEST` for tests, linters or explicit Bash | Exact argv personally approved; runs as the application user |
+| Local checks | Built-in syntax checks (`.py`, `.json`, `.sh`; `.yml`/`.yaml` with PyYAML from the service's Python, a system `python3` or Taskrail's own package directory, safe composer only; `taskrail check` names which); `LOCAL_REQUEST` for tests, linters or explicit Bash | Exact argv personally approved; runs as the application user |
 | HTTP/API/database tools | No direct connector | Approved SSH scripts may use installed remote clients |
 
 Executor requests are JSON **assistant responses**, not function calls. End the

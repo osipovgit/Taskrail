@@ -1,27 +1,36 @@
 """YAML syntax without a YAML dependency of the service itself.
 
-PyYAML in this Python composes the file in process; otherwise a system python3 that
-has it does, with a fixed argv in isolated mode. Only the safe composer runs: no tag
-such as !vault is constructed and nothing in the file executes.
+PyYAML in this Python composes the file in process. Otherwise this Python or a system
+python3 does, in isolated mode with a fixed argv, when it imports PyYAML, also from
+Taskrail's own package directory where an approved install puts it. Only the safe
+composer runs: no tag such as !vault is constructed and nothing in the file executes.
 """
 
 import os
 import shutil
 import subprocess
+import sys
 from functools import cache
 from importlib import import_module
 from importlib.util import find_spec
+from pathlib import Path
+
+from taskrail.application.run_locks import STATE
 
 SECONDS = 30
 IN_PROCESS = "PyYAML in this Python"
-SCRIPT = """import sys, yaml
+TARGET = Path.home() / STATE / "python"
+PROBE = "import sys\nsys.path.insert(0, sys.argv[1])\nimport yaml\n"
+SCRIPT = """import sys
+sys.path.insert(0, sys.argv[2])
+import yaml
 try:
     with open(sys.argv[1], encoding="utf-8") as stream:
         list(yaml.compose_all(stream, Loader=yaml.SafeLoader))
 except yaml.YAMLError as error:
     sys.exit(str(error))
 """
-MISSING = "YAML not checked: PyYAML is in neither this Python nor python3 (install python3-yaml)"
+MISSING = "YAML not checked: no Python here has PyYAML"
 
 
 class Unavailable(Exception):
@@ -42,13 +51,19 @@ def syntax(path):
 
 @cache
 def source():
-    """This Python when it has PyYAML, else a system python3 that has it, else None."""
+    """This Python when it has PyYAML, else a Python that imports it, else None."""
     if find_spec("yaml") is not None:
         return IN_PROCESS
-    python = shutil.which("python3", path=os.defpath)
-    if python and completed(python, "-c", "import yaml").returncode == 0:
-        return python
+    for python in pythons():
+        if completed(python, "-c", PROBE, str(TARGET)).returncode == 0:
+            return python
     return None
+
+
+def pythons():
+    """This Python, then the system python3."""
+    system = shutil.which("python3", path=os.defpath)
+    return [python for python in dict.fromkeys((sys.executable, system)) if python]
 
 
 def compose(path):
@@ -61,8 +76,8 @@ def compose(path):
 
 
 def run(python, path):
-    """Compose every document with the system python3."""
-    finished = completed(python, "-c", SCRIPT, str(path))
+    """Compose every document with another Python."""
+    finished = completed(python, "-c", SCRIPT, str(path), str(TARGET))
     if finished.returncode:
         raise ValueError(finished.stderr.decode(errors="replace").strip())
 
@@ -77,9 +92,3 @@ def completed(python, *arguments):
         timeout=SECONDS,
         check=False,
     )
-
-
-def health():
-    """Informational check line: how the check stage validates YAML, if at all."""
-    checker = source()
-    return True, (f"YAML syntax checks: {checker}" if checker else MISSING)
