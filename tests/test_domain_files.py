@@ -1,12 +1,13 @@
 """Landmarks of infrastructure and application files, and the optional YAML syntax check."""
 
+import sys
 import tempfile
 import unittest
 from importlib.util import find_spec
 from pathlib import Path
 from unittest.mock import patch
 
-from taskrail.application import builtin_checks
+from taskrail.application import builtin_checks, yaml_check
 from taskrail.application.project_files import described, landmarks
 
 LANDMARK_CASES = (
@@ -71,26 +72,52 @@ class LandmarkTests(unittest.TestCase):
 
 
 class YamlSyntaxTests(unittest.TestCase):
+    def setUp(self):
+        yaml_check.source.cache_clear()
+        self.addCleanup(yaml_check.source.cache_clear)
+
     def check(self, text):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "site.yml"
             path.write_text(text)
             return builtin_checks.file_check("site.yml", path)
 
-    @unittest.skipUnless(find_spec("yaml"), "PyYAML is optional")
-    def test_yaml_is_parsed_without_constructing_tags(self):
+    def assert_parsed_without_constructing_tags(self):
         passed = self.check("---\npassword: !vault |\n  $ANSIBLE_VAULT;1.1\n---\n- name: a\n")
         self.assertEqual(passed["status"], "PASS", passed)
         failed = self.check("roles: [ntp\n")
         self.assertEqual(failed["status"], "FAIL")
         self.assertIn("line 2", failed["detail"])
+        return passed["detail"]
 
-    def test_yaml_is_unchecked_without_pyyaml(self):
-        with patch.object(builtin_checks, "find_spec", return_value=None):
-            self.assertEqual(builtin_checks.optional_validators(), {})
-        base = {suffix: builtin_checks.VALIDATORS[suffix] for suffix in (".py", ".json", ".sh")}
-        with patch.object(builtin_checks, "VALIDATORS", base):
-            self.assertEqual(self.check("roles: [ntp\n")["status"], "SKIPPED")
+    @unittest.skipUnless(find_spec("yaml"), "PyYAML is optional")
+    def test_yaml_is_parsed_in_process_without_constructing_tags(self):
+        self.assertIn("PyYAML in this Python", self.assert_parsed_without_constructing_tags())
+
+    @unittest.skipUnless(find_spec("yaml"), "needs a Python with PyYAML")
+    def test_a_system_python_with_pyyaml_checks_yaml_for_the_service(self):
+        with (
+            patch.object(yaml_check, "find_spec", return_value=None),
+            patch.object(yaml_check.shutil, "which", return_value=sys.executable),
+        ):
+            self.assertIn(sys.executable, self.assert_parsed_without_constructing_tags())
+
+    def test_yaml_is_skipped_with_the_reason_when_no_python_has_pyyaml(self):
+        with (
+            patch.object(yaml_check, "find_spec", return_value=None),
+            patch.object(yaml_check.shutil, "which", return_value=None),
+        ):
+            skipped = self.check("roles: [ntp\n")
+            self.assertEqual(skipped["status"], "SKIPPED")
+            self.assertIn("install python3-yaml", skipped["detail"])
+            self.assertEqual(yaml_check.health(), (True, yaml_check.MISSING))
+
+    def test_an_unknown_kind_names_its_suffix(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "app.cfg"
+            path.write_text("x")
+            skipped = builtin_checks.file_check("app.cfg", path)
+        self.assertEqual(skipped["detail"], "No built-in syntax validator for .cfg")
 
 
 if __name__ == "__main__":

@@ -6,16 +6,14 @@ import os
 import shutil
 import subprocess
 import tokenize
-from importlib import import_module
-from importlib.util import find_spec
 from types import MappingProxyType
 
+from taskrail.application import yaml_check
 from taskrail.application.planned_paths import safe_file
 
 SHELL_SECONDS = 30
 SKIPPED = "SKIPPED"
 CHECK_ERRORS = (ValueError, SyntaxError, OSError, subprocess.TimeoutExpired)
-YAML_SUFFIXES = (".yml", ".yaml")
 
 
 def syntax_checks(roots, names):
@@ -29,9 +27,12 @@ def file_check(name, path):
         return dict(file=name, status=SKIPPED, detail="deleted file")
     validator = VALIDATORS.get(path.suffix)
     if validator is None:
-        return dict(file=name, status=SKIPPED, detail="No built-in syntax validator")
+        kind = path.suffix or "files without a suffix"
+        return dict(file=name, status=SKIPPED, detail=f"No built-in syntax validator for {kind}")
     try:
         detail = validator(path)
+    except yaml_check.Unavailable as missing:
+        return dict(file=name, status=SKIPPED, detail=str(missing))
     except CHECK_ERRORS as error:
         return dict(file=name, status="FAIL", detail=str(error))
     return dict(file=name, status="PASS", detail=detail)
@@ -68,23 +69,12 @@ def shell_syntax(path):
     return "bash -n (no execution)"
 
 
-def yaml_syntax(path):
-    """Compose every document with the safe loader; tags such as !vault are not constructed."""
-    yaml = import_module("yaml")
-    try:
-        list(yaml.compose_all(path.read_text(), Loader=yaml.SafeLoader))
-    except yaml.YAMLError as error:
-        raise ValueError(str(error)) from error
-    return "YAML syntax (PyYAML, no tag construction)"
-
-
-def optional_validators():
-    """The runtime is standard-library only; YAML is checked only where PyYAML exists."""
-    if find_spec("yaml") is None:
-        return {}
-    return dict.fromkeys(YAML_SUFFIXES, yaml_syntax)
-
-
 VALIDATORS = MappingProxyType(
-    {".py": python_syntax, ".json": json_syntax, ".sh": shell_syntax, **optional_validators()}
+    {
+        ".py": python_syntax,
+        ".json": json_syntax,
+        ".sh": shell_syntax,
+        ".yml": yaml_check.syntax,
+        ".yaml": yaml_check.syntax,
+    }
 )
