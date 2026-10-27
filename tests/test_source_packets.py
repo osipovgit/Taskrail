@@ -6,6 +6,7 @@ import unittest
 from pathlib import Path
 
 from taskrail.application import (
+    citation_review,
     context_projection,
     evidence,
     recovery,
@@ -54,6 +55,28 @@ class SourcePacketTests(unittest.TestCase):
         claim.update(line_start=13, line_end=13)
         with self.assertRaisesRegex(ValueError, "matching observed read"):
             source_claims.validate_claim(claim, evidence.validation_records(self.run))
+
+    def test_a_rejected_citation_brings_its_current_lines_into_the_same_session(self):
+        context = dict(
+            run=self.run, roots=self.config["roots"], check_config={}, deliver_lines=True
+        )
+        claim = dict(id="E7", path=str(self.path), line_start=15, line_end=16)
+        with self.assertRaises(ValueError) as rejected:
+            citation_review.validate([claim], [], context)
+        feedback = str(rejected.exception)
+        self.assertIn("Evidence E7", feedback)
+        self.assertIn("15: value_15 = 15\n16: value_16 = 16", feedback)
+        self.assertIn("Check the claim against these lines", feedback)
+        records = evidence.validation_records(self.run)
+        proofs = citation_review.validate([claim], records, context)
+        self.assertEqual(proofs[0]["claim_id"], "E7")
+        secret = self.root / ".env"
+        secret.write_text("TOKEN=hidden\n")
+        hidden = dict(id="E8", path=str(secret), line_start=1, line_end=1)
+        with self.assertRaises(ValueError) as withheld:
+            citation_review.validate([hidden], [], context)
+        self.assertNotIn("hidden", str(withheld.exception))
+        self.assertIn("offset=1, limit=1", str(withheld.exception))
 
     def test_budget_and_range_cap_never_register_undelivered_lines(self):
         self.path.write_text("".join(f"{number}: " + "x" * 200 + "\n" for number in range(1, 101)))

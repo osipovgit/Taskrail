@@ -2,8 +2,8 @@
 
 from pathlib import Path
 
-from taskrail.application import source_views
-from taskrail.core import source_claims
+from taskrail.application import citation_delivery, source_views
+from taskrail.core import citation_errors, source_claims
 
 ERROR_LIMIT = 5
 
@@ -16,6 +16,9 @@ def validate(claims, records, context):
     for claim in claims:
         try:
             proofs.append(checked(claim, records, context))
+        except citation_errors.MissingLines as error:
+            delivered = context.get("deliver_lines") and citation_delivery.deliver(error, context)
+            errors.append(delivered or guidance(claim, context, str(error), views))
         except ValueError as error:
             errors.append(guidance(claim, context, str(error), views))
     if errors:

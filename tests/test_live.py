@@ -15,6 +15,7 @@ from taskrail.application.planned_paths import safe_file
 from taskrail.application.task_config import configuration
 from taskrail.core.paths import tool_paths
 from taskrail.infrastructure.runner import run_agent as real_run_agent
+from taskrail.interactions.session import MAX_RESULT_CORRECTIONS
 
 
 class LiveTests(LiveFixture, unittest.TestCase):
@@ -988,7 +989,7 @@ class LiveTests(LiveFixture, unittest.TestCase):
         self.assertEqual(status, "READY_FOR_REVIEW", state.get("summary"))
         planner = [stage for stage in state["stages"] if stage["stage"] == "plan-reviewer"]
         self.assertEqual([stage["mode"] for stage in planner], ["model", "research-recovery"])
-        self.assertEqual(planner[0]["session_turns"], 3)
+        self.assertEqual(planner[0]["session_turns"], MAX_RESULT_CORRECTIONS + 1)
         request = (run / planner[1]["directory"] / "request.md").read_text()
         self.assertIn("PREVIOUS FINAL RESPONSE WAS INVALID: Evidence E1", request)
 
@@ -1195,8 +1196,8 @@ class LiveTests(LiveFixture, unittest.TestCase):
         _, status, state = self.run_mode("badpath")
         self.assertEqual(status, "INVALID_RESULT")
         self.assertEqual(len(state["attempts"]), 1)
-        self.assertEqual(state["stages"][0]["session_turns"], 3)
-        self.assertEqual(len(state["attempts"][0]["validation_errors"]), 2)
+        self.assertEqual(state["stages"][0]["session_turns"], MAX_RESULT_CORRECTIONS + 1)
+        self.assertEqual(len(state["attempts"][0]["validation_errors"]), MAX_RESULT_CORRECTIONS)
         self.assertIn("return 1", (self.root / "hello.py").read_text())
 
     def test_symlink_and_metadata_paths_rejected(self):
