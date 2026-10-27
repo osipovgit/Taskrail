@@ -16,7 +16,7 @@ time and observed tokens; stage cards show time allowances and instruction prove
 
 Missing usage means **unknown**, not zero. The stage context
 percentage uses the configured window (`model_context_tokens` minus the reserve) and the
-latest reported input; cumulative spend cannot supply it. Cost currency/rates are not
+latest reported input or the estimate above; cumulative spend cannot supply it. Cost currency/rates are not
 verified. Provider quotas, not these counters, enforce billing limits.
 
 ## Server settings
@@ -117,8 +117,13 @@ Stage headers display `planner · 5 min 5 s / 1 h`: active time and its limit. T
 clock updates once per second using server clock alignment without rebuilding message
 nodes. Selection pauses DOM timer updates. Terminal stages keep the recorded elapsed
 duration and effective attempt limit; only the worker establishes a timeout. Below the
-clock, `Context 55% · 47,310 of 86,016 tokens` compares the session's latest reported
-input with its model's input capacity (`Peak context` once the stage ended). The launch
+clock, `Context 55% · 47,310 of 86,016 tokens` compares the session's context with its
+model's input capacity (`Peak context` once the stage ended). It is the input the
+provider reported for the latest finished step (uncached plus cache read and write).
+Text and tool calls that arrived since are added at about four characters per token and
+mark the value `≈`; without any report the estimate is the request, the role and every
+text and tool call so far. Reports arrive only at step ends, so a long step shows the
+estimate until it finishes. The launch
 counter is retained internally for recovery control but is not displayed in stage cards.
 
 Git/local executor operations appear in the activity log as tool calls. They retain

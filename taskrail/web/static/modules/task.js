@@ -60,15 +60,13 @@ export function taskSection(data) {
   task.append(el('h3', 'Task'), originalTask(data));
   const requirements = data.requirements || [];
   if (requirements.length) {
-    const ids = fold(
-      'Requirement IDs',
-      `task-requirements:${data.id}`,
-      String(requirements.length),
-    );
+    const ids = fold('Requirements', `task-requirements:${data.id}`, String(requirements.length));
     const items = el('ul', undefined, 'task-requirements');
-    for (const entry of requirements) {
+    for (const [index, entry] of requirements.entries()) {
       const item = el('li', undefined, 'task-requirement');
-      item.append(el('span', entry.id, 'task-requirement-id'), el('div', entry.text, 'text'));
+      const label = el('span', 'R' + (index + 1), 'task-requirement-id');
+      label.title = entry.id;
+      item.append(label, el('div', entry.text, 'text'));
       items.append(item);
     }
     ids.append(items);

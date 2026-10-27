@@ -29,6 +29,26 @@ class TelemetryTests(unittest.TestCase):
         self.assertEqual(len(t.timeline.compactions), 1)
         self.assertNotIn("compaction_completed", t.summary())
 
+    def test_delivered_characters_restart_at_each_reported_input(self):
+        t = Telemetry()
+        read = dict(id="r", tool="read", state=dict(status="completed", input={}, output="x" * 98))
+        running = dict(read, id="p", state=dict(status="running", input={}, output=""))
+        events = [
+            dict(type="text", part=dict(id="t", text="hello")),
+            dict(type="tool_use", part=running),
+            dict(type="tool_use", part=read),
+        ]
+        for event in events:
+            t.observe(json.dumps(event))
+        value = t.summary()
+        self.assertEqual((value["observed_characters"], value["unreported_characters"]), (105, 105))
+        usage = dict(id="s", tokens=dict(input=50, output=5, total=55))
+        t.observe(json.dumps(dict(type="step_finish", part=usage)))
+        t.observe(json.dumps(dict(type="text", part=dict(id="u", text="abc"))))
+        value = t.summary()
+        self.assertEqual((value["observed_characters"], value["unreported_characters"]), (108, 3))
+        self.assertEqual(value["last_input"], 50)
+
     def test_tool_trace_preserves_arguments_status_errors_and_timing(self):
         t = Telemetry()
         for i in range(2):
