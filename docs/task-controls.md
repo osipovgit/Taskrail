@@ -4,18 +4,22 @@
 
 | Action | Required state | Result |
 |---|---|---|
-| Restart from scratch (standalone run) | No active run on its projects | Open the prefilled task form; submit explicitly to create a new run |
+| Restart from scratch (standalone run) | Stopped run | Open the prefilled task form; submit explicitly to create a new run once no run is active on its projects |
 | Restart reviewed task (split child) | Latest attempt of the next unfinished task; no active writer | Start a linked attempt from the approved parent plan, directly at implementation; preserve previous edits and original preimages |
 | Restart this phase (integration review, Jenkins validation, server checks) | Latest stopped attempt of the phase | Start the phase again under the same delivery; the earlier run stays one of its attempts |
 | Stop task | Running | Write a stop request; the worker cleans up opencode and saves an interruption checkpoint |
 | Continue with extra budget | Eligible checkpoint; explicit confirmation | Add two attempts and one attempt timeout to the interrupted stage; retain consumption |
-| Continue interrupted run | Eligible checkpoint and unchanged source | Append new attempts to the same run, starting at the interrupted stage; a stage that reported **Blocked** can continue too, with your note answering its question; an interrupted or blocked implementer first inspects its existing edits |
+| Continue interrupted run | Eligible checkpoint, unchanged source, no active run on its projects | Append new attempts to the same run, starting at the interrupted stage; a stage that reported **Blocked** can continue too, with your note answering its question; an interrupted or blocked implementer first inspects its existing edits |
 | Send a follow-up Goal | Previous standalone run stopped, no active run on its projects | Snapshot prior public evidence and start a new run from planning; a task or phase run has no follow-up, use Continue with a note or a follow-up of its parent |
 | Answer only | New or follow-up submission | Research and independent review, no implementation; the reviewed answer opens the report and is the `answer` of `taskrail status` |
 | Design discussion | New or follow-up submission | Like Answer only, but the reviewed summary is a design document, saved as `design.md`; follow-ups refine it, a **Develop** follow-up implements it |
 | Confirm changes | A finished code change with planned server checks, after integration review for a split and any Jenkins validation | Accept the change; the server checks start only now |
 | Mark as done / Move back from Done | Stopped run | Move the run to the Done group, or return it to its computed group; nothing else changes |
-| Delete from history | Stopped/completed run | Move run and launcher artifacts to local trash; leave source files untouched |
+| Delete from history | Stopped/completed run; no active run of its split or delivery | Move run and launcher artifacts to local trash; leave source files untouched |
+
+A run on the same project holds back only what would start a worker: Continue, a
+follow-up and a task or phase restart. The run page names the active run's project
+instead of hiding the reason; Mark as done, Delete and the restart form stay usable.
 
 Each run page shows its mode (**Develop**, **Answer only** or **Design discussion**;
 older forced splits show **Split into tasks**); the run list shows the mode when it is
