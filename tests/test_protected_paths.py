@@ -13,7 +13,7 @@ from taskrail.application import (
     task_config,
 )
 from taskrail.core import protected_paths
-from taskrail.infrastructure.profile_rules import permissions
+from taskrail.infrastructure.profile_rules import GIT_METADATA, permissions
 from taskrail.interactions import access, read_only
 
 DENY = "deny"
@@ -66,10 +66,11 @@ class ProtectedPathTests(unittest.TestCase):
     def test_profiles_deny_protected_reads_and_edits_after_every_allowance(self):
         writable = [self.root / "certs/server.pem", self.root / "app.py"]
         rules = permissions([self.root], [], writable, self.root, protected_paths.DEFAULT_PATTERNS)
-        for permission in ("read", "edit"):
-            names = list(rules[permission])
-            tail = names[-len(protected_paths.DEFAULT_PATTERNS) :]
-            self.assertEqual(tail, list(protected_paths.DEFAULT_PATTERNS), permission)
+        protected = list(protected_paths.DEFAULT_PATTERNS)
+        denied_last = dict(read=protected, edit=[*protected, *GIT_METADATA])
+        for permission, denied in denied_last.items():
+            tail = list(rules[permission])[-len(denied) :]
+            self.assertEqual(tail, denied, permission)
             self.assertEqual(rules[permission]["*/*.pem"], DENY)
         self.assertEqual(rules["edit"][str(self.root / "app.py")], "allow")
 

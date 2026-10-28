@@ -15,12 +15,15 @@ from taskrail.core import protected_paths
 ALLOW = "allow"
 DENY = "deny"
 CLOSED = MappingProxyType({"*": DENY})
+# A writable root never makes its Git metadata writable.
+GIT_METADATA = (".git", ".git/*", "*/.git", "*/.git/*")
 # Allowing the whole base keeps absolute and parent-relative names denied.
 WHOLE_BASE = MappingProxyType({"*": ALLOW, "/*": DENY, "..": DENY, "../*": DENY})
 
 
 def permissions(roots, readable, writable, base=None, protected=protected_paths.DEFAULT_PATTERNS):
     roots = list(roots)
+    edit_denials = (*protected, *GIT_METADATA) if writable else ()
     return {
         "*": DENY,
         "read": denied_last(read_rules(roots, list(readable), base), protected),
@@ -28,7 +31,7 @@ def permissions(roots, readable, writable, base=None, protected=protected_paths.
         "glob": ALLOW,
         "grep": ALLOW,
         "external_directory": directory_rules([*roots, *readable]),
-        "edit": denied_last(edit_rules(roots, writable, base), protected if writable else ()),
+        "edit": denied_last(edit_rules(roots, writable, base), edit_denials),
         "bash": DENY,
         "task": DENY,
         "skill": DENY,
@@ -75,12 +78,21 @@ def directory_rules(paths):
 
 
 def edit_rules(roots, writable, base):
-    """Edits authorize exact files, absolutely and relative to ONE base; never wildcards."""
+    """Edits authorize exact files, absolutely and relative to ONE base.
+
+    A writable directory, a whole root on a task branch, also covers what is below it.
+    """
     rules = dict(CLOSED)
-    for path in map(str, writable):
-        anchor = permission_worktree(roots[0]) if base is None else Path(base)
-        relative = os.path.relpath(path, str(anchor))
-        rules.update({path: ALLOW, relative: ALLOW})
+    if not writable:
+        return rules
+    anchor = permission_worktree(roots[0]) if base is None else Path(base)
+    if anchor in set(map(Path, writable)):
+        rules = dict(WHOLE_BASE)
+    for path in map(Path, writable):
+        names = [str(path), os.path.relpath(path, anchor)]
+        if path.is_dir():
+            names += [f"{name}/*" for name in names]
+        rules.update(dict.fromkeys(names, ALLOW))
     return rules
 
 

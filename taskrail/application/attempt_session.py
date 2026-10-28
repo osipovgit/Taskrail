@@ -1,9 +1,13 @@
 """Launch inputs of one attempt and validation of its final response."""
 
+from functools import partial
+
 from taskrail.application import context_windows, result_context, stage_artifacts
 from taskrail.application.attempt_launch import agent_name
 from taskrail.application.git_state import git_metadata
 from taskrail.application.plan_validation import canonical_plan, validate_plan
+from taskrail.application.task_branch import KEY as TASK_BRANCH
+from taskrail.application.task_branch import extend as extend_beyond_plan
 from taskrail.observability.progress import clock, say
 from taskrail.observability.telemetry import inspect_events
 
@@ -31,8 +35,13 @@ def token_allowance(workflow):
 
 
 def session_environment(workflow, profile, files, format_only, check_result):
-    """What the stage session needs to keep scope and integrity guards between turns."""
+    """What the stage session needs to keep scope and integrity guards between turns.
+
+    On a task branch the writer's changes beyond the plan are adopted before each check.
+    """
     guard = workflow.guard
+    on_branch = workflow.config.get(TASK_BRANCH) is True
+    adopts = on_branch and bool(workflow.writable())
     return dict(
         format_only=format_only,
         check_result=check_result,
@@ -46,6 +55,7 @@ def session_environment(workflow, profile, files, format_only, check_result):
         git_before=guard.git_before,
         scan=guard.scan,
         git_metadata=git_metadata,
+        beyond_plan=partial(extend_beyond_plan, workflow) if adopts else None,
     )
 
 

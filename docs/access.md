@@ -30,7 +30,7 @@ folders.
 | Operation | Route | Boundary |
 |---|---|---|
 | Source read/search | opencode read/glob/grep (and list in 1.x) | Declared roots; never search their parents |
-| Source edit | opencode edit | Exact approved regular files; preserve user edits |
+| Source edit | opencode edit | Exact approved regular files; on a `taskrail/` branch the whole roots except Git metadata and protected files; preserve user edits |
 | Git history | `GIT_REQUEST` final response | Controlled executor; read-only for planning/review |
 | Git mutation | `GIT_REQUEST` final response | Implementer, approved scope, bounded command grammar |
 | Remote inspection/change | `ACTION_REQUEST` final response | Configured SSH targets; exact script root-approved; inspection only before you confirm a change, server checks after it; never the implementer |

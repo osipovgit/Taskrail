@@ -80,7 +80,7 @@ the agents' input.
 | `task_scope` | Required for server-generated `task` phases: exact reviewed file paths; child planning cannot widen them or create another split |
 | `design` | `true` for a design discussion (the browser's **Design discussion**); implies `read_only` |
 | `auto_approve` | `true` approves local commands, read access and the change limit of this run without asking (the browser's **Allow all actions**); SSH keeps its root-only approval |
-| `isolation` | `in_place` (default) edits the roots; `worktree` edits new linked Git worktrees (the browser's **Isolated Git worktree**), see below |
+| `isolation` | `in_place` (default) edits the roots; `worktree` edits new linked Git worktrees and commits each approved task there (the browser's **Isolated Git worktree**, on by default), see below |
 | `task_spec` | Generated typed input: version 1, literal named fields, a display integrity reference and optional child context/requirement lineage; do not edit only its Markdown display |
 | `assigned_contract` | Generated child reference (`parent_run`, `task_id`); the workflow authenticates it against the sealed reviewed parent before skipping child planning |
 | `check_specs` | Selected server recipe IDs and runtime criterion IDs; commands and approval policy remain server-owned |
@@ -125,11 +125,29 @@ Before planning, the run creates one linked worktree per root from its current
 `worktrees` folder beside the run store). Uncommitted changes in the source checkout
 are not included. The whole run, including Continue, works in the worktrees; the
 source checkout and its other branches may change meanwhile without stopping the
-run. Changes stay uncommitted in the worktrees: the report lists each worktree and
-branch, and you review, commit, merge and finally `git worktree remove` it yourself.
-A browser follow-up continues in the same worktrees; a standalone restart starts
-from the source checkouts in new worktrees. Restarting a reviewed split child keeps
-the parent's effective roots, including its existing worktrees.
+run. The browser form starts new tasks this way unless you clear **Isolated Git
+worktree**.
+
+These `taskrail/` branches hold only the run's own work, so a task there is a unit of
+change rather than a list of files:
+
+- The planned files are the expected scope, not a limit. The implementer may change
+  any other file of the roots, except Git metadata and protected files, when its task
+  cannot be complete and valid without it; such a file gets its preimage from the
+  branch's last commit, appears in the diff, is judged by the reviewer and is listed
+  under **Changed beyond the plan** in the report. In place, the plan still limits the
+  files.
+- Each approved task becomes one commit on its branch: exactly the files the run
+  changed, without hooks, with the implementer's summary as message and a
+  `Taskrail-Run:` trailer. The report lists each commit; a failed commit is reported
+  and never retried. A split's tasks therefore follow each other as commits, and the
+  next task starts from the previous one.
+
+Changes of a run that was not approved stay uncommitted in the worktree. You review
+and merge each branch and finally `git worktree remove` it yourself. A browser
+follow-up continues in the same worktrees; a standalone restart starts from the
+source checkouts in new worktrees. Restarting a reviewed split child keeps the
+parent's effective roots, including its existing worktrees.
 
 ## Execution boundaries
 

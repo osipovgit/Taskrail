@@ -32,9 +32,13 @@ def open_record(workflow, mode):
 
 
 def planned_files(workflow):
-    """Approved files the current stage may write."""
+    """Approved files the current stage may write; on a task branch, its whole roots."""
     protected = protected_paths.patterns(workflow.config)
-    return [safe_file(name, workflow.config[ROOTS], protected) for name in workflow.writable()]
+    roots = workflow.config[ROOTS]
+    files = [safe_file(name, roots, protected) for name in workflow.writable()]
+    if files and workflow.config.get("task_branch"):
+        files.extend(roots.values())
+    return files
 
 
 def attempt_prompt(workflow, active, request, recovery):

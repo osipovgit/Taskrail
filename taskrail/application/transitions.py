@@ -56,6 +56,7 @@ def result_review(flow, state, verdict, limit):
     state["review_outcome"] = review_outcome.describe(verdict, state.get("changed_files", []))
     if verdict[STATUS] == "APPROVE":
         state.update(status=review_outcome.accepted_status(flow, state), summary=verdict[SUMMARY])
+        flow["effect"] = "commit" if flow[ALLOWED] else None
     elif not flow[ALLOWED] or flow[REPAIRS] >= limit:
         state.update(status="CHANGES_REQUESTED", summary=verdict[SUMMARY])
     else:

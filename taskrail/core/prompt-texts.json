@@ -9,7 +9,8 @@
     "Each task owns a requirement or scoped part, one deliverable, its tests and necessary documentation, and fits one implementation session.",
     "Tasks run in dependency order against earlier changes. Shared files require an explicit dependency; no task may undo or rework another task's result.",
     "Split tasks have no fresh planning phase: provide exact Files, source Read ranges, observable Done when results, Verify checks and essential Notes.",
-    "Keep companion tests and documentation in their owning task. Standalone documentation or tests are valid user-requested deliverables. A prerequisite may await a later task that wires it in."
+    "Keep companion tests and documentation in their owning task. Standalone documentation or tests are valid user-requested deliverables. A prerequisite may await a later task that wires it in.",
+    "Split by issue scope, never mechanically: file and hunk boundaries do not express issue scope, and a change partitioned along them is one nobody can build or review."
   ],
   "mode.checks": "Under ## After the change list deferred checks: Jenkins check: <server>/<job>: <parameters and expected result>, or Server check: <remote check and expected result>. Server checks run only after personal confirmation of the change.",
   "mode.answer": "Mode: answer only. Change nothing. Write Decision: no change with no tasks, give each requirement done: (with citations) or gap:, and put the evidence-based answer in a final ## Answer section.",
@@ -18,8 +19,11 @@
   "mode.design.review": "Mode: design review. Verify every requirement and source citation. Require Context, Options, Trade-offs, Recommendation, Risks, Implementation outline and Open questions.",
   "mode.delivery.review": "Mode: delivery check. Nothing is changed. Judge every requirement from the recorded check results and their artifacts.",
   "mode.task.implementer": "Mode: task $task of a reviewed split. Earlier tasks are already applied to the source. Change only the allowed files. If the task needs another file or cannot be done as written, report a gap that says what the parent plan must change. parent-task.md holds the complete parent plan: read only a specific section you need.",
+  "mode.task.implementer.branch": "Mode: task $task of a reviewed split. Earlier tasks are committed on this branch and may already contain parts of yours, or all of it: keep them and finish only what is missing. Later tasks own the work listed for them: do it now only when your task cannot be complete and valid without it, and name it in your summary. parent-task.md holds the complete parent plan: read only a specific section you need.",
   "mode.task.reviewer": "Mode: review task $task. Compare its requirements with changes.diff and current files. Earlier tasks must keep working; report any regression.",
   "mode.integration": "Mode: integration review. Change nothing. Verify every original requirement and cross-task behavior from current source and combined changes.diff. Task reports are not proof. Missing static evidence is a gap; runtime checks wait for delivery.",
+  "mode.branch.implementer": "This run works on its own Git branch; the approved task becomes one commit there. The planned files are the expected scope, not a limit: change another file when the task cannot be complete and valid without it, and name it in your summary. Do not split hunks mechanically to make the change smaller: where the task needs part of a file, write that part; where it needs none of it, leave the file out. Anything the plan does not cover, implement normally.",
+  "mode.branch.reviewer": "On this branch the implementer may change files beyond the plan: approve each only if the task needs it, and review its integrity and quality like any other change.",
   "plan.format": [
     "PLAN FILE: edit the Markdown file $path; its current text is attached to every turn, so edit it without reading it again. Fill Decision and requirements early; the file survives interruption. Reply DONE when complete. The server reports problems with line numbers.",
     "- Citations: done: <exact-read-path>:7-42,43-156; <other-path>:1-4. Backtick paths with spaces; put explanation in parentheses. Prose references are not evidence; source cannot prove an unrun check passed.",
@@ -112,6 +116,7 @@
   "child.header": "Task $task of a reviewed split of parent run $parent. Tasks run in plan order; earlier tasks are already applied to the source.",
   "child.earlier": "Earlier tasks:",
   "child.none": "This is the first task.",
+  "child.later": "Later tasks, not to do here:",
   "validation.plan_citations": "cite the lines as <path>:<from>-<to>; backtick-quote paths containing spaces or punctuation; separate citations with commas or semicolons, use comma-separated ranges for one path, and put explanations in parentheses",
   "validation.missing_source": "$label: cited file does not exist; use the exact read path",
   "validation.regular_source": "$label: cite lines of a regular file, not a directory",

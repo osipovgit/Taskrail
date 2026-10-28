@@ -100,6 +100,8 @@ class StageSession:
     def check_sources(self):
         """Keep source and Git guards before any command can execute."""
         env = self.environment
+        if env.get("beyond_plan"):
+            env["beyond_plan"]()
         current = env["scan"]()
         control.check_delta(
             changed(env["expected"], current),

@@ -17,6 +17,7 @@ from taskrail.application.check_stage import run_checks
 from taskrail.application.run_locks import run_locks
 from taskrail.application.run_report import report
 from taskrail.application.stage_attempts import StageAttempts
+from taskrail.application.task_commit import commit
 from taskrail.application.workflow_finish import close, interrupted
 from taskrail.application.workflow_state import STAGE, Workflow
 from taskrail.core import control
@@ -90,7 +91,9 @@ def model_stage(workflow):
         planned_checks.activate(workflow)
         reviewed_artifacts.seal(workflow)
     effect = workflow.flow.pop("effect", None)
-    if workflow.state[STATUS] == RUNNING:
+    if effect == "commit":
+        commit(workflow)
+    elif workflow.state[STATUS] == RUNNING:
         apply_effect(workflow, effect)
 
 

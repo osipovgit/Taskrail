@@ -1,8 +1,9 @@
 """What a task of a split is told about its place in the split.
 
 The brief names the task and the parent run and lists the earlier tasks, which are
-already applied to the source, with their latest run's outcome and changed files. It
-comes from authenticated run records, never from a sibling's own report.
+already applied to the source, with their latest run's outcome and changed files, and
+the later tasks, whose work is not to be done here. It comes from authenticated run
+records and the reviewed plan, never from a sibling's own report.
 """
 
 from taskrail.application import reviewed_artifacts
@@ -20,21 +21,29 @@ def heading(step):
 
 
 def context(parent, step):
-    """Which task this is and what the earlier tasks, already applied, changed."""
+    """Which task this is, what the earlier tasks changed and what the later ones own."""
     run = parent["run"].name
-    header = prompt_texts.text("child.header", task=step[IDENTIFIER], parent=run)
-    earlier = earlier_steps(parent["plan"]["steps"], step[IDENTIFIER])
-    if not earlier:
-        return "{}\n{}".format(header, prompt_texts.text("child.none"))
-    lines = [earlier_task(parent, entry) for entry in earlier]
-    return "\n".join([header, prompt_texts.text("child.earlier"), *lines])
+    lines = [prompt_texts.text("child.header", task=step[IDENTIFIER], parent=run)]
+    earlier, later = around(parent["plan"]["steps"], step[IDENTIFIER])
+    if earlier:
+        lines.append(prompt_texts.text("child.earlier"))
+        lines.extend(earlier_task(parent, entry) for entry in earlier)
+    else:
+        lines.append(prompt_texts.text("child.none"))
+    if later:
+        lines.append(prompt_texts.text("child.later"))
+        lines.extend(map(later_task, later))
+    return "\n".join(lines)
 
 
-def earlier_steps(steps, task):
-    """The plan steps that run before a task."""
+def around(steps, task):
+    """The plan steps that run before a task and those that run after it."""
     order = task_graph.order(steps)
-    names = set(order[: order.index(task)])
-    return [entry for entry in steps if entry[IDENTIFIER] in names]
+    position = order.index(task)
+    before = set(order[:position])
+    after = set(order[position + 1 :])
+    earlier = [entry for entry in steps if entry[IDENTIFIER] in before]
+    return earlier, [entry for entry in steps if entry[IDENTIFIER] in after]
 
 
 def earlier_task(parent, step):
@@ -49,6 +58,12 @@ def earlier_task(parent, step):
     return "- {} ({}): {} Changed files: {}".format(
         heading(step), state["status"], summary, changed
     )
+
+
+def later_task(step):
+    """A later task and the files it owns."""
+    files = listed(step["files"])
+    return f"- {heading(step)}. Files: {files}"
 
 
 def listed(files):
