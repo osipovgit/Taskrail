@@ -1,6 +1,6 @@
 """The human review report written at the end of every run."""
 
-from taskrail.application import outside_changes
+from taskrail.application import outside_changes, task_commit
 from taskrail.application.artifacts import save_run
 from taskrail.application.report_sections import (
     check_lines,
@@ -32,6 +32,7 @@ def report(run, state):
     lines = [
         *header(state),
         *worktree_lines(state),
+        *task_commit.report_lines(state),
         *timeline(state),
         *inventory(state),
         *check_lines(state),

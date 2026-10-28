@@ -106,8 +106,10 @@ remaining deliverable after dependencies finish. There are no parallel writers;
 checkpoints keep the approved plan, and an interrupted writer inspects current files
 before it continues.
 
-Child task headers carry the parent's immutable file scope; no nested split or scope
-expansion can reach implementation. The server authenticates the reviewed plan digest,
+Child task headers carry the parent's immutable file scope; no nested split can reach
+implementation. On a `taskrail/` branch (`task_branch.py`) the plan's files are the
+expected scope: changes beyond them are adopted with preimages from the branch's last
+commit and judged by review, and each approved task is committed (`task_commit.py`). The server authenticates the reviewed plan digest,
 requirement lineage and accepted prerequisite results before starting a child directly
 at implementation, and names the files changed outside the split's tasks along the
 attempt chain; a child of an unsealed parent is refused.

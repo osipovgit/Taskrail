@@ -28,6 +28,8 @@ from taskrail.application.attempt_session import (
     validated,
 )
 from taskrail.application.result_context import git_directory
+from taskrail.application.task_branch import KEY as TASK_BRANCH
+from taskrail.application.task_branch import extend as extend_beyond_plan
 from taskrail.interactions.session import run_stage
 
 STATUS = "status"
@@ -120,6 +122,8 @@ class StageAttempts:
         attempt_context.record_outcome(workflow.run, workflow.state, active[1], outcome)
         prior = (guard.expected, guard.git_before)
         guard.adopt(*workflow.state.pop("source_effect", prior))
+        if workflow.writable() and workflow.config.get(TASK_BRANCH):
+            extend_beyond_plan(workflow)
         workflow.state["changed_files"] = guard.accept(workflow.writable())
         evidence.refresh(workflow.run, active[0] / "events.jsonl", evidence_roots(workflow))
         workflow.checkpoint()

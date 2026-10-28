@@ -8,6 +8,7 @@ from taskrail.application import (
     resume_inputs,
     reviewed_input,
     reviewed_start,
+    task_branch,
 )
 from taskrail.application.artifacts import save_run
 from taskrail.application.checkpoints import load_checkpoint
@@ -35,6 +36,9 @@ def start(workflow, resume):
         workflow.run, workflow.config
     )
     workflow.state["decompose"] = workflow.config.get("decompose") is True
+    on_branch = task_branch.detect(workflow.config["roots"])
+    workflow.config[task_branch.KEY] = on_branch
+    workflow.state[task_branch.KEY] = on_branch
     workflow.state.setdefault("auto_continue", True)
     control.clear_stop(workflow.run, resume)
 

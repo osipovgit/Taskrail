@@ -2,6 +2,7 @@
 
 import os
 import shutil
+import subprocess
 from types import MappingProxyType
 
 from taskrail.core.schema import require
@@ -63,6 +64,23 @@ def invoke(root, arguments, settings=()):
         arguments = ["blame", "--no-textconv", *arguments[1:]]
     options = [token for setting in (*OPTIONS, *settings) for token in ("-c", setting)]
     return transport.run([executable, "--no-pager", *options, *arguments], root, environment())
+
+
+def blob(root, name):
+    """Bytes of a committed file such as `HEAD:path`; None when there is no such file."""
+    executable = shutil.which("git", path=os.defpath)
+    require(bool(executable), "Git is not installed on the orchestrator host")
+    options = [token for setting in OPTIONS for token in ("-c", setting)]
+    completed = subprocess.run(
+        [executable, "--no-pager", *options, "cat-file", "blob", name],
+        cwd=root,
+        env=environment(),
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        timeout=transport.TIMEOUT_SECONDS,
+        check=False,
+    )
+    return None if completed.returncode else completed.stdout
 
 
 def checked(root, arguments):

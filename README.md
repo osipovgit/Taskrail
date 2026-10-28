@@ -55,8 +55,9 @@ A change larger than the configured limit waits for your decision first. A revie
 discussion** turns produce a reviewed design document instead of code.
 Failed checks/review may request bounded repairs. Interrupted writers are never
 replayed automatically. Partial changes remain available for inspection. A task can
-also run in [isolated Git worktrees](docs/task-format.md#worktree-isolation) on a new
-branch, leaving the source checkout untouched. Tasks on different projects run in
+run in [isolated Git worktrees](docs/task-format.md#worktree-isolation) on a new
+branch, the default in the browser, leaving the source checkout untouched: there each
+approved task becomes one commit and may change files beyond its plan. Tasks on different projects run in
 parallel; one project runs one task at a time.
 
 A finished change waits as **Ready for your review** until you confirm it; **No

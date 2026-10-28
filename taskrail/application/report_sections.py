@@ -87,7 +87,7 @@ def check_lines(state):
 
 
 def worktree_lines(state):
-    """Where an isolated run left its uncommitted changes."""
+    """Where an isolated run left its changes."""
     worktrees = state.get("worktrees") or {}
     if not worktrees:
         return []
@@ -98,7 +98,7 @@ def worktree_lines(state):
         "",
         "## Isolated worktrees",
         "",
-        "Changes are uncommitted in these worktrees; the source checkouts are unchanged. Review, commit and merge each branch yourself, then remove the worktree with `git worktree remove`.",
+        "Each approved task is committed on its branch; other changes stay uncommitted in the worktrees. The source checkouts are unchanged. Review and merge each branch yourself, then remove the worktree with `git worktree remove`.",
         "",
         *entries,
     ]

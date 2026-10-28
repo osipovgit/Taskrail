@@ -5,7 +5,9 @@ same run implements them; with Decision split each task becomes its own run (see
 plan_contract.splits), implemented in plan order directly from the reviewed plan.
 Checks that must run after the change are listed under `## After the change` with fixed
 prefixes, so the server can run Jenkins validation and, after the operator confirms,
-server checks. The texts live in core/prompt-texts.json.
+server checks. On a Taskrail branch the implementer may go beyond the planned files
+and the reviewer judges what it changed beyond them. The texts live in
+core/prompt-texts.json.
 """
 
 from types import MappingProxyType
@@ -22,10 +24,27 @@ PHASE_RULES = MappingProxyType(
 # Mode flag -> its rule for the planner; reviewing stages use the rule's .review form.
 READ_ONLY_FLAGS = MappingProxyType({"design": "mode.design", "read_only": "mode.answer"})
 PLANNING_RULES = frozenset(("mode.change", "mode.decompose"))
+# Stages of a run with a writer whose rules change on a Taskrail branch.
+BRANCH_STAGES = frozenset(("implementer", "reviewer"))
+WRITING_PHASES = frozenset((None, "task"))
 
 
 def render(config, stage):
     """The rule of the run's mode for one stage; an empty string when none applies."""
+    rule = mode_rule(config, stage)
+    if not branch(config, stage):
+        return rule
+    return "\n".join(filter(None, (rule, text(f"mode.branch.{stage}"))))
+
+
+def branch(config, stage):
+    """A writing stage, or its review, on a Taskrail branch."""
+    writing = config.get("phase") in WRITING_PHASES
+    return writing and stage in BRANCH_STAGES and config.get("task_branch") is True
+
+
+def mode_rule(config, stage):
+    """The rule of the run's mode itself."""
     if config.get("phase") == "task":
         return task_rule(config, stage)
     key = mode_key(config, stage)
@@ -55,4 +74,7 @@ def planning_rule(key):
 
 def task_rule(config, stage):
     """One task of a reviewed split: its implementer or reviewer; it is never planned again."""
-    return text(f"mode.task.{stage}", task=config["assigned_contract"]["task_id"])
+    key = f"mode.task.{stage}"
+    if stage == "implementer" and config.get("task_branch") is True:
+        key = f"{key}.branch"
+    return text(key, task=config["assigned_contract"]["task_id"])
