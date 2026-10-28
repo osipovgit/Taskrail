@@ -46,9 +46,10 @@ Only the operator's settings define `check_recipes`. Each recipe fixes `kind`,
 Local recipes use `phase: check`, a declared root as `cwd`, an explicit argv and
 the existing local command policy. In an isolated run, the application maps the
 root to its worktree. Source or Git changes during verification stop the run.
-Local recipes and `verify_commands` require personal approval of the exact
-command, or the operator's Allow all actions. Only built-in read-only listings
-inside declared roots are exempt. `verify_commands` remain mandatory gates and
+Local recipes and `verify_commands` run without a decision in the
+[local command sandbox](access.md#local-commands), with writable roots; on a host
+without one they require personal approval of the exact command, or the operator's
+Allow all actions. `verify_commands` remain mandatory gates and
 appear in the recipe catalog
 as `verify-<digest>`; this ID prefix is reserved.
 

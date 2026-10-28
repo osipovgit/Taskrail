@@ -69,6 +69,7 @@
   "routes.git": "Git: GIT_REQUEST as your entire message; absence from your tool list is expected. Reads: log/show/diff/status/reflog/rev-parse/ls-files/ls-tree/blame/describe/merge-base/cat-file; branch --all, tag, remote -v. Scope with -- <path>; read output before citing.",
   "routes.git.writes": "Only when the task asks for it you may also request: add -- <files>, commit -m <message>, revert --no-edit <full hash>, cherry-pick --no-edit <full hash>, merge --ff-only <full hash>, fetch <remote>, push <remote> HEAD:refs/heads/<branch>. A push waits for the operator's approval. Writes must stay within the allowed files and keep existing user changes. Never reset --hard, clean, amend, rebase, rewrite history, force-push or use aliases, and never repeat a failed or unknown write.",
   "routes.local": "Local commands: send LOCAL_REQUEST as your entire message. Personal approval covers exact argv; only built-in read-only root listings bypass it. Shells require explicit [\"bash\",\"-c\",\"...\"]. No Git, SSH or deployments. Do not resend denied commands unchanged.",
+  "routes.local.sandbox": "Local commands: send LOCAL_REQUEST as your entire message; it runs at once in an offline sandbox. Shells need explicit [\"bash\",\"-c\",\"...\"]. No Git, SSH or deployments. For the network or files outside the sandbox add \"sandbox\": false and a reason; the operator decides.",
   "routes.local.read_only": "Inspect or verify only: requests with --fix, --write or in-place options are rejected.",
   "routes.ssh.unavailable": "SSH executor unavailable. Do not claim remote execution.",
   "routes.ssh.unreachable": "SSH executor unreachable. Continue local analysis; report required remote checks as blocked.",
@@ -199,6 +200,7 @@
   "manifest.git": "Return GIT_REQUEST as the entire final message. It is not a tool call.",
   "manifest.remote": "Use ACTION_REQUEST only when advertised; personal approval is required.",
   "manifest.local": "Use LOCAL_REQUEST; the operator approves exact commands.",
+  "manifest.local.sandbox": "Use LOCAL_REQUEST; commands run in an offline sandbox, and \"sandbox\": false asks the operator to run one on the host.",
   "manifest.search": "Search declared roots and exact listed artifact files; never search run directories or protected files.",
   "validation.git_envelope": "A Git request that changes state must be your entire message, without prose or a code fence",
   "git.replay": "Do not replay a Git write; inspect its saved result"

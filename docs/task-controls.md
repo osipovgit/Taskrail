@@ -278,7 +278,7 @@ recorded in the same ledger with `"automatic": true`. The run shows an **All act
 allowed** badge and a **Stop allowing all actions** button, which takes effect before
 the next decision and also on Continue. A choice made on a card lasts until the worker
 exits; Continue asks again unless the task form enabled it and it was not stopped.
-Read-only requests never ask ([access](access.md#local-approval)). Pushes and inline
+Sandboxed local commands and read-only requests never ask ([access](access.md#local-commands)). Pushes and inline
 shell or Python code from agents (`bash -c`, `python -c`) always ask. SSH tickets keep
 root-only approval. Jenkins builds follow the executor job policy: root approval by
 default, or the explicitly configured `"approval": "none"`; Allow all actions cannot

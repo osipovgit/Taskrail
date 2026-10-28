@@ -1,4 +1,4 @@
-"""Personally approved local diagnostics; no implicit shell expansion."""
+"""Local diagnostics, sandboxed or personally approved; no implicit shell expansion."""
 
 import os
 import shutil
@@ -9,25 +9,28 @@ import time
 from taskrail.core import control, json_response, prompt_texts, protected_paths, schema
 from taskrail.git import transport
 from taskrail.infrastructure import environment as host_environment
+from taskrail.infrastructure import sandbox
 from taskrail.infrastructure.process_group import stop_group
-from taskrail.interactions import local_request, read_only
+from taskrail.interactions import local_request, local_sandbox, read_only
 
 MAX_TIMEOUT = 3600
 POLL_SECONDS = 0.1
+REQUIRED = frozenset(("schema_version", "status", "cwd", "argv", "reason"))
 
 
 def extract(text):
-    """Accept one unchanged request object; personal approval still gates execution."""
+    """Accept one unchanged request object; the sandbox or an approval gates execution."""
     try:
         payload = json_response.extract(text, schema.unique_fields)
     except ValueError:
         return None
     if not isinstance(payload, dict) or payload.get("status") != "LOCAL_REQUEST":
         return None
-    schema.require(
-        set(payload) == {"schema_version", "status", "cwd", "argv", "reason"},
-        "Invalid local request",
-    )
+    fields = set(payload)
+    optional = {local_sandbox.FIELD}
+    schema.require(REQUIRED <= fields <= REQUIRED | optional, "Invalid local request")
+    requested = payload.get(local_sandbox.FIELD, True)
+    schema.require(isinstance(requested, bool), "sandbox must be a boolean")
     schema.contract_version(payload["schema_version"])
     return payload
 
@@ -56,9 +59,13 @@ def execute(payload, context):
     argv = context.get("effective_argv")
     if not argv:
         argv = validate(payload, context["roots"], *recheck(context))
-    with tempfile.TemporaryFile() as output, tempfile.TemporaryFile() as errors:
+    with (
+        local_sandbox.launch(argv, payload, context) as launch,
+        tempfile.TemporaryFile() as output,
+        tempfile.TemporaryFile() as errors,
+    ):
         process = subprocess.Popen(
-            argv,
+            **launch,
             cwd=payload["cwd"],
             env=context.get("execution_env", host_environment.filtered()),
             stdin=subprocess.DEVNULL,
@@ -94,8 +101,9 @@ def monitor(process, streams, context):
 
 
 def instructions(stage):
-    """Diagnostics run as the service user only after explicit personal approval."""
-    advertised = [prompt_texts.text("routes.local")]
+    """Diagnostics run in the sandbox, or as the service user after personal approval."""
+    route = "routes.local.sandbox" if sandbox.mode() else "routes.local"
+    advertised = [prompt_texts.text(route)]
     if stage != "implementer":
         advertised.append(prompt_texts.text("routes.local.read_only"))
     return " ".join(advertised)

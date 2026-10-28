@@ -14,8 +14,12 @@ UNCERTAIN = frozenset(("APPROVED", "RUNNING", "UNKNOWN"))
 
 
 def signature(payload):
-    """Changing a reason cannot make the same command a different action."""
-    operation = {key: payload[key] for key in ("cwd", "argv")}
+    """Changing a reason cannot make the same command a different action.
+
+    A command asked to run on the host instead of the sandbox is a different action.
+    """
+    named = ("cwd", "argv", "sandbox")
+    operation = {key: payload[key] for key in named if key in payload}
     encoded = json.dumps(operation, sort_keys=True, separators=(",", ":")).encode()
     return digest(encoded)
 

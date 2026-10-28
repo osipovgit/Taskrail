@@ -3,7 +3,8 @@
 The setting lives in the worker's run state only, so a command cannot turn it on
 by writing a file. The operator turns it off with a marker file, which can only
 remove the permission. It covers local commands and the change limit; SSH actions
-and Jenkins builds keep their separate root-only approval.
+and Jenkins builds keep their separate root-only approval. A command that runs in
+the sandbox needs no decision; its automatic approval is recorded the same way.
 """
 
 import time
@@ -17,6 +18,7 @@ AUTO_APPROVE = "auto_approve"
 ALLOW = "allow"
 ALLOW_ALL = "allow_all"
 READ_ONLY = "read_only"
+SANDBOX = "sandbox"
 OFF = approval_marks.OFF
 
 

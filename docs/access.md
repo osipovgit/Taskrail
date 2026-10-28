@@ -35,7 +35,7 @@ folders.
 | Git mutation | `GIT_REQUEST` final response | Implementer, approved scope, bounded command grammar |
 | Remote inspection/change | `ACTION_REQUEST` final response | Configured SSH targets; exact script root-approved; inspection only before you confirm a change, server checks after it; never the implementer |
 | Jenkins | `JENKINS_REQUEST` final response | Configured jobs; reads automatically approved, builds root-approved unless root configured the job with `approval: none` |
-| Local checks | Built-in syntax checks (`.py`, `.json`, `.sh`; `.yml`/`.yaml` with PyYAML from the service's Python, a system `python3` or Taskrail's own package directory, safe composer only; `taskrail check` names which); `LOCAL_REQUEST` for tests, linters or explicit Bash | Exact argv personally approved; runs as the application user |
+| Local checks | Built-in syntax checks (`.py`, `.json`, `.sh`; `.yml`/`.yaml` with PyYAML from the service's Python, a system `python3` or Taskrail's own package directory, safe composer only; `taskrail check` names which); `LOCAL_REQUEST` for tests, linters or explicit Bash | [Sandbox](#local-commands) without a decision; on the host only after approval |
 | HTTP/API/database tools | No direct connector | Approved SSH scripts may use installed remote clients |
 
 Executor requests are JSON **assistant responses**, not function calls. End the
@@ -59,7 +59,7 @@ denials open a decision card. Allow grants only read/search access inside declar
 roots; Deny or Alternative returns feedback in the same session. Protected scopes
 and edit grants are never broadened automatically.
 
-The permission profile is not an OS sandbox. Search tools have pattern permissions,
+The permission profile is not an OS sandbox; only local commands run in one. Search tools have pattern permissions,
 not a per-file content filter; do not use them to access protected files. Git read
 commands currently operate on the underlying repository, including when a declared
 root is a subdirectory. Do not use Git to bypass source scope or protected-file
@@ -75,13 +75,40 @@ remote process stopped. Git network operations use their separate noninteractive
 transport and do not use the SSH ticket approval flow. Only request them when the
 task explicitly authorizes them. See Git and SSH documentation for supported syntax.
 
-## Local approval
+## Local commands
 
-All roles can request installed linters, tests and diagnostic commands. The exact
-working directory, argv and reason appear in the UI before execution. Allow is
-single-use; Deny skips execution; Alternative sends your text back to the agent.
-Waiting has no expiry and is excluded from active stage time. Stop remains available.
-Each decision is bound to a random ticket and retained for audit.
+All roles can request installed linters, tests and diagnostic commands with
+`LOCAL_REQUEST`. Where [bubblewrap](deployment.md#local-command-sandbox) works, every
+request runs at once in a sandbox, without a decision, and is recorded in the
+approval ledger with `"rule": "sandbox"`:
+
+- the host system is read-only; `/tmp`, `/var/tmp` and `/run` are private and empty;
+- home is an empty scratch directory showing, read-only, only its visible entries,
+  known toolchain directories (`~/.local/bin`, `~/.local/lib`, pipx, uv, pyenv, nvm,
+  cargo, rustup, SDKMAN, Maven, Gradle, Ansible collections and roles, and the like)
+  and the prefix of the requested program, such as its virtual environment; hidden
+  credentials such as `~/.ssh`, `~/.config` or `~/.local/share` stay out of reach;
+- the implementer's roots are writable; a reading stage's roots take writes that
+  vanish when the command ends (bubblewrap 0.10 or later), else they are read-only;
+  Git metadata is always read-only and [protected files](#protected-paths) are unreadable;
+- there is no network: a private network namespace where the host allows one, else a
+  seccomp filter that refuses every socket but Unix and netlink ones. Abstract Unix
+  sockets of the host, such as an X server's, stay reachable in that case;
+  `DISPLAY`, `WAYLAND_DISPLAY`, `XAUTHORITY` and `DBUS_SESSION_BUS_ADDRESS` are unset.
+
+A command that needs the network or host files outside the sandbox adds
+`"sandbox": false` and says why in its reason. It then goes through the approval below,
+as does every command on a host without a working bubblewrap and a program that is
+not installed, so you can install it and allow the command. `taskrail check` names
+the sandbox in use. Configured checks from settings run in the same sandbox with
+writable roots; the source guard still stops a check that changes source.
+
+### Approval
+
+The exact working directory, argv and reason appear in the UI before execution.
+Allow is single-use; Deny skips execution; Alternative sends your text back to the
+agent. Waiting has no expiry and is excluded from active stage time. Stop remains
+available. Each decision is bound to a random ticket and retained for audit.
 
 Read-only requests are approved without asking and recorded in the same ledger with
 `"rule": "read_only"`:
@@ -102,27 +129,27 @@ Read-only requests are approved without asking and recorded in the same ledger w
   predicate validation. The same bounded grammar protects remote inspection before
   change confirmation, with additional explicit remote diagnostic options.
 
-Everything else is asked as before. **Allow all
-actions** ([task controls](task-controls.md)) approves this run's local commands, read
-access and change limit automatically; it trusts every command the agents choose, so
-use it only where you would allow them anyway. Inline shell or Python code that an
-agent requests (`bash -c`, `sh -c`, `python -c` and the like, also behind `env`,
-`timeout` or `xargs`) always waits for your personal decision: its code is not
-checked by the command routes above. Configured checks from settings are not agent
-requests and keep the normal rules.
-
+Everything else is asked. **Allow all actions** ([task controls](task-controls.md))
+approves this run's local commands, read access and change limit automatically; it
+trusts every command the agents choose, so use it only where you would allow them
+anyway. Inline shell or Python code that an agent requests (`bash -c`, `sh -c`,
+`python -c` and the like, also behind `env`, `timeout` or `xargs`) always waits for
+your personal decision: its code is not checked by the command routes above.
 Interpreter options that carry another argument are parsed before detecting inline
 code. Unknown interpreter options and `env --split-string` require a personal
 decision as well; they cannot use Allow all to bypass this boundary.
 
-Local commands use exec without implicit shell expansion and a host environment
-without secret-shaped variables, provider keys included. Explicit Bash and project
-code are trusted code, not sandboxed: they can have effects beyond their argv text.
-Review scripts before allowing them. Direct Git/SSH/deployment commands use their
-separate controlled routes. Source and Git integrity checks detect unexpected
-changes but cannot undo side effects or enforce a sandbox around arbitrary code.
+Commands run on the host use exec without implicit shell expansion and a host
+environment without secret-shaped variables, provider keys included. Explicit Bash
+and project code are trusted code there, not sandboxed: they can have effects beyond
+their argv text. Review scripts before allowing them. Source and Git integrity checks
+detect unexpected changes but cannot undo side effects.
+
+### Every local command
+
+Direct Git/SSH/deployment commands use their separate controlled routes.
 Planner/reviewer commands must inspect or verify, not fix source: `--fix`, `--write`,
-in-place options and `sed -i` are rejected before approval. Files Git ignores (caches,
+in-place options and `sed -i` are rejected before they run. Files Git ignores (caches,
 reports, build output) and common tool cache directories are not source and are never
 fingerprinted. Other files a command changes are adopted into the run's source state,
 recorded with the action, reported under **Changed by approved commands** and named to

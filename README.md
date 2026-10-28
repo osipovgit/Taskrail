@@ -60,9 +60,10 @@ branch, leaving the source checkout untouched. Tasks on different projects run i
 parallel; one project runs one task at a time.
 
 A finished change waits as **Ready for your review** until you confirm it; **No
-changes required** ends a run that needed no edits. Other project tests, Docker, CI and deployment never run
-automatically; agents may request local commands that you approve one by one or once
-per run, while read-only listings inside the projects run without asking. The optional
+changes required** ends a run that needed no edits. Agents run project tests and
+linters at once in an offline [sandbox](docs/access.md#local-commands) where the host
+has bubblewrap; commands that need more, Docker, CI and deployment wait for your
+approval, one by one or once per run. The optional
 [isolated SSH executor](docs/ssh-executor.md) runs exact remote scripts and Jenkins builds after personal
 root approval, with results returned to the same task. Deferred runtime checks
 remain visible. The planner writes Markdown and finishes with `DONE`; other results follow a strict

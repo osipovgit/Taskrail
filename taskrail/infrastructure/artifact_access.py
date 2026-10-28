@@ -3,6 +3,7 @@
 import re
 
 from taskrail.core import prompt_texts, protected_paths
+from taskrail.infrastructure import sandbox
 
 
 def result_inputs(run):
@@ -84,6 +85,8 @@ def manifest(run, folder, roots, writable=(), protected=protected_paths.DEFAULT_
         ],
         "git": prompt_texts.text("manifest.git"),
         "remote": prompt_texts.text("manifest.remote"),
-        "local_commands": prompt_texts.text("manifest.local"),
+        "local_commands": prompt_texts.text(
+            "manifest.local.sandbox" if sandbox.mode() else "manifest.local"
+        ),
         "search": prompt_texts.text("manifest.search"),
     }

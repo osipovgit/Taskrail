@@ -1,11 +1,13 @@
-"""A local command request: checked, approved, executed and its effects adopted."""
+"""A local command request: checked, sandboxed or approved, executed, effects adopted."""
 
 from taskrail.interactions import (
+    approval_policy,
     command_effects,
     events,
     local_actions,
     local_policy,
     local_request,
+    local_sandbox,
 )
 
 MISSING_PROGRAM = "{0} is not installed on the orchestrator host. Install it, then Allow to run this exact command; or Deny."
@@ -14,6 +16,7 @@ INLINE_NOTICE = (
     "Inline shell or Python code: review the whole script. Allow all actions never approves it."
 )
 REJECTED = "REJECTED"
+ARGV = "argv"
 
 
 def run_local(actions, outcome, payload):
@@ -30,13 +33,10 @@ def run_local(actions, outcome, payload):
 
 def local_action(actions, payload):
     """Review exact argv and recheck sources immediately before execution."""
-    refused = refusal(actions, payload)
-    if refused:
-        return actions.local_result(payload, refused)
-    answer = local_actions.previous(actions.run, payload)
-    if answer is not None:
-        return actions.local_result(payload, answer)
-    inline = local_policy.inline_script(payload["argv"])
+    settled = without_decision(actions, payload)
+    if settled is not None:
+        return settled
+    inline = local_policy.inline_script(payload[ARGV])
     notice = dict(notice=INLINE_NOTICE) if inline else install_notice(payload)
     decision = actions.approve(dict(payload, **notice), personal=inline)
     if decision["decision"] != "allow":
@@ -45,23 +45,46 @@ def local_action(actions, payload):
     return executed(actions, payload, decision)
 
 
+def without_decision(actions, payload):
+    """The response to a refused, already decided or sandboxed request, else None.
+
+    A command this host can sandbox runs without a decision; an installed program is
+    required, so the operator can still install a missing one and allow it.
+    """
+    answer = refusal(actions, payload) or local_actions.previous(actions.run, payload)
+    if answer is not None:
+        return actions.local_result(payload, answer)
+    if local_request.missing_executable(payload[ARGV]) or not local_sandbox.sandboxed(payload):
+        return None
+    request = dict(stage=actions.folder.name, **payload)
+    decision = approval_policy.automatic(actions.run, request, approval_policy.SANDBOX)
+    return executed(actions, payload, decision)
+
+
 def refusal(actions, payload):
     """Why a request cannot even be offered for approval, or None."""
-    writer = actions.session.active[1]["role"] == "implementer"
+    roots = actions.session.environment["roots"]
     try:
-        local_request.checked_request(payload, actions.session.environment["roots"], writer)
+        local_request.checked_request(payload, roots, writes(actions))
     except ValueError as error:
         return dict(status=REJECTED, reason=str(error))
     return None
 
 
+def writes(actions):
+    """Only the implementer may change files in its roots."""
+    return actions.session.active[1]["role"] == "implementer"
+
+
 def executed(actions, payload, decision):
     """Run an approved command and adopt what it changed in the roots."""
-    automatic = decision.get("rule") == "read_only"
-    if local_request.missing_executable(payload["argv"], automatic):
+    automatic = decision.get("rule") == approval_policy.READ_ONLY
+    if local_request.missing_executable(payload[ARGV], automatic):
         return actions.local_result(payload, dict(status=REJECTED, reason=STILL_MISSING))
     actions.session.check_sources()
     context = dict(actions.session.environment, automatic_read=automatic)
+    if decision.get("rule") == approval_policy.SANDBOX:
+        context[local_sandbox.WRITES] = writes(actions)
     context["timeout"] = actions.session.clock.remaining()
     answer = local_actions.execute(actions.run, actions.folder, payload, context, decision)
     response = actions.local_result(payload, answer)
@@ -71,7 +94,7 @@ def executed(actions, payload, decision):
 
 def install_notice(payload):
     """Let the operator install a missing program and allow the same command."""
-    program = local_request.missing_executable(payload["argv"])
+    program = local_request.missing_executable(payload[ARGV])
     if program is None:
         return {}
     return dict(notice=MISSING_PROGRAM.format(program))
