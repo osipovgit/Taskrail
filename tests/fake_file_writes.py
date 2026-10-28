@@ -5,7 +5,12 @@ import time
 
 
 def implement(target, mode, emit):
-    """A rejected write changes nothing; recovery reads and matches the current text."""
+    """A rejected write changes nothing; recovery reads and matches the current text.
+
+    After a context handoff the fresh session finds the edit done and only finishes.
+    """
+    if mode == "write-context" and "return 2" in target.read_text():
+        return
     error = f"You must read file {target} before overwriting it. Use the Read tool first"
     tool = "write"
     if mode.startswith("write-mismatch"):

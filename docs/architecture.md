@@ -138,9 +138,13 @@ permissions as their instructions (`application/response_format.py`); an absent,
 unreachable or empty executor advertises neither capability. All roles run with automatic compaction disabled. Admission measures each role's
 request, frozen role and approved source inputs against the configured context
 capacity and reserve; usage monitoring separately checks provider input including
-cache and explicit compaction events. A writer is never retried automatically after
-context exhaustion. Read-only recovery may start a bounded fresh session from
-recorded evidence while retaining the plan file. See [context limits](deployment.md#context-limits).
+cache and explicit compaction events. A session ends at a boundary between 90 and 95
+percent of its model's window; the next attempt starts a fresh session instead of
+compacting. Read-only recovery starts it from recorded evidence while retaining the
+plan file; a writer continues from its kept edits and `progress.md`, never after
+any other interruption. Every turn of a stage runs on one private opencode server
+(`opencode_serve.py` for 1.x, the adapter for 2.x), so reads of earlier turns stay
+known and turns start warm. See [context limits](deployment.md#context-limits).
 
 The optional SSH executor owns its private credentials and queue under a separate
 OS user. The application submits requests through a Unix socket; only a root peer

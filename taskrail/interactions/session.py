@@ -48,6 +48,7 @@ class StageSession:
                 self.launch.get("workspace"),
                 *allow,
                 startup=startup,
+                attach=self.launch.get("server", True),
             ) as server:
                 self.context["attachment"] = server.attachment() if server else {}
                 return self.turns()

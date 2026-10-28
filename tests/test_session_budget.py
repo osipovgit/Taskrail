@@ -9,7 +9,6 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 from taskrail.application import context_windows, session_budget
-from taskrail.application.attempt_retries import Retries
 from taskrail.application.attempt_session import launch_options
 from taskrail.application.live import execute_task
 from taskrail.application.task_config import limits
@@ -52,10 +51,11 @@ class SessionBudgetTests(unittest.TestCase):
     def test_each_model_gets_its_own_window_and_unlisted_models_the_default(self):
         windows = {"lab/small": 32768, "lab/large": 200000, "default": 65536}
         config = limits(dict(model_context_tokens=windows))
-        self.assertEqual(context_windows.capacity(config, "lab/small"), 32768 - 8192)
-        self.assertEqual(context_windows.capacity(config, "lab/large"), 200000 - 8192)
-        self.assertEqual(context_windows.capacity(config, "lab/other"), 65536 - 8192)
-        self.assertEqual(context_windows.capacity(config, None), 65536 - 8192)
+        # The window minus the reserve, kept between 90 and 95 percent of the window.
+        self.assertEqual(context_windows.capacity(config, "lab/small"), 29491)
+        self.assertEqual(context_windows.capacity(config, "lab/large"), 190000)
+        self.assertEqual(context_windows.capacity(config, "lab/other"), 58982)
+        self.assertEqual(context_windows.capacity(config, None), 58982)
         listed_only = limits(dict(model_context_tokens={"lab/small": 32768}))
         self.assertEqual(context_windows.capacity(listed_only, "lab/other"), 94208 - 8192)
         for invalid in ({}, {"lab/small": 4096}):
@@ -72,7 +72,7 @@ class SessionBudgetTests(unittest.TestCase):
             session_budget.admission(config, (self.root, record), [])["status"],
             "CONTEXT_EXCEEDED",
         )
-        self.assertEqual(record["context_budget"]["input_capacity_tokens"], 20000 - 8192)
+        self.assertEqual(record["context_budget"]["input_capacity_tokens"], 18000)
         config["models"]["planner"] = "lab/large"
         self.assertIsNone(session_budget.admission(config, (self.root, record), []))
 
@@ -229,14 +229,6 @@ class SessionBudgetTests(unittest.TestCase):
             )
         launch.assert_not_called()
         self.assertEqual(outcome["status"], "CONTEXT_EXCEEDED")
-
-    def test_writer_context_failure_cannot_schedule_transport_retry(self):
-        workflow = SimpleNamespace(
-            flow=dict(stage="implementer"), state=dict(stages=[]), config=dict(read_retries=3)
-        )
-        retries = Retries(SimpleNamespace(workflow=workflow))
-        with patch("taskrail.application.attempt_retries.overflow_outputs", return_value=""):
-            self.assertFalse(retries.allowed(dict(status="CONTEXT_EXCEEDED")))
 
     def test_workflow_refuses_oversized_initial_stage_without_retry_or_edits(self):
         project = self.root / "repo"
