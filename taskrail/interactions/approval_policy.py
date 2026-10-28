@@ -27,7 +27,7 @@ def decision(run, request, state, scope=None, personal=False):
 
     The scope holds the declared roots and protected patterns of the read-only route;
     without one (the change limit) only the run's setting can approve automatically.
-    A personal request, such as a push to a remote or inline shell or Python code,
+    A personal request, such as a push to a remote or a manual installation step,
     always waits for the operator.
     """
     if not personal and scope is not None and read_only.request(request, *scope):

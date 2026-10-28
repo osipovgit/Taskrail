@@ -249,8 +249,9 @@ taskrail action RUN resume --note "python3 is installed now"
 taskrail submit --json payload.json       # the fields of POST /api/tasks
 ```
 
-`--mode` is `develop` (the default), `answer`, `design` or `split`; `--followup RUN` and `--restart RUN`
-continue a conversation; a text option may name a file as `@FILE`. `action` accepts the
+`--mode` is `develop` (the default), `answer`, `design` or `split`; a code change runs in
+[isolated worktrees](task-format.md#worktree-isolation) unless `--in-place` is given.
+`--followup RUN` and `--restart RUN` continue a conversation; a text option may name a file as `@FILE`. `action` accepts the
 `/api/actions` actions. For a standalone run, `action RUN restart` prints the saved
 `draft`; submit the edited fields with `parent_run` and `submission_mode: "restart"`
 in the JSON payload. For a split child, `action CHILD_RUN restart` launches a new
@@ -282,8 +283,9 @@ recorded in the same ledger with `"automatic": true`. The run shows an **All act
 allowed** badge and a **Stop allowing all actions** button, which takes effect before
 the next decision and also on Continue. A choice made on a card lasts until the worker
 exits; Continue asks again unless the task form enabled it and it was not stopped.
-Sandboxed local commands and read-only requests never ask ([access](access.md#local-commands)). Pushes and inline
-shell or Python code from agents (`bash -c`, `python -c`) always ask. SSH tickets keep
+Sandboxed local commands and read-only requests never ask ([access](access.md#local-commands)).
+Allow all actions also covers inline shell or Python code (`bash -c`, `python -c`); pushes
+always ask. SSH tickets keep
 root-only approval. Jenkins builds follow the executor job policy: root approval by
 default, or the explicitly configured `"approval": "none"`; Allow all actions cannot
 change either remote policy.

@@ -159,8 +159,13 @@ class TaskControlTests(unittest.TestCase):
             self.launcher.submit(dict(self.payload, worktree=True, read_only=True))
             text = launch.call_args.args[0]["text"]
         meta = json.loads(text.split("```taskrail-task\n")[1].split("```")[0])
-        self.assertEqual(meta["isolation"], "worktree")
+        # The worktree choice keeps the default isolation; leaving it out works in place.
+        self.assertNotIn("isolation", meta)
         self.assertTrue(meta["read_only"])
+        with patch.object(self.launcher, "launch", return_value={"id": "next"}) as launch:
+            self.launcher.submit(dict(self.payload, worktree=False))
+            in_place = launch.call_args.args[0]["text"]
+        self.assertIn('"isolation": "in_place"', in_place)
         with self.assertRaisesRegex(ValueError, "boolean"):
             self.launcher.submit(dict(self.payload, worktree="yes"))
         child = self.runs / "isolated"

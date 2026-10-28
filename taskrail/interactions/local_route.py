@@ -12,9 +12,7 @@ from taskrail.interactions import (
 
 MISSING_PROGRAM = "{0} is not installed on the orchestrator host. Install it, then Allow to run this exact command; or Deny."
 STILL_MISSING = "Executable is still not installed on the orchestrator host"
-INLINE_NOTICE = (
-    "Inline shell or Python code: review the whole script. Allow all actions never approves it."
-)
+INLINE_NOTICE = "Inline shell or Python code: review the whole script before you allow it."
 REJECTED = "REJECTED"
 ARGV = "argv"
 
@@ -38,7 +36,7 @@ def local_action(actions, payload):
         return settled
     inline = local_policy.inline_script(payload[ARGV])
     notice = dict(notice=INLINE_NOTICE) if inline else install_notice(payload)
-    decision = actions.approve(dict(payload, **notice), personal=inline)
+    decision = actions.approve(dict(payload, **notice))
     if decision["decision"] != "allow":
         answer = local_actions.execute(actions.run, actions.folder, payload, {}, decision)
         return actions.local_result(payload, answer)

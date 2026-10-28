@@ -53,6 +53,8 @@ class LiveTests(LiveFixture, unittest.TestCase):
             process.checked(self.root, ["add", "."])
             process.checked(self.root, ["commit", "-m", f"Change {number}"])
         head = process.checked(self.root, ["rev-parse", "HEAD"]).strip()
+        header = {"roots": {"project": str(self.root)}, "isolation": "in_place"}
+        self.task.write_text(f"```taskrail-task\n{json.dumps(header)}\n```\nReturn 2")
         run, status, state = self.run_mode("git-actions")
         self.assertEqual(status, "READY_FOR_REVIEW", state.get("summary"))
         self.assertEqual(len(state["git_jobs"]), 2)

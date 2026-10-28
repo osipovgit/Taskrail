@@ -1,32 +1,42 @@
-"""Optional isolation: a run edits new linked Git worktrees on their own branches.
+"""Isolation: a run edits new linked Git worktrees on their own branches.
 
-The source checkout is never touched. Nothing is committed, merged or removed
-automatically; the report says where the changes are.
+By default (`auto`, see `worktree_default`) a code change in Git repositories gets
+them. The source checkout is never touched;
+approved tasks are committed on the branches, nothing is merged or removed
+automatically, and the report says where the changes are.
 """
 
 from pathlib import Path
 
+from taskrail.application import worktree_default
 from taskrail.core.schema import require
 from taskrail.git import process
 
-MODES = ("in_place", "worktree")
+MODES = ("in_place", "worktree", "auto")
 WORKTREE = "worktree"
+AUTO = "auto"
 ROOTS = "roots"
 
 
 def isolation_settings(meta, options, run_base):
     """The task chooses isolation; server settings choose where worktrees live."""
-    mode = meta.get("isolation", MODES[0])
+    mode = meta.get("isolation", AUTO)
     if mode not in MODES:
-        raise ValueError("isolation must be in_place or worktree")
+        raise ValueError("isolation must be in_place, worktree or auto")
     base = Path(options.get("worktree_base", run_base.parent / "worktrees")).expanduser()
     if not base.is_absolute():
         raise ValueError("worktree_base must be an absolute directory")
-    return dict(isolation=mode == WORKTREE, worktree_base=base, worktrees={})
+    isolation = None if mode == AUTO else mode == WORKTREE
+    return dict(isolation=isolation, worktree_base=base, worktrees={})
 
 
 def isolate(config, name):
-    """Create one worktree per root from its HEAD and run against the worktrees."""
+    """Create one worktree per root from its HEAD and run against the worktrees.
+
+    Nothing happens when the task chose in place or the default does not apply.
+    """
+    if not worktree_default.wanted(config):
+        return
     base = config["worktree_base"] / name
     roots = config[ROOTS].values()
     require(

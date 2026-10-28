@@ -12,13 +12,12 @@ import functools
 import os
 import shutil
 import subprocess
-import tempfile
 
 from taskrail.core import protected_paths
 from taskrail.infrastructure import sandbox_mounts, socket_filter
 
-NAMESPACE = "network namespace"
-SOCKET_FILTER = "socket filter"
+NAMESPACE = socket_filter.NAMESPACE
+SOCKET_FILTER = socket_filter.FILTER
 PROBE_SECONDS = 10
 OVERLAY_PROBE = "/usr"
 BASE = (
@@ -39,11 +38,13 @@ DESKTOP = ("DISPLAY", "WAYLAND_DISPLAY", "XAUTHORITY", "DBUS_SESSION_BUS_ADDRESS
 
 
 def health():
-    """Informational check line: how local commands run on this host."""
+    """Informational check line: how local commands run here, or why bubblewrap does not."""
     current = mode()
-    if current is None:
-        return True, "Local commands: no working bubblewrap, so each one waits for approval"
-    return True, f"Local commands: sandboxed without approval; network cut off by a {current}"
+    if current is not None:
+        return True, f"Local commands: sandboxed without approval; network cut off by a {current}"
+    failures = [f"{kind}: {error}" for kind, error in attempts()]
+    reason = "; ".join(failures) or "bwrap not found"
+    return True, f"Local commands: each one waits for approval; no sandbox ({reason})"
 
 
 def executable():
@@ -54,40 +55,51 @@ def executable():
 @functools.cache
 def mode():
     """How this host isolates the network of a sandboxed command, or None."""
+    return next((kind for kind, error in attempts() if error is None), None)
+
+
+@functools.cache
+def attempts():
+    """Each kind of sandbox tried here, in order, with bubblewrap's error or None."""
     if executable() is None:
-        return None
+        return ()
+    tried = []
     for candidate in (NAMESPACE, SOCKET_FILTER):
-        if probe(candidate):
-            return candidate
-    return None
+        tried.append((candidate, probe(candidate)))
+        if tried[-1][1] is None:
+            break
+    return tuple(tried)
 
 
 @functools.cache
 def overlays():
     """Whether roots a stage may not change can take writes that vanish afterwards."""
     current = mode()
-    return current is not None and probe(current, sandbox_mounts.discarded(OVERLAY_PROBE))
+    return current is not None and not probe(current, sandbox_mounts.discarded(OVERLAY_PROBE))
 
 
 def probe(candidate, mounts=()):
-    """Whether an empty command starts in this kind of sandbox."""
+    """Why an empty command does not start in this kind of sandbox; None when it does."""
     empty = shutil.which("true", path=os.defpath)
     if empty is None or (candidate == SOCKET_FILTER and socket_filter.program() is None):
-        return False
-    with isolation(candidate) as launch:
+        return "unsupported on this host"
+    with socket_filter.isolation(candidate) as launch:
         options = [*BASE, *launch["args"], *mounts]
         try:
             completed = subprocess.run(
                 [executable(), *options, "--", empty],
                 stdin=subprocess.DEVNULL,
                 capture_output=True,
+                text=True,
                 timeout=PROBE_SECONDS,
                 pass_fds=launch["pass_fds"],
                 check=False,
             )
-        except (OSError, subprocess.SubprocessError):
-            return False
-    return completed.returncode == 0
+        except (OSError, subprocess.SubprocessError) as error:
+            return str(error)
+    if completed.returncode:
+        return completed.stderr.strip() or f"exit status {completed.returncode}"
+    return None
 
 
 @contextlib.contextmanager
@@ -101,20 +113,6 @@ def command(argv, cwd, roots, writable, protected=protected_paths.DEFAULT_PATTER
     ]
     desktop = [option for name in DESKTOP for option in ("--unsetenv", name)]
     command = [*mounts, *desktop, "--chdir", str(cwd), "--", *argv]
-    with isolation(mode()) as launch:
+    with socket_filter.isolation(mode()) as launch:
         arguments = [*BASE, *launch["args"], *command]
         yield dict(launch, args=[executable(), *arguments])
-
-
-@contextlib.contextmanager
-def isolation(kind):
-    """Network isolation options; a seccomp program is read from an inherited file."""
-    if kind == NAMESPACE:
-        yield dict(args=["--unshare-net"], pass_fds=())
-        return
-    with tempfile.TemporaryFile() as program:
-        program.write(socket_filter.program())
-        program.flush()
-        program.seek(0)
-        descriptor = program.fileno()
-        yield dict(args=["--seccomp", str(descriptor)], pass_fds=(descriptor,))

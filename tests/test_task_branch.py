@@ -7,9 +7,10 @@ from pathlib import Path
 
 from live_fixture import LiveFixture
 
-from taskrail.application import child_brief, mode_rules, task_branch
+from taskrail.application import child_brief, mode_rules, task_branch, worktree_default
 from taskrail.application.delivery_confirmation import review_guard
 from taskrail.core import prompt_texts
+from taskrail.git import process
 from taskrail.infrastructure import profile_rules
 
 
@@ -49,8 +50,18 @@ class TaskBranchRunTests(LiveFixture, unittest.TestCase):
         self.assertIn("## Changed beyond the plan", (run / "report.md").read_text())
         self.assertEqual((self.root / "unrelated.txt").read_text(), "user dirty work\n")
 
+    def test_a_code_change_in_a_repository_gets_a_worktree_by_default(self):
+        self.real_repository()
+        run, status, state = self.run_mode("ok", worktree_base=str(self.base / "worktrees"))
+        self.assertEqual(status, "READY_FOR_REVIEW", state.get("summary"))
+        self.assertEqual(state["worktrees"]["project"]["branch"], f"taskrail/{run.name}")
+        self.assertEqual(len(state["commits"]), 1)
+        self.assertIn("return 1", (self.root / "hello.py").read_text())
+
     def test_in_place_the_plan_still_limits_the_files(self):
         self.real_repository()
+        header = {"roots": {"project": str(self.root)}, "isolation": "in_place"}
+        self.task.write_text(f"```taskrail-task\n{json.dumps(header)}\n```\nReturn 2")
         _, status, state = self.run_mode("scope")
         self.assertNotEqual(status, "READY_FOR_REVIEW")
         self.assertFalse(state[task_branch.KEY])
@@ -58,6 +69,24 @@ class TaskBranchRunTests(LiveFixture, unittest.TestCase):
 
 
 class TaskBranchRuleTests(unittest.TestCase):
+    def test_only_a_code_change_in_repository_top_levels_is_isolated_by_default(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            config = dict(isolation=None, roots={"project": root})
+            self.assertFalse(worktree_default.wanted(config))
+            process.checked(root, ["init", "-b", "main"])
+            self.assertFalse(worktree_default.wanted(config))
+            (root / "a.txt").write_text("a\n")
+            process.checked(root, ["add", "a.txt"])
+            identity = ["-c", "user.name=T", "-c", "user.email=t@example.invalid"]
+            process.checked(root, [*identity, "commit", "-m", "init"])
+            self.assertTrue(worktree_default.wanted(config))
+            self.assertFalse(worktree_default.wanted(dict(config, read_only=True)))
+            self.assertFalse(worktree_default.wanted(dict(config, phase="task")))
+            self.assertFalse(worktree_default.wanted(dict(config, isolation=False)))
+            process.checked(root, ["checkout", "-b", "taskrail/run"])
+            self.assertFalse(worktree_default.wanted(config))
+
     def test_writable_roots_never_make_git_metadata_writable(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

@@ -58,7 +58,7 @@ source checks, checkpoints and file operations:
 |---|---|
 | `workflow_engine.py` | Lock, stage loop, transitions and write effects |
 | `run_setup.py`, `run_state.py`, `task_config.py`, `task_roots.py` | Run directory, frozen inputs and validated configuration |
-| `worktree_isolation.py` | Optional linked Git worktree per root and run |
+| `worktree_isolation.py`, `worktree_default.py` | Linked Git worktree per root and run, by default for code changes in repositories |
 | `workflow_start.py`, `workflow_finish.py` | Fresh start or checkpoint continuation; interruption and the final report |
 | `workflow_state.py`, `source_guard.py`, `source_ignores.py` | Run state, flow, checkpoints and source/Git integrity; Git-ignored files are not source |
 | `prompts.py`, `policy_sections.py`, `mode_rules.py`, `response_format.py` | The request of a stage from frozen policy sections and catalog texts |

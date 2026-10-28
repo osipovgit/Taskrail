@@ -132,12 +132,10 @@ Read-only requests are approved without asking and recorded in the same ledger w
 Everything else is asked. **Allow all actions** ([task controls](task-controls.md))
 approves this run's local commands, read access and change limit automatically; it
 trusts every command the agents choose, so use it only where you would allow them
-anyway. Inline shell or Python code that an agent requests (`bash -c`, `sh -c`,
-`python -c` and the like, also behind `env`, `timeout` or `xargs`) always waits for
-your personal decision: its code is not checked by the command routes above.
-Interpreter options that carry another argument are parsed before detecting inline
-code. Unknown interpreter options and `env --split-string` require a personal
-decision as well; they cannot use Allow all to bypass this boundary.
+anyway, inline shell or Python code included. Without it, the card of inline code that
+an agent requests (`bash -c`, `sh -c`, `python -c` and the like, also behind `env`,
+`timeout` or `xargs`, with unknown interpreter options or `env --split-string`) says so:
+its code is not checked by the command routes above, so read the whole script.
 
 Commands run on the host use exec without implicit shell expansion and a host
 environment without secret-shaped variables, provider keys included. Explicit Bash

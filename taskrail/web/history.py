@@ -73,7 +73,7 @@ def task_draft(run):
     draft = parsed.fields()
     draft["title"] = parsed.title(run.name)
     draft["read_only"] = parsed.metadata.get("read_only") is True
-    draft["worktree"] = parsed.metadata.get("isolation") == "worktree"
+    draft["worktree"] = parsed.metadata.get("isolation") != "in_place"
     draft[DESIGN] = parsed.metadata.get(DESIGN) is True
     draft[DECOMPOSE] = parsed.metadata.get(DECOMPOSE) is True
     draft["auto_approve"] = parsed.metadata.get("auto_approve") is True
