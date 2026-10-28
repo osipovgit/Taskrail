@@ -3,7 +3,7 @@
 from pathlib import Path
 
 from taskrail.application import citation_delivery, source_views
-from taskrail.core import citation_errors, source_claims
+from taskrail.core import citation_errors, prompt_texts, source_claims
 
 ERROR_LIMIT = 5
 
@@ -29,7 +29,7 @@ def validate(claims, records, context):
 def feedback(errors):
     """Cap the correction payload while disclosing any remaining failed claims."""
     omitted = len(errors) - ERROR_LIMIT
-    suffix = f"\n{omitted} further invalid citations remain." if omitted > 0 else ""
+    suffix = prompt_texts.text("citation.remaining", count=omitted) if omitted > 0 else ""
     return "\n".join(errors[:ERROR_LIMIT]) + suffix
 
 
@@ -53,9 +53,4 @@ def guidance(claim, context, error, views):
     view = views[path]
     if view is None:
         return error
-    return (
-        f"{error}\nThe raw JSON has oversized lines. A lossless formatted source view is "
-        f"available at {view['path']} ({view['lines']} lines). Search that view and read only "
-        "relevant windows of at most 200 lines, then cite those view ranges in the plan or "
-        "result. Do not repeat the clipped raw read or claim the whole report was observed."
-    )
+    return prompt_texts.text("citation.source_view", error=error, **view)

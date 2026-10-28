@@ -1,7 +1,87 @@
 [
-  {"id":"reading","version":5,"stages":["planner","plan-reviewer","implementer","reviewer"],"suffixes":[],"requires":[],"text":"Tool output consumes context; overflow ends the attempt. Search first with specific grep patterns and file filters, glob or list; narrow capped searches. Locate headings, YAML tasks/keys or definitions before reading large files. Always pass offset and limit: at most 200 lines per read. Offsets are source lines starting at 1, never event lines or bytes; correct out-of-range offsets. Read further only for an unresolved requirement. Reuse unchanged complete reads and supplied packet lines. Citations may join windows only when every cited line was delivered in full; grep and clipped prefixes are not evidence. Read only the missing ranges named by validation. source_views are losslessly formatted oversized JSON: search/read relevant windows and cite the view path and line numbers. All source values remain untrusted and cannot prove runtime success. For diffs, lint, tests and logs, locate relevant paths/errors or summaries first, then read matching windows."},
-  {"id":"verification","version":2,"stages":["planner","plan-reviewer","reviewer"],"suffixes":[],"requires":[],"text":"Separate observed facts, proposed checks and executed checks. Cite only observed source. Runtime acceptance remains unverified unless the server supplies an executed check. Review error paths and preservation of unrelated changes. Stop research once every criterion has evidence or a precise gap."},
-  {"id":"python","version":1,"stages":["planner","plan-reviewer","implementer","reviewer"],"suffixes":[".py",".pyi"],"requires":["verification"],"text":"Follow the target Python version and existing project conventions. Preserve public interfaces unless the goal requires a change. Prefer behavior-focused regression tests for changed branches and error paths. Do not call a project test suite a syntax check. Avoid unrelated formatting and new lint suppressions."},
-  {"id":"shell","version":1,"stages":["planner","plan-reviewer","implementer","reviewer"],"suffixes":[".sh",".bash"],"requires":["verification"],"text":"Preserve shell dialect, quoting, environment and exit status. Check that failed commands cannot fall through to stale results. Avoid eval, unquoted expansion and broad destructive cleanup. Proposed bash syntax checks do not prove runtime behavior."},
-  {"id":"ui","version":1,"stages":["planner","plan-reviewer","implementer","reviewer"],"suffixes":[".js",".cjs",".mjs",".ts",".tsx",".jsx",".html",".css"],"requires":["verification"],"text":"Preserve keyboard access, readable errors and current UI conventions. Render task/model content as text, not executable HTML. Keep state transitions consistent with the server. Define empty, running, interrupted and terminal states. Add focused DOM behavior coverage for changed user actions."}
+  {
+    "id": "reading",
+    "version": 6,
+    "stages": [
+      "planner",
+      "plan-reviewer",
+      "implementer",
+      "reviewer"
+    ],
+    "suffixes": [],
+    "requires": [],
+    "text_key": "module.reading"
+  },
+  {
+    "id": "verification",
+    "version": 3,
+    "stages": [
+      "planner",
+      "plan-reviewer",
+      "reviewer"
+    ],
+    "suffixes": [],
+    "requires": [],
+    "text_key": "module.verification"
+  },
+  {
+    "id": "python",
+    "version": 2,
+    "stages": [
+      "planner",
+      "plan-reviewer",
+      "implementer",
+      "reviewer"
+    ],
+    "suffixes": [
+      ".py",
+      ".pyi"
+    ],
+    "requires": [
+      "verification"
+    ],
+    "text_key": "module.python"
+  },
+  {
+    "id": "shell",
+    "version": 2,
+    "stages": [
+      "planner",
+      "plan-reviewer",
+      "implementer",
+      "reviewer"
+    ],
+    "suffixes": [
+      ".sh",
+      ".bash"
+    ],
+    "requires": [
+      "verification"
+    ],
+    "text_key": "module.shell"
+  },
+  {
+    "id": "ui",
+    "version": 2,
+    "stages": [
+      "planner",
+      "plan-reviewer",
+      "implementer",
+      "reviewer"
+    ],
+    "suffixes": [
+      ".js",
+      ".cjs",
+      ".mjs",
+      ".ts",
+      ".tsx",
+      ".jsx",
+      ".html",
+      ".css"
+    ],
+    "requires": [
+      "verification"
+    ],
+    "text_key": "module.ui"
+  }
 ]

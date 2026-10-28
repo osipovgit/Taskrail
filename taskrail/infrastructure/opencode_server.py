@@ -13,6 +13,7 @@ import threading
 import time
 from types import MappingProxyType
 
+from taskrail.infrastructure import server_readiness
 from taskrail.infrastructure.opencode_cli import RAW_EVENTS
 from taskrail.infrastructure.opencode_events import EventTranslator
 
@@ -39,6 +40,7 @@ class Server:
         self.env = dict(os.environ if env is None else env, PWD=directory)
         self.url = self.env.get(SHARED_SERVER)
         self.process = None
+        self.startup = {"timeout": READY_SECONDS}
         if self.url:
             return
         self.env[AUTH_VARIABLE] = secrets.token_urlsafe(PASSWORD_BYTES)
@@ -53,16 +55,20 @@ class Server:
 
     def __enter__(self):
         if self.process is not None:
-            ready = json.loads(self.process.stdout.readline() or b"{}")
+            try:
+                self.url = server_readiness.wait(self.process, self.startup)
+            except BaseException:
+                self.__exit__()
+                raise
             threading.Thread(target=self.process.stdout.read, daemon=True).start()
-            self.url = ready.get("url")
         return self
 
     def __exit__(self, *failure):
         if self.process is None:
             return
         self.process.stdin.close()
-        self.process.terminate()
+        if self.process.poll() is None:
+            self.process.terminate()
         try:
             self.process.wait(CLOSE_SECONDS)
         except subprocess.TimeoutExpired:

@@ -6,19 +6,21 @@ any other repository, and an entry the run staged that changed since, are not th
 to stage over or commit, even inside an approved file.
 """
 
+import subprocess
 from pathlib import Path
 
 from taskrail.core.files import digest
 from taskrail.core.schema import require
-from taskrail.git import process
+from taskrail.git import process, staging_receipt
 
 ADD = "add"
 SUCCEEDED = "SUCCEEDED"
 UNOWNED = "not staged by this run"
+EXECUTABLE_BIT = 0o100
 
 
 def entries(repo, paths):
-    """Path -> staged blob ID, or None when the index has no entry for the path."""
+    """Path -> staged mode/blob/stage identity, or None when the entry is absent."""
     names = [path.relative_to(repo).as_posix() for path in paths]
     outcome = process.invoke(repo, ["ls-files", "--stage", "-z", "--", *names])
     require(outcome.returncode == 0, outcome.stderr or "Cannot read the Git index")
@@ -27,11 +29,11 @@ def entries(repo, paths):
 
 
 def index_blobs(repo, listing):
-    """Path -> blob ID from the output of `git ls-files --stage -z`."""
+    """Keep executable modes and conflict stages as well as content identity."""
     found = {}
     for record in filter(None, listing.split("\x00")):
         description, name = record.split("\t", 1)
-        found[str(repo / name)] = description.split()[1]
+        found[str(repo / name)] = ":".join(description.split())
     return found
 
 
@@ -71,8 +73,11 @@ def fingerprint(repo, root, argv):
 
 
 def file_digest(path):
-    """The digest of a working-tree file, or None when it is absent."""
-    return digest(path.read_bytes()) if path.is_file() else None
+    """Working content and executable bit; a mode-only edit permits a fresh add."""
+    if not path.is_file():
+        return None
+    executable = bool(path.stat().st_mode & EXECUTABLE_BIT)
+    return f"{executable}:{digest(path.read_bytes())}"
 
 
 def record(root, entry):
@@ -81,7 +86,8 @@ def record(root, entry):
     if entry["status"] != SUCCEEDED or argv[0] != ADD:
         return
     paths = [root / name for name in argv[2:]]
+    repo = Path(entry["repository"])
     try:
-        entry["staged"] = entries(Path(entry["repository"]), paths)
-    except ValueError:
-        entry["staged"] = {}
+        entry["staged"] = staging_receipt.capture(repo, entry, paths, entries)
+    except (OSError, ValueError, subprocess.TimeoutExpired) as error:
+        entry.update(status="UNKNOWN", stderr=f"Cannot record staged source identity: {error}")

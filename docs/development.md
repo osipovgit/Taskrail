@@ -27,7 +27,7 @@ checkpoints, budgets, telemetry, UI DOM behavior and deployment. Deployment test
 private release copies and system paths, with unconditional privilege-command stubs;
 they never invoke the host's sudo, systemd or executor reset.
 GitHub Actions (`.github/workflows/ci.yml`) runs `make check` on Python 3.12, the
-test suite on Python 3.10 to 3.14, and `taskrail init` plus `taskrail check`
+regression suite with pinned test dependencies on Python 3.10 to 3.14, and `taskrail init` plus `taskrail check`
 against a pinned opencode 1.x without calling a model. CodeQL (only while the
 repository is public; private repositories need GitHub Code Security) and Dependabot
 watch the code and pinned dependencies. `tests/fixtures/` holds recorded opencode 1.19.3
@@ -36,6 +36,10 @@ paths replaced by `/fixture` and keep both. `make test` runs the Python tests wi
 `HOME`, so the locks of running tasks and installed settings cannot affect them.
 Passing tests does not establish model quality, provider behavior, visual rendering
 or runtime acceptance in the target environment.
+
+Keep [scenario acceptance tasks and oracles](testing.md) current with functional
+changes. Their execution, live provider acceptance and coverage measurement require an
+explicit user request; `make check` and CI run the ordinary regression suite only.
 
 Deterministic-contract tests cover lossless inputs, strict plan parsing, requirement
 lineage, compact decisions, source packets, context admission, durable command replay

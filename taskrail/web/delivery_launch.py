@@ -10,6 +10,7 @@ from functools import partial
 from pathlib import Path
 from types import MappingProxyType
 
+from taskrail.application import delivery_confirmation
 from taskrail.executor import client, protocol
 from taskrail.web import (
     delivery_payload,
@@ -78,6 +79,8 @@ def start_phase(launcher, run, name):
     with launcher.lock, epic_record.changing(run) as epic:
         if name in epic.get(PHASES, {}):
             return None
+        if name == SERVER:
+            delivery_confirmation.verify(run, epic)
         if not offers.get(OFFERS[name]):
             epic.setdefault(PHASES, {})[name] = UNAVAILABLE[name]
             return dict(id=run.name, status="PHASE_RECORDED")
@@ -109,8 +112,9 @@ def confirm(launcher, run):
         delivery = delivery_state.view(run, state)
         if delivery is None or delivery["step"] != "confirm":
             raise ValueError("Only a finished change that waits for confirmation can be confirmed")
-        with integration_review.confirmation_lock(run, delivery):
+        with integration_review.confirmation_lock(run, delivery) as snapshot:
             epic["confirmed"] = time.time()
+            epic[delivery_confirmation.INPUTS] = snapshot
     proceed_quietly(launcher, run)
     return dict(id=run.name, status="CONFIRMED")
 

@@ -5,7 +5,7 @@ import sys
 
 from taskrail.application import budgets
 from taskrail.application.artifacts import save_run
-from taskrail.core import protected_paths
+from taskrail.core import prompt_texts, protected_paths
 from taskrail.core.files import atomic_json
 from taskrail.infrastructure.artifact_access import manifest
 from taskrail.observability.progress import clock
@@ -44,7 +44,9 @@ def save_request(folder, record, request, workflow):
         atomic_json(access, manifest(folder.parent, folder, *rights, protected))
         request = request.replace(
             "# Orchestrator instructions\n",
-            f"# Orchestrator instructions\nAccess manifest: {access} lists the run files you may read.\n",
+            "# Orchestrator instructions\n{}\n".format(
+                prompt_texts.text("request.manifest", path=access)
+            ),
             1,
         )
     (folder / "request.md").write_text(request, encoding="utf-8")

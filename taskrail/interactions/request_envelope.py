@@ -9,7 +9,7 @@ rejected before anything runs, and the session is told what to fix.
 from types import MappingProxyType
 
 from taskrail.application import execution_requests, jenkins_requests
-from taskrail.core import json_response, schema
+from taskrail.core import json_response, prompt_texts, schema
 from taskrail.git import requests as git_requests
 from taskrail.interactions import local
 
@@ -17,9 +17,6 @@ GIT = git_requests.STATUS
 LOCAL = "LOCAL_REQUEST"
 ACTION = "ACTION_REQUEST"
 JENKINS = jenkins_requests.STATUS
-GIT_WRITE = (
-    "A Git request that changes state must be your entire message, without prose or a code fence"
-)
 
 
 def status(text):
@@ -35,7 +32,7 @@ def status(text):
 def parsed(kind, text):
     """The validated request of a recognized response; ValueError says what is wrong."""
     payload = PARSERS[kind](text)
-    schema.require(payload is not None, GIT_WRITE)
+    schema.require(payload is not None, prompt_texts.text("validation.git_envelope"))
     return payload
 
 

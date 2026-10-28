@@ -33,7 +33,8 @@ class InteractionTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
-        self.run = Path(self.tmp.name)
+        self.run = Path(self.tmp.name) / "run"
+        self.run.mkdir()
         self.root = self.run / "project"
         self.root.mkdir()
         self.context = dict(run=self.run, roots={"project": self.root}, timeout=5)
@@ -95,8 +96,34 @@ class InteractionTests(unittest.TestCase):
             ["env", "FOO=1", "bash", "-c", "id"],
             ["timeout", "5", "sh", "-c", "id"],
             ["env", "-S", "python3 -c 1"],
+            ["/usr/bin/env", "-vS", "/usr/bin/python3 -c print(987654)"],
+            ["env", "--split-string=python3\\_-c\\_1"],
+            ["bash", "--rcfile", "/dev/null", "-c", "printf harmless"],
+            ["bash", "--init-file", "/dev/null", "-mc", "printf harmless"],
+            ["bash", "-m", "-c", "printf harmless"],
+            ["bash", "-eo", "pipefail", "-c", "printf harmless"],
+            ["python3", "--check-hash-based-pycs", "never", "-c", "print(1)"],
+            ["python3", "-W", "ignore", "-X", "dev", "-c", "print(1)"],
+            ["python3", "--check-hash-based-pycs"],
+            ["timeout", "5", "bash", "--rcfile", "/dev/null", "-c", "printf harmless"],
+            ["xargs", "python3", "--future-option", "value", "-c", "print(1)"],
         )
-        scripts = (["bash", "x.sh"], ["python3", "-m", "pytest", "-c", "x.ini"], ["ls", "-c"])
+        scripts = (
+            ["bash", "x.sh"],
+            [
+                "bash",
+                "--noprofile",
+                "--norc",
+                "--rcfile",
+                "/dev/null",
+                "script with spaces.sh",
+                "-c",
+            ],
+            ["python3", "-Wignore", "-Xdev", "script with spaces.py", "-c"],
+            ["python3", "--check-hash-based-pycs", "never", "-m", "pytest", "-c", "x.ini"],
+            ["python3", "-m", "pytest", "-c", "x.ini"],
+            ["ls", "-c"],
+        )
         for argv in (*inline, *scripts):
             with self.subTest(argv=argv):
                 approve = MagicMock(return_value=dict(decision="deny", alternative=""))
@@ -190,7 +217,14 @@ class InteractionTests(unittest.TestCase):
         self.assertFalse(approval_policy.active(self.run, state))
         self.assertFalse(approval_policy.at_start(self.run, dict(auto_approve=True)))
         card = dict(decision="allow", alternative="", allow_all=True)
-        with patch("taskrail.interactions.approvals.wait", return_value=card) as wait:
+
+        def personal_decision(run, request):
+            (run / approvals.PENDING).write_text(json.dumps(dict(ticket="restore")))
+            approvals.decide(run, dict(card, id=run.name, ticket="restore"))
+            approvals.clear(run)
+            return card
+
+        with patch("taskrail.interactions.approvals.wait", side_effect=personal_decision) as wait:
             approval_policy.decision(self.run, self.request(["make"]), state)
             approval_policy.decision(self.run, self.request(["make"]), state)
         self.assertEqual(wait.call_count, 1)

@@ -1,7 +1,6 @@
 """Intermediate Jenkins requests: the advertised contract and its validation."""
 
 import json
-from types import MappingProxyType
 
 from taskrail.core import json_response, prompt_texts, schema
 from taskrail.executor import jenkins_schema
@@ -11,29 +10,13 @@ VERSION_FIELD = "schema_version"
 STATUS_FIELD = "status"
 JENKINS = "jenkins"
 ENVELOPE = frozenset((VERSION_FIELD, STATUS_FIELD, JENKINS))
-CONTRACT = MappingProxyType(
-    {
-        VERSION_FIELD: 1,
-        STATUS_FIELD: STATUS,
-        JENKINS: {
-            "server": "configured-server-alias",
-            "job": "configured-job-alias",
-            "operation": "status | console | tests | build",
-            "build": '"last" or a build number; "new" for a build',
-            "parameters": {},
-            "reason": "Purpose and what the result should show",
-            "timeout_seconds": 1800,
-        },
-    }
-)
 
 
 def instructions(servers):
     """The contract and the configured servers and jobs, or nothing without Jenkins."""
     if not servers:
         return ""
-    contract = json.dumps(dict(CONTRACT))
-    return prompt_texts.text("routes.jenkins", contract=contract, servers=json.dumps(servers))
+    return prompt_texts.text("routes.jenkins", servers=json.dumps(prompt_catalog(servers)))
 
 
 def extract(response):
@@ -58,3 +41,14 @@ def validate(payload, servers):
     schema.require(set(payload) == ENVELOPE, "Invalid envelope")
     schema.contract_version(payload[VERSION_FIELD])
     return jenkins_schema.validate(payload[JENKINS], servers)
+
+
+def prompt_catalog(servers):
+    """Only aliases, accepted parameters and approval mode affect model requests."""
+    return {
+        alias: {
+            job: dict(parameters=entry["parameters"], approval=entry.get("approval", "root"))
+            for job, entry in server["jobs"].items()
+        }
+        for alias, server in servers.items()
+    }

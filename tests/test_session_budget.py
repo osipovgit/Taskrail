@@ -248,9 +248,13 @@ class SessionBudgetTests(unittest.TestCase):
         source.write_text(original)
         task = self.root / "task.md"
         header = json.dumps(dict(roots=dict(project=str(project))))
-        task.write_text(f"```taskrail-task\n{header}\n```\nReturn 2")
+        options = self.workflow_settings()
+        capacity = context_windows.capacity(options)
+        # The task itself exceeds capacity, independently of instruction wording.
+        details = "context " * (capacity // len("context ") + 1)
+        task.write_text(f"```taskrail-task\n{header}\n```\nReturn 2. {details}")
         settings = self.root / "settings.json"
-        settings.write_text(json.dumps(self.workflow_settings()))
+        settings.write_text(json.dumps(options))
         run, status = execute_task(task, settings, run_dir=self.root / "result")
         state = json.loads(run.joinpath("run.json").read_text())
         self.assertEqual(status, "CONTEXT_EXCEEDED", state.get("summary"))
@@ -258,6 +262,7 @@ class SessionBudgetTests(unittest.TestCase):
         self.assertEqual(len(state["stages"]), 1)
         rejected = state["stages"][0]
         self.assertEqual(rejected["role"], "planner")
+        self.assertGreater(rejected["context_budget"]["request_bytes"], capacity)
         self.assertEqual(rejected["status"], "CONTEXT_EXCEEDED")
         self.assertEqual(rejected["elapsed_seconds"], 0)
         self.assertIn("Planner admission", state["summary"])

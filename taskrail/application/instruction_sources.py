@@ -10,6 +10,7 @@ from taskrail.infrastructure.agent_sync import atomic_write
 
 ROLES = ("planner", "implementer", "reviewer")
 CONTRACT = "00-input/contract.json"
+TEXTS = "texts"
 
 
 def validate_role_source(path):
@@ -60,9 +61,10 @@ def freeze_contract(run, policy, state):
         raise ValueError("Saved instruction policy changed; restart required")
     state["contract_sha256"] = signature
     saved = json.loads(path.read_text())
-    if saved["schemas"] != SCHEMAS or "texts" not in saved:
+    compatible = prompt_texts.compatible(saved.get(TEXTS))
+    if saved["schemas"] != SCHEMAS or not compatible:
         raise ValueError("Saved contract differs from this release; restart for fresh validation")
-    prompt_texts.ACTIVE.adopt(saved["texts"])
+    prompt_texts.ACTIVE.adopt(saved[TEXTS])
     return saved
 
 
@@ -70,7 +72,9 @@ def adopt_texts(run):
     """Use the run's frozen texts, or this release's texts before the contract exists."""
     path = run / CONTRACT
     saved = json.loads(path.read_text()) if path.is_file() else {}
-    prompt_texts.ACTIVE.adopt(saved.get("texts") or prompt_texts.release())
+    if saved and not prompt_texts.compatible(saved.get(TEXTS)):
+        raise ValueError("Saved contract differs from this release; restart for fresh validation")
+    prompt_texts.ACTIVE.adopt(saved.get(TEXTS) or prompt_texts.release())
 
 
 def imported_draft(run, stage):

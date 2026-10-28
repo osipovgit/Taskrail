@@ -9,6 +9,7 @@ and Jenkins builds keep their separate root-only approval.
 import time
 import uuid
 
+from taskrail.core import approval_marks
 from taskrail.core.files import atomic_json
 from taskrail.interactions import approvals, read_only
 
@@ -16,7 +17,7 @@ AUTO_APPROVE = "auto_approve"
 ALLOW = "allow"
 ALLOW_ALL = "allow_all"
 READ_ONLY = "read_only"
-OFF = "auto-approve.off"
+OFF = approval_marks.OFF
 
 
 def decision(run, request, state, scope=None, personal=False):
@@ -33,31 +34,30 @@ def decision(run, request, state, scope=None, personal=False):
         return automatic(run, request, ALLOW_ALL)
     answer = approvals.wait(run, request)
     if answer.get("allow_all") and answer["decision"] == ALLOW:
-        state[AUTO_APPROVE] = True
-        (run / OFF).unlink(missing_ok=True)
+        state[AUTO_APPROVE] = not approval_marks.revoked(run)
     return answer
 
 
 def enabled(run, state):
     """The run's setting, switched off for good once the operator revoked it."""
-    if (run / OFF).exists():
+    if approval_marks.revoked(run):
         state[AUTO_APPROVE] = False
     return state.get(AUTO_APPROVE) is True
 
 
 def at_start(run, config):
     """The task header's setting, unless the operator revoked it for this run."""
-    return config.get(AUTO_APPROVE) is True and not (run / OFF).exists()
+    return config.get(AUTO_APPROVE) is True and not approval_marks.revoked(run)
 
 
 def active(run, state):
     """What the UI shows: allowed and not revoked since the worker last saved its state."""
-    return state.get(AUTO_APPROVE) is True and not (run / OFF).exists()
+    return state.get(AUTO_APPROVE) is True and not approval_marks.revoked(run)
 
 
 def revoke(run):
     """Ask the worker to stop approving automatically; it applies before the next decision."""
-    atomic_json(run / OFF, dict(revoked_at=time.time()))
+    approval_marks.revoke(run)
     return dict(id=run.name, status="AUTO_APPROVE_REVOKED")
 
 

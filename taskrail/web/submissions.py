@@ -51,9 +51,7 @@ class TaskLauncher:
         if path == "/api/decision":
             lifecycle.approvals.validate_decision(payload)
             run = history.checked_run(self.base, payload["id"])
-            recorded = lifecycle.approvals.decide(run, payload)
-            split_approvals.granted(run, payload)
-            return recorded
+            return split_approvals.decide(run, payload)
         if path == "/api/tasks":
             return self.submit(payload)
         return self.action(payload)

@@ -6,14 +6,13 @@ contract and a bounded prerequisite index; the full parent remains available
 for specific lookups when needed.
 """
 
-from taskrail.core import task_graph, task_lineage
+from taskrail.core import prompt_texts, task_graph, task_lineage
 
 INDEX_BUDGET = 6000
 BRIEF_BUDGET = 14000
 CONTRACT_BUDGET = 8000
 IDENTIFIER = "id"
 REQUIREMENTS = "requirements"
-SCOPE = "This run is one task of a larger goal that was split into tasks. Do only the current task below; every other task has its own run. Finished tasks are already in the source."
 
 
 def requirements(state, task):
@@ -37,18 +36,14 @@ def assigned_requirements(state, task):
 
 def part(text, scope):
     """Preserve the requirement exactly; scope is separate server-owned metadata."""
-    return f"{text}\nOnly this assigned part: {scope}" if scope else text
+    return prompt_texts.current("child.part", requirement=text, scope=scope) if scope else text
 
 
 def brief(run, draft, entries, current):
     """A bounded index; the immutable artifact holds every full contract and outcome."""
-    lines = [SCOPE, "", f"Parent run: {run.name}. Current task: {current['id']}."]
-    lines.append(
-        "This run carries its complete assigned requirements, global constraints and current "
-        "contract. The sealed parent-task.md is reference data: consult only a specific missing "
-        "parent section or prerequisite, within the read budget; never read the whole snapshot. "
-        "If an essential dependency cannot be resolved within the budget, report the exact gap."
-    )
+    lines = [prompt_texts.current("child.scope")]
+    lines.extend(["", f"Parent run: {run.name}. Current task: {current['id']}."])
+    lines.append(prompt_texts.current("child.reference"))
     lines.extend(["", current_contract(current), "", "Prerequisites:"])
     needed = task_graph.ancestors(entries, current[IDENTIFIER])
     remaining = min(INDEX_BUDGET, BRIEF_BUDGET - len("\n".join(lines)))
@@ -58,7 +53,7 @@ def brief(run, draft, entries, current):
             if len(line) <= remaining:
                 lines.append(line)
                 remaining -= len(line)
-    lines.append("Other tasks are outside this run's scope; their full index is in parent-task.md.")
+    lines.append(prompt_texts.current("child.outside"))
     return "\n".join(lines)
 
 

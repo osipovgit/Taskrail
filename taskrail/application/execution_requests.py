@@ -2,39 +2,32 @@
 
 import json
 from pathlib import Path
-from types import MappingProxyType
 
-from taskrail.application import jenkins_requests
+from taskrail.application import delivery_confirmation, jenkins_requests
 from taskrail.core import delivery_record, json_response, prompt_texts, schema
 from taskrail.executor import action_schema, client, protocol
 from taskrail.interactions import remote_inspection
 
 INSPECT = "inspect"
 SERVER = "server"
-
-CONTRACT = MappingProxyType(
-    {
-        "schema_version": 1,
-        "status": "ACTION_REQUEST",
-        "action": {
-            "targets": ["configured-host-alias"],
-            "script": "exact shell script to review and execute remotely",
-            "files": {},
-            "reason": "Purpose, expected effects and verification",
-            "timeout_seconds": 300,
-        },
-    }
-)
+UNAVAILABLE = "unavailable"
 
 
-def instructions(config, stage, run):
-    """Advertise only an installed executor and what it offers; expose no credentials."""
+def available():
+    """One public catalog snapshot supplies both route instructions and response shapes."""
     if not Path(protocol.SOCKET).exists():
-        return prompt_texts.text("routes.ssh.unavailable")
+        return {UNAVAILABLE: "routes.ssh.unavailable"}
     try:
-        catalog = client.request({"operation": "catalog"})
+        return client.request({"operation": "catalog"})
     except (OSError, ValueError):
-        return prompt_texts.text("routes.ssh.unreachable")
+        return {UNAVAILABLE: "routes.ssh.unreachable"}
+
+
+def instructions(config, stage, run, catalog=None):
+    """Advertise the same stage capabilities as the request's response schemas."""
+    catalog = available() if catalog is None else catalog
+    if catalog.get(UNAVAILABLE):
+        return prompt_texts.text(catalog[UNAVAILABLE])
     routes = [
         ssh_instructions(catalog.get("hosts"), server_scope(config, stage, run)),
         jenkins_requests.instructions(catalog.get("jenkins")),
@@ -62,8 +55,15 @@ def remote_mode(run, config, role):
         return None
     change = config.get("confirmed_change")
     if config.get("phase") == SERVER and delivery_record.server_checks_confirmed(run, change):
+        delivery_confirmation.verify(run.parent / change)
         return SERVER
     return INSPECT
+
+
+def server_authorized(run, config):
+    """Every remote kind in a server phase retains the confirmed delivery boundary."""
+    mode = remote_mode(run, config, "reviewer")
+    schema.require(mode == SERVER, "Server checks require confirmed changes")
 
 
 def ssh_instructions(targets, scope):
@@ -74,9 +74,8 @@ def ssh_instructions(targets, scope):
         return prompt_texts.text("routes.ssh.implementing")
     return prompt_texts.text(
         "routes.ssh",
-        contract=json.dumps(dict(CONTRACT)),
         scope=scope,
-        targets=json.dumps(targets),
+        targets=json.dumps(list(targets)),
     )
 
 

@@ -3,7 +3,7 @@
 from pathlib import Path
 
 from taskrail.core.schema import require
-from taskrail.git import index_ownership, process
+from taskrail.git import history_outcome, index_ownership, process, staging_baseline
 
 
 def repository(root):
@@ -31,20 +31,20 @@ def check_paths(paths, allowed):
 
 def original_clean(repo, paths, baseline):
     """Do not stage unrelated pre-existing edits, even inside an approved file."""
+    revision = history_outcome.head(repo, unborn=True)
     for path in paths:
         original = baseline.get(str(path))
-        relative = path.relative_to(repo).as_posix()
-        head = process.invoke(repo, ["show", f"HEAD:{relative}"])
+        committed = staging_baseline.committed(repo, path, revision) if revision else None
         if original is None:
-            require(head.returncode != 0, "Missing baseline for an existing tracked file")
+            require(committed is None, "Missing baseline for an existing tracked file")
         else:
-            head_digest = head.stdout_sha256
             require(
-                head.returncode == 0,
+                committed is not None,
                 "Pre-existing untracked file cannot be committed automatically",
             )
             require(
-                original.split(":")[-1] == head_digest,
+                staging_baseline.source_identity(original)
+                == staging_baseline.source_identity(committed),
                 "Preserve pre-existing user edits; Git staging requires a clean original file",
             )
 
@@ -72,12 +72,15 @@ def preflight(root, argv, context):
             "Only an index staged by this run can be committed",
         )
         check_paths(staged, allowed)
+        context["affected_paths"] = staged
     else:
         require(
             not process.checked(repo, ["status", "--porcelain"]),
             "Commit application requires a clean working tree; preserve current edits",
         )
-        check_paths(affected(repo, argv), allowed)
+        paths = affected(repo, argv)
+        check_paths(paths, allowed)
+        context["affected_paths"] = paths
     return argv
 
 

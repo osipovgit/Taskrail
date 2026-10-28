@@ -25,9 +25,9 @@ def execute(workflow, folder, spec, recipe):
 
 def authorize(workflow, recipe):
     """The server verifies confirmation independently of the selected recipe."""
-    if recipe["kind"] == "ssh":
-        mode = execution_requests.remote_mode(workflow.run, workflow.config, "reviewer")
-        require(mode == execution_requests.SERVER, "Server checks require confirmed changes")
+    phase = workflow.config.get("phase")
+    if recipe["kind"] == "ssh" or phase == execution_requests.SERVER:
+        execution_requests.server_authorized(workflow.run, workflow.config)
 
 
 def binding(workflow, spec, recipe):

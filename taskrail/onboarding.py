@@ -32,9 +32,11 @@ def check(explicit=None):
         options = json.loads(path.read_text()) if path.is_file() else {}
     except (OSError, ValueError) as error:
         return [found, (False, f"Settings are unreadable: {error}")]
+    if not isinstance(options, dict):
+        return [found, (False, "Settings are invalid: expected a JSON object")]
     try:
         launch = launch_settings(options, path.parent)
-    except (OSError, ValueError) as error:
+    except (OSError, TypeError, ValueError) as error:
         return [found, (False, f"Settings are invalid: {error}")]
     command = options.get(COMMAND, list(opencode_cli.DEFAULT_COMMAND))
     return [

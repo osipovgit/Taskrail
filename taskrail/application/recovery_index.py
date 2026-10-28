@@ -6,15 +6,15 @@ file can be larger than its context.
 
 import json
 
-RULE = "Read only the blocks you need, at most 200 lines at a time; never read this file whole."
-HEAD = ("", "## Index", RULE)
+from taskrail.core import prompt_texts
+
 WINDOW_KEYS = ("pattern", "offset", "limit")
 
 
 def index_lines(records, blocks, start):
     """The index after line start: one entry per record with the lines of its block."""
-    spans = block_spans(blocks, start + len(HEAD) + len(records))
-    entries = list(HEAD)
+    entries = prompt_texts.text("recovery.index").splitlines()
+    spans = block_spans(blocks, start + len(entries) + len(records))
     for number, pair in enumerate(zip(records, spans, strict=True), 1):
         entries.append(index_entry(number, *pair))
     return entries

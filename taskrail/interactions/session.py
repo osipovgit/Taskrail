@@ -36,13 +36,24 @@ class StageSession:
 
     def run(self):
         """One stage server serves every turn and stops with the stage."""
-        launch = self.launch
-        runtime = launch.get("runtime", {})
+        runtime = self.launch.get("runtime", {})
         allow = (runtime.get("env_allow", ()), runtime.get("autocompact", False))
-        command = launch.get("command", ())
-        with opencode_api.stage_server(command, launch.get("workspace"), *allow) as server:
-            self.context["attachment"] = server.attachment() if server else {}
-            return self.turns()
+        startup = dict(
+            timeout=self.clock.remaining(),
+            check=lambda: control.check_stop(self.environment["run"]),
+        )
+        try:
+            with opencode_api.stage_server(
+                self.launch.get("command", ()),
+                self.launch.get("workspace"),
+                *allow,
+                startup=startup,
+            ) as server:
+                self.context["attachment"] = server.attachment() if server else {}
+                return self.turns()
+        except TimeoutError as error:
+            outcome = dict(status="TIMEOUT", final_text="", errors=[str(error)])
+            return self.finished(outcome)
 
     def turns(self):
         """Only intermediate responses continue; final validation stays independent."""

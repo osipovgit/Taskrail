@@ -1,0 +1,20 @@
+[run]
+branch = True
+source = taskrail
+patch = subprocess
+relative_files = True
+data_file = tmp/coverage/.coverage
+
+[paths]
+source =
+    taskrail
+    */taskrail
+
+[report]
+show_missing = True
+
+[html]
+directory = tmp/coverage/html
+
+[json]
+output = tmp/coverage/coverage.json

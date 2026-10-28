@@ -41,14 +41,25 @@ def select(setting, command, allow=()):
             timeout=VERSION_SECONDS,
             check=False,
         )
-    except (OSError, subprocess.TimeoutExpired):
-        return ONE_X
+    except (OSError, subprocess.TimeoutExpired) as error:
+        raise ValueError(
+            "Cannot detect opencode interface; set settings.opencode_version explicitly"
+        ) from error
+    return detected(completed)
+
+
+def detected(completed):
+    """Never infer compatibility from a failed, ambiguous or unsupported version."""
     match = VERSION.fullmatch(completed.stdout.strip())
     if completed.returncode or match is None:
         raise ValueError(
             "Cannot detect opencode interface; set settings.opencode_version explicitly"
         )
-    return TWO_X if int(match.group(1)) >= 2 else ONE_X
+    versions = {1: ONE_X, 2: TWO_X}
+    major = int(match.group(1))
+    if major not in versions:
+        raise ValueError(f"Unsupported opencode major version: {major}; supported: 1.x, 2.x")
+    return versions[major]
 
 
 def launch_command(command, version):
@@ -57,13 +68,17 @@ def launch_command(command, version):
     return [sys.executable, "-I", "-c", ADAPTER, PACKAGE_ROOT, json.dumps(command)]
 
 
-def stage_server(command, workspace, allow, compact=True):
+def stage_server(command, workspace, allow, compact=True, startup=None):
     """2.x turns of one stage share a private server; 1.x launches need none."""
     if ADAPTER not in command:
         return contextlib.nullcontext()
     target = json.loads(command[-1])
     environment = opencode_cli.environment(allow, compact)
-    return opencode_server.Server(target, str(workspace), env=environment)
+    server = opencode_server.Server(target, str(workspace), env=environment)
+    if startup is not None:
+        server.startup.update(startup)
+        server.startup["timeout"] = min(server.startup["timeout"], opencode_server.READY_SECONDS)
+    return server
 
 
 def relative_base(config, roots, files):

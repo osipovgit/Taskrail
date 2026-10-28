@@ -34,7 +34,7 @@ folders.
 | Git history | `GIT_REQUEST` final response | Controlled executor; read-only for planning/review |
 | Git mutation | `GIT_REQUEST` final response | Implementer, approved scope, bounded command grammar |
 | Remote inspection/change | `ACTION_REQUEST` final response | Configured SSH targets; exact script root-approved; inspection only before you confirm a change, server checks after it; never the implementer |
-| Jenkins | `JENKINS_REQUEST` final response | Configured jobs; reads approved in the UI, builds root-approved |
+| Jenkins | `JENKINS_REQUEST` final response | Configured jobs; reads automatically approved, builds root-approved unless root configured the job with `approval: none` |
 | Local checks | Built-in syntax checks (`.py`, `.json`, `.sh`; `.yml`/`.yaml` with PyYAML from the service's Python, a system `python3` or Taskrail's own package directory, safe composer only; `taskrail check` names which); `LOCAL_REQUEST` for tests, linters or explicit Bash | Exact argv personally approved; runs as the application user |
 | HTTP/API/database tools | No direct connector | Approved SSH scripts may use installed remote clients |
 
@@ -110,6 +110,10 @@ agent requests (`bash -c`, `sh -c`, `python -c` and the like, also behind `env`,
 `timeout` or `xargs`) always waits for your personal decision: its code is not
 checked by the command routes above. Configured checks from settings are not agent
 requests and keep the normal rules.
+
+Interpreter options that carry another argument are parsed before detecting inline
+code. Unknown interpreter options and `env --split-string` require a personal
+decision as well; they cannot use Allow all to bypass this boundary.
 
 Local commands use exec without implicit shell expansion and a host environment
 without secret-shaped variables, provider keys included. Explicit Bash and project

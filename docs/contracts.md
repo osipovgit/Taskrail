@@ -5,15 +5,31 @@
 | `taskrail/agents/*.md` | Role-specific method; no duplicate schema, policy or budget |
 | `application/policy.md` | Execution boundaries, in `## All stages` and per-stage sections; each stage reads only its sections |
 | `core/prompt-texts.json` | Every other model-facing text: stage and mode rules, plan format, response routing, executor routes, feedback and recovery notes |
-| `application/instruction-modules.json` | Reading and language guidance selected per stage |
-| `core/result-schemas.json` | Exact machine-readable response shapes, per role |
+| `application/instruction-modules.json` | Module selection metadata and keys into the prompt catalog |
+| `core/result-schemas.json` | Exact machine-readable result and executor request shapes |
 | `00-input/` | Frozen task, role sources and effective contract for this run |
 
 Code selects texts by key and fills in `$placeholders`; it does not hold model-facing
 prose. `00-input/contract.json` freezes the policy, the prompt texts and the schemas on the
 first launch, and a continuation uses that frozen copy, so an update never changes the
 instructions of a running task. A continuation is refused when the release's schemas
-differ from the frozen ones.
+differ or the saved catalog lacks a required text key; start a new run to adopt the
+updated contract. Frozen wording remains valid when all keys and schemas are compatible.
+New task forms and child input snapshots use the current release, independently of another
+run's active catalog. Runtime feedback, manifests, recovery, source-view guidance and
+module prose use the active run's frozen catalog. Validator diagnostics describe the
+current server's validation rules.
+
+One public executor catalog supplies both route instructions and response alternatives.
+SSH requires configured targets and a stage that permits it; implementation never
+advertises ACTION_REQUEST. Jenkins requires configured jobs. Missing or unreachable
+executors advertise neither remote schema. Prompts expose aliases, parameter names and
+job approval modes, without repeating connection details that the approval screen shows.
+The prompt budget matrix covers those capability combinations, workflow modes and
+Python/shell/UI guidance together: planning and plan review remain below 10,500 instruction
+bytes; implementation and result review below 9,000. It also bounds a representative
+complete request plus role text. Variable user input, source packets and large inventories
+still consume the configured model context allowance.
 
 A request has three parts: `# Task` with the task fields under readable headings and a
 label before each requirement block (`[R1]`, `[R2 runtime]`, `[R3 constraint]`, placed at
@@ -70,6 +86,11 @@ reviewers accept that recorded choice.
   inputs. The server derives input completeness and aggregate verdict. Plan review
   can approve planned work; result and no-change review cannot. An approval cannot
   contain defects or required gaps.
+
+Documentation and test work are valid standalone deliverables when the user requests
+them. The planner and reviewer reject only artificial companion tasks that separate
+tests or documentation from the implementation that owes them. Each task still needs
+observable acceptance criteria, an explicit file boundary and appropriate verification.
 
 The primary authored result is small:
 

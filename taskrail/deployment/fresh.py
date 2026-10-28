@@ -1,6 +1,7 @@
 """Validate and remove application-owned storage for an explicit fresh install."""
 
 import argparse
+import json
 import shutil
 import sys
 from pathlib import Path
@@ -44,6 +45,24 @@ def erase(inventory):
             remove(target)
 
 
+def imported_sources(supplied):
+    """A fresh import must not erase either its settings or its explicit role source."""
+    source = Path(supplied).expanduser().resolve()
+    protected = [source]
+    roles = json.loads(source.read_text()).get("agent_source")
+    if roles is not None:
+        protected.extend(role_sources(source.parent / Path(roles).expanduser()))
+    return protected
+
+
+def role_sources(source):
+    """Copying follows role symlinks, so their targets must survive the reset too."""
+    yield source.resolve()
+    if source.is_dir():
+        for path in source.iterdir():
+            yield from role_sources(path)
+
+
 def main():
     """Revalidate after the service stops before applying the deletion inventory."""
     parser = argparse.ArgumentParser(description=__doc__)
@@ -53,7 +72,7 @@ def main():
     arguments = parser.parse_args()
     protected = [arguments.source.resolve()]
     if arguments.supplied:
-        protected.append(Path(arguments.supplied).expanduser().resolve())
+        protected.extend(imported_sources(arguments.supplied))
     inventory = prepare(Path.home(), protected)
     if arguments.operation == "remove":
         erase(inventory)

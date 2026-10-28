@@ -2,7 +2,7 @@
 
 import re
 
-from taskrail.core import protected_paths
+from taskrail.core import prompt_texts, protected_paths
 
 
 def result_inputs(run):
@@ -82,8 +82,8 @@ def manifest(run, folder, roots, writable=(), protected=protected_paths.DEFAULT_
             "source-views.json",
             "00-input/git-metadata.json",
         ],
-        "git": "Return GIT_REQUEST as the entire final message. It is not a tool call.",
-        "remote": "Use ACTION_REQUEST only when advertised; personal approval is required.",
-        "local_commands": "Use LOCAL_REQUEST; the operator approves exact commands.",
-        "search": "Search declared roots and exact listed artifact files; never search run directories or protected files.",
+        "git": prompt_texts.text("manifest.git"),
+        "remote": prompt_texts.text("manifest.remote"),
+        "local_commands": prompt_texts.text("manifest.local"),
+        "search": prompt_texts.text("manifest.search"),
     }

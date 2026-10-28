@@ -6,12 +6,18 @@ import unittest
 from contextlib import redirect_stderr
 from importlib import metadata
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 BASE = Path(__file__).resolve().parents[1]
 SPEC = importlib.util.spec_from_file_location("check_tools", BASE / "tools/check_tools.py")
 check_tools = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(check_tools)
+COVERAGE_SPEC = importlib.util.spec_from_file_location(
+    "test_coverage", BASE / "tools/test_coverage.py"
+)
+measurement = importlib.util.module_from_spec(COVERAGE_SPEC)
+COVERAGE_SPEC.loader.exec_module(measurement)
 
 
 class DevelopmentToolTests(unittest.TestCase):
@@ -45,6 +51,17 @@ class DevelopmentToolTests(unittest.TestCase):
     def test_comments_and_blank_lines_are_not_requirements(self):
         text = "# tools\n\nruff==1.0  # linter\nshfmt-py==2\n"
         self.assertEqual(list(check_tools.pins(text)), [("ruff", "1.0"), ("shfmt-py", "2")])
+
+    def test_coverage_measurement_does_not_lose_signal_failures(self):
+        for code in (0, 1, -9):
+            with (
+                self.subTest(returncode=code),
+                patch.object(
+                    measurement.subprocess, "run", return_value=SimpleNamespace(returncode=code)
+                ),
+            ):
+                status = measurement.coverage(["run"], {})
+                self.assertEqual(status, 0 if code == 0 else 1)
 
 
 if __name__ == "__main__":

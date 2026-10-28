@@ -454,5 +454,211 @@
         "maxLength": 2000
       }
     }
+  },
+  "git-request": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "schema_version",
+      "status",
+      "root",
+      "argv",
+      "reason"
+    ],
+    "properties": {
+      "schema_version": {
+        "const": 1
+      },
+      "status": {
+        "const": "GIT_REQUEST"
+      },
+      "root": {
+        "type": "string",
+        "minLength": 1
+      },
+      "argv": {
+        "type": "array",
+        "minItems": 1,
+        "items": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "reason": {
+        "type": "string",
+        "minLength": 1
+      }
+    }
+  },
+  "local-request": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "schema_version",
+      "status",
+      "cwd",
+      "argv",
+      "reason"
+    ],
+    "properties": {
+      "schema_version": {
+        "const": 1
+      },
+      "status": {
+        "const": "LOCAL_REQUEST"
+      },
+      "cwd": {
+        "type": "string",
+        "minLength": 1
+      },
+      "argv": {
+        "type": "array",
+        "minItems": 1,
+        "items": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "reason": {
+        "type": "string",
+        "minLength": 1
+      }
+    }
+  },
+  "ssh-request": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "schema_version",
+      "status",
+      "action"
+    ],
+    "properties": {
+      "schema_version": {
+        "const": 1
+      },
+      "status": {
+        "const": "ACTION_REQUEST"
+      },
+      "action": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "targets",
+          "script",
+          "reason",
+          "files",
+          "timeout_seconds"
+        ],
+        "properties": {
+          "targets": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 16,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "script": {
+            "type": "string",
+            "minLength": 1
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1
+          },
+          "files": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "timeout_seconds": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 3600
+          }
+        }
+      }
+    }
+  },
+  "jenkins-request": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "schema_version",
+      "status",
+      "jenkins"
+    ],
+    "properties": {
+      "schema_version": {
+        "const": 1
+      },
+      "status": {
+        "const": "JENKINS_REQUEST"
+      },
+      "jenkins": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "server",
+          "job",
+          "operation",
+          "build",
+          "parameters",
+          "reason",
+          "timeout_seconds"
+        ],
+        "properties": {
+          "server": {
+            "type": "string",
+            "minLength": 1
+          },
+          "job": {
+            "type": "string",
+            "minLength": 1
+          },
+          "operation": {
+            "enum": [
+              "status",
+              "console",
+              "tests",
+              "build"
+            ]
+          },
+          "build": {
+            "oneOf": [
+              {
+                "enum": [
+                  "last",
+                  "new"
+                ]
+              },
+              {
+                "type": "integer",
+                "minimum": 1
+              }
+            ]
+          },
+          "parameters": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1
+          },
+          "timeout_seconds": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 3600
+          }
+        }
+      }
+    }
   }
 }

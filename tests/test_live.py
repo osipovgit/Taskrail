@@ -283,16 +283,16 @@ class LiveTests(LiveFixture, unittest.TestCase):
     def test_live_prompt_has_complete_schema(self):
         run, _status, _state = self.run_mode()
         prompt = (run / "02-plan-review/request.md").read_text()
-        schemas = prompt.split("Schemas, one per line:\n", 1)[1].split("\nContext:", 1)[0]
+        schemas = prompt.split("Schemas:\n", 1)[1].split("\nContext:", 1)[0]
         schema = json.loads(schemas.splitlines()[0])
         self.assertNotIn("ACTION_REQUEST", schemas)
         self.assertIn("findings", schema["properties"])
         self.assertNotIn("quote", json.dumps(schema))
         planning = (run / "01-plan/request.md").read_text()
-        self.assertIn(f"PLAN FILE: your result is the Markdown file {run / 'plan.md'}", planning)
+        self.assertIn(f"PLAN FILE: edit the Markdown file {run / 'plan.md'}", planning)
         self.assertIn("[R1]\nReturn 2", planning)
         self.assertEqual(planning.count("Return 2"), 1)
-        requests = planning.split("Request schemas, one per line:\n", 1)[1].split("\nContext:")[0]
+        requests = planning.split("Schemas:\n", 1)[1].split("\nContext:")[0]
         self.assertEqual(
             [json.loads(line)["properties"]["status"]["const"] for line in requests.splitlines()],
             ["GIT_REQUEST", "LOCAL_REQUEST"],
@@ -1131,8 +1131,8 @@ class LiveTests(LiveFixture, unittest.TestCase):
         self.assertTrue(state["auto_continue"])
         self.assertIn("return 1", (self.root / "hello.py").read_text())
         request = (run / "01-plan/request.md").read_text()
-        self.assertIn("Choose split when it is several tasks", request)
-        self.assertIn("implemented directly from this plan", request)
+        self.assertIn("Choose split for independent deliverables", request)
+        self.assertIn("Split tasks have no fresh planning phase", request)
         self.assertIn("Decision: split", (run / "plan.md").read_text())
 
     def test_design_discussion_leaves_a_reviewed_design_document(self):

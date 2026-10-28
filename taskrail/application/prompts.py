@@ -58,20 +58,22 @@ def make_request(config, execution, state, run):
     state["module_source_files"] = instruction_modules.observed_files(run)
     frozen = instruction_sources.freeze_contract(run, POLICY, state)
     stage = execution[0]
+    catalog = execution_requests.available()
     task = task_text(config, run, state.get("requirements", []))
     parts = (
         policy_sections.for_stage(frozen["policy"], stage),
         prompt_texts.text(f"stage.{stage}"),
         mode_rules.render(config, stage),
         instruction_modules.render(run, execution, state),
-        execution_requests.instructions(config, stage, run),
+        execution_requests.instructions(config, stage, run, catalog),
         git_requests.instructions(stage),
         local.instructions(stage),
-        response_format.section(stage, state, run, config),
+        response_format.section(stage, state, run, config, catalog),
         f"Context:\n{context_json(request_context(config, execution, state, run))}",
     )
-    instructions = "\n\n".join(filter(None, parts))
-    return f"# Task\n{task}\n\n{INSTRUCTIONS_HEADING}\n{instructions}"
+    return "# Task\n{}\n\n{}\n{}".format(
+        task, INSTRUCTIONS_HEADING, "\n\n".join(filter(None, parts))
+    )
 
 
 def contract(stage, version):
@@ -91,10 +93,10 @@ def repair(response, error, stage, version, requirements):
         (
             prompt_texts.text("repair.header"),
             repair_rules(stage),
-            f"Previous response was invalid: {plan_file.labelled(error, requirements)}",
-            "Schema:",
+            prompt_texts.text("repair.error", error=plan_file.labelled(error, requirements)),
+            prompt_texts.text("repair.schema"),
             contract(stage, version),
-            "Assigned requirements:",
+            prompt_texts.text("repair.requirements"),
             context_json(plan_file.labelled_requirements(requirements)),
             saved_response_prompt(response),
         )

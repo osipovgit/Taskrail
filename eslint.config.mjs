@@ -2,7 +2,7 @@ import js from '@eslint/js';
 import globals from 'globals';
 
 export default [
-  { ignores: ['build/**', 'node_modules/**'] },
+  { ignores: ['.venv/**', 'build/**', 'dist/**', 'node_modules/**', 'tmp/**'] },
   js.configs.recommended,
   {
     files: ['taskrail/web/static/theme.js'],

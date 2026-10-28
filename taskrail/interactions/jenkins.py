@@ -2,7 +2,7 @@
 
 import json
 
-from taskrail.application import execution_wait, jenkins_requests
+from taskrail.application import execution_requests, execution_wait, jenkins_requests
 from taskrail.core import prompt_texts
 from taskrail.executor import client
 from taskrail.interactions import events, transcripts
@@ -23,7 +23,7 @@ def consume(actions, text):
     try:
         response = routed(actions, payload)
     except BaseException:
-        events.finish(actions.folder, event, "Interrupted; check Jenkins before repeating.")
+        events.finish(actions.folder, event, prompt_texts.text("feedback.jenkins_interrupted"))
         raise
     events.finish(actions.folder, event, response)
     return response
@@ -31,6 +31,7 @@ def consume(actions, text):
 
 def routed(actions, payload):
     """Validate against the executor catalog, then read or submit a build ticket."""
+    authorize(actions.session)
     try:
         request = checked(payload)
     except (OSError, ValueError, LookupError) as error:
@@ -49,6 +50,7 @@ def checked(payload):
 def build(session, request):
     """A build is a root-approved executor ticket, like an SSH action."""
     run = session.environment["run"]
+    authorize(session)
     execution_wait.submit(run, session.active[0], request, kind="jenkins")
     with ApprovalPause(session):
         return execution_wait.resume(run, session.state)
@@ -59,7 +61,8 @@ def read(actions, request):
     decision = actions.approve(dict(status=jenkins_requests.STATUS, jenkins=request))
     if decision["decision"] != "allow":
         answer = json.dumps(dict(status="DECLINED", decision=decision))
-        return f"{answer}\nDo not repeat the declined request. Continue with the user decision."
+        return prompt_texts.text("feedback.jenkins_declined", answer=answer)
+    authorize(actions.session)
     query = dict(operation="jenkins-read", request=request)
     try:
         outcome = client.request(query, timeout=READ_SECONDS)
@@ -67,3 +70,10 @@ def read(actions, request):
         outcome = dict(status="FAILED", detail=str(error))
     request = dict(status=jenkins_requests.STATUS, jenkins=request)
     return transcripts.local_snapshot(actions.run, actions.folder, request, outcome)
+
+
+def authorize(session):
+    """A confirmation remains current across Jenkins requests and personal read approval."""
+    config = session.environment.get("config", {})
+    if config.get("phase") == execution_requests.SERVER:
+        execution_requests.server_authorized(session.environment["run"], config)

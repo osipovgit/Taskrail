@@ -4,6 +4,7 @@ import json
 
 from taskrail.application import (
     check_configuration,
+    delivery_confirmation,
     integration_changes,
     reviewed_artifacts,
     run_state,
@@ -39,6 +40,12 @@ def adopt(workflow, resume=False):
     name = reference(workflow.config)
     if name is None:
         return
+    if workflow.config[PHASE] == "server":
+        require(
+            delivery_record.server_checks_confirmed(workflow.run, name),
+            "Server checks require personal confirmation",
+        )
+        delivery_confirmation.verify(workflow.run.parent / name)
     if resume and restored(workflow):
         return
     parent = reviewed_artifacts.run_path(workflow.run.parent, name)

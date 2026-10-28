@@ -1,11 +1,15 @@
 """Fresh-install deletion is validated against every retained ownership record."""
 
 import json
+import os
 import subprocess
 import tempfile
 import unittest
 from pathlib import Path
 
+from deployment_fixture import DeploymentFixture
+
+from taskrail.core import approval_marks
 from taskrail.deployment.fresh import erase, prepare
 
 BASE = Path(__file__).resolve().parents[1]
@@ -78,6 +82,36 @@ class DeploymentResetTests(unittest.TestCase):
                 self.assertEqual(unrelated.read_text(), "personal file")
                 unrelated.unlink()
 
+    def test_valid_approval_sidecars_allow_reset_and_unknown_contents_block_it(self):
+        approval_marks.revoke(self.history / "pending")
+        inventory = prepare(self.home, [BASE])
+        policy = self.history / approval_marks.DIRECTORY
+        for filename, content in (
+            ("unrelated.txt", "personal file"),
+            ("pending.lock", "unrelated lock contents"),
+            ("pending.off", '{"revoked_at": true}'),
+            ("pending.off", '{"revoked_at": 1, "extra": "unknown"}'),
+            ("pending.off", '{"revoked_at": NaN}'),
+        ):
+            with self.subTest(filename=filename, content=content):
+                path = policy / filename
+                original = path.read_bytes() if path.exists() else None
+                path.write_text(content)
+                with self.assertRaisesRegex(ValueError, "approval policy"):
+                    prepare(self.home, [BASE])
+                self.assertEqual(path.read_text(), content)
+                if original is None:
+                    path.unlink()
+                else:
+                    path.write_bytes(original)
+        redirected = policy / "linked.off"
+        redirected.symlink_to(policy / "pending.off")
+        with self.assertRaisesRegex(ValueError, "approval policy"):
+            prepare(self.home, [BASE])
+        redirected.unlink()
+        erase(inventory)
+        self.assertFalse(policy.exists())
+
     def test_release_and_supplied_settings_in_cache_are_protected(self):
         cache = self.home / ".cache/taskrail"
         for protected in (cache / "release", cache / "settings.json"):
@@ -133,3 +167,89 @@ class DeploymentResetTests(unittest.TestCase):
         )
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("invalid.sh", result.stderr)
+
+
+class DeploymentImportPreflightTests(unittest.TestCase):
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.home = Path(temporary.name)
+        self.fixture = DeploymentFixture(self.home)
+        self.release = self.fixture.source()
+        self.environment = self.fixture.environment(dict(os.environ, HOME=str(self.home)))
+        self.config = self.home / ".config/taskrail"
+        self.config.mkdir(parents=True)
+        self.settings = self.config / "settings.json"
+        self.settings.write_text("{}\n")
+        self.sentinel = self.home / ".local/share/taskrail/releases/old/preserved"
+        self.sentinel.parent.mkdir(parents=True)
+        self.sentinel.write_text("previous release")
+        self.imported = self.home / "imported.json"
+        self.command = ["/bin/true"]
+
+    def install_fresh(self):
+        return subprocess.run(
+            [
+                "bash",
+                str(self.release / "deploy/install.sh"),
+                str(self.imported),
+                "--fresh",
+                "--autostart=keep",
+            ],
+            env=self.environment,
+            capture_output=True,
+            text=True,
+            timeout=15,
+        )
+
+    def assert_preserved(self, result):
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(self.sentinel.read_text(), "previous release")
+        self.assertEqual(self.settings.read_text(), "{}\n")
+        self.assertNotIn("--user stop", (self.home / "privilege.log").read_text())
+
+    def test_invalid_settings_and_missing_roles_fail_before_reset(self):
+        for content in (
+            "{",
+            json.dumps(dict(command=["/missing-agent-command"])),
+            json.dumps(dict(command=self.command, agent_source="missing-roles")),
+        ):
+            with self.subTest(content=content):
+                self.imported.write_text(content)
+                self.assert_preserved(self.install_fresh())
+
+    def test_imported_roles_cannot_be_destroyed_by_the_requested_reset(self):
+        roles = self.config / "agents"
+        roles.mkdir()
+        (roles / "planner.md").write_text("custom role")
+        self.imported.write_text(json.dumps(dict(command=self.command, agent_source=str(roles))))
+        result = self.install_fresh()
+        self.assert_preserved(result)
+        self.assertIn("outside reset directories", result.stderr)
+        self.assertEqual((roles / "planner.md").read_text(), "custom role")
+
+    def test_service_environment_is_validated_before_reset(self):
+        self.imported.write_text(json.dumps(dict(command=self.command)))
+        (self.config / "service.env").write_text("PATH=/previous\n")
+        self.environment["PATH"] += ":invalid\nentry"
+        result = self.install_fresh()
+        self.assert_preserved(result)
+        self.assertIn("PATH must not contain newlines", result.stderr)
+        self.assertEqual((self.config / "service.env").read_text(), "PATH=/previous\n")
+
+    def test_role_symlink_targets_must_survive_reset_and_broken_imports_fail_early(self):
+        roles = self.home / "roles"
+        roles.mkdir()
+        target = self.config / "saved-planner.md"
+        target.write_text("custom role")
+        link = roles / "planner.md"
+        link.symlink_to(target)
+        self.imported.write_text(json.dumps(dict(command=self.command, agent_source=str(roles))))
+        result = self.install_fresh()
+        self.assert_preserved(result)
+        self.assertIn("outside reset directories", result.stderr)
+        self.assertEqual(target.read_text(), "custom role")
+        target.unlink()
+        result = self.install_fresh()
+        self.assert_preserved(result)
+        self.assertIn("planner.md", result.stderr)

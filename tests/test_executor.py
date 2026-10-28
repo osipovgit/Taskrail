@@ -14,8 +14,10 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
-from taskrail.application import execution_requests, execution_wait
+from taskrail.application import delivery_confirmation, execution_requests, execution_wait
+from taskrail.application.source_guard import SourceGuard
 from taskrail.core import prompt_texts
+from taskrail.core.files import atomic_json
 from taskrail.executor import action_schema, client, hosts, protocol, streams, transport, worker
 from taskrail.executor.service import ExecutorServer
 from taskrail.executor.store import TicketStore
@@ -235,7 +237,7 @@ class ExecutorTest(unittest.TestCase):
         run = self.root / "server-check"
         server = {"phase": "server", "confirmed_change": "change"}
         inspect_only = execution_requests.server_scope({}, "planner", run)
-        self.assertIn("exactly one read-only command", inspect_only)
+        self.assertIn("one literal read-only command", inspect_only)
         self.assertIn("systemctl status|show", inspect_only)
         self.assertIsNone(execution_requests.server_scope({}, "implementer", run))
         self.assertEqual(execution_requests.server_scope(server, "planner", run), inspect_only)
@@ -281,7 +283,17 @@ class ExecutorTest(unittest.TestCase):
     def confirm_server_checks(self, run):
         change = run.parent / "change"
         change.mkdir(parents=True, exist_ok=True)
+        source = self.root / "source"
+        source.mkdir(exist_ok=True)
+        (source / "source.txt").write_text("Reviewed source\n")
+        guard = SourceGuard({"project": source})
+        guard.capture()
+        atomic_json(change / "run.json", dict(roots={"project": str(source)}, results={}))
+        atomic_json(
+            change / "checkpoint.json", dict(expected=guard.expected, git_before=guard.git_before)
+        )
         record = dict(confirmed=1.0, phases=dict(server=run.name))
+        record[delivery_confirmation.INPUTS] = delivery_confirmation.capture(change, change, record)
         (change / "epic.json").write_text(json.dumps(record))
 
     def session(self, run, role, config):

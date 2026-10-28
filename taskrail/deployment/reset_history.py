@@ -1,5 +1,7 @@
 """Read declared roots from live, archived and never-started task histories."""
 
+from taskrail.core import approval_marks
+from taskrail.deployment import reset_policy
 from taskrail.deployment.reset_records import (
     LAUNCH_INDEX,
     RUN_INDEX,
@@ -33,7 +35,9 @@ def history_roots(history):
     if not history.exists():
         return
     for child in children(history):
-        if child.name == ".trash":
+        if child.name == approval_marks.DIRECTORY:
+            reset_policy.validate(child)
+        elif child.name == ".trash":
             yield from collection_roots(child, archived=True)
         elif child.name == ".submissions":
             yield from collection_roots(child)
