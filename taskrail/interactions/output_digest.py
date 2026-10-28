@@ -8,6 +8,8 @@ import re
 from collections import Counter
 from pathlib import Path
 
+from taskrail.core import prompt_texts
+
 FILE_MENTION = re.compile(r"([\w./-]+\.[A-Za-z0-9]{1,8}):\d+")
 RULE = re.compile(r"\b([a-z][a-z0-9-]*\[[\w-]+\]|[A-Z]{1,4}\d{2,4}\b)")
 SEVERITIES = ("error", "warning", "fail")
@@ -30,7 +32,7 @@ def digest(name, location):
     lines = [f"Digest of {name} ({len(lowered)} lines, {location}): lines mentioning {severities}."]
     lines.append(f"Files most mentioned: {ranked(FILE_MENTION.findall(text))}")
     lines.append(f"Rules most mentioned: {ranked(RULE.findall(text))}")
-    lines.append("Read only the windows you need: grep the file for a rule or a path.")
+    lines.append(prompt_texts.text("output.windows"))
     return "\n".join(lines)
 
 

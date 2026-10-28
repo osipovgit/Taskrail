@@ -124,7 +124,8 @@ class DashboardTests(unittest.TestCase):
         ]:
             with self.assertRaises(HTTPError) as error:
                 self.get(path)
-            self.assertEqual(error.exception.code, 404)
+            with error.exception as response:
+                self.assertEqual(response.code, 404)
 
     def test_mutations_and_foreign_origins_rejected(self):
         original = self.index.read_bytes()
@@ -138,7 +139,8 @@ class DashboardTests(unittest.TestCase):
         ]:
             with self.assertRaises(HTTPError) as error:
                 self.get("/api/run?id=example", **kwargs)
-            self.assertEqual(error.exception.code, expected)
+            with error.exception as response:
+                self.assertEqual(response.code, expected)
         self.assertEqual(self.index.read_bytes(), original)
 
     def test_ssh_tunnel_on_another_local_port_is_trusted(self):
@@ -150,4 +152,5 @@ class DashboardTests(unittest.TestCase):
         self.assertEqual(json.loads(self.get("/api/runs")), [])
         with self.assertRaises(HTTPError) as error:
             self.get("/api/run?id=example")
-        self.assertEqual(error.exception.code, 404)
+        with error.exception as response:
+            self.assertEqual(response.code, 404)

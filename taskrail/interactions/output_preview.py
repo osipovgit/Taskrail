@@ -2,6 +2,7 @@
 
 from pathlib import Path
 
+from taskrail.core import prompt_texts
 from taskrail.interactions import output_digest
 
 LINE_LIMIT = 2000
@@ -26,7 +27,7 @@ def render(path, outcome, outputs):
     return "\n".join(
         [
             *map(excerpt, fields),
-            f"Executor evidence snapshot: {path}. Read exact lines before citing it.",
+            prompt_texts.text("output.snapshot", path=path),
             *streams,
             excerpt(digest),
             references if outputs else "",
@@ -39,7 +40,7 @@ def excerpt(text):
     if len(text) <= PREVIEW_CHARS * 2:
         return text
     head, tail = text[:PREVIEW_CHARS], text[-PREVIEW_CHARS:]
-    return f"{head}\n[... omitted; read the saved output ...]\n{tail}"
+    return prompt_texts.text("output.omitted", head=head, tail=tail)
 
 
 def ticket_streams(entry):
@@ -85,7 +86,7 @@ def ticket_preview(path, pending):
     shown = "\n".join(previews)
     if len(shown) > PREVIEW_LIMIT:
         clipped = shown[:PREVIEW_LIMIT]
-        return f"{clipped}\n[Preview clipped; read the ticket snapshot.]"
+        return prompt_texts.text("output.clipped", preview=clipped)
     return shown
 
 

@@ -1,7 +1,9 @@
 import json
 import os
+import subprocess
 import sys
 import tempfile
+import time
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -23,6 +25,7 @@ from taskrail.infrastructure.permission_check import verify_launch
 from taskrail.infrastructure.profile_rules import permissions
 from taskrail.infrastructure.runner import run_agent
 from taskrail.interactions import provider_resume
+from taskrail.interactions.session import StageSession
 
 RECORDER = """
 import json, os, sys
@@ -87,12 +90,19 @@ class SettingsTests(unittest.TestCase):
     def test_defaults_launch_opencode_with_its_configured_model(self):
         with tempfile.TemporaryDirectory() as temp, mock.patch.dict(os.environ, {"PATH": temp}):
             base = Path(temp)
-            launch = launch_settings({"agent_directory": "profiles"}, base)
+            launch = launch_settings(
+                {"agent_directory": "profiles", "opencode_version": "1.x"}, base
+            )
             self.assertEqual(launch["command"], ["opencode"])
             self.assertEqual(launch["models"], {})
             self.assertEqual(launch["destination"], (base / "profiles").resolve())
             wrapped = launch_settings(
-                {"command": ["/opt/bin/wrapper"], "models": {"a": "p/m"}}, base
+                {
+                    "command": ["/opt/bin/wrapper"],
+                    "models": {"a": "p/m"},
+                    "opencode_version": "1.x",
+                },
+                base,
             )
             self.assertEqual(wrapped["command"], ["/opt/bin/wrapper"])
             self.assertEqual(wrapped["models"], {"a": "p/m"})
@@ -640,7 +650,8 @@ class SelectionTests(unittest.TestCase):
         ):
             with self.subTest(output=ambiguous), self.assertRaisesRegex(ValueError, "explicitly"):
                 self.version(ambiguous)
-        self.assertEqual(opencode_api.select("auto", ["/nonexistent/opencode"]), "1.x")
+        with self.assertRaisesRegex(ValueError, "explicitly"):
+            opencode_api.select("auto", ["/nonexistent/opencode"])
         self.assertEqual(opencode_api.select("2.x", ["/nonexistent/opencode"]), "2.x")
         with self.assertRaisesRegex(ValueError, "opencode_version"):
             opencode_api.select("v3", ["opencode"])
@@ -650,6 +661,97 @@ class SelectionTests(unittest.TestCase):
         self.assertEqual(command[:3], [sys.executable, "-I", "-c"])
         self.assertEqual(json.loads(command[-1]), ["opencode"])
         self.assertEqual(opencode_api.launch_command(["opencode"], "1.x"), ["opencode"])
+
+    def test_failed_probes_and_unsupported_majors_never_select_an_adapter(self):
+        for major in ("0.8.0", "3.0.0", "custom-cli 9.1.0"):
+            with self.subTest(version=major), self.assertRaisesRegex(ValueError, "Unsupported"):
+                self.version(major)
+        failures = (OSError("unavailable"), subprocess.TimeoutExpired(["custom-cli", "--version"], 30))
+        for failure in failures:
+            with (
+                self.subTest(error=failure),
+                mock.patch.object(opencode_api.subprocess, "run", side_effect=failure),
+                self.assertRaisesRegex(ValueError, "explicitly"),
+            ):
+                opencode_api.select("auto", ["custom-cli", "--profile", "work"])
+        result = subprocess.CompletedProcess(["custom-cli"], 1, stdout="2.1.0")
+        with (
+            mock.patch.object(opencode_api.subprocess, "run", return_value=result),
+            self.assertRaisesRegex(ValueError, "explicitly"),
+        ):
+            opencode_api.select("auto", ["custom-cli"])
+
+
+class ServerStartupTests(unittest.TestCase):
+    def server(self, code, root):
+        script = root / "startup.py"
+        script.write_text("import sys, time\n" + code + "\n")
+        return opencode_server.Server([sys.executable, str(script)], str(root))
+
+    def test_silence_and_partial_lines_have_a_deadline_and_release_the_child(self):
+        for code in ("time.sleep(10)", "sys.stdout.write('{'); sys.stdout.flush(); time.sleep(10)"):
+            with self.subTest(code=code), tempfile.TemporaryDirectory() as directory:
+                server = self.server(code, Path(directory))
+                server.startup["timeout"] = 0.1
+                started = time.monotonic()
+                with self.assertRaisesRegex(TimeoutError, "readiness timed out"), server:
+                    self.fail("An incomplete announcement cannot start a model")
+                self.assertLess(time.monotonic() - started, 1)
+                self.assertIsNotNone(server.process.poll())
+                self.assertTrue(server.process.stdout.closed)
+
+    def test_malformed_missing_remote_or_empty_announcements_release_the_child(self):
+        announcements = ("broken", "[]", "{}", '{"url":"https://example.org"}', "x" * 9000)
+        codes = [f"print({line!r}, flush=True); time.sleep(10)" for line in announcements]
+        codes.append("sys.exit(0)")
+        for code in codes:
+            with self.subTest(code=code[:60]), tempfile.TemporaryDirectory() as directory:
+                server = self.server(code, Path(directory))
+                with self.assertRaises(ValueError), server:
+                    self.fail("Invalid readiness cannot be accepted")
+                self.assertIsNotNone(server.process.poll())
+
+    def test_stage_budget_and_stop_apply_before_the_first_turn(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            script = root / "startup.py"
+            script.write_text("import time\ntime.sleep(10)\n")
+            command = opencode_api.launch_command([sys.executable, str(script)], "2.x")
+            record = dict(role="planner", budget={"timeout": 0.1})
+            session = StageSession(
+                (root, record), {}, {"run": root}, dict(command=command, workspace=root)
+            )
+            with mock.patch.object(session, "turns") as turns:
+                self.assertEqual(session.run()["status"], "TIMEOUT")
+                turns.assert_not_called()
+            (root / "stop.request").touch()
+            session = StageSession(
+                (root, record), {}, {"run": root}, dict(command=command, workspace=root)
+            )
+            with self.assertRaises(KeyboardInterrupt):
+                session.run()
+
+    def test_stop_cleans_up_the_starting_server(self):
+        with tempfile.TemporaryDirectory() as directory:
+            server = self.server("time.sleep(10)", Path(directory))
+            server.startup["check"] = mock.Mock(side_effect=KeyboardInterrupt)
+            with self.assertRaises(KeyboardInterrupt), server:
+                self.fail("A stopped stage cannot start a model")
+            self.assertIsNotNone(server.process.poll())
+            self.assertTrue(server.process.stdin.closed)
+            self.assertTrue(server.process.stdout.closed)
+
+    def test_stop_interrupts_permission_preflight_before_any_model_launch(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            script = root / "listing.py"
+            script.write_text("import time\ntime.sleep(10)\n")
+            (root / "stop.request").touch()
+            launch = dict(command=[sys.executable, str(script)], agent_env_allow=(), stop_run=root)
+            started = time.monotonic()
+            with self.assertRaises(KeyboardInterrupt):
+                verify_launch(launch, root, "managed", [], root / "permissions.log")
+            self.assertLess(time.monotonic() - started, 1)
 
 
 class ProfileTests(unittest.TestCase):

@@ -66,11 +66,16 @@ Every **Develop** task goes through the same steps:
 5. **Your confirmation, only before server checks.** Tasks of a split run one after
    another without waiting for you; a finished task is **Completed**, not a review
    point. When server checks are planned, **Confirm changes** lets them start; for a
-   split, the source and Git state must still match the integration review's
-   checkpoint. Without server checks nothing waits for a confirmation: a finished
+   single task, source and Git must still match its final review checkpoint; a split
+   must match its integration review checkpoint. Confirmation records those fingerprints,
+   completed task and check results, and their current links. Without server checks nothing waits for a confirmation: a finished
    change is **Ready for review**, and **Mark as done** files it away.
 6. **Server checks.** Planned `Server check:` entries and deferred runtime checks
    run only after confirmation, through the isolated executor and root approval.
+   The server rechecks confirmed source, Git and review evidence when launching or
+   resuming this phase and before every SSH request. Drift requires fresh review and
+   confirmation; restarting the server phase cannot adopt changed files as a new baseline.
+   Older confirmations without fingerprints cannot authorize server actions.
    Before confirmation, SSH requests may only inspect ([SSH executor](ssh-executor.md)).
 
 The run page shows these steps in a **Delivery** panel as one graph: the tasks of a
@@ -108,8 +113,13 @@ Required acceptance text is never replaced by a truncated summary. An oversized
 submission fails visibly and pauses auto-continue instead of looping silently.
 **Allow all actions** covers the whole split or delivery: given in the task form, on a
 decision of the parent or on a decision of any task or phase run, it applies to every
-task and check run started afterwards. **Stop allowing all actions** in any of these runs
-revokes it for the parent too. Unconfigured Jenkins/SSH phases are shown as skipped; integration
+task and check run started afterwards. **Stop allowing all actions** in the parent,
+current child or an older attempt revokes it for the whole recorded family, including
+active tasks, phase attempts and linked workers that have not started yet. Each worker
+checks revocation before its next automatic decision; an already approved action keeps
+its approval. A late response to an earlier approval card cannot undo a later revocation.
+A fresh **Allow all actions** decision restores that worker and future children; other
+revoked workers still require a personal decision. Unconfigured Jenkins/SSH phases are shown as skipped; integration
 review is never skipped. **Repeat integration review** starts a new read-only review
 when the earlier one stopped or its evidence is stale; it also invalidates later
 validation and confirmation. Earlier phase links remain in the parent's history.
@@ -131,9 +141,9 @@ finds the parent. A task header with
 A done mark belongs to the outcome it was given for: if a continuation ends with a
 different result, the run leaves Done again.
 
-Stop is cooperative. The worker checks requests at stage boundaries and while
-waiting for opencode. Permission preflight, filesystem scans and short built-in checks
-may finish before the request is observed. The UI shows the pending stop state.
+Stop is cooperative. The worker checks requests at stage boundaries, during permission
+preflight and while waiting for opencode, including private-server startup. Filesystem
+scans and short built-in checks may finish before the request is observed. The UI shows the pending stop state.
 No stored PID is signalled, so a reused PID cannot affect another process. The
 existing process-group cleanup handles the opencode process and its children. Closing
 the web page does not stop the worker. Stopping the managed application service
@@ -269,8 +279,10 @@ allowed** badge and a **Stop allowing all actions** button, which takes effect b
 the next decision and also on Continue. A choice made on a card lasts until the worker
 exits; Continue asks again unless the task form enabled it and it was not stopped.
 Read-only requests never ask ([access](access.md#local-approval)). Pushes and inline
-shell or Python code from agents (`bash -c`, `python -c`) always ask. SSH tickets and
-Jenkins builds always keep root-only approval.
+shell or Python code from agents (`bash -c`, `python -c`) always ask. SSH tickets keep
+root-only approval. Jenkins builds follow the executor job policy: root approval by
+default, or the explicitly configured `"approval": "none"`; Allow all actions cannot
+change either remote policy.
 
 Git and approved local actions resume the same opencode session inside one stage. A
 missing/changed session ID stops continuation rather than starting fresh research.

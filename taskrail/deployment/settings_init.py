@@ -6,6 +6,7 @@ import json
 import os
 import shutil
 import sys
+import tempfile
 from pathlib import Path
 
 from taskrail.cli_service import DEFAULT_PORT
@@ -36,7 +37,7 @@ class Installation:
         else:
             write_private(self.target, self.first_settings(supplied))
 
-    def first_settings(self, supplied):
+    def first_settings(self, supplied, copy_roles=True):
         """Bundled defaults or an imported file, with the agent CLI resolved at install time."""
         if supplied:
             initial = Path(supplied).expanduser().resolve()
@@ -46,21 +47,35 @@ class Installation:
         settings["timeout_seconds"] = FIRST_TIMEOUT_SECONDS
         settings["command"] = resolved(settings.get("command", list(DEFAULT_COMMAND)))
         if supplied:
-            self.import_folders(settings, initial.parent)
+            self.import_folders(settings, initial.parent, copy_roles)
         else:
             settings[AGENT_SOURCE] = self.bundled_agents
         return settings
 
-    def import_folders(self, settings, origin):
+    def import_folders(self, settings, origin, copy_roles):
         """Copy imported roles once; other relative folders keep the imported file's meaning."""
-        roles = self.config / "agents"
-        if not roles.exists():
-            shutil.copytree(absolute(settings.get(AGENT_SOURCE, "agents"), origin), roles)
-        settings[AGENT_SOURCE] = str(roles)
+        source = settings.get(AGENT_SOURCE)
+        if source is None:
+            settings[AGENT_SOURCE] = self.bundled_agents
+        else:
+            settings[AGENT_SOURCE] = self.imported_roles(absolute(source, origin), copy_roles)
         for key in IMPORTED_FOLDERS:
             folder = settings.get(key)
             if folder is not None:
                 settings[key] = str(absolute(folder, origin))
+
+    def imported_roles(self, source, copy):
+        """Validate an explicit import before reset; copy it only during initialization."""
+        target = self.config / "agents"
+        if not target.exists() or not copy:
+            if not source.is_dir():
+                raise ValueError(f"Imported role directory does not exist: {source}")
+            if copy:
+                shutil.copytree(source, target)
+            else:
+                with tempfile.TemporaryDirectory(prefix="taskrail-roles-") as temporary:
+                    shutil.copytree(source, Path(temporary) / "agents")
+        return str(target)
 
     def use_bundled_agents(self):
         """Point settings at the release roles after keeping one backup per distinct file."""
@@ -92,14 +107,16 @@ def absolute(folder, origin):
     return path if path.is_absolute() else origin / path
 
 
-def service_environment(config):
+def service_environment(config, check=False, fresh=False):
     """Capture the installer's PATH once so the user service finds the same tools."""
     environment = config / "service.env"
-    if environment.exists():
+    if environment.exists() and not fresh:
         return
     captured = os.environ.get("PATH", FALLBACK_PATH)
     if "\n" in captured or "\r" in captured:
         raise ValueError("PATH must not contain newlines")
+    if check:
+        return
     quoted = captured.replace("\\", r"\\").replace('"', r"\"")
     environment.write_text(f'PATH="{quoted}"\nTASKRAIL_WEB_PORT={DEFAULT_PORT}\n')
     environment.chmod(PRIVATE_FILE)
@@ -120,6 +137,8 @@ def parsed(argv):
     parser.add_argument("supplied")
     parser.add_argument("app", type=Path)
     parser.add_argument("agents", choices=("keep", "bundled"))
+    parser.add_argument("--check", action="store_true")
+    parser.add_argument("--fresh", action="store_true")
     return parser.parse_args(argv)
 
 
@@ -127,6 +146,13 @@ def main(argv=None):
     """Create settings and the service environment once; switch roles only when asked."""
     arguments = parsed(argv)
     installation = Installation(arguments.source, arguments.config, arguments.app)
+    if arguments.check:
+        if arguments.fresh or not installation.target.exists():
+            installation.first_settings(arguments.supplied, copy_roles=False)
+        else:
+            json.loads(installation.target.read_text())
+        service_environment(arguments.config, check=True, fresh=arguments.fresh)
+        return
     installation.initialize(arguments.supplied)
     if arguments.agents == "bundled":
         installation.use_bundled_agents()

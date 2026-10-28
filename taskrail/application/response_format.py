@@ -7,12 +7,10 @@ the executor is installed. The texts live in core/prompt-texts.json.
 """
 
 import json
-from pathlib import Path
 
 from taskrail.application import executor_contracts, plan_file, progress_file
 from taskrail.core import protected_paths, schema
 from taskrail.core.prompt_texts import text
-from taskrail.executor import protocol
 
 PLANNER = "planner"
 IMPLEMENTER = "implementer"
@@ -41,11 +39,9 @@ def correction(stage, error):
     return "{}\n".format(text("format.correction", error=error, patch=patch))
 
 
-def section(stage, state, run, config):
+def section(stage, state, run, config, catalog=None):
     """The response instructions and schemas of a stage."""
-    alternatives = [executor_contracts.git_schema(), executor_contracts.local_schema()]
-    if Path(protocol.SOCKET).exists():
-        alternatives.extend([executor_contracts.ssh_schema(), executor_contracts.jenkins_schema()])
+    alternatives = executor_contracts.for_stage(stage, run, config, catalog)
     if stage == PLANNER:
         requirements = state.get("requirements", [])
         protected = protected_paths.patterns(config)

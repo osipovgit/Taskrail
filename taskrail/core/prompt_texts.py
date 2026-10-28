@@ -46,4 +46,14 @@ def text(key, **fields):
 
 def diagnostic(key, **fields):
     """Current validators use current diagnostics even with an older frozen prompt catalog."""
+    return current(key, **fields)
+
+
+def current(key, **fields):
+    """New task inputs use the release catalog, independent of any active run."""
     return Catalog(release()).text(key, **fields)
+
+
+def compatible(entries):
+    """Old text values survive; missing release keys require an explicit restart."""
+    return isinstance(entries, dict) and release().keys() <= entries.keys()

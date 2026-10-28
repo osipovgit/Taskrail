@@ -56,16 +56,13 @@ def context(run):
     entries = history(run)
     schema.require(
         not any(entry[STATUS_KEY] in {"RUNNING", "UNKNOWN"} for entry in entries),
-        "Git outcome unknown; inspect the recorded operation before continuing. No automatic replay.",
+        prompt_texts.text("git.unknown"),
     )
     if not entries:
         return ""
     recent = list(map(brief, entries[-RECENT_ACTIONS:]))
     index = dict(total_actions=len(entries), recent=recent)
-    return (
-        "\nGit action index (completed writes remain replay-protected; read outputs for detail):\n"
-        + json.dumps(index)
-    )
+    return prompt_texts.text("git.index") + json.dumps(index)
 
 
 def brief(entry):

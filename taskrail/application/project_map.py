@@ -10,7 +10,7 @@ from functools import partial
 from itertools import starmap
 
 from taskrail.application import project_files, requirement_hints
-from taskrail.core import protected_paths
+from taskrail.core import prompt_texts, protected_paths
 from taskrail.infrastructure.agent_sync import atomic_write
 
 NAME = "00-input/project-map.md"
@@ -18,14 +18,6 @@ MAP_LIMIT = 60000
 LINE_LIMIT = 240
 SEARCHED_SIZE = 200000
 SEARCHED_FILES = 2000
-HEADER = (
-    "# Project map",
-    "Written by the server before planning; files may have changed since. Read the index,",
-    "then only the sections you need, at most 200 lines at a time. Landmarks are task",
-    "names, top-level keys, definitions or headings; hints point each requirement at the",
-    "first line that names one of its distinctive words.",
-)
-NO_HINTS = "No requirement names a distinctive word found in the files."
 
 
 def prepare(run, roots, requirements, protected=protected_paths.DEFAULT_PATTERNS):
@@ -42,7 +34,7 @@ def render(roots, requirements, protected=protected_paths.DEFAULT_PATTERNS):
     share = MAP_LIMIT // len(roots)
     section = partial(root_section, texts=texts, share=share, protected=protected)
     sections = list(starmap(section, roots.items()))
-    hints = requirement_hints.hint_lines(requirements, texts) or [NO_HINTS]
+    hints = requirement_hints.hint_lines(requirements, texts) or [prompt_texts.text("map.no_hints")]
     return assembled([*sections, ["## Requirement hints", *hints]])
 
 
@@ -53,7 +45,7 @@ def root_section(alias, root, texts, share, protected):
     for count, name in enumerate(names):
         if sum(map(len, lines)) > share:
             remaining = len(names) - count
-            lines.append(f"- … {remaining} more files; use glob to list them")
+            lines.append(prompt_texts.text("map.more", count=remaining))
             break
         lines.append(file_line(f"{alias}/{name}", root / name, texts))
     return lines
@@ -73,9 +65,10 @@ def file_line(shown, path, texts):
 
 def assembled(sections):
     """The header, an index of the sections with their line ranges, then the sections."""
-    index = index_lines(sections, len(HEADER) + len(sections) + 4)
+    header = prompt_texts.text("map.header").splitlines()
+    index = index_lines(sections, len(header) + len(sections) + 4)
     body = ["\n".join(["", *part]) for part in sections]
-    return "\n".join([*HEADER, *index, *body, ""])
+    return "\n".join([*header, *index, *body, ""])
 
 
 def index_lines(sections, start):

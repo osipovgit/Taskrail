@@ -85,6 +85,29 @@ class SettingsInitTests(unittest.TestCase):
         self.initialize(str(supplied))
         self.assertEqual((self.config / "agents/planner.md").read_text(), "Imported planner")
 
+    def test_exported_bundled_settings_import_without_an_adjacent_roles_folder(self):
+        supplied = self.home / "exported.json"
+        supplied.write_text(json.dumps(dict(command=["wrapper"], run_base="runs")))
+        self.initialize(str(supplied))
+        settings = self.settings()
+        self.assertEqual(settings["agent_source"], str(self.app / "current/taskrail/agents"))
+        self.assertEqual(settings["run_base"], str(self.home / "runs"))
+        self.assertFalse((self.config / "agents").exists())
+
+    def test_fresh_preflight_validates_an_import_without_copying_or_writing(self):
+        roles = self.home / "roles"
+        roles.mkdir()
+        supplied = self.home / "exported.json"
+        supplied.write_text(json.dumps(dict(command=["wrapper"], agent_source="roles")))
+        arguments = [str(BASE), str(self.config), str(supplied), str(self.app), "keep"]
+        main([*arguments, "--check", "--fresh"])
+        self.assertEqual(list(self.config.iterdir()), [])
+        roles.rmdir()
+        (self.config / "agents").mkdir()
+        with self.assertRaisesRegex(ValueError, "Imported role directory"):
+            main([*arguments, "--check", "--fresh"])
+        self.assertFalse((self.config / "settings.json").exists())
+
     def test_updates_preserve_existing_settings_and_service_environment(self):
         target = self.config / "settings.json"
         target.write_text('{"command": ["custom"], "max_repairs": 1}')

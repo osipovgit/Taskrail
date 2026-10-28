@@ -13,19 +13,16 @@ service=taskrail.service
 source "$source_dir/deploy/options.sh"
 systemctl --user show-environment >/dev/null
 "$python_bin" -c 'import sys; assert sys.version_info >= (3, 10), "Python 3.10+ is required"'
-mkdir -p "$app_dir/releases" "$config_dir" "$state_dir/runs" "$unit_dir" "$HOME/.local/bin"
 # Serialize installers. Never switch releases underneath an active workflow.
-exec 8>"$app_dir/install.lock"
-flock -n 8 || {
-    echo 'Another installation is running' >&2
-    exit 1
-}
-exec 9>"$state_dir/live.lock"
-echo "Waiting up to $wait_seconds seconds for the active workflow to finish..."
-flock -w "$wait_seconds" 9 || {
-    echo 'Stop the active task in the UI and wait before updating' >&2
-    exit 1
-}
+# shellcheck source=deploy/install-locks.sh
+source "$source_dir/deploy/install-locks.sh"
+mkdir -p "$app_dir/releases" "$config_dir" "$state_dir/runs" "$unit_dir" "$HOME/.local/bin"
+# An invalid import must not destroy an existing installation during --fresh.
+preflight=(--check)
+[[ "$fresh" == yes ]] && preflight+=(--fresh)
+"$python_bin" -I -c \
+    'import sys; sys.path.insert(0, sys.argv.pop(1)); from taskrail.deployment.settings_init import main; main()' \
+    "$source_dir" "$source_dir" "$config_dir" "$initial_settings" "$app_dir" "$agent_mode" "${preflight[@]}"
 # shellcheck source=deploy/fresh.sh
 source "$source_dir/deploy/fresh.sh"
 version=$(PYTHONPATH="$source_dir" "$python_bin" -c 'from taskrail.core.version import VERSION; print(VERSION)')

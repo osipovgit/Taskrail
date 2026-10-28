@@ -27,7 +27,7 @@ UI updates read the ordered stage index and public event stream.
 | `deploy/` | Offline release installation, CLI wrapper and systemd units |
 | `deployment/` | Installer helpers: first-install settings and service PATH (`settings_init.py`), validated fresh-install reset (`fresh.py`) |
 | `taskrail/agents/`, `taskrail/settings.json` | Bundled role templates (frozen per run) and default settings |
-| `tests/` | Workflow, contracts, permissions, API, telemetry and DOM regressions |
+| `tests/` | Automatic regressions and explicitly requested scenario acceptance tasks; see [test suites](testing.md) |
 | `tools/` | Development quality gates: pinned tool versions and the Wemake run |
 | `docs/`, `examples/` | Documentation and example tasks |
 
@@ -82,8 +82,9 @@ returning a status alone. See [contracts](contracts.md).
 
 ## Curated instruction modules
 
-`application/instruction-modules.json` contains reading, Python, shell, UI and
-verification guidance. Every stage gets the reading module, which
+`application/instruction-modules.json` selects reading, Python, shell, UI and
+verification modules by metadata and catalog key; their prose lives in
+`core/prompt-texts.json`. Every stage gets the reading module, which
 keeps large inputs within the model context: search first, map a large file by its
 landmarks, read windows of at most 200 lines, never re-read a range, and map diffs
 and long outputs before reading them. Selection of the others uses validated plan
@@ -112,8 +113,15 @@ at implementation, and names the files changed outside the split's tasks along t
 attempt chain; a child of an unsealed parent is refused.
 A bounded prerequisite index points to a sealed full parent snapshot. After all children finish, a read-only integration run reviews
 the complete original goal and criteria through the same execution engine and
-independent reviewer. Confirmation rechecks its source/Git fingerprint, and changed
-child completion records invalidate the approval.
+independent reviewer. Standalone and split confirmation use the same reviewed
+source/Git checkpoint and freeze the accepted completion and result artifacts.
+Phase launch, adoption and server execution recheck that snapshot; drift requires
+another review and confirmation. Revoking Allow all also marks already linked and
+not-yet-created family workers, so an older child cannot retain a stale grant.
+
+Controlled history writes record the committed source baseline for later staging
+without changing the immutable original preimages. User-staged content and unrelated
+pre-existing source edits never become the run's staging authority.
 
 Before the first planning request the server writes `00-input/project-map.md`
 (`application/project_map.py`): an index, every source file of each root with its line
@@ -123,8 +131,9 @@ Terraform blocks; Jinja2 blocks and macros; Markdown headings), and for every
 requirement the first lines that name its distinctive words. Long command output also
 comes with a digest of its severities, most mentioned files and rules
 (`interactions/output_digest.py`). Response schemas are compact JSON, one alternative
-per line, and the SSH and Jenkins request schemas appear only when the executor is
-installed (`application/response_format.py`). All roles run with automatic compaction disabled. Admission measures each role's
+per line. SSH and Jenkins schemas use the same available targets/jobs and stage
+permissions as their instructions (`application/response_format.py`); an absent,
+unreachable or empty executor advertises neither capability. All roles run with automatic compaction disabled. Admission measures each role's
 request, frozen role and approved source inputs against the configured context
 capacity and reserve; usage monitoring separately checks provider input including
 cache and explicit compaction events. A writer is never retried automatically after
@@ -134,5 +143,6 @@ recorded evidence while retaining the plan file. See [context limits](deployment
 The optional SSH executor owns its private credentials and queue under a separate
 OS user. The application submits requests through a Unix socket; only a root peer
 can approve the exact digest. The executor runs nothing locally. It also holds the
-Jenkins API token: Jenkins reads run on request, builds are root-approved tickets. See
+Jenkins API token: reads run on request; builds need root approval unless root has
+preauthorized that job with `approval: none`. See
 [SSH and Jenkins executor](ssh-executor.md).

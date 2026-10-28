@@ -73,15 +73,17 @@ class ResponseContractTests(unittest.TestCase):
             self.assertIn("No outcome for R1", request)
             self.assertNotIn("R-", request)
             self.assertIn("Do not research", request)
-            self.assertIn("schema_version 2", request)
             self.assertNotIn("source research", request)
             contract = request.split("\nSchema:\n", 1)[1].split("\nAssigned requirements:", 1)[0]
-            self.assertEqual(json.loads(contract), schema.SCHEMAS[name])
+            decoded = json.loads(contract)
+            self.assertEqual(decoded, schema.SCHEMAS[name])
+            self.assertEqual(decoded["properties"]["schema_version"]["enum"], [2])
         self.assertIn(
             "cannot edit files", prompts.repair("{}", "x", "implementer", 1, requirements)
         )
         self.assertIn(
-            "planned (an approved task", prompts.repair("{}", "x", "plan-reviewer", 1, [])
+            "planned is allowed for approved tasks",
+            prompts.repair("{}", "x", "plan-reviewer", 1, []),
         )
 
 

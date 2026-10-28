@@ -96,12 +96,19 @@ preserved on update: merge their instructions deliberately or point `agent_sourc
 to bundled roles. Generated opencode profiles are temporary permissions, not editable
 source templates. See [instruction contracts](contracts.md).
 
+An imported settings file without `agent_source` selects bundled roles, as in
+`taskrail init`. Only an explicit `agent_source` imports a custom directory; relative
+paths resolve beside the supplied settings file. Before a fresh reset, the installer
+checks the settings, agent executable, service environment and readable custom role
+tree. Keep supplied settings, imported roles and their symlink targets outside all
+reset directories.
+
 ## opencode
 
 | Setting | Default | Meaning |
 |---|---|---|
 | `command` | `["opencode"]` | opencode argv prefix; the installer resolves it to an absolute path. A wrapper for a compatible build also works |
-| `opencode_version` | `auto` | `1.x` or `2.x`; `auto` accepts an exact bare or single-name-prefixed semantic version; ambiguous or failed probes require an explicit version |
+| `opencode_version` | `auto` | `1.x` or `2.x`; `auto` accepts an exact bare or single-name-prefixed semantic version of either supported major; failed, timed-out or ambiguous probes stop instead of guessing |
 | `models` | `{}` | Role to `provider/model`; a missing role uses opencode's configured default model |
 | `agent_directory` | opencode agent directory | Where managed role profiles are written; relative to the settings file |
 | `agent_env_allow` | `[]` | Extra environment variables opencode may receive despite their secret-shaped names; common provider keys are always allowed |
@@ -121,6 +128,12 @@ untouched 2.x stream in `events.raw.jsonl`. Every call sets
 secret-shaped variables (`*_TOKEN`, `*_KEY`, `*_SECRET`, `*_PASSWORD`, their `*_FILE`
 locators, `SSH_AUTH_SOCK`, `GIT_ASKPASS` and similar); opencode alone keeps common
 provider keys and the names in `agent_env_allow`.
+
+The 2.x readiness announcement has a bounded timeout within the stage's remaining
+budget and responds to Stop, including when no complete line arrives. Malformed
+announcements close the private process before reporting failure. Unknown major
+versions are unsupported; set an explicit interface only after establishing wrapper
+compatibility with that interface.
 
 Managed profiles default to `$OPENCODE_CONFIG_DIR/agent`, else
 `$XDG_CONFIG_HOME/opencode/agent`. opencode names a file either absolutely or relative
@@ -195,6 +208,12 @@ PyYAML into that directory (Allow all actions covers it) and later runs use it;
 without either, install it yourself (for example `sudo apt install python3-yaml`) and
 Allow; that card runs nothing and is always a personal decision. The files are checked
 at once after Allow; after Deny they stay `SKIPPED` as not checked.
+
+The managed installer pins PyYAML 6.0.3 and runs from the server's run directory.
+Python uses isolated imports (`-I`), and uv disables configuration discovery
+(`--no-config`), so project modules and `uv.toml` cannot alter that installation.
+Corporate package indexes and proxies belong in the service's trusted environment
+(or pip's operator-owned configuration), not in target-project configuration.
 
 Before any command, the check stage compares each approved file with its preimage and
 scans only the added lines. A private key, a GitHub, AWS, Slack or `sk-` style API key

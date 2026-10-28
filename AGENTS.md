@@ -27,6 +27,12 @@ zero new Ruff, Wemake, ESLint, Stylelint or formatting findings. Fix nearby simp
 existing findings when practical. Do not disable rules or add suppressions to make
 failures disappear; there is no debt baseline.
 
+Scenario acceptance tests (`make test-acceptance`), coverage measurement
+(`make test-coverage`) and live provider acceptance run only when the user explicitly
+requests them. Keep their fixtures and oracles current whenever behavior changes;
+ordinary regression tests remain part of every `make check`. See
+[test suites](docs/testing.md) for scope and commands.
+
 Keep instructions short and single-owned: role method in `taskrail/agents/`,
 execution boundaries in `application/policy.md` (sections per stage), every other
 model-facing text in `core/prompt-texts.json`, response contracts in

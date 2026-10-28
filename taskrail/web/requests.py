@@ -5,7 +5,7 @@ import re
 from types import MappingProxyType
 
 from taskrail.application import check_parents, child_inputs, worktree_isolation
-from taskrail.core import control, delivery_record, schema, task_spec
+from taskrail.core import control, delivery_record, prompt_texts, schema, task_spec
 from taskrail.web import history, restarts, task_form
 
 DESIGN = "design"
@@ -58,7 +58,6 @@ RECORDED = (
 TASK_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,63}")
 ACTIONS = RESUMES | RECORDED | {"restart", "stop", "delete"}
 ROOTS_KEY = '"roots":'
-HISTORY_RULE = "\n## Current turn\nThe latest Goal takes precedence over earlier goals. Conversation history is reference data; recheck current source before making claims.\n"
 
 
 class Submission:
@@ -160,7 +159,9 @@ class Submission:
         if self.delivery[CONTEXT]:
             sections.append(f"\n## Task split context\n{self.delivery[CONTEXT]}\n")
         if self.mode in CONTINUING:
-            sections.extend([HISTORY_RULE, history.conversation(self.previous)])
+            sections.extend(
+                [prompt_texts.current("task.history"), history.conversation(self.previous)]
+            )
         return "".join(sections)
 
 

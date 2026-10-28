@@ -66,7 +66,7 @@ def install_profile(workflow, active, files, format_only):
     workflow.runtime["profiles"].add(profile)
     atomic_write(folder / "agent.md", profile.read_bytes())
     verify_launch(
-        workflow.config,
+        dict(workflow.config, stop_run=workflow.run),
         next(iter(workflow.config[ROOTS].values())),
         agent_name(workflow, record),
         permissions,

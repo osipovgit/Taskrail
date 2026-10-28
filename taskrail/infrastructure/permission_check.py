@@ -3,8 +3,10 @@
 import json
 import re
 import subprocess
+import time
 from types import MappingProxyType
 
+from taskrail.core import control
 from taskrail.infrastructure import opencode_cli, opencode_server
 from taskrail.infrastructure.process_group import stop_group
 
@@ -20,15 +22,19 @@ def verify_launch(launch, cwd, name, expected, log):
 
     Permission probes use the same limited wrapper environment as the model launch.
     """
-    code = run_listing(launch["command"], cwd, log, launch["agent_env_allow"])
+    code = run_listing(
+        launch["command"], cwd, log, launch["agent_env_allow"], launch.get("stop_run")
+    )
     text = ANSI.sub("", log.read_text(errors="replace"))
     actual = listed_rules(text, name, code, log)
     check_closed(actual, expected, log, launch.get("tool_output_dir"))
     return actual
 
 
-def run_listing(command, cwd, log, allow=()):
+def run_listing(command, cwd, log, allow=(), stop_run=None):
     """`opencode agent list` with its output in log; the process group is always stopped."""
+    if stop_run is not None:
+        control.check_stop(stop_run)
     with log.open("wb") as output:
         process = subprocess.Popen(
             [*command, "agent", "list"],
@@ -40,7 +46,7 @@ def run_listing(command, cwd, log, allow=()):
             start_new_session=True,
         )
         try:
-            return process.wait(timeout=LISTING_SECONDS)
+            return wait_listing(process, stop_run)
         except subprocess.TimeoutExpired:
             stop_group(process.pid)
             process.wait()
@@ -54,6 +60,20 @@ def run_listing(command, cwd, log, allow=()):
             raise
         finally:
             stop_group(process.pid)
+
+
+def wait_listing(process, run):
+    """Poll the permission probe within its deadline while honoring cooperative Stop."""
+    deadline = time.monotonic() + LISTING_SECONDS
+    while time.monotonic() < deadline:
+        if run is not None:
+            control.check_stop(run)
+        code = process.poll()
+        if code is not None:
+            return code
+        remaining = max(0, deadline - time.monotonic())
+        time.sleep(min(0.1, remaining))
+    raise subprocess.TimeoutExpired(process.args, LISTING_SECONDS)
 
 
 def listed_rules(text, name, code, log):

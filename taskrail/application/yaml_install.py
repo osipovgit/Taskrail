@@ -17,7 +17,7 @@ from taskrail.interactions import approval_policy, local_actions
 DECISION = "yaml_install"
 MANUAL_STEP = "MANUAL_STEP"
 ALLOWED = "allowed"
-PACKAGE = "PyYAML"
+PACKAGE = "PyYAML==6.0.3"
 PIP = "pip"
 INSTALL_SECONDS = 600
 # The uv installer puts uv here, which a service started at boot may not have on PATH.
@@ -69,15 +69,15 @@ def request(workflow, command):
     """The local request, if any, and what the operator reads; a manual step runs nothing."""
     if command is None:
         return None, dict(status=MANUAL_STEP, schema_version=1, reason=REASON, notice=MANUAL)
-    root = next(iter(workflow.config["roots"].values()))
-    payload = dict(status="LOCAL_REQUEST", schema_version=1, cwd=str(root), reason=REASON)
+    payload = dict(status="LOCAL_REQUEST", schema_version=1, reason=REASON)
+    payload["cwd"] = str(workflow.run)
     payload["argv"] = command
     return payload, dict(payload, notice=OFFER.format(yaml_check.TARGET))
 
 
 def run_install(workflow, folder, payload, decision):
     """Run the approved install; the last lines of its error output when it reports one."""
-    context = dict(roots=workflow.config["roots"], run=workflow.run, timeout=INSTALL_SECONDS)
+    context = dict(roots={"installer": workflow.run}, run=workflow.run, timeout=INSTALL_SECONDS)
     outcome = local_actions.execute(workflow.run, folder, payload, context, decision)
     output = outcome.get("stderr") or outcome.get("reason") or ""
     stripped = map(str.strip, str(output).splitlines())
@@ -90,13 +90,13 @@ def installer():
     target = str(yaml_check.TARGET)
     for python in yaml_check.pythons():
         if yaml_check.completed(python, "-m", PIP, "--version").returncode == 0:
-            pip = [python, "-m", PIP, "install", "--disable-pip-version-check"]
+            pip = [python, "-I", "-m", PIP, "install", "--disable-pip-version-check"]
             return [*pip, "--no-input", "--target", target, PACKAGE]
     uv = shutil.which("uv") or shutil.which("uv", path=USER_BIN)
     if uv is None:
         return None
     checker = yaml_check.pythons()[0]
-    return [uv, PIP, "install", "--python", checker, "--target", target, PACKAGE]
+    return [uv, "--no-config", PIP, "install", "--python", checker, "--target", target, PACKAGE]
 
 
 def health():

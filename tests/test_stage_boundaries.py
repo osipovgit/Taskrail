@@ -103,11 +103,11 @@ class StageBoundaryTests(unittest.TestCase):
         plan = dict(files_read=["/repo/app.py"], proposed_change_files=["/repo/app.py"])
         execution = ("implementer", plan, [], None)
         text = instruction_modules.render(self.run, execution, state)
-        self.assertIn("python v1:", text)
-        self.assertIn("verification v2:", text)
-        self.assertIn("reading v5:", text)
-        self.assertNotIn("shell v1:", text)
-        self.assertNotIn("ui v1:", text)
+        self.assertIn("python v2:", text)
+        self.assertIn("verification v3:", text)
+        self.assertIn("reading v6:", text)
+        self.assertNotIn("shell v2:", text)
+        self.assertNotIn("ui v2:", text)
         with patch.object(instruction_modules, "CATALOG", self.run / "absent"):
             self.assertEqual(instruction_modules.render(self.run, execution, state), text)
         frozen = self.run / "00-input/modules.json"

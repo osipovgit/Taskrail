@@ -6,7 +6,7 @@ import sys
 import time
 import uuid
 
-from taskrail.core import control
+from taskrail.core import approval_marks, control
 from taskrail.core.files import atomic_json
 from taskrail.core.schema import require
 
@@ -15,6 +15,7 @@ DECISION = "approval-decision.json"
 TICKET = "ticket"
 ALTERNATIVE = "alternative"
 ALLOW_ALL = "allow_all"
+CHOICE = "decision"
 TEXT_LIMIT = 16000
 POLL_SECONDS = 0.2
 
@@ -34,6 +35,8 @@ def decide(run, payload):
         require(pending is not None, "No approval pending")
         require(pending[TICKET] == payload[TICKET], "Stale approval")
         require(not (run / DECISION).exists(), "Decision already submitted")
+        if payload.get(ALLOW_ALL) and payload[CHOICE] == "allow":
+            approval_marks.grant(run)
         atomic_json(run / DECISION, payload)
     return dict(id=run.name, status="DECISION_RECORDED")
 
@@ -79,7 +82,7 @@ def validate_decision(payload):
     require(isinstance(payload, dict), "Decision must be an object")
     fields = set(payload) - {ALLOW_ALL}
     require(fields == {"id", TICKET, "decision", ALTERNATIVE}, "Invalid decision fields")
-    require(payload["decision"] in {"allow", "deny", ALTERNATIVE}, "Invalid decision")
+    require(payload[CHOICE] in {"allow", "deny", ALTERNATIVE}, "Invalid decision")
     require(isinstance(payload.get(ALLOW_ALL, False), bool), "allow_all must be boolean")
     text = payload[ALTERNATIVE]
     require(isinstance(text, str) and len(text) <= TEXT_LIMIT, "Invalid alternative")

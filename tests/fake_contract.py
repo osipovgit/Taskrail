@@ -194,7 +194,7 @@ def outcome(entry, steps, names, evidence, value):
         return ", ".join(owners)
     if kind in ("satisfied", "contradicted"):
         cited = [evidence[name] for name in entry["evidence_ids"] if name in evidence]
-        spans = ["{path}:{line_start}-{line_end}".format(**item) for item in cited]
+        spans = ["`{path}:{line_start}-{line_end}`".format(**item) for item in cited]
         return "{}: {}".format("done" if kind == "satisfied" else kind, ", ".join(spans))
     if kind == "deferred":
         return "runtime: " + (value.get("unverified") or ["Run the runtime check"])[0]

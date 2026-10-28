@@ -1,6 +1,8 @@
 """Landmarks of infrastructure and application files, and the optional YAML syntax check."""
 
 import os
+import shutil
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -125,7 +127,9 @@ class YamlInstallTests(unittest.TestCase):
         root = base / "repo"
         root.mkdir()
         (root / "site.yml").write_text("roles: [ntp\n")
-        self.workflow = SimpleNamespace(run=base, state={}, config=dict(roots=dict(project=root)))
+        run = base / "run"
+        run.mkdir()
+        self.workflow = SimpleNamespace(run=run, state={}, config=dict(roots=dict(project=root)))
         self.available = []
         for patcher in (
             patch.object(yaml_check, "find_spec", return_value=None),
@@ -193,7 +197,50 @@ class YamlInstallTests(unittest.TestCase):
                 patch.object(yaml_check, "completed", return_value=no_pip),
             ):
                 command = yaml_install.installer()
-        self.assertEqual(command[:3], [str(uv), "pip", "install"])
+        self.assertEqual(command[:4], [str(uv), "--no-config", "pip", "install"])
+
+    def test_install_request_uses_server_storage_instead_of_a_project_directory(self):
+        command = [sys.executable, "-I", "-m", "pip", "--version"]
+        payload, shown = yaml_install.request(self.workflow, command)
+        self.assertEqual(payload["cwd"], str(self.workflow.run))
+        self.assertEqual(shown["argv"], command)
+        tail = yaml_install.run_install(
+            self.workflow, self.workflow.run, payload, dict(decision="allow")
+        )
+        self.assertEqual(tail, "")
+        entry = yaml_install.local_actions.local_journal.records(self.workflow.run)[0]
+        self.assertEqual(entry["status"], "SUCCEEDED")
+        self.assertIn("pip ", entry["outcome"]["stdout"])
+
+    def test_pip_install_isolated_imports_ignore_project_modules(self):
+        self.available.append(sys.executable)
+        command = yaml_install.installer()
+        self.assertIn("-I", command)
+        self.assertEqual(command[-1], "PyYAML==6.0.3")
+        root = self.workflow.config["roots"]["project"]
+        for name in ("pip.py", "sitecustomize.py"):
+            (root / name).write_text("raise RuntimeError('project module must not execute')\n")
+        probe = [*command[: command.index("install")], "--version"]
+        completed = subprocess.run(
+            probe, cwd=root, capture_output=True, text=True, timeout=10, check=False
+        )
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        self.assertIn("pip ", completed.stdout)
+
+    @unittest.skipUnless(shutil.which("uv"), "uv is optional")
+    def test_uv_install_ignores_malformed_project_configuration_offline(self):
+        self.available.append(sys.executable)
+        with patch.object(yaml_check, "completed", return_value=SimpleNamespace(returncode=1)):
+            command = yaml_install.installer()
+        root = self.workflow.config["roots"]["project"]
+        (root / "uv.toml").write_text("invalid = [\n")
+        command[command.index("--target") + 1] = str(self.workflow.run / "packages")
+        command[-1:-1] = ["--offline", "--no-cache"]
+        completed = subprocess.run(
+            command, cwd=root, env={"PATH": os.defpath}, capture_output=True, text=True, timeout=10
+        )
+        self.assertNotIn("parse", completed.stderr.lower())
+        self.assertIn("pyyaml", completed.stderr.lower())
 
     def test_without_an_installer_the_operator_installs_it_and_always_decides(self):
         allow = dict(decision="allow", alternative="")

@@ -3,6 +3,7 @@
 import json
 
 from taskrail.application import child_inputs
+from taskrail.core import prompt_texts
 from taskrail.web import history
 
 FIELD_BUDGET = 8000
@@ -20,7 +21,7 @@ def field(text, label):
     """Large inherited fields stay complete in the artifact instead of breaking launch."""
     if len(text) <= FIELD_BUDGET:
         return text
-    return f"Read the complete {label} in parent-task.md from the artifact manifest."
+    return prompt_texts.current("child.field", label=label)
 
 
 def write(folder, text):

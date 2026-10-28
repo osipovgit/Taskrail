@@ -130,10 +130,12 @@ class SubmissionTests(unittest.TestCase):
                         headers=dict(headers, **replacement),
                     )
                 )
-            self.assertEqual(error.exception.code, expected)
+            with error.exception as response:
+                self.assertEqual(response.code, expected)
         with self.assertRaises(HTTPError) as error:
             urlopen(Request(url + "/api/tasks", data=b"{}", headers=headers))
-        self.assertEqual(error.exception.code, 400)
+        with error.exception as response:
+            self.assertEqual(response.code, 400)
         self.assertFalse(self.runs.exists())
 
     def test_http_creation_to_completed_run_uses_normal_workflow(self):
@@ -233,7 +235,8 @@ class SubmissionTests(unittest.TestCase):
                     headers=dict(headers, **{"X-Taskrail-Token": ""}),
                 )
             )
-        self.assertEqual(error.exception.code, 403)
+        with error.exception as response:
+            self.assertEqual(response.code, 403)
 
 
 class ApprovalHttpTests(unittest.TestCase):
@@ -264,7 +267,8 @@ class ApprovalHttpTests(unittest.TestCase):
                         headers=dict(headers, **extra),
                     )
                 )
-            self.assertEqual(failure.exception.code, code)
+            with failure.exception as response:
+                self.assertEqual(response.code, code)
         self.assertFalse((run / "approval-decision.json").exists())
         with urlopen(
             Request(url + "/api/decision", data=json.dumps(payload).encode(), headers=headers)

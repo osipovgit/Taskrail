@@ -12,7 +12,16 @@ from taskrail.application.git_state import git_metadata
 from taskrail.application.plan_validation import validate_plan
 from taskrail.application.source_tree import snapshot
 from taskrail.core import coverage
-from taskrail.git import dispatch, execution, policy, process, requests
+from taskrail.git import (
+    dispatch,
+    execution,
+    index_ownership,
+    policy,
+    process,
+    requests,
+    staging_baseline,
+    staging_receipt,
+)
 from taskrail.interactions.session import StageSession
 
 
@@ -223,6 +232,302 @@ class GitExecutorTests(unittest.TestCase):
         self.assertEqual(process.checked(other, ["show", ":value.txt"]), "Staged by the user\n")
         committed = self.execute(commit, "implementer", [staged, stolen, added])
         self.assertEqual(committed["status"], "SUCCEEDED", committed)
+
+    def test_two_own_commits_preserve_initial_preimages_and_unrelated_user_edits(self):
+        untouched = self.root / "unrelated.txt"
+        untouched.write_text("original\n")
+        process.checked(self.root, ["add", "unrelated.txt"])
+        process.checked(self.root, ["commit", "-m", "Independent file"])
+        untouched.write_text("User changes\n")
+        self.env["allowed_paths"].append(untouched)
+        manifest = self.run / "00-input/manifest.json"
+        manifest.write_text(json.dumps(snapshot(self.roots)))
+        original = manifest.read_bytes()
+        previous = []
+        for number in (4, 5):
+            self.file.write_text(f"{number}\n")
+            staged = self.execute(["add", "--", "value.txt"], "implementer", previous)
+            self.assertEqual(staged["status"], "SUCCEEDED", staged)
+            previous.append(staged)
+            committed = self.execute(["commit", "-m", "Task change"], "implementer", previous)
+            self.assertEqual(committed["status"], "SUCCEEDED", committed)
+            previous.append(committed)
+        self.assertEqual(manifest.read_bytes(), original)
+        denied = self.execute(["add", "--", "unrelated.txt"], "implementer", previous)
+        self.assertEqual(denied["status"], "REJECTED", denied)
+        self.assertIn("Preserve pre-existing user edits", denied["stderr"])
+        self.assertEqual(untouched.read_text(), "User changes\n")
+        self.assertEqual(process.checked(self.root, ["show", "HEAD:value.txt"]), "5\n")
+
+    def test_controlled_delete_and_recreate_keep_originals_across_two_commits(self):
+        manifest = self.run / "00-input/manifest.json"
+        original = manifest.read_bytes()
+        initial = process.checked(self.root, ["rev-parse", "HEAD"]).strip()
+        self.file.unlink()
+        removed = self.execute(["add", "--", "value.txt"], "implementer")
+        self.assertEqual(removed["status"], "SUCCEEDED", removed)
+        deleted = self.execute(["commit", "-m", "Task change"], "implementer", [removed])
+        self.assertEqual(deleted["status"], "SUCCEEDED", deleted)
+        self.assertIsNone(deleted[staging_baseline.KEY]["files"][str(self.file)])
+        self.assertFalse(self.file.exists())
+        self.assertEqual(process.checked(self.root, ["ls-tree", "HEAD", "--", "value.txt"]), "")
+        self.assertEqual(process.checked(self.root, ["rev-parse", "HEAD^"]).strip(), initial)
+        self.file.write_text("Recreated by the same approved task\n")
+        previous = [removed, deleted]
+        added = self.execute(["add", "--", "value.txt"], "implementer", previous)
+        self.assertEqual(added["status"], "SUCCEEDED", added)
+        restored = self.execute(["commit", "-m", "Task change"], "implementer", [*previous, added])
+        self.assertEqual(restored["status"], "SUCCEEDED", restored)
+        self.assertEqual(
+            process.checked(self.root, ["show", "HEAD:value.txt"]),
+            "Recreated by the same approved task\n",
+        )
+        self.assertEqual(
+            process.checked(self.root, ["rev-parse", "HEAD^"]).strip(),
+            deleted[staging_baseline.KEY]["head"],
+        )
+        self.assertEqual(process.checked(self.root, ["show", f"{initial}:value.txt"]), "3\n")
+        self.assertEqual(manifest.read_bytes(), original)
+
+    def test_own_commit_does_not_adopt_a_later_foreign_head_or_index(self):
+        self.file.write_text("4\n")
+        staged = self.execute(["add", "--", "value.txt"], "implementer")
+        committed = self.execute(["commit", "-m", "Task change"], "implementer", [staged])
+        self.assertEqual(committed["status"], "SUCCEEDED", committed)
+        previous = [staged, committed]
+        self.file.write_text("5\n")
+        process.checked(self.root, ["add", "value.txt"])
+        foreign_index = self.execute(["add", "--", "value.txt"], "implementer", previous)
+        self.assertEqual(foreign_index["status"], "REJECTED", foreign_index)
+        process.checked(self.root, ["commit", "-m", "User commit"])
+        self.file.write_text("6\n")
+        foreign_head = self.execute(["add", "--", "value.txt"], "implementer", previous)
+        self.assertEqual(foreign_head["status"], "REJECTED", foreign_head)
+        self.assertIn("Git HEAD changed", foreign_head["stderr"])
+
+    def staged_change(self):
+        self.file.write_text("4\n")
+        staged = self.execute(["add", "--", "value.txt"], "implementer")
+        self.assertEqual(staged["status"], "SUCCEEDED", staged)
+        return staged
+
+    def foreign_commit(self):
+        unrelated = self.root / "unrelated.txt"
+        unrelated.write_text("Independent user change\n")
+        process.checked(self.root, ["add", "unrelated.txt"])
+        process.checked(self.root, ["commit", "-m", "Foreign commit"])
+
+    def assert_unknown_receipt(self, record):
+        self.assertEqual(record["status"], "UNKNOWN", record)
+        self.assertNotIn(staging_baseline.KEY, record)
+        self.assertNotIn("staged", record)
+        (self.run / "git-execution.json").write_text(json.dumps([record]))
+        with self.assertRaisesRegex(ValueError, "unknown"):
+            requests.context(self.run)
+        with patch("taskrail.git.process.invoke") as invoke:
+            repeated = self.execute(record["request"]["argv"], "implementer", [record])
+            invoke.assert_not_called()
+        self.assertEqual(repeated["status"], "REJECTED")
+
+    def test_foreign_commit_before_receipt_cannot_be_adopted_as_controlled_history(self):
+        staged = self.staged_change()
+        manifest = (self.run / "00-input/manifest.json").read_bytes()
+        capture = staging_baseline.snapshot
+
+        def raced(repo, entry):
+            self.foreign_commit()
+            return capture(repo, entry)
+
+        with patch.object(staging_baseline, "snapshot", side_effect=raced):
+            committed = self.execute(["commit", "-m", "Own change"], "implementer", [staged])
+        self.assert_unknown_receipt(committed)
+        self.assertIn("history changed outside", committed["stderr"])
+        self.assertEqual((self.run / "00-input/manifest.json").read_bytes(), manifest)
+        self.assertEqual(
+            process.checked(self.root, ["log", "-1", "--format=%s"]), "Foreign commit\n"
+        )
+
+    def test_foreign_commit_during_pinned_blob_reads_leaves_outcome_unknown(self):
+        staged = self.staged_change()
+        read = staging_baseline.committed
+        revisions = []
+
+        def raced(repo, path, revision):
+            revisions.append(revision)
+            contents = read(repo, path, revision)
+            self.foreign_commit()
+            return contents
+
+        with patch.object(staging_baseline, "committed", side_effect=raced):
+            committed = self.execute(["commit", "-m", "Own change"], "implementer", [staged])
+        self.assert_unknown_receipt(committed)
+        self.assertEqual(len(set(revisions)), 1)
+        self.assertNotEqual(revisions[0], process.checked(self.root, ["rev-parse", "HEAD"]).strip())
+
+    def test_concurrent_index_replacement_is_not_the_approved_commit(self):
+        staged = self.staged_change()
+        invoke = process.invoke
+
+        def raced(root, argv, settings=()):
+            if argv[0] == "commit":
+                self.file.write_text("Foreign staged contents\n")
+                invoke(root, ["add", "value.txt"])
+            return invoke(root, argv, settings)
+
+        with patch.object(process, "invoke", side_effect=raced):
+            committed = self.execute(["commit", "-m", "Own change"], "implementer", [staged])
+        self.assert_unknown_receipt(committed)
+        self.assertIn("approved Git index", committed["stderr"])
+        self.assertEqual(self.file.read_text(), "Foreign staged contents\n")
+
+    def test_concurrent_extra_index_path_makes_the_outcome_unknown(self):
+        staged = self.staged_change()
+        invoke = process.invoke
+
+        def raced(root, argv, settings=()):
+            if argv[0] == "commit":
+                (root / "unrelated.txt").write_text("Independent user change\n")
+                invoke(root, ["add", "unrelated.txt"])
+            return invoke(root, argv, settings)
+
+        with patch.object(process, "invoke", side_effect=raced):
+            committed = self.execute(["commit", "-m", "Own change"], "implementer", [staged])
+        self.assert_unknown_receipt(committed)
+        self.assertIn("history changed outside", committed["stderr"])
+
+    def test_receipt_timeout_after_success_is_unknown_and_keeps_the_commit(self):
+        staged = self.staged_change()
+        before = process.checked(self.root, ["rev-parse", "HEAD"]).strip()
+        with patch.object(
+            staging_baseline, "snapshot", side_effect=subprocess.TimeoutExpired(["git"], 60)
+        ):
+            committed = self.execute(["commit", "-m", "Own change"], "implementer", [staged])
+        self.assert_unknown_receipt(committed)
+        self.assertNotEqual(process.checked(self.root, ["rev-parse", "HEAD"]).strip(), before)
+
+    def test_initial_commit_records_an_unborn_start_and_all_created_paths(self):
+        fresh = self.base / "fresh"
+        fresh.mkdir()
+        process.checked(fresh, ["init", "-b", "main"])
+        process.checked(fresh, ["config", "user.name", "Test"])
+        process.checked(fresh, ["config", "user.email", "test@example.invalid"])
+        self.roots["fresh"] = fresh
+        target = fresh / "first.txt"
+        self.env["allowed_paths"].append(target)
+        (self.run / "00-input/manifest.json").write_text(json.dumps(snapshot(self.roots)))
+        target.write_text("First controlled commit\n")
+        staged = self.execute(["add", "--", "first.txt"], "implementer", root=fresh)
+        self.assertEqual(staged["status"], "SUCCEEDED", staged)
+        committed = self.execute(["commit", "-m", "Initial"], "implementer", [staged], fresh)
+        self.assertEqual(committed["status"], "SUCCEEDED", committed)
+        self.assertIsNone(committed["head_before"])
+        self.assertEqual(set(committed[staging_baseline.KEY]["files"]), {str(target)})
+
+    def test_index_mode_changes_require_a_new_controlled_add(self):
+        staged = self.staged_change()
+        process.checked(self.root, ["update-index", "--chmod=+x", "value.txt"])
+        rejected = self.execute(["commit", "-m", "Foreign mode"], "implementer", [staged])
+        self.assertEqual(rejected["status"], "REJECTED", rejected)
+        process.checked(self.root, ["update-index", "--chmod=-x", "value.txt"])
+        self.file.chmod(0o755)
+        added = self.execute(["add", "--", "value.txt"], "implementer", [staged])
+        self.assertEqual(added["status"], "SUCCEEDED", added)
+        committed = self.execute(["commit", "-m", "Own mode"], "implementer", [staged, added])
+        self.assertEqual(committed["status"], "SUCCEEDED", committed)
+
+    def test_preexisting_executable_mode_change_cannot_be_adopted_as_owned_source(self):
+        self.file.chmod(0o755)
+        (self.run / "00-input/manifest.json").write_text(json.dumps(snapshot(self.roots)))
+        self.file.write_text("Own content after the user's chmod\n")
+        rejected = self.execute(["add", "--", "value.txt"], "implementer")
+        self.assertEqual(rejected["status"], "REJECTED", rejected)
+        self.assertIn("pre-existing user edits", rejected["stderr"])
+        self.assertEqual(process.checked(self.root, ["diff", "--cached", "--name-only"]), "")
+        self.assertEqual(self.file.stat().st_mode & 0o777, 0o755)
+
+    def test_nonexecuting_permission_bits_do_not_count_as_git_content(self):
+        self.file.chmod(0o640)
+        (self.run / "00-input/manifest.json").write_text(json.dumps(snapshot(self.roots)))
+        staged = self.staged_change()
+        committed = self.execute(["commit", "-m", "Own content"], "implementer", [staged])
+        self.assertEqual(committed["status"], "SUCCEEDED", committed)
+        self.assertEqual(self.file.stat().st_mode & 0o777, 0o640)
+
+    def applied_history_then_commit(self, command, option):
+        process.checked(self.root, ["checkout", "-b", "incoming"])
+        self.file.write_text("4\n")
+        process.checked(self.root, ["add", "value.txt"])
+        process.checked(self.root, ["commit", "-m", "Incoming change"])
+        revision = process.checked(self.root, ["rev-parse", "HEAD"]).strip()
+        process.checked(self.root, ["checkout", "main"])
+        applied = self.execute([command, option, revision], "implementer")
+        self.assertEqual(applied["status"], "SUCCEEDED", applied)
+        self.file.write_text("5\n")
+        staged = self.execute(["add", "--", "value.txt"], "implementer", [applied])
+        self.assertEqual(staged["status"], "SUCCEEDED", staged)
+        committed = self.execute(["commit", "-m", "Own edit"], "implementer", [applied, staged])
+        self.assertEqual(committed["status"], "SUCCEEDED", committed)
+        self.assertEqual(process.checked(self.root, ["show", "HEAD:value.txt"]), "5\n")
+
+    def test_fast_forward_baseline_supports_a_later_own_commit(self):
+        self.applied_history_then_commit("merge", "--ff-only")
+
+    def test_cherry_pick_baseline_supports_a_later_own_commit(self):
+        self.applied_history_then_commit("cherry-pick", "--no-edit")
+
+    def test_foreign_add_before_receipt_cannot_be_adopted_as_owned_index(self):
+        self.file.write_text("4\n")
+        record = index_ownership.record
+
+        def raced(root, entry):
+            self.file.write_text("Foreign staged contents\n")
+            process.checked(root, ["add", "value.txt"])
+            record(root, entry)
+
+        with patch.object(index_ownership, "record", side_effect=raced):
+            added = self.execute(["add", "--", "value.txt"], "implementer")
+        self.assert_unknown_receipt(added)
+        self.assertIn("index changed outside", added["stderr"])
+        self.assertEqual(self.file.read_text(), "Foreign staged contents\n")
+
+    def test_foreign_add_during_receipt_reads_cannot_replace_an_owned_entry(self):
+        self.file.write_text("4\n")
+        verify = staging_receipt.verify
+
+        def raced(repo, entry, staged):
+            verify(repo, entry, staged)
+            self.file.write_text("Foreign staged contents\n")
+            process.checked(repo, ["add", "value.txt"])
+
+        with patch.object(staging_receipt, "verify", side_effect=raced):
+            added = self.execute(["add", "--", "value.txt"], "implementer")
+        self.assert_unknown_receipt(added)
+        self.assertIn("index changed outside", added["stderr"])
+
+    def test_foreign_head_during_add_receipt_is_unknown(self):
+        self.file.write_text("4\n")
+        verify = staging_receipt.verify
+
+        def raced(repo, entry, staged):
+            verify(repo, entry, staged)
+            process.checked(repo, ["commit", "-m", "Foreign commit of pending index"])
+
+        with patch.object(staging_receipt, "verify", side_effect=raced):
+            added = self.execute(["add", "--", "value.txt"], "implementer")
+        self.assert_unknown_receipt(added)
+        self.assertEqual(
+            process.checked(self.root, ["log", "-1", "--format=%s"]),
+            "Foreign commit of pending index\n",
+        )
+
+    def test_add_receipt_timeout_cannot_claim_index_ownership(self):
+        self.file.write_text("4\n")
+        with patch.object(
+            staging_receipt, "verify", side_effect=subprocess.TimeoutExpired(["git"], 60)
+        ):
+            added = self.execute(["add", "--", "value.txt"], "implementer")
+        self.assert_unknown_receipt(added)
+        self.assertEqual(process.checked(self.root, ["show", ":value.txt"]), "4\n")
 
     def test_a_changed_staged_entry_is_not_the_runs_to_commit(self):
         self.file.write_text("4\n")

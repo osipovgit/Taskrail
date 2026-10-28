@@ -11,8 +11,9 @@ you review.
 1. Read every requirement and the inputs. A mandatory missing input is a gap.
 2. Plan review: inspect the affected source; check scope, task ownership, order and
    checks. Each task must keep its own deliverable after the tasks it depends on, and a
-   split task must be self-contained. Reject overlapping tasks and tasks that only run
-   checks or update documentation.
+   split task must be self-contained. Reject overlapping tasks and separate companion
+   checks or documentation that another task owes. Documentation or tests may be a
+   standalone deliverable when the user's goal requests them.
 3. No-change plan: establish yourself that the source already meets the task.
 4. Result review: compare the current files with the task, the plan, changes.diff, the
    preimages and the server's check records. Implementation claims are not evidence.

@@ -1,0 +1,260 @@
+{
+  "schema_version": 1,
+  "purpose": "Explicitly requested offline scenario acceptance and exportable live provider tasks. Synthetic model decisions exercise the real workflow; separate oracles check delivered behavior. No providers or remote services are contacted.",
+  "projects": {
+    "infra": {
+      "roles/flink/tasks/main.yml": "---\n- name: Create the Flink service directory\n  file:\n    path: /opt/flink\n    state: directory\n    mode: '0755'\n- name: Install the Flink configuration\n  template:\n    src: flink-conf.yaml.j2\n    dest: /opt/flink/flink-conf.yaml\n    mode: '0644'\n",
+      "roles/flink/templates/flink-conf.yaml.j2": "jobmanager.rpc.address: {{ flink_manager }}\nparallelism.default: {{ flink_parallelism | default(2) }}\n",
+      "inventory.yml": "all:\n  hosts:\n    fixture.invalid:\n      ansible_connection: local\n",
+      "README.md": "# Fixture infrastructure\nSynthetic configuration; never deploy this inventory.\n",
+      ".env": "FIXTURE_ONLY=not-a-credential\n"
+    },
+    "service": {
+      "pricing.py": "\"\"\"Fixture order pricing.\"\"\"\n\ndef apply_discount(total, percent):\n    return total - total * percent\n\ndef order_total(items, percent=0):\n    subtotal = sum(quantity * price for quantity, price in items)\n    return round(apply_discount(subtotal, percent), 2)\n",
+      "config.json": "{\"retries\": 3, \"timeout_seconds\": 30}\n",
+      "compose.yaml": "services:\n  api:\n    build: .\n    image: fixture-api:local\n  worker:\n    image: fixture-api:local\n  db:\n    image: postgres:17\n",
+      "Jenkinsfile": "pipeline {\n    agent any\n    stages {\n        stage('Test') {\n            steps { sh './scripts/test.sh' }\n        }\n    }\n}\n",
+      "scripts/test.sh": "#!/usr/bin/env bash\nset -euo pipefail\npython3 -m unittest discover -s tests\n",
+      "scripts/start.sh": "#!/usr/bin/env bash\nset -euo pipefail\ndocker compose build api\ndocker compose up --no-build\n",
+      "notes.txt": "Operator's uncommitted note: preserve verbatim.\n",
+      "tests/test_pricing.py": "import unittest\n\nfrom pricing import order_total\n\n\nclass PricingAcceptanceTests(unittest.TestCase):\n    def test_percentage(self):\n        self.assertEqual(order_total([(2, 10.0)], percent=10), 18.0)\n\n    def test_zero_percentage(self):\n        self.assertEqual(order_total([(1, 5.5), (3, 2.0)]), 11.5)\n",
+      "README.md": "# Fixture API\n\nAn example service with configurable retries and timeout.\n"
+    },
+    "ui": {
+      "settings.js": "export const settings = { timeoutSeconds: 30 };\n",
+      "README.md": "# Fixture UI\nTimeouts use seconds, never milliseconds.\n"
+    }
+  },
+  "tasks": [
+    {
+      "id": "ANSIBLE-LINT",
+      "roots": [
+        "infra"
+      ],
+      "mode": "develop",
+      "goal": "Review and fix the Flink role's syntax and lint findings without changing its service paths.",
+      "criteria": "- Use fully qualified Ansible module names.\n- Preserve variable names and explicit file modes.",
+      "constraints": "Keep the inventory and unrelated files unchanged. Do not suppress lint rules.",
+      "verification": "Run ansible-lint for roles/flink using an operator-configured local recipe.\nRun the play twice on the disposable server only after confirmation and root approval.",
+      "live_oracle": "Independent review is required. Deferred server idempotence must never be reported as a passed local check.",
+      "changes": {
+        "infra/roles/flink/tasks/main.yml": "---\n- name: Create the Flink service directory\n  ansible.builtin.file:\n    path: /opt/flink\n    state: directory\n    mode: '0755'\n- name: Install the Flink configuration\n  ansible.builtin.template:\n    src: flink-conf.yaml.j2\n    dest: /opt/flink/flink-conf.yaml\n    mode: '0644'\n"
+      },
+      "seed_overrides": {},
+      "evidence_path": "infra/roles/flink/tasks/main.yml",
+      "expected_status": "READY_FOR_REVIEW",
+      "summary": "Deliver ANSIBLE-LINT"
+    },
+    {
+      "id": "IMAGE-CACHE",
+      "roots": [
+        "service"
+      ],
+      "mode": "develop",
+      "goal": "Rebuild only the API image without Docker cache before every local stack start and suite run.",
+      "criteria": "- Both launch paths build the API once with --no-cache.\n- Services reuse that image with --no-build.\n- A failed build stops the remaining actions.",
+      "constraints": "Preserve the database image, user notes and unrelated services. Do not run Docker without exact-command approval.",
+      "verification": "Observe the command order and a simulated failed build using a recording Docker stub.",
+      "live_oracle": "Inspect both scripts and Jenkinsfile; approve only required files. Use a stub, never an actual Docker daemon.",
+      "changes": {
+        "service/scripts/start.sh": "#!/usr/bin/env bash\nset -euo pipefail\ndocker compose build --no-cache api\ndocker compose up --no-build\n",
+        "service/scripts/test.sh": "#!/usr/bin/env bash\nset -euo pipefail\ndocker compose build --no-cache api\ndocker compose run --rm --no-build api python3 -m unittest discover -s tests\n"
+      },
+      "seed_overrides": {},
+      "evidence_path": "service/config.json",
+      "expected_status": "READY_FOR_REVIEW",
+      "summary": "Deliver IMAGE-CACHE"
+    },
+    {
+      "id": "PERCENT-DISCOUNT",
+      "roots": [
+        "service"
+      ],
+      "mode": "develop",
+      "goal": "Treat the discount parameter as a percentage from 0 to 100.",
+      "criteria": "- Two items at 10 each with a 10 percent discount total 18.\n- A zero discount preserves the subtotal.",
+      "constraints": "Keep the public signatures and unrelated dirty notes unchanged.",
+      "verification": "Run the operator-configured pricing unit tests.",
+      "live_oracle": "Change only pricing.py, compute 18.0 and unchanged subtotal, retain independent result review.",
+      "changes": {
+        "service/pricing.py": "\"\"\"Fixture order pricing.\"\"\"\n\ndef apply_discount(total, percent):\n    return total - total * percent / 100\n\ndef order_total(items, percent=0):\n    subtotal = sum(quantity * price for quantity, price in items)\n    return round(apply_discount(subtotal, percent), 2)\n"
+      },
+      "seed_overrides": {},
+      "evidence_path": "service/config.json",
+      "expected_status": "READY_FOR_REVIEW",
+      "summary": "Deliver PERCENT-DISCOUNT"
+    },
+    {
+      "id": "MULTI-ROOT-TIMEOUT",
+      "roots": [
+        "service",
+        "ui"
+      ],
+      "mode": "split",
+      "goal": "Raise the API and UI timeout from 30 to 45 seconds consistently.",
+      "criteria": "- Server timeout_seconds is 45.\n- UI timeoutSeconds is 45.\n- The combined result uses the same units.",
+      "constraints": "Preserve retries and all unrelated files. Every child keeps the global constraints.",
+      "verification": "Check both roots together after child completion.",
+      "live_oracle": "Sealed child scopes, requirement lineage, dependency order and combined independent integration review are required.",
+      "changes": {
+        "service/config.json": "{\"retries\": 3, \"timeout_seconds\": 45}\n",
+        "ui/settings.js": "export const settings = { timeoutSeconds: 45 };\n"
+      },
+      "seed_overrides": {},
+      "evidence_path": "service/config.json",
+      "expected_status": "TASKS_READY",
+      "summary": "Deliver MULTI-ROOT-TIMEOUT"
+    },
+    {
+      "id": "ANSWER-ONLY",
+      "roots": [
+        "service"
+      ],
+      "mode": "answer",
+      "goal": "Explain the currently configured retry count and timeout with source line citations.",
+      "criteria": "State the current values and their units.",
+      "constraints": "Do not change any source file or Git metadata.",
+      "verification": "",
+      "live_oracle": "NO_CHANGES_REQUIRED after plan review, no implementer, identical source hashes.",
+      "changes": {},
+      "seed_overrides": {},
+      "evidence_path": "service/config.json",
+      "expected_status": "NO_CHANGES_REQUIRED",
+      "summary": "The retry count is 3 and the timeout is 30 seconds, from config.json:1.",
+      "answer": "The retry count is 3 and timeout_seconds is 30 seconds (`{source}:1-1`)."
+    },
+    {
+      "id": "DESIGN-ONLY",
+      "roots": [
+        "service",
+        "ui"
+      ],
+      "mode": "design",
+      "goal": "Design a backwards-compatible timeout configuration shared by API and UI.",
+      "criteria": "Describe units, migration, default values and tests.",
+      "constraints": "Write only the reviewed design artifact; preserve source files.",
+      "verification": "",
+      "live_oracle": "Reviewed design artifact, no source writer and no claimed runtime validation.",
+      "changes": {},
+      "seed_overrides": {},
+      "evidence_path": "service/config.json",
+      "expected_status": "NO_CHANGES_REQUIRED",
+      "summary": "Keep timeout configuration backwards compatible and expressed in seconds.",
+      "answer": "### Context\nThe API currently sets timeout_seconds to 30 seconds; its retries value is 3 (`{source}:1-1`). The UI has a separate seconds-based setting.\n\n### Options\nKeep two independent values or introduce a shared timeout_seconds setting with an adapter for timeoutSeconds.\n\n### Trade-offs\nA shared value reduces drift but requires a compatibility adapter during migration.\n\n### Recommendation\nUse seconds throughout and retain the default of 30 seconds. Accept the existing UI field until all callers migrate.\n\n### Risks\nA milliseconds conversion or early removal of the old field could change request timeouts.\n\n### Implementation outline\nAdd the compatibility adapter, migrate each consumer, then test default values, override parity and old-field compatibility without changing public behavior.\n\n### Open questions\nWhich service owns the configuration artifact, and when can the compatibility field be retired?"
+    },
+    {
+      "id": "LITERAL-USER-TEXT",
+      "roots": [
+        "service"
+      ],
+      "mode": "develop",
+      "goal": "  Preserve this literal shell example:\r\n\r\n```bash\r\nprintf '%s\\n' \"${COMPOSE[@]}\"\r\n# Keep this comment\r\n```\r\n",
+      "criteria": "## Current behavior\nThis heading remains part of the criterion.",
+      "constraints": "Preserve indentation, CRLF and quotes in the original task fields.",
+      "verification": "",
+      "live_oracle": "Typed fields and frozen original input preserve every character; embedded headings cannot reclassify requirements.",
+      "changes": {},
+      "seed_overrides": {},
+      "evidence_path": "service/config.json",
+      "expected_status": "NO_CHANGES_REQUIRED",
+      "summary": "Preserve the literal example in the immutable task fields; no source changes are required."
+    },
+    {
+      "id": "DOCS-ONLY",
+      "roots": [
+        "service"
+      ],
+      "mode": "develop",
+      "goal": "Document the API timeout setting, its seconds unit and default value in README.md.",
+      "criteria": "The requested standalone deliverable is independently reviewed.",
+      "constraints": "Change only the documentation or test files required by the goal.",
+      "verification": "",
+      "live_oracle": "The reviewer must not reject a standalone requested documentation or test deliverable as artificial decomposition.",
+      "changes": {
+        "service/README.md": "# Fixture API\n\n`config.json` sets `timeout_seconds` to 30 by default. The unit is seconds.\n"
+      },
+      "seed_overrides": {},
+      "evidence_path": "service/config.json",
+      "expected_status": "READY_FOR_REVIEW",
+      "summary": "Deliver DOCS-ONLY"
+    },
+    {
+      "id": "TESTS-ONLY",
+      "roots": [
+        "service"
+      ],
+      "mode": "develop",
+      "goal": "Add regression tests for zero and full percentage discounts without changing pricing.py.",
+      "criteria": "The requested standalone deliverable is independently reviewed.",
+      "constraints": "Change only the documentation or test files required by the goal.",
+      "verification": "",
+      "live_oracle": "The reviewer must not reject a standalone requested documentation or test deliverable as artificial decomposition.",
+      "changes": {
+        "service/tests/test_discount_edges.py": "import unittest\n\nfrom pricing import order_total\n\n\nclass DiscountEdgeTests(unittest.TestCase):\n    def test_zero(self):\n        self.assertEqual(order_total([(2, 10)], percent=0), 20)\n\n    def test_full(self):\n        self.assertEqual(order_total([(2, 10)], percent=100), 0)\n"
+      },
+      "seed_overrides": {
+        "service/pricing.py": "\"\"\"Fixture order pricing.\"\"\"\n\ndef apply_discount(total, percent):\n    return total - total * percent / 100\n\ndef order_total(items, percent=0):\n    subtotal = sum(quantity * price for quantity, price in items)\n    return round(apply_discount(subtotal, percent), 2)\n"
+      },
+      "evidence_path": "service/config.json",
+      "expected_status": "READY_FOR_REVIEW",
+      "summary": "Deliver TESTS-ONLY"
+    }
+  ],
+  "syntax_cases": [
+    {
+      "name": "valid.py",
+      "text": "def value():\n    return 45\n",
+      "expected": "PASS"
+    },
+    {
+      "name": "broken.py",
+      "text": "def value(:\n",
+      "expected": "FAIL"
+    },
+    {
+      "name": "valid.json",
+      "text": "{\"timeout_seconds\":45}\n",
+      "expected": "PASS"
+    },
+    {
+      "name": "broken.json",
+      "text": "{\"timeout_seconds\":45,}\n",
+      "expected": "FAIL"
+    },
+    {
+      "name": "valid.sh",
+      "text": "#!/usr/bin/env bash\nset -euo pipefail\nprintf '%s\\n' 'fixture'\n",
+      "expected": "PASS"
+    },
+    {
+      "name": "broken.sh",
+      "text": "if true; then\n",
+      "expected": "FAIL"
+    },
+    {
+      "name": "valid.yaml",
+      "text": "service:\n  retries: 3\n",
+      "expected": "PASS"
+    },
+    {
+      "name": "broken.yaml",
+      "text": "service: [unclosed\n",
+      "expected": "FAIL"
+    },
+    {
+      "name": "Jenkinsfile",
+      "text": "pipeline { agent any }\n",
+      "expected": "SKIPPED"
+    },
+    {
+      "name": "settings.js",
+      "text": "export const timeout = 45;\n",
+      "expected": "SKIPPED"
+    },
+    {
+      "name": "template.j2",
+      "text": "timeout: {{ timeout_seconds }}\n",
+      "expected": "SKIPPED"
+    }
+  ]
+}

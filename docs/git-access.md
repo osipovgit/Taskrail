@@ -47,7 +47,7 @@ check, not a prompt-only permission change.
 
 Writes must affect only approved files. Staging pre-existing user edits is rejected.
 Commit application requires a clean working tree. The index belongs to the run only
-entry by entry and repository by repository: an `add` records the exact staged blobs
+entry by entry and repository by repository: an `add` records the exact staged modes and blobs
 it produced in its repository, and a later `add` or `commit` there proceeds only
 while every staged entry is one of those blobs. Changes the user staged, in that or
 any other repository, and an entry changed after the run staged it, are rejected even
@@ -55,6 +55,12 @@ inside approved files. A commit or other history write ends that ownership. Merg
 commits are not yet supported for revert/cherry-pick. A rejected request returns
 feedback for further analysis; the task need not stop unless the operation is
 mandatory and unresolved.
+
+After a successful controlled commit, later staging uses that verified committed
+content while original preimages stay immutable. Receipts pin HEAD and validate
+the complete changed-path set, staged content and executable modes. Concurrent index
+or HEAD changes, failed receipt reads and unexpected byte normalization produce an
+unknown outcome rather than adopting another writer's work; inspect before restarting.
 
 The same write is not repeated: an identical request is rejected while its earlier
 outcome is unknown, and other writes are never repeated. An `add` or `commit` that

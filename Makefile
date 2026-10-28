@@ -3,10 +3,10 @@ PYTHON ?= python3
 TOOL_DIR := $(shell $(PYTHON) -c 'import sysconfig; print(sysconfig.get_path("scripts"))')
 SHELLCHECK = $(TOOL_DIR)/shellcheck
 SHFMT = $(TOOL_DIR)/shfmt
-SHELL_SCRIPTS = deploy/fresh.sh deploy/executor-maintenance.sh deploy/reset-executor.sh deploy/install.sh deploy/options.sh deploy/taskrail deploy/install-executor.sh deploy/executor-service deploy/taskrail-executor-approve deploy/ssh-askpass
+SHELL_SCRIPTS = deploy/fresh.sh deploy/executor-maintenance.sh deploy/install-locks.sh deploy/reset-executor.sh deploy/install.sh deploy/options.sh deploy/taskrail deploy/install-executor.sh deploy/executor-service deploy/taskrail-executor-approve deploy/ssh-askpass
 SHELL_ENTRYPOINTS = deploy/install.sh deploy/install-executor.sh deploy/reset-executor.sh deploy/taskrail deploy/executor-service deploy/taskrail-executor-approve deploy/ssh-askpass
 
-.PHONY: lint lint-python lint-ui lint-shell test format-check check tool-versions
+.PHONY: lint lint-python lint-ui lint-shell test test-acceptance test-coverage format-check check tool-versions
 lint: lint-python lint-ui lint-shell
 tool-versions:
 	$(PYTHON) tools/check_tools.py
@@ -24,7 +24,13 @@ format-check: tool-versions
 	npm run format:check
 test:
 	@# A private HOME keeps the real workflow lock and installed settings out of the tests.
-	home=$$(mktemp -d) && HOME=$$home $(PYTHON) -m unittest discover -s tests; \
-		status=$$?; rm -rf "$$home"; exit $$status
+	taskrail_test_home=$$(mktemp -d) && HOME=$$taskrail_test_home $(PYTHON) -m unittest discover -s tests; \
+		status=$$?; rm -rf "$$taskrail_test_home"; exit $$status
 	npm test
+# Explicit operator request only; neither target is a dependency of check or CI.
+test-acceptance: tool-versions
+	taskrail_test_home=$$(mktemp -d) && HOME=$$taskrail_test_home PYTHONPATH=.:tests $(PYTHON) -m unittest discover -s tests/acceptance -p 'scenario_*.py' -v; \
+		status=$$?; rm -rf "$$taskrail_test_home"; exit $$status
+test-coverage: tool-versions
+	$(PYTHON) tools/test_coverage.py
 check: tool-versions lint format-check test

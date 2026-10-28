@@ -5,6 +5,7 @@ from pathlib import Path
 
 from taskrail.application import evidence
 from taskrail.application.instruction_sources import fingerprint
+from taskrail.core import prompt_texts
 from taskrail.core.files import atomic_json
 
 IDENTIFIER = "id"
@@ -52,7 +53,10 @@ def select(catalog, execution, state):
 
 def render(run, execution, state):
     """Disclose exact selected versions and hashes; modules grant no permissions."""
-    selected = select(frozen_catalog(run, state), execution, state)
+    selected = [
+        dict(module, text=prompt_texts.text(module["text_key"]))
+        for module in select(frozen_catalog(run, state), execution, state)
+    ]
     state["instruction_modules"] = [
         {
             "id": module[IDENTIFIER],

@@ -4,7 +4,7 @@ import json
 import time
 
 from taskrail.application.artifacts import save_run
-from taskrail.core import control
+from taskrail.core import control, prompt_texts
 from taskrail.core.files import atomic_json
 from taskrail.executor import client, protocol
 from taskrail.interactions import output_preview
@@ -56,11 +56,9 @@ def resume(run, state):
     save_run(run, state)
     terminal_status = pending[STATUS]
     if terminal_status == "REJECTED":
-        return "Remote action rejected by the operator. Nothing executed. Skip this action and continue feasible work; do not repeat the request unchanged."
+        return prompt_texts.text("feedback.remote_declined")
     if terminal_status == "UNKNOWN":
-        raise ValueError(
-            "Remote outcome UNKNOWN. Inspect the target before submitting another action; no automatic replay."
-        )
+        raise ValueError(prompt_texts.text("feedback.remote_unknown"))
     evidence_path = save_snapshot(run, pending)
     return output_preview.ticket_preview(evidence_path, pending)
 

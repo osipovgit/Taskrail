@@ -8,21 +8,13 @@ and summary, and the path of history.md (see history_index).
 import json
 
 from taskrail.application.history_index import HistoryFile, section_lines, text_of
-from taskrail.core import requirements
+from taskrail.core import prompt_texts, requirements
 from taskrail.infrastructure.agent_sync import atomic_write
 
 MARKER = f"{requirements.HISTORY}\n"
 INLINE_BYTES = 24000
 EXCERPT_CHARS = 2000
 FILE_NAME = "00-input/history.md"
-CLIPPED = " [clipped; the complete text is in the history file]"
-NOTE = (
-    "The {0} earlier turns ({1} bytes) are too large to repeat here. They are in {2}. "
-    "First read lines 1-{3} of that file: an index of the turns with the line ranges of "
-    "their goal, summary, task, conclusions and diff. Then read only the turns and sections "
-    "you need, at most 200 lines at a time; never read the file whole. The latest earlier "
-    "turn, with long fields clipped:\n"
-)
 
 
 def prompt_task(task_text, run):
@@ -41,7 +33,9 @@ def reference(turns, encoded, run):
     path = run / FILE_NAME
     history = HistoryFile(turns)
     atomic_write(path, "\n".join(history.lines()).encode("utf-8"))
-    note = NOTE.format(len(turns), size(encoded), path, history.index_end)
+    note = prompt_texts.text(
+        "history.reference", count=len(turns), size=size(encoded), path=path, end=history.index_end
+    )
     return f"{note}{excerpt(turns[-1])}\n"
 
 
@@ -71,7 +65,7 @@ def clipped(field):
     text = text_of(field)
     if len(text) <= EXCERPT_CHARS:
         return text
-    return text[:EXCERPT_CHARS] + CLIPPED
+    return text[:EXCERPT_CHARS] + prompt_texts.text("history.clipped")
 
 
 def size(text):

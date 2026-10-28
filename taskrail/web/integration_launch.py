@@ -3,6 +3,7 @@
 import json
 from functools import partial
 
+from taskrail.application import delivery_confirmation
 from taskrail.web import (
     delivery_state,
     epic_record,
@@ -45,6 +46,7 @@ def repeat(launcher, run):
         epic.setdefault("phase_history", []).append(epic.get(PHASES, {}))
         epic[PHASES] = {}
         epic.pop("confirmed", None)
+        epic.pop(delivery_confirmation.INPUTS, None)
         epic.pop("launch_error", None)
     return start(launcher, run)
 

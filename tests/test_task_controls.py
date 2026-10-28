@@ -9,8 +9,9 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from taskrail.application import mode_rules
+from taskrail.application import delivery_confirmation, mode_rules
 from taskrail.application.live import execute_task
+from taskrail.application.source_guard import SourceGuard
 from taskrail.core.files import atomic_json
 from taskrail.web import delivery_launch, requests, submissions, task_form
 from taskrail.web.history import HISTORY, TaskDraft, conversation, previous_messages, task_draft
@@ -59,6 +60,11 @@ class TaskControlTests(unittest.TestCase):
             json.dumps(dict(status="PLAN_READY", summary="Evidence"))
         )
         (self.run / "changes.diff").write_text("-return 1\n+return 2\n")
+        guard = SourceGuard({"project": self.repo})
+        guard.capture()
+        atomic_json(
+            self.run / "checkpoint.json", dict(expected=guard.expected, git_before=guard.git_before)
+        )
         self.settings = self.base / "settings.json"
         self.configure("ok")
         self.launcher = TaskLauncher(self.runs, self.settings)
@@ -202,7 +208,7 @@ class TaskControlTests(unittest.TestCase):
         self.assertIn("Mode: design discussion. Change nothing", rule)
         self.assertNotIn("answer only", rule)
         self.assertIn("Mode: split into tasks", mode_rules.render(dict(decompose=True), "planner"))
-        self.assertIn("this run then implements it", mode_rules.render({}, "planner"))
+        self.assertIn("Mode: change", mode_rules.render({}, "planner"))
         self.assertEqual(mode_rules.render({}, "implementer"), "")
         with patch.object(self.launcher, "launch", return_value={"id": "next"}) as launch:
             self.launcher.submit(
@@ -277,7 +283,12 @@ class TaskControlTests(unittest.TestCase):
         child = self.runs / name
         (child / "00-input").mkdir(parents=True, exist_ok=True)
         (child / "00-input/task.md").write_text("# child\n")
-        state = dict(status=status, summary=f"{name} summary", changed_files=["/repo/hello.py"])
+        state = dict(
+            status=status,
+            summary=f"{name} summary",
+            changed_files=["/repo/hello.py"],
+            roots={"project": str(self.repo)},
+        )
         (child / "run.json").write_text(json.dumps(state))
 
     def test_task_split_starts_tasks_in_order_with_a_brief(self):
@@ -441,8 +452,17 @@ class TaskControlTests(unittest.TestCase):
         with patch.object(delivery_launch, "executor_offers", return_value={}):
             self.launcher.action(dict(id="epic", action="confirm"))
         self.assertEqual(run_view(self.runs, "epic")["delivery"]["step"], "done")
+        delivery_confirmation.verify(epic)
+        for changed in (source, self.repo / ".git/HEAD"):
+            contents = changed.read_text()
+            changed.write_text("changed after confirmation\n")
+            with self.assertRaisesRegex(ValueError, "Confirmed source/Git"):
+                delivery_confirmation.verify(epic)
+            changed.write_text(contents)
         self.finish("child-2", "TOOL_ERROR")
         self.assertEqual(run_view(self.runs, "epic")["delivery"]["step"], "needs_you")
+        with self.assertRaisesRegex(ValueError, "review evidence changed"):
+            delivery_confirmation.verify(epic)
 
     def test_repeat_review_keeps_active_phases_and_archives_stopped_links(self):
         epic = self.make_epic()

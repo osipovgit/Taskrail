@@ -2,10 +2,14 @@
 
 import contextlib
 import json
-from pathlib import Path
 
-from taskrail.application import outside_changes, run_locks, worktree_isolation
-from taskrail.application.source_guard import SourceGuard
+from taskrail.application import (
+    delivery_confirmation,
+    outside_changes,
+    run_locks,
+    worktree_isolation,
+)
+from taskrail.core import delivery_record
 from taskrail.core.files import digest
 from taskrail.web import epic_tasks, history, parent_context, split_approvals, task_form
 from taskrail.web.run_activity import BusyError
@@ -75,30 +79,15 @@ def invalidate(delivery, epic):
 
 @contextlib.contextmanager
 def confirmation_lock(run, delivery):
-    """Hold the reviewed roots unchanged while the operator confirms a split."""
-    if "tasks" not in delivery:
-        yield
-        return
-    record = delivery["phases"][NAME]
-    child = history.checked_run(run.parent, record["run"])
-    guard = review_guard(child)
+    """Hold the reviewed roots unchanged for standalone and split confirmation alike."""
+    child = run
+    if "tasks" in delivery:
+        child = history.checked_run(run.parent, delivery["phases"][NAME]["run"])
+    snapshot = delivery_confirmation.capture(run, child, delivery_record.read(run))
+    guard = delivery_confirmation.guard(snapshot)
     with run_locks.run_locks(guard.roots.values(), run) as conflict:
         if conflict:
             raise BusyError(conflict)
-        guard.verify("Source changed since integration review; repeat review before confirmation")
-        yield
-
-
-def review_guard(child):
-    """Restore the final review's fingerprint boundary without trusting summaries."""
-    state = json.loads(history.read_artifact(child, "run.json"))
-    checkpoint = json.loads(history.read_artifact(child, "checkpoint.json"))
-    roots = resolved_roots(state["roots"])
-    guard = SourceGuard(roots)
-    guard.adopt(checkpoint["expected"], checkpoint["git_before"])
-    return guard
-
-
-def resolved_roots(roots):
-    """Convert stored roots for the shared integrity guard."""
-    return {alias: Path(root) for alias, root in roots.items()}
+        review = "review" if child == run else "integration review"
+        guard.verify(f"Source changed since {review}; repeat review before confirmation")
+        yield snapshot

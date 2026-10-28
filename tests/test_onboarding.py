@@ -43,18 +43,31 @@ class OnboardingTests(unittest.TestCase):
     def test_check_verifies_cli_permissions_and_storage(self):
         report = check(self.settings())
         self.assertTrue(all(passed for passed, _ in report), report)
-        self.assertIn("1.0.0", report[1][1])
+        self.assertTrue(any("1.0.0" in message for _, message in report), report)
         self.assertEqual(list(self.profiles.glob("*.md")), [])
         self.assertTrue((self.root / "runs").is_dir())
 
     def test_check_reports_missing_cli_and_invalid_settings(self):
-        report = check(self.settings(command=[str(self.root / "missing-opencode")]))
-        self.assertFalse(report[1][0])
-        self.assertFalse(report[2][0])
-        self.assertFalse(check(self.settings(models=[]))[1][0])
+        with mock.patch("taskrail.onboarding.permission_result") as permission:
+            report = check(self.settings(command=[str(self.root / "missing-opencode")]))
+        permission.assert_not_called()
+        failures = [message for passed, message in report if not passed]
+        self.assertTrue(any("Cannot detect opencode interface" in message for message in failures))
+        for options, expected in (
+            (dict(models=[]), "settings.models"),
+            (dict(agent_directory=[]), "Settings are invalid"),
+        ):
+            with self.subTest(options=options):
+                report = check(self.settings(**options))
+                failures = [message for passed, message in report if not passed]
+                self.assertTrue(any(expected in message for message in failures), report)
         broken = self.root / "broken.json"
-        broken.write_text("{")
-        self.assertIn("unreadable", check(str(broken))[1][1])
+        for content, expected in (("{", "unreadable"), ("[]", "JSON object")):
+            with self.subTest(content=content):
+                broken.write_text(content)
+                report = check(str(broken))
+                failures = [message for passed, message in report if not passed]
+                self.assertTrue(any(expected in message for message in failures), report)
 
     def test_init_writes_private_settings_once(self):
         fake = self.root / "opencode"

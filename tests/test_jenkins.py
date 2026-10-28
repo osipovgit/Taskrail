@@ -252,7 +252,8 @@ class JenkinsTest(unittest.TestCase):
         folder = run / "01-plan"
         folder.mkdir(parents=True)
         decisions = []
-        actions = SimpleNamespace(run=run, folder=folder)
+        session = SimpleNamespace(environment=dict(run=run), active=(folder,), state={})
+        actions = SimpleNamespace(run=run, folder=folder, session=session)
         actions.approve = lambda request: decisions.append(request) or dict(decision="allow")
         envelope = dict(schema_version=1, status="JENKINS_REQUEST", jenkins=READ)
         answers = [
@@ -268,8 +269,6 @@ class JenkinsTest(unittest.TestCase):
         bad = dict(envelope, jenkins=dict(READ, job="unknown"))
         with patch.object(client, "request", return_value=answers[0]):
             self.assertIn("rejected", jenkins.consume(actions, json.dumps(bad)))
-        session = SimpleNamespace(environment=dict(run=run), active=(folder,), state={})
-        actions.session = session
         envelope["jenkins"] = BUILD
         with (
             patch.object(client, "request", return_value=answers[0]),

@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 from types import MappingProxyType
 
-from taskrail.core import input_header
+from taskrail.core import input_header, prompt_texts
 from taskrail.web import history, task_input
 from taskrail.web.form_roots import checked_roots
 
@@ -21,9 +21,6 @@ FIELDS = (
     CONSTRAINTS,
     "verification",
 )
-DEFAULT_CRITERIA = (
-    "The Goal is achieved; the report states what was verified and what remains unverified."
-)
 TITLE_WORDS = 80
 FIELD_LIMIT = 16000
 TITLE_LIMIT = 160
@@ -36,15 +33,6 @@ SECTIONS = MappingProxyType(
         "entry_points": "Known entry points",
         CONSTRAINTS: "Additional constraints",
     }
-)
-WORKFLOW_RULES = (
-    "",
-    "## Workflow rules",
-    "Discover related files and the minimal change scope within the declared roots.",
-    "Preserve unrelated changes. Use controlled Git access; never hard-reset, clean, rewrite history or force-push. Do not edit Git metadata directly.",
-    "Use English for generated explanations, comments, documentation and reports.",
-    "The server runs syntax checks and configured verification commands. Report all unexecuted checks as unverified.",
-    "Remote actions require the isolated SSH executor and personal approval of exact scripts and targets.",
 )
 
 
@@ -67,7 +55,7 @@ def form_text(payload):
     if not form[GOAL]:
         raise ValueError("Required field: goal")
     form[TITLE] = form[TITLE] or default_title(form[GOAL])
-    form[CRITERIA] = form[CRITERIA] or DEFAULT_CRITERIA
+    form[CRITERIA] = form[CRITERIA] or prompt_texts.current("task.default_criteria")
     check_title(form[TITLE])
     check_reserved(form.values())
     return form
@@ -112,4 +100,4 @@ def task_markdown(form, header):
     for field, heading in SECTIONS.items():
         if form[field]:
             sections.extend(["", f"## {heading}", form[field]])
-    return "{}\n".format("\n".join([*sections, *WORKFLOW_RULES]))
+    return "{}\n".format("\n".join([*sections, prompt_texts.current("task.workflow_rules")]))

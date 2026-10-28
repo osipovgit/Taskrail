@@ -10,6 +10,8 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+from deployment_fixture import DeploymentFixture
+
 from taskrail.application import execution_wait
 from taskrail.executor import client, protocol
 from taskrail.executor.service import ExecutorServer
@@ -159,26 +161,117 @@ class MaintenanceStepsTests(unittest.TestCase):
 class MaintenanceScriptTests(unittest.TestCase):
     """The installer and reset take every step before they replace or delete anything."""
 
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.home = Path(temporary.name)
+        fixture = DeploymentFixture(self.home)
+        self.release = fixture.source()
+        for name in ("install-executor.sh", "reset-executor.sh"):
+            script = self.release / "deploy" / name
+            # Only the privilege guard changes; every host path and command is isolated.
+            script.write_text(script.read_text().replace("$EUID", "0"))
+        self.package = fixture.system / "opt/taskrail-executor/taskrail"
+        self.config = fixture.system / "etc/taskrail-executor"
+        self.state = fixture.system / "var/lib/taskrail-executor"
+        self.unit = fixture.system / "etc/systemd/system/taskrail-executor.service"
+        for directory in (
+            self.package,
+            self.config,
+            self.state,
+            self.unit.parent,
+            fixture.system / "run",
+            fixture.system / "usr/local/bin",
+        ):
+            directory.mkdir(parents=True, exist_ok=True)
+        (self.package / "previous").write_text("previous package")
+        (self.release / "taskrail/replacement").write_text("prepared package")
+        self.unit.write_text("[Unit]\n")
+        self.log = self.home / "operations.log"
+        stubs = {
+            "id": '#!/bin/sh\ncase "$1" in -u) echo 1000 ;; -nG) echo users ;; esac\n',
+            "getent": "#!/bin/sh\nexit 0\n",
+            "chown": "#!/bin/sh\nexit 0\n",
+            "install": "#!/bin/bash\narguments=()\nwhile [[ $# -gt 0 ]]; do\n"
+            'case "$1" in -o|-g) shift 2 ;; *) arguments+=("$1"); shift ;; esac\n'
+            'done\nexec /usr/bin/install "${arguments[@]}"\n',
+            "runuser": '#!/bin/sh\nprintf "prepare marker=%s\\n" '
+            '"$(test -e "$MARKER" && echo yes || echo no)" >> "$LOG"\n'
+            'exit "${PREPARE_EXIT:-0}"\n',
+            "systemctl": '#!/bin/sh\nprintf "%s marker=%s previous=%s\\n" "$*" '
+            '"$(test -e "$MARKER" && echo yes || echo no)" '
+            '"$(test -e "$PACKAGE/previous" && echo yes || echo no)" >> "$LOG"\n'
+            'case "$1" in stop) exit "${STOP_EXIT:-0}" ;; is-active) exit 3 ;; esac\n',
+        }
+        for name, source in stubs.items():
+            executable = fixture.binaries / name
+            executable.write_text(source)
+            executable.chmod(0o755)
+        self.environment = fixture.environment(
+            dict(
+                os.environ,
+                HOME=str(self.home),
+                MARKER=str(self.config / "maintenance"),
+                LOG=str(self.log),
+                PACKAGE=str(self.package),
+            )
+        )
+
+    def execute(self, name, *arguments, **environment):
+        return subprocess.run(
+            ["bash", str(self.release / "deploy" / name), *arguments],
+            env=dict(self.environment, **environment),
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+
     def test_the_installer_swaps_a_prepared_package_only_after_maintenance(self):
-        script = (BASE / "deploy/install-executor.sh").read_text()
-        steps = [
-            "lock_executor_maintenance",
-            "prepare_executor_package",
-            "begin_maintenance",
-            'mv -- "$staging',
-        ]
-        positions = [script.index(step) for step in steps]
-        self.assertEqual(positions, sorted(positions))
-        self.assertIn("trap cleanup EXIT", script)
-        self.assertNotIn("systemctl stop", script)
-        self.assertNotIn("rm -rf -- /opt/taskrail-executor/taskrail", script)
+        installed = self.execute("install-executor.sh", "--client=fixture")
+        self.assertEqual(installed.returncode, 0, installed.stderr)
+        self.assertEqual((self.package / "replacement").read_text(), "prepared package")
+        self.assertFalse((self.package / "previous").exists())
+        self.assertEqual(
+            self.log.read_text().splitlines()[:2],
+            ["prepare marker=no", "stop taskrail-executor.service marker=yes previous=yes"],
+        )
+        self.assertFalse((self.config / "maintenance").exists())
+
+    def test_failed_preparation_stop_and_running_work_preserve_the_old_package(self):
+        for environment in (dict(PREPARE_EXIT="1"), dict(STOP_EXIT="1"), {}):
+            with self.subTest(environment=environment):
+                if not environment:
+                    (self.state / "ticket.json").write_text('{"status":"RUNNING"}')
+                failed = self.execute("install-executor.sh", "--client=fixture", **environment)
+                self.assertNotEqual(failed.returncode, 0)
+                self.assertEqual((self.package / "previous").read_text(), "previous package")
+                self.assertFalse((self.package / "replacement").exists())
+                self.assertFalse((self.config / "maintenance").exists())
+                calls = self.log.read_text()
+                if environment.get("PREPARE_EXIT") or not environment:
+                    self.assertNotIn("stop ", calls)
+                self.log.unlink()
 
     def test_the_reset_keeps_running_and_uncertain_journals(self):
-        script = (BASE / "deploy/reset-executor.sh").read_text()
-        maintenance = script.index('begin_maintenance "$marker"')
-        self.assertIn("RUNNING UNKNOWN", script[maintenance : script.index("\n", maintenance)])
-        self.assertLess(maintenance, script.index("rm -rf --"))
-        self.assertIn("trap 'leave_maintenance", script)
+        ticket = self.state / "ticket.json"
+        for status in ("RUNNING", "UNKNOWN"):
+            with self.subTest(status=status):
+                ticket.write_text(json.dumps(dict(status=status)))
+                refused = self.execute("reset-executor.sh")
+                self.assertNotEqual(refused.returncode, 0)
+                self.assertIn(status, refused.stderr)
+                self.assertEqual(json.loads(ticket.read_text())["status"], status)
+                self.assertEqual((self.package / "previous").read_text(), "previous package")
+                self.assertFalse(self.log.exists())
+                self.assertFalse((self.config / "maintenance").exists())
+        ticket.write_text('{"status":"COMPLETED"}')
+        reset = self.execute("reset-executor.sh")
+        self.assertEqual(reset.returncode, 0, reset.stderr)
+        self.assertFalse(self.package.exists())
+        self.assertFalse(ticket.exists())
+        calls = self.log.read_text().splitlines()
+        self.assertEqual(calls[0], "stop taskrail-executor.service marker=yes previous=yes")
+        self.assertEqual(calls[-1], "daemon-reload marker=no previous=no")
 
 
 class ExecutorPackageTests(unittest.TestCase):
