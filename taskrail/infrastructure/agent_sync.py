@@ -37,6 +37,7 @@ def launch_settings(options, base):
     return dict(
         command=opencode_api.launch_command(command, version),
         opencode_version=version,
+        opencode_server=options.get("opencode_server", True) is not False,
         destination=(base / destination.expanduser()).resolve(),
         **validated,
     )

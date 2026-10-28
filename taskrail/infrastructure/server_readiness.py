@@ -1,7 +1,12 @@
-"""Bounded, interruptible reading of the private server's readiness announcement."""
+"""Bounded, interruptible reading of the private server's readiness announcement.
+
+opencode 2.x announces itself with one JSON line, 1.x prints `... listening on <url>`
+after any warnings. Either way only a local HTTP address without credentials counts.
+"""
 
 import json
 import os
+import re
 import selectors
 import time
 from urllib.parse import urlsplit
@@ -10,6 +15,7 @@ POLL_SECONDS = 0.1
 MAX_BYTES = 8192
 INVALID = "Invalid opencode server readiness URL"
 HOSTS = frozenset(("localhost", "127.0.0.1", "::1"))
+LISTENING = re.compile(rb"listening on (http://\S+)")
 
 
 def wait(process, startup):
@@ -48,7 +54,10 @@ def announcement(process, received):
 
 
 def address(announcement):
-    """Accept only a structured announcement with a string endpoint."""
+    """A structured announcement or a `listening on <url>` line, nothing else."""
+    found = LISTENING.search(announcement)
+    if found:
+        return local_url(found.group(1).decode())
     ready = json.loads(announcement)
     url = ready.get("url") if isinstance(ready, dict) else None
     if not isinstance(url, str):

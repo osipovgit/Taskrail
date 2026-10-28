@@ -1,4 +1,8 @@
-"""Select the opencode CLI generation; 2.x runs behind the 1.x-compatible adapter."""
+"""Select the opencode CLI generation; 2.x runs behind the 1.x-compatible adapter.
+
+Both generations run every turn of a stage on one private server: 2.x through the
+adapter, 1.x with `run --attach` where the CLI offers it (`opencode_serve`).
+"""
 
 import contextlib
 import json
@@ -7,7 +11,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from taskrail.infrastructure import opencode_cli, opencode_server
+from taskrail.infrastructure import opencode_cli, opencode_serve, opencode_server
 from taskrail.infrastructure.profile_rules import permission_worktree
 
 ONE_X = "1.x"
@@ -68,12 +72,20 @@ def launch_command(command, version):
     return [sys.executable, "-I", "-c", ADAPTER, PACKAGE_ROOT, json.dumps(command)]
 
 
-def stage_server(command, workspace, allow, compact=True, startup=None):
-    """2.x turns of one stage share a private server; 1.x launches need none."""
-    if ADAPTER not in command:
-        return contextlib.nullcontext()
-    target = json.loads(command[-1])
+def stage_server(command, workspace, allow, compact=True, **options):
+    """The private server every turn of one stage runs on, or None for one process a turn.
+
+    options: startup, the readiness deadline and Stop check, and attach, False to keep
+    one 1.x process a turn.
+    """
     environment = opencode_cli.environment(allow, compact)
+    startup = options.get("startup")
+    if ADAPTER not in command:
+        attach = options.get("attach", True) and bool(command)
+        if not (attach and opencode_serve.supported(tuple(command))):
+            return contextlib.nullcontext()
+        return opencode_serve.StageServer(command, str(workspace), environment, startup)
+    target = json.loads(command[-1])
     server = opencode_server.Server(target, str(workspace), env=environment)
     if startup is not None:
         server.startup.update(startup)

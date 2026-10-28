@@ -93,7 +93,6 @@ class LiveTests(LiveFixture, unittest.TestCase):
         cases = (
             ("write-unresolved", "TOOL_ERROR"),
             ("write-mismatch-unresolved", "TOOL_ERROR"),
-            ("write-context", "CONTEXT_EXCEEDED"),
             ("write-scope", "BLOCKED"),
         )
         for mode, expected in cases:
@@ -109,6 +108,18 @@ class LiveTests(LiveFixture, unittest.TestCase):
                     self.assertIn("return 1", (self.root / "hello.py").read_text())
                 if mode == "write-scope":
                     self.assertIn("Scope violation", state["summary"])
+
+    def test_a_writer_that_fills_its_context_continues_in_a_fresh_session(self):
+        run, status, state = self.run_mode("write-context")
+        self.assertEqual(status, "READY_FOR_REVIEW", state.get("summary"))
+        writer = [entry for entry in state["attempts"] if entry["stage"] == "implementer"]
+        self.assertEqual(writer[0]["status"], "CONTEXT_EXCEEDED")
+        self.assertEqual(len(writer), 2)
+        stages = [entry for entry in state["stages"] if entry["stage"] == "implementer"]
+        fresh = (run / stages[-1]["directory"] / "request.md").read_text()
+        self.assertIn("FILLED ITS CONTEXT", fresh)
+        self.assertIn(str(self.root / "hello.py"), fresh)
+        self.assertIn("return 2", (self.root / "hello.py").read_text())
 
     def test_an_unread_progress_overwrite_is_only_a_warning(self):
         _, status, state = self.run_mode("progress-unread")

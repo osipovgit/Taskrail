@@ -2,6 +2,7 @@
 
 from taskrail.application import access_recovery, decision_adapter, evidence, plan_recovery, prompts
 from taskrail.core import prompt_texts
+from taskrail.core.paths import tool_paths
 from taskrail.infrastructure import context_overflow
 from taskrail.observability.progress import say
 
@@ -57,11 +58,7 @@ class Retries:
         if status == "BLOCKED_PERMISSION":
             return self.access_recovery(outcome)
         if status == context_overflow.STATUS:
-            return self.transport_retry(
-                note(prompt_texts.text("recovery.context")),
-                overflow_outputs(self.attempts.workflow),
-                plan_recovery.feedback(outcome),
-            )
+            return self.transport_retry(*context_notes(self, outcome), handoff=True)
         return status in TRANSPORT and self.transport_retry()
 
     def format_repair(self, outcome):
@@ -118,10 +115,16 @@ class Retries:
         say(f"  Access denied; continuing with allowed sources ({count}/2)")
         return True
 
-    def transport_retry(self, *notes):
-        """Read-only stages retry interrupted transports in a new session with recorded evidence."""
+    def transport_retry(self, *notes, handoff=False):
+        """Read-only stages retry interrupted transports in a new session with recorded evidence.
+
+        A writer that filled its context hands off to a fresh session the same way; it
+        is never retried after any other interruption.
+        """
         workflow = self.attempts.workflow
-        limit = 0 if self.stage == IMPLEMENTER else workflow.config["read_retries"]
+        limit = workflow.config["read_retries"]
+        if self.stage == IMPLEMENTER and not handoff:
+            limit = 0
         if self.counts[TRANSPORT_KEY] >= limit or self.access.count:
             return False
         self.counts[TRANSPORT_KEY] += 1
@@ -162,23 +165,27 @@ def full_attempt(retries):
     return True
 
 
+def context_notes(retries, outcome):
+    """What a fresh session after a full context needs: a writer, its notes and edits."""
+    workflow = retries.attempts.workflow
+    if retries.stage != IMPLEMENTER:
+        context = note(prompt_texts.text("recovery.context"))
+        return context, overflow_outputs(workflow), plan_recovery.feedback(outcome)
+    names = workflow.state.get("changed_files") or []
+    changed = ", ".join(tool_paths(names, workflow.config["roots"])) or "none"
+    handoff = prompt_texts.text("recovery.handoff", files=changed)
+    return note(handoff), overflow_outputs(workflow)
+
+
 def overflow_outputs(workflow):
     """Name the largest tool outputs of the attempt that just overflowed the context."""
     folder = workflow.run / workflow.state["stages"][-1]["directory"]
-    outputs = context_overflow.tool_outputs(folder / "events.jsonl")
-    ranked = sorted(outputs, reverse=True)[:NAMED_OUTPUTS]
-    largest = [entry for entry in ranked if entry[0] >= LARGE_OUTPUT]
+    events = folder / "events.jsonl"
+    total, largest = context_overflow.largest_outputs(events, NAMED_OUTPUTS, LARGE_OUTPUT)
     if not largest:
         return ""
     named = "; ".join("{1} ({0} characters)".format(*entry) for entry in largest)
-    return note(
-        prompt_texts.text("recovery.overflow", total=sum(map(output_size, outputs)), named=named)
-    )
-
-
-def output_size(entry):
-    """Characters of one recorded tool output."""
-    return entry[0]
+    return note(prompt_texts.text("recovery.overflow", total=total, named=named))
 
 
 def note(text):

@@ -45,3 +45,11 @@ def output_entry(line):
     arguments = json.dumps(state.get("input"), ensure_ascii=False)
     call = "{} {}".format(part.get("tool"), arguments)
     return [(len(output), call[:CALL_CHARS])]
+
+
+def largest_outputs(events, count, minimum):
+    """Total characters of a session's tool outputs and up to count of at least minimum."""
+    outputs = tool_outputs(events)
+    ranked = sorted(outputs, reverse=True)[:count]
+    total = sum(entry[0] for entry in outputs)
+    return total, [entry for entry in ranked if entry[0] >= minimum]

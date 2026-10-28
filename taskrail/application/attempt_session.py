@@ -65,6 +65,7 @@ def launch_options(workflow, active, allowance, format_only):
     config = workflow.config
     return dict(
         command=config["command"],
+        server=config.get("opencode_server", True),
         workspace=next(iter(config[ROOTS].values())),
         agent=agent_name(workflow, record),
         model=config["models"].get(record["role"]),

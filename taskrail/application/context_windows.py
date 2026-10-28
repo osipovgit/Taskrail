@@ -2,7 +2,9 @@
 
 `model_context_tokens` is one window for every model, or an object mapping
 `provider/model` names to their windows with an optional `default` for the rest.
-`context_reserve_tokens` is the headroom kept for responses and tool output.
+`context_reserve_tokens` is the headroom kept for responses and tool output. The
+session boundary it leaves stays between 90 and 95 percent of the window, so a small
+window is not cut short and a large one keeps room for the next tool output.
 """
 
 from taskrail.core.schema import require
@@ -13,6 +15,7 @@ DEFAULT = "default"
 DEFAULT_CONTEXT = 94208
 DEFAULT_RESERVE = 8192
 RESERVE_ERROR = "context_reserve_tokens must be positive and below every model_context_tokens"
+BOUNDARY = (0.9, 0.95)
 
 
 def settings(options):
@@ -41,8 +44,10 @@ def window(config, model):
 
 
 def capacity(config, model=None):
-    """Input capacity of a model's session, keeping the configured reserve free."""
-    return window(config, model) - settings(config)[CONTEXT_RESERVE]
+    """Input capacity of a model's session: the window minus the reserve, within BOUNDARY."""
+    size = window(config, model)
+    lowest, highest = (int(size * share) for share in BOUNDARY)
+    return min(max(size - settings(config)[CONTEXT_RESERVE], lowest), highest)
 
 
 def role_capacity(config, role):

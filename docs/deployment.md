@@ -116,11 +116,17 @@ reset directories.
 | `format_repair_tools` | `none` | `read` keeps read-only tools in format repair passes, for providers that reject tool-less requests |
 | `permission_worktree` | inferred | Base directory for relative permission names (Git worktree for 1.x, first root for 2.x); required when `.git` is a file or symlink |
 | `tool_output_dir` | opencode location | Absolute directory (`~` allowed) where a compatible CLI keeps truncated tool output; its automatic `external_directory` allow rule is accepted only for this directory |
+| `opencode_server` | `true` | `false` runs each 1.x turn as its own process instead of on the stage's private server |
 | `stop_on_provider_limit` | `false` | `true` stops a stage at the first exhausted provider quota or billing limit instead of spending its retries ([contracts](contracts.md)) |
 | `protected_paths` | credentials list | Patterns models never read or edit, besides `.env` files; setting it replaces the defaults ([access](access.md#protected-paths)) |
 
 opencode 1.x is called as `opencode run --session --dir --agent --format json --file`
-and `opencode agent list`. For 2.x, each stage starts one private `opencode serve`,
+and `opencode agent list`. Where its `run --help` offers `--attach` (opencode 1.0.26 and
+later), each stage starts one private `opencode serve --hostname 127.0.0.1 --port 0`
+behind a random `OPENCODE_SERVER_PASSWORD`, and every turn runs with `run --attach`:
+the session remembers its reads across turns and turns start warm. The server stops
+with the stage; `"opencode_server": false` keeps one process per turn. For 2.x, each
+stage starts one private `opencode serve`,
 waits until the managed agent is loaded, lists its effective rules through
 `opencode api` and runs every turn of the stage with `opencode run --server`; the
 shared background service is never used. The adapter writes 1.x-shaped events to `events.jsonl` and keeps the
@@ -158,8 +164,9 @@ models (a missing `default` is `94208`):
 
 Each stage uses the window of its role's model from `models`. Keep each window no
 higher than the model's real context window. `context_reserve_tokens` (default `8192`)
-must be positive and smaller than every window. Keep the provider's own model limits
-accurate.
+must be positive and smaller than every window. A session ends at the window minus
+the reserve, kept between 90 and 95 percent of the window. Keep the provider's own
+model limits accurate.
 
 Before any role starts, the server counts the request and frozen role instructions;
 writer admission also counts approved read/edit input files. Exact source lines already
@@ -173,9 +180,13 @@ provider envelopes cannot be predicted. Runtime monitoring stops on reported inp
 marker. Usage events can arrive after a provider has consumed tokens.
 
 A refusal or overflow is `CONTEXT_EXCEEDED`; an admission refusal consumes no model
-turn and is not retried with the same oversized input. Source changes are preserved and a
-writer is never automatically replayed. Replan into smaller atomic tasks or deliberately
-correct the model limit. `max_observed_tokens` remains a separate cumulative cost cap.
+turn and is not retried with the same oversized input. A session that reaches the
+boundary is not compacted: the stage continues in a fresh session, up to `read_retries`
+times. A reading stage starts it from recorded evidence; the implementer keeps its edits
+and continues from `progress.md` (Done, Remaining), told to read the files it already
+changed before editing them. Nothing is rolled back, and a writer interrupted any other
+way is never replayed. When fresh sessions do not suffice, replan into smaller atomic
+tasks or deliberately correct the model limit. `max_observed_tokens` remains a separate cumulative cost cap.
 
 After a planner context stop, the server first validates its saved `plan.md` against
 the same source evidence, requirement coverage, scope and dependency contracts.

@@ -6,6 +6,7 @@ from types import MappingProxyType
 
 from taskrail.infrastructure import context_overflow, turn_io, usage_limits
 from taskrail.infrastructure.event_summary import parse_events
+from taskrail.infrastructure.opencode_serve import ATTACH
 from taskrail.infrastructure.process_watch import SUCCESS, TurnWatch
 
 AUTO_REJECT = "auto-rejecting"
@@ -41,10 +42,10 @@ def start(watch, options):
     """Freeze the request and run opencode under the watch."""
     watch.turn.prepare(options["prompt"])
     argv, env = watch.turn.launch(options["command"], options["model"])
-    attached = (options[RUNTIME] or {}).get(ATTACHED, ())
-    files = (options["prompt"], *attached)
+    runtime = options[RUNTIME] or {}
+    files = (options["prompt"], *runtime.get(ATTACHED, ()))
     target = (options["workspace"], options["agent"], files)
-    argv += arguments(target, options["debug"])
+    argv += arguments(target, options["debug"], env.get(ATTACH))
     return watch.launch(argv, env, options["workspace"], options["timeout"])
 
 
@@ -76,15 +77,17 @@ def summarize(watch, process, options):
     return outcome
 
 
-def arguments(target, debug):
+def arguments(target, debug, server=None):
     """The opencode run arguments after the launch prefix; the prompt is the first file.
 
-    Every attached file is read by opencode itself when the turn starts, so each new
-    process of a continued session knows it as read and may overwrite it.
+    A turn on the stage's 1.x server attaches to it. Every attached file is read by
+    opencode itself when the turn starts, so a fresh session knows it as read too.
     """
     workspace, agent, files = target
     attached = [argument for path in files for argument in ("--file", str(path))]
     options = ["--dir", str(workspace), "--agent", agent, "--format", "json"]
+    if server:
+        options = ["--attach", server, *options]
     return [*(DEBUG_LOGS if debug else ()), *options, *attached, "--", PROMPT_ARGUMENT]
 
 
