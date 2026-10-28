@@ -9,6 +9,7 @@ import uuid
 from pathlib import Path
 
 from fake_contract import attempt, decision, earlier_invalid, enrich, plan_text
+from fake_file_writes import event as file_event
 from fake_file_writes import implement
 from fake_report_repair import report_result
 
@@ -60,6 +61,10 @@ record = attempt(args)
 role = record["stage"]
 run = request_file.parent.parent
 format_only = record["mode"] == "format-repair"
+# Every turn attaches the stage's own run file after the prompt, and only that file.
+attached = [args[index + 1] for index, item in enumerate(args) if item == "--file"][1:]
+own = dict(planner=run / "plan.md", implementer=run / "progress.md").get(role)
+assert attached == ([] if format_only or own is None else [str(own)]), attached
 continued = "--session" in args
 rebuilt = not format_only and earlier_invalid(run, record)
 saved_context = profiles / "fixture-context.json"
@@ -388,6 +393,10 @@ elif role == "implementer":
         target.write_text("".join(kept))
     if mode == "syntax-stuck":
         target.write_text("def broken(\n")
+    if mode == "progress-unread":
+        progress = run / "progress.md"
+        rejection = f"You must read file {progress} before overwriting it. Use the Read tool first"
+        file_event(print, progress, "write", "error", rejection)
     if mode == "syntax" and not context.get("feedback"):
         target.write_text("def broken(\n")
     if mode == "syntax" and context.get("feedback"):

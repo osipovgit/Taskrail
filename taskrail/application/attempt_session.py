@@ -1,6 +1,6 @@
 """Launch inputs of one attempt and validation of its final response."""
 
-from taskrail.application import context_windows, result_context
+from taskrail.application import context_windows, result_context, stage_artifacts
 from taskrail.application.attempt_launch import agent_name
 from taskrail.application.git_state import git_metadata
 from taskrail.application.plan_validation import canonical_plan, validate_plan
@@ -74,6 +74,7 @@ def launch_options(workflow, active, allowance, format_only):
             plan_file=str(workflow.run / "plan.md")
             if record["stage"] == "planner" and not format_only
             else None,
+            attached_files=() if format_only else record.get(stage_artifacts.ATTACHED, ()),
         ),
     )
 

@@ -109,6 +109,13 @@ class LiveTests(LiveFixture, unittest.TestCase):
                 if mode == "write-scope":
                     self.assertIn("Scope violation", state["summary"])
 
+    def test_an_unread_progress_overwrite_is_only_a_warning(self):
+        _, status, state = self.run_mode("progress-unread")
+        self.assertEqual(status, "READY_FOR_REVIEW", state.get("summary"))
+        writer = [entry for entry in state["attempts"] if entry["stage"] == "implementer"]
+        self.assertEqual(writer[0]["errors"], [])
+        self.assertIn("never evidence", writer[0]["warnings"][0]["resolution"])
+
     def test_git_policy_rejection_returns_feedback_and_workflow_continues(self):
         run, status, state = self.run_mode("git-denied")
         self.assertEqual(status, "READY_FOR_REVIEW", state.get("summary"))

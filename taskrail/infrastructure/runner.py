@@ -10,6 +10,9 @@ from taskrail.infrastructure.process_watch import SUCCESS, TurnWatch
 
 AUTO_REJECT = "auto-rejecting"
 PROMPT_ARGUMENT = "Execute_the_task_in_the_attached_file"
+ATTACHED = "attached_files"
+RUNTIME = "runtime"
+DEBUG_LOGS = ("--print-logs", "--log-level", "DEBUG")
 OPTIONAL = MappingProxyType(dict(debug=False, progress=False, format_only=False, runtime=None))
 UNAVAILABLE_TOOL = re.compile(
     r"Model tried to call unavailable tool '[^']+'. Available tools:\s*\.?"
@@ -26,7 +29,7 @@ def run_agent(launch):
     options = dict(OPTIONAL, **launch)
     attempt = options["attempt"]
     attempt.mkdir(exist_ok=True)
-    turn = turn_io.TurnIO(attempt, options["runtime"])
+    turn = turn_io.TurnIO(attempt, options[RUNTIME])
     watch = TurnWatch(turn, attempt, options["progress"])
     outcome = summarize(watch, start(watch, options), options)
     outcome.update(model=options["model"], agent=options["agent"])
@@ -38,7 +41,9 @@ def start(watch, options):
     """Freeze the request and run opencode under the watch."""
     watch.turn.prepare(options["prompt"])
     argv, env = watch.turn.launch(options["command"], options["model"])
-    target = (options["workspace"], options["agent"], options["prompt"])
+    attached = (options[RUNTIME] or {}).get(ATTACHED, ())
+    files = (options["prompt"], *attached)
+    target = (options["workspace"], options["agent"], files)
     argv += arguments(target, options["debug"])
     return watch.launch(argv, env, options["workspace"], options["timeout"])
 
@@ -53,8 +58,9 @@ def summarize(watch, process, options):
     outcome = parse_events(
         turn.path,
         len(turn.previous.splitlines()),
-        plan_file=(options["runtime"] or {}).get("plan_file"),
-        writable_files=(options["runtime"] or {}).get("writable_files", ()),
+        plan_file=(options[RUNTIME] or {}).get("plan_file"),
+        writable_files=(options[RUNTIME] or {}).get("writable_files", ()),
+        notes=(options[RUNTIME] or {}).get(ATTACHED, ()),
     )
     usage_limits.explain(outcome, watch.telemetry, turn.budgets["context_budget"])
     stderr = turn.error_text()
@@ -71,22 +77,15 @@ def summarize(watch, process, options):
 
 
 def arguments(target, debug):
-    """The opencode run arguments after the launch prefix."""
-    workspace, agent, prompt = target
-    logs = ["--print-logs", "--log-level", "DEBUG"] if debug else []
-    return [
-        *logs,
-        "--dir",
-        str(workspace),
-        "--agent",
-        agent,
-        "--format",
-        "json",
-        "--file",
-        str(prompt),
-        "--",
-        PROMPT_ARGUMENT,
-    ]
+    """The opencode run arguments after the launch prefix; the prompt is the first file.
+
+    Every attached file is read by opencode itself when the turn starts, so each new
+    process of a continued session knows it as read and may overwrite it.
+    """
+    workspace, agent, files = target
+    attached = [argument for path in files for argument in ("--file", str(path))]
+    options = ["--dir", str(workspace), "--agent", agent, "--format", "json"]
+    return [*(DEBUG_LOGS if debug else ()), *options, *attached, "--", PROMPT_ARGUMENT]
 
 
 def final_status(status, code, outcome, stderr):
