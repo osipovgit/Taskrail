@@ -8,6 +8,7 @@ from pathlib import Path
 from taskrail.application import evidence, result_validation, session_budget, source_packet
 from taskrail.core import schema
 from taskrail.core.files import atomic_json
+from taskrail.interactions import transcripts
 
 
 class DecisionContractTests(unittest.TestCase):
@@ -115,6 +116,63 @@ class DecisionContractTests(unittest.TestCase):
         self.assertEqual(result["status"], "BLOCKED")
         self.assertEqual(result["coverage"][0]["outcome"], "not_evaluated")
         self.assertEqual(result["evidence"], [])
+
+    def test_malformed_references_are_addressed_without_guessing_ranges(self):
+        references = (
+            f"{self.path}:1-1 the file is fixed",
+            f"{self.path}: command exited 0",
+            f"{self.path}:0-1",
+            f"{self.path}:2-1",
+            "request.md:1-1",
+            "S99:1-1",
+        )
+        for reference in references:
+            with self.subTest(reference=reference):
+                payload = self.decision()
+                payload["outcomes"][0]["evidence"] = [reference]
+                with self.assertRaises(schema.ContractError) as rejected:
+                    self.validate(payload)
+                self.assertEqual(rejected.exception.code, "EVIDENCE_REFERENCE")
+                self.assertEqual(rejected.exception.path, "/outcomes/0/evidence/0")
+                draft = json.loads((self.folder / "decision-draft.json").read_text())
+                self.assertEqual(draft, payload)
+                correction = dict(
+                    schema_version=2,
+                    corrections=[dict(path=rejected.exception.path, value=f"{self.path}:1-1")],
+                )
+                self.assertEqual(self.validate(correction)["status"], "APPROVE")
+        defect = dict(requirement="R1", evidence=[references[0]], problem="Wrong value")
+        with self.assertRaises(schema.ContractError) as rejected:
+            self.validate(self.decision(findings=[defect]))
+        self.assertEqual(rejected.exception.path, "/findings/0/evidence/0")
+
+    def test_executor_summary_needs_observed_snapshot_lines_not_commentary(self):
+        (self.folder / "events.jsonl").write_text("")
+        request = dict(cwd=str(self.root), argv=["ansible-lint", "roles/"], reason="Verify")
+        outcome = dict(status="SUCCEEDED", exit_code=0, stdout="0 failure(s), 2 warning(s).")
+        delivered = transcripts.local_snapshot(self.run, self.folder, request, outcome)
+        snapshot = self.run / "00-input/local" / f"{self.folder.name}-0.json"
+        payload = self.decision()
+        payload["outcomes"][0]["evidence"] = [f"{snapshot}: ansible-lint exit_code 0"]
+        with self.assertRaisesRegex(ValueError, "EVIDENCE_REFERENCE"):
+            self.validate(payload)
+        number = next(
+            index
+            for index, line in enumerate(snapshot.read_text().splitlines(), 1)
+            if '"exit_code": 0' in line
+        )
+        payload["outcomes"][0]["evidence"] = [f"{snapshot}:{number}-{number}"]
+        self.assertIn(str(snapshot), delivered)
+        self.assertEqual(self.validate(payload)["status"], "APPROVE")
+
+    def test_missing_input_prose_is_never_silently_discarded(self):
+        note = (
+            "No optional source was unavailable during this task; all required files were present."
+        )
+        result = self.validate(self.decision(missing_inputs=[note]))
+        self.assertEqual(result["status"], "BLOCKED")
+        self.assertEqual(result["blocking_gaps"], [note])
+        self.assertEqual(self.validate(self.decision(missing_inputs=[]))["status"], "APPROVE")
 
     def test_missing_coverage_cannot_be_inferred_from_no_findings(self):
         with self.assertRaisesRegex(ValueError, "Incomplete requirement coverage"):

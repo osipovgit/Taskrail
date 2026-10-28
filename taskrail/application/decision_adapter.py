@@ -29,6 +29,18 @@ def corrected(payload, folder):
     return payload
 
 
+def repair_response(response, folder):
+    """Keep the merged unvalidated draft after a correction, never replace malformed JSON."""
+    try:
+        candidate = json_response.extract(response, schema.unique_fields)
+    except ValueError:
+        return response
+    target = folder / "decision-draft.json"
+    if "corrections" in candidate and target.is_file():
+        return target.read_text()
+    return response
+
+
 def resolve_reference(context, name, start, end):
     """Absolute reads retain their normal provenance gate; handles cannot grant access."""
     if Path(name).is_absolute():

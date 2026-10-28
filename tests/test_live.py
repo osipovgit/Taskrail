@@ -92,6 +92,7 @@ class LiveTests(LiveFixture, unittest.TestCase):
     def test_source_overwrite_recovery_never_hides_stops_or_replays_writes(self):
         cases = (
             ("write-unresolved", "TOOL_ERROR"),
+            ("write-mismatch-unresolved", "TOOL_ERROR"),
             ("write-context", "CONTEXT_EXCEEDED"),
             ("write-scope", "BLOCKED"),
         )
@@ -1006,6 +1007,57 @@ class LiveTests(LiveFixture, unittest.TestCase):
         repair = next(stage for stage in state["stages"] if stage["mode"] == "format-repair")
         request = (run / repair["directory"] / "request.md").read_text()
         self.assertIn("This pass cannot edit files", request)
+
+    def test_resolved_edit_mismatch_keeps_the_workflow_and_independent_review(self):
+        _, status, state = self.run_mode("write-mismatch-recovered")
+        self.assertEqual(status, "READY_FOR_REVIEW", state.get("summary"))
+        writer = [entry for entry in state["attempts"] if entry["stage"] == "implementer"]
+        self.assertEqual(len(writer), 1)
+        self.assertEqual(writer[0]["errors"], [])
+        self.assertIn("Could not find oldString", writer[0]["warnings"][0]["error"])
+        self.assertIn("read", writer[0]["warnings"][0]["recovered_by"])
+        self.assertIn("return 2", (self.root / "hello.py").read_text())
+        self.assertEqual((self.root / "unrelated.txt").read_text(), "user dirty work\n")
+        self.assertEqual(state["stages"][-1]["stage"], "reviewer")
+
+    def test_writer_evidence_corrections_preserve_a_large_draft_without_replaying_edits(self):
+        for mode, expected_modes in (
+            ("writer-evidence-once", ["model"]),
+            ("writer-evidence-kept", ["model", "research-recovery"]),
+        ):
+            with self.subTest(mode=mode):
+                self.setUp()
+                with self.task.open("a") as task:
+                    task.write(
+                        "".join(
+                            f"\n\nPreserve existing behavior constraint {i}." for i in range(14)
+                        )
+                    )
+                run, status, state = self.run_mode(mode)
+                self.assertEqual(status, "READY_FOR_REVIEW", state.get("summary"))
+                writers = [entry for entry in state["stages"] if entry["stage"] == "implementer"]
+                self.assertEqual([entry["mode"] for entry in writers], expected_modes)
+                self.assertEqual(writers[0]["session_turns"], 2 if mode.endswith("once") else 4)
+                writes = []
+                for writer in writers:
+                    events = (run / writer["directory"] / "events.jsonl").read_text().splitlines()
+                    writes.extend(
+                        event
+                        for event in map(json.loads, events)
+                        if event.get("part", {}).get("tool") == "edit"
+                    )
+                self.assertEqual(len(writes), 1)
+                folder = run / writers[-1]["directory"]
+                result = json.loads((folder / "response-object.json").read_text())
+                self.assertEqual(len(result["coverage"]), 15)
+                self.assertEqual(result["blocking_gaps"], [])
+                if len(writers) > 1:
+                    self.assertGreater(len((folder / "response.raw.txt").read_text()), 1000)
+                    request = (folder / "request.md").read_text()
+                    self.assertIn('"saved_response"', request)
+                    self.assertIn("EVIDENCE_REFERENCE at /outcomes/0/evidence/0", request)
+                self.assertEqual(state["stages"][-1]["stage"], "reviewer")
+                self.assertEqual((self.root / "unrelated.txt").read_text(), "user dirty work\n")
 
     def test_narration_without_a_request_continues_the_same_session(self):
         run, status, state = self.run_mode("narrate")

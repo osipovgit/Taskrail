@@ -34,7 +34,7 @@ def parent_aliases(requirements):
     }
 
 
-def outcome(entry, requirements, claims):
+def outcome(entry, requirements, claims, index):
     """Semantic outcomes stay explicit; routine success needs no repeated prose."""
     kind = entry["result"]
     explained = kind not in REASONS or bool(entry.get("reason"))
@@ -42,14 +42,14 @@ def outcome(entry, requirements, claims):
     return dict(
         id=requirement_id(entry["requirement"], requirements),
         outcome=kind,
-        evidence_ids=claims.collect(entry["evidence"]),
+        evidence_ids=claims.collect(entry["evidence"], f"/outcomes/{index}/evidence"),
         explanation=entry.get("reason", f"Agent assessment: {kind}."),
     )
 
 
-def finding(entry, requirements, claims):
+def finding(entry, requirements, claims, index):
     """Every repair request identifies observed lines rather than invented file prose."""
-    identifiers = claims.collect(entry["evidence"])
+    identifiers = claims.collect(entry["evidence"], f"/findings/{index}/evidence")
     schema.require(bool(identifiers), "Finding needs observed source evidence")
     first = identifiers[0]
     proof = next(claim for claim in claims.entries if claim[IDENTIFIER] == first)

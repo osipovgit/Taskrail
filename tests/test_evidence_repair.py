@@ -8,7 +8,7 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 from taskrail.application import citation_review, evidence, source_guidance, source_views
-from taskrail.application.attempt_retries import Retries
+from taskrail.application.attempt_retries import Retries, needs_sources
 
 
 class EvidenceRepairTests(unittest.TestCase):
@@ -91,6 +91,62 @@ class EvidenceRepairTests(unittest.TestCase):
             repair.assert_not_called()
             outcome["contract_error"] = "Different defect"
             self.assertTrue(retries.allowed(outcome))
+
+    def test_malformed_evidence_needs_sources_but_keeps_the_retry_bounded(self):
+        errors = (
+            "Invalid evidence reference: /run/check.json: exit_code 0; use path:from-to",
+            "Invalid evidence line range",
+            "EVIDENCE_REFERENCE at /outcomes/0/evidence/0: Unknown delivered source handle: S9",
+        )
+        for error in errors:
+            with self.subTest(error=error):
+                workflow = SimpleNamespace(
+                    run=self.run,
+                    flow=dict(stage="implementer"),
+                    state=dict(stages=[dict(directory="01-implement")], requirements=[]),
+                    config={},
+                )
+                attempts = SimpleNamespace(
+                    workflow=workflow, request="Original task", format_only=False
+                )
+                retries = Retries(attempts)
+                response = '{"schema_version":2,"outcomes":[],"missing_inputs":[]}'
+                outcome = dict(status="INVALID_RESULT", contract_error=error, final_text=response)
+                self.assertTrue(retries.allowed(outcome))
+                self.assertFalse(attempts.format_only)
+                self.assertIn('"saved_response"', attempts.request)
+                self.assertIn(error, attempts.request)
+                self.assertEqual(retries.mode(), "research-recovery")
+                self.assertFalse(retries.allowed(outcome))
+                self.assertFalse(needs_sources(error, {"format_repair_tools": "read"}))
+
+    def test_repair_receives_the_merged_draft_after_an_addressed_correction(self):
+        folder = self.run / "01-implement"
+        folder.mkdir()
+        draft = dict(schema_version=2, outcomes=[], missing_inputs=["Missing contract"])
+        (folder / "decision-draft.json").write_text(json.dumps(draft))
+        workflow = SimpleNamespace(
+            run=self.run,
+            flow=dict(stage="implementer"),
+            state=dict(stages=[dict(directory=folder.name)], requirements=[], contract_version=1),
+            config={},
+        )
+        attempts = SimpleNamespace(workflow=workflow, request="Original task", format_only=False)
+        correction = dict(schema_version=2, corrections=[dict(path="/outcomes", value=[])])
+        outcome = dict(
+            status="INVALID_RESULT",
+            contract_error="Missing fields",
+            final_text=json.dumps(correction),
+        )
+        retries = Retries(attempts)
+        with patch(
+            "taskrail.application.attempt_retries.prompts.repair", return_value="repair"
+        ) as repair:
+            self.assertTrue(retries.allowed(outcome))
+            self.assertEqual(json.loads(repair.call_args.args[0]), draft)
+        self.assertTrue(retries.rebuild(dict(status="BLOCKED")))
+        self.assertIn("Missing contract", attempts.request)
+        self.assertNotIn('"corrections"', attempts.request)
 
     def test_repeated_ranges_prepare_each_source_view_once(self):
         second = self.root / "other.json"

@@ -7,8 +7,9 @@ proof.
 """
 
 REJECTION = "You must read file {0} before overwriting it. Use the Read tool first"
+EDIT_MISMATCH = "Could not find oldString in the file. It must match exactly, including whitespace, indentation, and line endings."
 NOTE_RESOLUTION = "A rejected overwrite of an orchestrator run file is not a failure: the file is a note, never evidence. Result validation and independent review still apply."
-RESOLUTION = "The rejected overwrite was followed by an actual read and successful write of the same approved file in the same session. Result validation and independent review still apply."
+RESOLUTION = "The rejected file change was followed by an actual read and successful write of the same approved file in the same session. Result validation and independent review still apply."
 WRITERS = frozenset(("write", "edit"))
 TOOLS = WRITERS | {"read"}
 PROVENANCE = ("event_line", "call_id", "part_id")
@@ -87,7 +88,7 @@ class FileWrites:
         target = failure.get(INPUT, {}).get(FILE_PATH)
         if target not in self.targets or failure.get("session_id") != session_id:
             return None
-        if not unread(failure, target):
+        if not unread(failure, target) and not edit_mismatch(failure):
             return None
         return self.proof(failure, session_id, final_line)
 
@@ -129,3 +130,11 @@ def unread(failure, target):
         and failure.get(INPUT, {}).get(FILE_PATH) == target
         and failure.get(ERROR) in {message, f"Error: {message}"}
     )
+
+
+def edit_mismatch(failure):
+    """Only the exact native no-match rejection qualifies for read/write proof."""
+    return failure.get(TOOL) == "edit" and failure.get(ERROR) in {
+        EDIT_MISMATCH,
+        f"Error: {EDIT_MISMATCH}",
+    }

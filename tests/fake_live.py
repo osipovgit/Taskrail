@@ -378,6 +378,13 @@ elif role == "implementer":
         time.sleep(5)
     if mode.startswith("write-"):
         implement(target, mode, print)
+    elif mode.startswith("writer-evidence"):
+        if not continued and not rebuilt:
+            assert "return 1" in target.read_text()
+            target.write_text(target.read_text().replace("return 1", "return 2"))
+            file_event(print, target, "edit", "completed", "File edited successfully")
+        else:
+            assert "return 2" in target.read_text()
     else:
         target.write_text(target.read_text().replace("return 1", "return 2"))
     if mode == "scope":
@@ -527,6 +534,26 @@ if bad_citation and role == "plan-reviewer":
     value["evidence"][0].update(line_start=9, line_end=9)
 if role != "planner":
     value = decision(value, role)
+if mode.startswith("writer-evidence") and role == "implementer":
+    assert not format_only, "Evidence recovery needs source reads"
+    if rebuilt:
+        saved, _ = json.JSONDecoder().raw_decode(request[request.index('{\n "saved_response"') :])
+        raw = saved["saved_response"]
+        raw = "".join(raw["text_chunks"]) if isinstance(raw, dict) else raw
+        value = json.loads(raw)
+        assert "outcomes" in value and "corrections" not in value
+        value["outcomes"][0]["evidence"] = [f"{target}:1-3"]
+    else:
+        reference = f"{target}: completed check exit_code 0"
+        if continued:
+            if mode == "writer-evidence-once":
+                reference = f"{target}:1-3"
+            value = dict(
+                schema_version=2,
+                corrections=[dict(path="/outcomes/0/evidence/0", value=reference)],
+            )
+        else:
+            value["outcomes"][0]["evidence"] = [reference]
 malformed = mode == "format-unavailable" or (mode == "repair-blocked" and not rebuilt)
 if malformed and role == "plan-reviewer" and not format_only:
     value.pop("missing_inputs")

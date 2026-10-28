@@ -107,6 +107,12 @@ optional. Models cannot override observed changes, granted scope, check records 
 aggregate status through these fields. Runtime deferrals retain the original check
 text rather than a model paraphrase.
 
+Each `evidence` string contains only a source handle or absolute path and line range;
+put explanations in `reason`, never after the range. Executor summaries need exact
+snapshot lines as well. `missing_inputs` is `[]` when nothing required is missing;
+do not put optional-source notes or statements such as "all files were present" there.
+Every nonempty entry remains a blocker; the server never guesses that prose negates it.
+
 Compact evidence references use `S1:10-12` for a delivered source handle or
 `/absolute/path:10-12` for a new observed read. The server assigns canonical evidence
 IDs and resolves handles to their path, source version and exact delivered range.
@@ -181,6 +187,8 @@ per message. Only semantic decision fields are addressable. Existing array slots
 may be replaced, or a whole array supplied; arbitrary insertion and deletion are
 not inferred. The complete merged candidate passes every normal gate again before
 it can advance the workflow. A correction has no execution or permission effects.
+Malformed references and unresolved handles identify the exact JSON pointer, allowing
+the model to replace one citation without repeating every requirement outcome.
 
 Format repair receives the saved response, the validation error, the schema and the
 server-assigned requirements under the request's `R<n>` labels. Each stage gets at most
@@ -193,8 +201,11 @@ implementer repair reports only edits already present; changed files are still
 checked against the observed source. If the repair reports BLOCKED because it
 cannot rebuild the result without tools, the stage gets one full attempt with tools
 and the original validation error. An evidence error (a wrong range, file or
-evidence ID) goes to that full attempt directly, because a repair without read tools
-cannot fix it. Research recovery receives bounded observed source
+evidence ID, malformed reference or unresolved source handle) goes to that full attempt
+directly when repair has no read tools. Recovery retains the rejected response as
+untrusted draft data; after an addressed correction it receives the merged draft,
+not just the last patch. It preserves existing edits and does not replay completed
+writes or checks. Research recovery receives bounded observed source
 material and keeps unresolved requirements explicit. `recovery.md` starts with an
 index: each recorded call with its target, window, size and the line range of its
 block in the file. The recovery prompt names the index lines and asks for windows of
@@ -230,8 +241,9 @@ constraints) and reads it when the session
 ends; the file survives an interrupted or overflowing session. After a context
 stop, a fully validated ready proposal advances to independent plan review; an
 invalid one supplies exact validation errors to the bounded recovery attempt.
-An exact native read-before-overwrite error becomes a warning only after a later
-successful native read and write of the same server-approved file in the same session,
+An exact native read-before-overwrite or edit `oldString` no-match error becomes a
+warning only after a later successful native read and write of the same server-approved
+file in the same session,
 before the final response. This applies to the planner's plan and the implementer's
 allowed files, never to read-only stages or format repair. The original rejection and
 the read/write event references remain recorded; unresolved errors still stop the stage.

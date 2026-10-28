@@ -15,9 +15,17 @@ class Citations:
         self.entries = []
         self.known = {}
 
-    def collect(self, references):
-        """Return stable IDs for the supplied source ranges, preserving order."""
-        return list(dict.fromkeys(self.reference(reference) for reference in references))
+    def collect(self, references, path):
+        """Return stable IDs and address rejected references for a narrow correction."""
+        identifiers = []
+        for index, reference in enumerate(references):
+            try:
+                identifiers.append(self.reference(reference))
+            except ValueError as error:
+                raise schema.ContractError(
+                    "EVIDENCE_REFERENCE", f"{path}/{index}", str(error)
+                ) from error
+        return list(dict.fromkeys(identifiers))
 
     def reference(self, reference):
         """A source path or server handle followed by a complete line range."""
