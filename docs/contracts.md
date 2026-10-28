@@ -78,8 +78,9 @@ reviewers accept that recorded choice.
   inputs. The server derives changed_files from the source scan and completed_steps
   from the accepted approved contract. IMPLEMENTED cannot retain unfinished work.
   Besides its allowed files it keeps `<run>/progress.md` (Done, Remaining, Verify),
-  which survives an interrupted, timed-out or overflowing session: a later session
-  reads it first and does not re-check finished work. It is a note, never evidence.
+  which survives an interrupted, timed-out or overflowing session: every turn has it
+  attached, and a later session does not re-check finished work. It is a note, never
+  evidence, so a rejected overwrite of it is only a warning.
   The implementer re-reads each edited block once, at the end, to cite it; independent
   review checks the result instead of repeated self-checks.
 - Reviewer: semantic outcomes, findings grounded in observed references, and missing
@@ -234,6 +235,9 @@ successful native read and write of the same server-approved file in the same se
 before the final response. This applies to the planner's plan and the implementer's
 allowed files, never to read-only stages or format repair. The original rejection and
 the read/write event references remain recorded; unresolved errors still stop the stage.
+opencode remembers reads per process, and each turn after an executor request is a new
+process of the session, so every turn attaches the stage's run file (`plan.md` or
+`progress.md`) and opencode reads it at the start; project files are never attached.
 This classification executes no tools and never retries a writer. Read ranges are
 evidence locations, not edit coordinates: edits must match freshly read content.
 The saved plan still passes full validation and independent review.

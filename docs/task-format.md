@@ -107,7 +107,8 @@ Continue resolves check IDs against the run's sealed recipe catalog, so removing
 a recipe from current settings cannot replace or lose an
 already approved check. A changed frozen catalog stops continuation.
 
-The planner must read `plan.md` in its current agent session before writing it.
+Every planner turn has `plan.md` attached, so the planner edits it without reading it
+again.
 Unknown plan sections, unparsed ownership text and mismatched scope delimiters are
 errors, with line numbers. Put `## Answer` last: its remaining Markdown is the answer.
 Optional `## Check selections` lines have the form `recipe-id: R2, R4`; only advertised

@@ -27,11 +27,16 @@ INPUT = "input"
 FILE_PATH = "filePath"
 
 
-def parse_events(path, start=0, plan_file=None, writable_files=()):
-    """Usage, sessions, errors and the final text of events after line `start`."""
+def parse_events(path, start=0, plan_file=None, writable_files=(), notes=()):
+    """Usage, sessions, errors and the final text of events after line `start`.
+
+    notes: the orchestrator's run files attached to the turn. The plan file among them
+    is the planner's result, not a note, so its rejected overwrite still needs a proof.
+    """
     summary = EventSummary()
     writes = write_warnings.FileWrites(
-        (*writable_files, plan_file) if plan_file else writable_files
+        (*writable_files, plan_file) if plan_file else writable_files,
+        [note for note in notes if note != plan_file],
     )
     for event_line, line in turn_io.event_lines(path, start):
         event = decoded(line)

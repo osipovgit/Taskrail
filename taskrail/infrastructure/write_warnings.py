@@ -1,6 +1,13 @@
-"""Prove that an approved file overwrite was completed after a native read."""
+"""Prove that an approved file overwrite was completed after a native read.
+
+The orchestrator's own run files are attached to every turn, so a new process of a
+continued session knows them as read. Should a native rejection still reach one of
+them, it is a warning: such a file is a note, never evidence. Project files keep the
+proof.
+"""
 
 REJECTION = "You must read file {0} before overwriting it. Use the Read tool first"
+NOTE_RESOLUTION = "A rejected overwrite of an orchestrator run file is not a failure: the file is a note, never evidence. Result validation and independent review still apply."
 RESOLUTION = "The rejected overwrite was followed by an actual read and successful write of the same approved file in the same session. Result validation and independent review still apply."
 WRITERS = frozenset(("write", "edit"))
 TOOLS = WRITERS | {"read"}
@@ -9,14 +16,17 @@ EVENT_LINE = "event_line"
 TOOL = "tool"
 INPUT = "input"
 FILE_PATH = "filePath"
+ERROR = "error"
+ERRORS = "errors"
 
 
 class FileWrites:
     """Record completed native operations only for server-approved writable files."""
 
-    def __init__(self, targets):
+    def __init__(self, targets, notes=()):
         """Without explicit writable paths, no failed write may be recovered."""
         self.targets = frozenset(targets)
+        self.notes = frozenset(map(str, notes))
         self.calls = []
         self.seen = set()
 
@@ -48,17 +58,29 @@ class FileWrites:
 
     def recover(self, outcome, final_line):
         """Retain a known rejection as a warning only with a later read/write proof."""
+        self.excuse_notes(outcome)
         sessions = outcome["sessions"]
         answered = final_line is not None and outcome["final_text"].strip()
         if not self.targets or not answered or len(sessions) != 1:
             return outcome
         for failure in outcome["tool_errors"]:
             proof = self.recovery(failure, sessions[0], final_line)
-            if proof is not None and failure["error"] in outcome["errors"]:
+            if proof is not None and failure[ERROR] in outcome[ERRORS]:
                 failure.update(recovered_by=proof, resolution=RESOLUTION)
                 outcome["warnings"].append(dict(failure))
-                outcome["errors"].remove(failure["error"])
+                outcome[ERRORS].remove(failure[ERROR])
         return outcome
+
+    def excuse_notes(self, outcome):
+        """A known rejection of an orchestrator run file never fails the turn."""
+        for failure in outcome["tool_errors"]:
+            target = failure.get(INPUT, {}).get(FILE_PATH)
+            if target not in self.notes or not unread(failure, target):
+                continue
+            if failure[ERROR] in outcome[ERRORS]:
+                failure.update(resolution=NOTE_RESOLUTION)
+                outcome["warnings"].append(dict(failure))
+                outcome[ERRORS].remove(failure[ERROR])
 
     def recovery(self, failure, session_id, final_line):
         """Only the known rejection in the completed session can use an observed proof."""
@@ -105,5 +127,5 @@ def unread(failure, target):
     return (
         failure.get(TOOL) in WRITERS
         and failure.get(INPUT, {}).get(FILE_PATH) == target
-        and failure.get("error") in {message, f"Error: {message}"}
+        and failure.get(ERROR) in {message, f"Error: {message}"}
     )

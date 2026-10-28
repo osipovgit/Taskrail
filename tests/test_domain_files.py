@@ -117,6 +117,17 @@ class YamlSyntaxTests(unittest.TestCase):
         )
 
 
+def pip_python():
+    """A Python here that runs pip, or None: the tests' own or the system python3."""
+    for python in dict.fromkeys((sys.executable, shutil.which("python3"))):
+        if python and yaml_check.completed(python, "-m", "pip", "--version").returncode == 0:
+            return python
+    return None
+
+
+PIP_PYTHON = pip_python()
+
+
 class YamlInstallTests(unittest.TestCase):
     def setUp(self):
         yaml_check.source.cache_clear()
@@ -199,8 +210,9 @@ class YamlInstallTests(unittest.TestCase):
                 command = yaml_install.installer()
         self.assertEqual(command[:4], [str(uv), "--no-config", "pip", "install"])
 
+    @unittest.skipUnless(PIP_PYTHON, "needs a Python with pip")
     def test_install_request_uses_server_storage_instead_of_a_project_directory(self):
-        command = [sys.executable, "-I", "-m", "pip", "--version"]
+        command = [PIP_PYTHON, "-I", "-m", "pip", "--version"]
         payload, shown = yaml_install.request(self.workflow, command)
         self.assertEqual(payload["cwd"], str(self.workflow.run))
         self.assertEqual(shown["argv"], command)
@@ -212,8 +224,9 @@ class YamlInstallTests(unittest.TestCase):
         self.assertEqual(entry["status"], "SUCCEEDED")
         self.assertIn("pip ", entry["outcome"]["stdout"])
 
+    @unittest.skipUnless(PIP_PYTHON, "needs a Python with pip")
     def test_pip_install_isolated_imports_ignore_project_modules(self):
-        self.available.append(sys.executable)
+        self.available.append(PIP_PYTHON)
         command = yaml_install.installer()
         self.assertIn("-I", command)
         self.assertEqual(command[-1], "PyYAML==6.0.3")

@@ -57,6 +57,21 @@ class PlanWarningTests(unittest.TestCase):
         result = self.parse(combined, None, (PLAN,))
         self.assertEqual(result["errors"], [other_error])
 
+    def test_only_an_orchestrator_note_rejection_is_a_warning_without_proof(self):
+        note = "/run/task/progress.md"
+        rejected = json.dumps(self.events()[:1] + self.events()[3:]).replace(PLAN, note)
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "events.jsonl"
+            path.write_text("\n".join(map(json.dumps, json.loads(rejected))))
+            noted = parse_events(path, writable_files=(note,), notes=(note,))
+            planned = parse_events(path, plan_file=note, notes=(note,))
+            project = parse_events(path, writable_files=(note,), notes=(PLAN,))
+        self.assertEqual(noted["errors"], [])
+        self.assertIn("never evidence", noted["warnings"][0]["resolution"])
+        rejection = REJECTION.replace(PLAN, note)
+        self.assertEqual(planned["errors"], [rejection])
+        self.assertEqual(project["errors"], [rejection])
+
     def test_later_unresolved_rejection_of_same_file_is_still_fatal(self):
         events = self.events()
         later = copy.deepcopy(events[0])
