@@ -5,6 +5,7 @@ import unittest
 from pathlib import Path
 
 from taskrail.infrastructure.event_summary import parse_events
+from taskrail.infrastructure.write_warnings import EDIT_MISMATCH
 
 PLAN = "/run/task/plan.md"
 REJECTION = f"You must read file {PLAN} before overwriting it. Use the Read tool first"
@@ -92,6 +93,31 @@ class PlanWarningTests(unittest.TestCase):
                 self.assertEqual(warning["recovered_by"]["read"]["event_line"], 2)
                 self.assertEqual(warning["recovered_by"]["call_id"], "call-2")
                 self.assertEqual(result["tool_errors"][0], warning)
+
+    def test_exact_edit_mismatch_requires_later_same_file_read_and_write(self):
+        for prefix in ("", "Error: "):
+            events = self.events()
+            events[0]["part"]["tool"] = "edit"
+            message = prefix + EDIT_MISMATCH
+            events[0]["part"]["state"]["error"] = message
+            result = self.parse(events, None, (PLAN,))
+            self.assertEqual(result["errors"], [])
+            self.assertEqual(result["warnings"][0]["error"], message)
+            self.assertEqual(result["warnings"][0]["recovered_by"]["read"]["event_line"], 2)
+            for selected in ([0, 3, 4], [0, 1, 3, 4], [0, 2, 3, 4], [1, 0, 2, 3, 4]):
+                with self.subTest(prefix=prefix, selected=selected):
+                    incomplete = [events[index] for index in selected]
+                    self.assertEqual(self.parse(incomplete, None, (PLAN,))["errors"], [message])
+            self.assertEqual(self.parse(events, None, ())["errors"], [message])
+            for index in (1, 2):
+                foreign = copy.deepcopy(events)
+                foreign[index]["sessionID"] = "other"
+                self.assertEqual(self.parse(foreign, None, (PLAN,))["errors"], [message])
+            unknown = copy.deepcopy(events)
+            unknown[0]["part"]["state"]["error"] += " Additional unknown failure"
+            self.assertTrue(self.parse(unknown, None, (PLAN,))["errors"])
+            events[0]["part"]["tool"] = "write"
+            self.assertEqual(self.parse(events, None, (PLAN,))["errors"], [message])
 
     def test_missing_or_different_approved_plan_path_never_recovers_writes(self):
         for target in (None, "/run/other/plan.md", "/run/task/source.py"):

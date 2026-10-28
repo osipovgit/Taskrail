@@ -7,8 +7,15 @@ import time
 def implement(target, mode, emit):
     """A rejected write changes nothing; recovery reads and matches the current text."""
     error = f"You must read file {target} before overwriting it. Use the Read tool first"
-    event(emit, target, "write", "error", error)
-    if mode == "write-unresolved":
+    tool = "write"
+    if mode.startswith("write-mismatch"):
+        tool = "edit"
+        error = (
+            "Error: Could not find oldString in the file. It must match exactly, "
+            "including whitespace, indentation, and line endings."
+        )
+    event(emit, target, tool, "error", error)
+    if mode in {"write-unresolved", "write-mismatch-unresolved"}:
         return
     current = target.read_text()
     numbered = "\n".join(f"{number}:{line}" for number, line in enumerate(current.splitlines(), 1))
@@ -33,5 +40,6 @@ def event(emit, target, tool, status, output):
     """One completed or failed native operation with a stable session-local identity."""
     state = dict(status=status, input=dict(filePath=str(target)))
     state["error" if status == "error" else "output"] = output
-    part = dict(id="source-" + tool, callID="source-" + tool, tool=tool, state=state)
+    identity = "source-" + tool + "-" + status
+    part = dict(id=identity, callID=identity, tool=tool, state=state)
     emit(json.dumps(dict(type="tool_use", part=part)))

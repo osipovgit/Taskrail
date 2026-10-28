@@ -1,6 +1,6 @@
 """Bounded retry policy of one stage: format repair, access and transport recovery."""
 
-from taskrail.application import access_recovery, evidence, plan_recovery, prompts
+from taskrail.application import access_recovery, decision_adapter, evidence, plan_recovery, prompts
 from taskrail.core import prompt_texts
 from taskrail.infrastructure import context_overflow
 from taskrail.observability.progress import say
@@ -15,6 +15,9 @@ LARGE_OUTPUT = 10000
 NAMED_OUTPUTS = 5
 # Errors only a pass that can read sources again can fix.
 EVIDENCE_ERRORS = (
+    "EVIDENCE_REFERENCE",
+    "Invalid evidence reference",
+    "Invalid evidence line range",
     "matching observed read",
     "range outside source",
     "reversed line range",
@@ -70,13 +73,20 @@ class Retries:
             return False
         self.counts[FORMAT_KEY] += 1
         state = self.attempts.workflow.state
-        self.repair = dict(request=self.attempts.request, error=outcome[CONTRACT_ERROR])
+        self.repair = dict(
+            request=self.attempts.request,
+            error=outcome[CONTRACT_ERROR],
+            response=decision_adapter.repair_response(
+                outcome["final_text"],
+                self.attempts.workflow.run / state["stages"][-1]["directory"],
+            ),
+        )
         config = self.attempts.workflow.config
         if self.stage == "planner" or needs_sources(outcome[CONTRACT_ERROR], config):
             return full_attempt(self)
         self.attempts.format_only = True
         self.attempts.request = prompts.repair(
-            outcome["final_text"],
+            self.repair["response"],
             outcome[CONTRACT_ERROR],
             self.stage,
             state.get("contract_version"),
@@ -146,7 +156,8 @@ def full_attempt(retries):
     retries.counts[REBUILD_KEY] += 1
     attempts.format_only = False
     rebuild = note(prompt_texts.text("recovery.rebuild", error=retries.repair["error"]))
-    attempts.request = "{}{}".format(retries.repair["request"], rebuild)
+    response = prompts.saved_response_prompt(retries.repair["response"])
+    attempts.request = "{}{}{}\n".format(retries.repair["request"], rebuild, response)
     attempts.recovery = evidence.load_index(attempts.workflow.run)
     return True
 

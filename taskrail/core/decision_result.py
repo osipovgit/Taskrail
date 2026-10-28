@@ -28,12 +28,12 @@ class Decisions:
         self.claims = Citations(resolve)
         requirements = context["requirements"]
         self.rows = [
-            decision_fields.outcome(entry, requirements, self.claims)
-            for entry in payload["outcomes"]
+            decision_fields.outcome(entry, requirements, self.claims, index)
+            for index, entry in enumerate(payload["outcomes"])
         ]
         self.defects = [
-            decision_fields.finding(entry, requirements, self.claims)
-            for entry in payload.get("findings", [])
+            decision_fields.finding(entry, requirements, self.claims, index)
+            for index, entry in enumerate(payload.get("findings", []))
         ]
 
     def normalized(self):

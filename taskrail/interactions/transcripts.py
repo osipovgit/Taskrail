@@ -3,6 +3,7 @@
 import json
 
 from taskrail.application import evidence
+from taskrail.core import prompt_texts
 from taskrail.core.files import atomic_json
 from taskrail.interactions import output_digest, output_preview
 
@@ -41,7 +42,7 @@ def delivered(run, folder, path, text, outputs=None):
         )
     if outputs:
         notice = f"{notice}\n{output_digest.summary(outputs)}"
-    return f"Evidence snapshot (cite this path, never tool-result.md): {path}\n{notice}\n{visible}"
+    return "{}\n{}\n{}".format(prompt_texts.text("output.snapshot", path=path), notice, visible)
 
 
 def local_snapshot(run, folder, request, outcome):
