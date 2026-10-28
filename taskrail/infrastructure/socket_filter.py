@@ -1,14 +1,20 @@
-"""A seccomp program that cuts a sandboxed command off the network.
+"""How a sandboxed command is cut off the network.
 
-It serves hosts that forbid configuring a private network namespace. Every socket but
-Unix and netlink ones is refused with EACCES. Calls of another architecture, x32
-calls and io_uring, which could bypass the socket check, are refused or killed.
+A private network namespace where the host allows one, else a seccomp program for
+hosts that forbid configuring it: every socket but Unix and netlink ones is refused
+with EACCES. Calls of another architecture, x32 calls and io_uring, which could
+bypass the socket check, are refused or killed.
 """
 
+import contextlib
 import errno
 import platform
 import struct
+import tempfile
 from types import MappingProxyType
+
+NAMESPACE = "network namespace"
+FILTER = "socket filter"
 
 # struct sock_filter instructions and seccomp return values from the Linux UAPI.
 LOAD = 0x20
@@ -52,3 +58,17 @@ def program():
         (RETURN, 0, 0, REFUSE),
     )
     return b"".join(struct.pack("=HBBI", *instruction) for instruction in instructions)
+
+
+@contextlib.contextmanager
+def isolation(kind):
+    """bubblewrap options of this kind; the seccomp program is read from an inherited file."""
+    if kind == NAMESPACE:
+        yield dict(args=["--unshare-net"], pass_fds=())
+        return
+    with tempfile.TemporaryFile() as compiled:
+        compiled.write(program())
+        compiled.flush()
+        compiled.seek(0)
+        descriptor = compiled.fileno()
+        yield dict(args=["--seccomp", str(descriptor)], pass_fds=(descriptor,))

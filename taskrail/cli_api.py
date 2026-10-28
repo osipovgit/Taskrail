@@ -64,7 +64,9 @@ def submit_parser():
         parser.add_argument(option, help="Text, or @FILE to read it from a file")
     parser.add_argument("--mode", choices=tuple(cli_requests.MODES), default="develop")
     parser.add_argument("--allow-all", action="store_true", help="Allow all actions of the run")
-    parser.add_argument("--worktree", action="store_true", help="Work in new Git worktrees")
+    parser.add_argument(
+        "--in-place", action="store_true", help="Edit the roots instead of new Git worktrees"
+    )
     parser.add_argument("--followup", metavar="RUN", help="Continue the conversation of RUN")
     parser.add_argument("--restart", metavar="RUN", help="Start RUN again from scratch")
     return parser

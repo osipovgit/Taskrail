@@ -7,15 +7,13 @@ changes beyond them is adopted with its preimage from the branch's last commit, 
 the task started. Protected and unsafe files are never adopted.
 """
 
-from pathlib import Path
-
 from taskrail.application.planned_paths import safe_file
+from taskrail.application.worktree_default import BRANCH_PREFIX, top_level
 from taskrail.core import protected_paths
 from taskrail.core.files import changed
 from taskrail.git import process
 from taskrail.infrastructure.agent_sync import atomic_write
 
-PREFIX = "taskrail/"
 KEY = "task_branch"
 BEYOND = "beyond_plan"
 PREIMAGES = "preimages"
@@ -28,12 +26,10 @@ def detect(roots):
 
 def on_branch(root):
     """A Git top level whose checked-out branch Taskrail created."""
-    top = process.invoke(root, ["rev-parse", "--show-toplevel"])
-    toplevel = Path(top.stdout.strip()).resolve()
-    if top.returncode or toplevel != Path(root).resolve():
+    if not top_level(root):
         return False
     branch = process.invoke(root, ["symbolic-ref", "--quiet", "--short", "HEAD"])
-    return branch.returncode == 0 and branch.stdout.strip().startswith(PREFIX)
+    return branch.returncode == 0 and branch.stdout.strip().startswith(BRANCH_PREFIX)
 
 
 def extend(workflow):

@@ -1,4 +1,4 @@
-"""Recognize interpreter options without granting ambiguous inline code automatically."""
+"""Recognize inline code and ambiguous interpreter options, so their card names them."""
 
 import re
 from pathlib import Path
@@ -24,12 +24,12 @@ SHELL_LONG = frozenset(
 PYTHON_LONG = frozenset(("--help", "--help-env", "--help-xoptions", "--help-all", "--version"))
 SHELL_FLAGS = frozenset("abefhiklmnprstuvxBCEHPTD")
 PYTHON_FLAGS = frozenset("bBdEiIOPqRsSuvVx")
-PERSONAL = "personal"
+INLINE = "inline"
 NEEDS_VALUE = "value"
 FLAG = "flag"
 
 
-def personal(argv):
+def detected(argv):
     """Inline or ambiguous interpreter syntax, including wrapper split strings."""
     split = any(split_string(word) for word in argv)
     if split and any(Path(word).name == "env" for word in argv):
@@ -64,7 +64,7 @@ def options(arguments, python):
         if terminal(argument, python):
             return False
         kind = option_kind(argument, python)
-        if kind == PERSONAL:
+        if kind == INLINE:
             return True
         if kind == NEEDS_VALUE and next(remaining, None) is None:
             return True
@@ -93,11 +93,11 @@ def short_option(argument, python):
     """Classify compact switches; an unknown long option is never guessed."""
     flags = argument[1:]
     if argument.startswith("--"):
-        return PERSONAL
+        return INLINE
     if "c" in flags:
-        return PERSONAL
+        return INLINE
     allowed = PYTHON_FLAGS if python else SHELL_FLAGS
     valued = not python and flags.endswith(("o", "O"))
     if valued and set(flags[:-1]) <= allowed:
         return NEEDS_VALUE
-    return FLAG if set(flags) <= allowed else PERSONAL
+    return FLAG if set(flags) <= allowed else INLINE

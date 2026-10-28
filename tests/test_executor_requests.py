@@ -112,6 +112,7 @@ class LiveRequestTests(LiveFixture, unittest.TestCase):
         self.real_repository()
         (self.root / ".gitignore").write_text(".cache-tool/\n")
         header = {"roots": {"project": str(self.root)}, "auto_approve": True}
+        header["isolation"] = "in_place"
         self.task.write_text(f"```taskrail-task\n{json.dumps(header)}\n```\nReturn 2")
         self.configure_mode("local-effects")
         allow = dict(decision="allow", alternative="")
@@ -119,10 +120,8 @@ class LiveRequestTests(LiveFixture, unittest.TestCase):
             run, status = execute_task(self.task, self.settings, run_dir=self.base / "result")
         state = json.loads((run / "run.json").read_text())
         self.assertEqual(status, "READY_FOR_REVIEW", state.get("summary"))
-        # Allow all actions covers everything else, but the agent's python -c still asked.
-        asked = wait.call_args.args[1]
-        self.assertEqual((wait.call_count, asked["argv"][1]), (1, "-c"))
-        self.assertIn("Allow all actions never approves it", asked["notice"])
+        # Allow all actions covers the agent's inline python -c as well.
+        wait.assert_not_called()
         journal = json.loads((run / "local-actions.json").read_text())
         self.assertEqual(journal[0]["effects"], ["project/notes.txt"])
         self.assertEqual(state["command_effects"][0]["files"], ["project/notes.txt"])

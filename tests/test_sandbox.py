@@ -43,12 +43,13 @@ def request(**fields):
 
 class SandboxSetupTests(unittest.TestCase):
     def setUp(self):
-        for cached in (sandbox.mode, sandbox.overlays):
+        for cached in (sandbox.mode, sandbox.attempts, sandbox.overlays):
             cached.cache_clear()
             self.addCleanup(cached.cache_clear)
 
     def test_probing_prefers_a_network_namespace_then_a_socket_filter(self):
-        outcomes = [SimpleNamespace(returncode=1), SimpleNamespace(returncode=0)]
+        refused = SimpleNamespace(returncode=1, stderr="bwrap: loopback: Failed RTM_NEWADDR\n")
+        outcomes = [refused, SimpleNamespace(returncode=0, stderr="")]
         with (
             patch.object(sandbox, "executable", return_value="/usr/bin/bwrap"),
             patch.object(sandbox.subprocess, "run", side_effect=outcomes) as probed,
@@ -57,17 +58,25 @@ class SandboxSetupTests(unittest.TestCase):
         first, second = (call.args[0] for call in probed.call_args_list)
         self.assertIn("--unshare-net", first)
         self.assertIn("--seccomp", second)
+        self.assertEqual(sandbox.attempts()[0][1], "bwrap: loopback: Failed RTM_NEWADDR")
 
     def test_without_bubblewrap_or_a_working_probe_nothing_is_sandboxed(self):
         with patch.object(sandbox, "executable", return_value=None):
             self.assertIsNone(sandbox.mode())
-        sandbox.mode.cache_clear()
-        failed = SimpleNamespace(returncode=1)
+        self.assertIn("bwrap not found", sandbox.health()[1])
+        for cached in (sandbox.mode, sandbox.attempts):
+            cached.cache_clear()
+        failed = SimpleNamespace(
+            returncode=1, stderr="bwrap: setting up uid map: Permission denied"
+        )
         with (
             patch.object(sandbox, "executable", return_value="/usr/bin/bwrap"),
             patch.object(sandbox.subprocess, "run", return_value=failed),
         ):
             self.assertIsNone(sandbox.mode())
+            line = sandbox.health()[1]
+        self.assertIn("waits for approval", line)
+        self.assertIn("socket filter: bwrap: setting up uid map: Permission denied", line)
 
     def test_the_check_names_how_local_commands_run(self):
         with patch.object(sandbox, "mode", return_value=sandbox.SOCKET_FILTER):
@@ -197,6 +206,8 @@ class SandboxRouteTests(unittest.TestCase):
 class SandboxedRunTests(LiveFixture, unittest.TestCase):
     def test_a_planner_command_runs_without_a_decision_and_leaves_no_trace(self):
         self.real_repository()
+        header = {"roots": {"project": str(self.root)}, "isolation": "in_place"}
+        self.task.write_text(f"```taskrail-task\n{json.dumps(header)}\n```\nReturn 2")
         self.configure_mode("local-effects")
         with patch("taskrail.interactions.approvals.wait") as asked:
             run, status = execute_task(self.task, self.settings, run_dir=self.base / "result")

@@ -91,7 +91,7 @@ class InteractionTests(unittest.TestCase):
         self.assertEqual(ledger[0]["request"]["request"]["argv"], ["echo", "2"])
         self.assertIsNone(approvals.load(self.run))
 
-    def test_inline_shell_or_python_code_always_needs_a_personal_decision(self):
+    def test_inline_shell_or_python_code_is_named_on_its_card(self):
         inline = (
             ["bash", "-c", "id"],
             ["sh", "-ec", "id"],
@@ -141,10 +141,9 @@ class InteractionTests(unittest.TestCase):
                     local_result=lambda payload, answer: answer,
                 )
                 local_route.local_action(actions, self.request(argv))
-                personal = approve.call_args.kwargs["personal"]
-                self.assertEqual(personal, argv in inline)
+                self.assertNotIn("personal", approve.call_args.kwargs)
                 notice = approve.call_args.args[0].get("notice", "")
-                self.assertEqual("Allow all actions never" in notice, argv in inline)
+                self.assertEqual("review the whole script" in notice, argv in inline)
         state = dict(auto_approve=True)
         card = dict(decision="allow", alternative="")
         with patch("taskrail.interactions.approvals.wait", return_value=card) as wait:

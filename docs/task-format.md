@@ -80,7 +80,7 @@ the agents' input.
 | `task_scope` | Required for server-generated `task` phases: exact reviewed file paths; child planning cannot widen them or create another split |
 | `design` | `true` for a design discussion (the browser's **Design discussion**); implies `read_only` |
 | `auto_approve` | `true` approves local commands, read access and the change limit of this run without asking (the browser's **Allow all actions**); SSH keeps its root-only approval |
-| `isolation` | `in_place` (default) edits the roots; `worktree` edits new linked Git worktrees and commits each approved task there (the browser's **Isolated Git worktree**, on by default), see below |
+| `isolation` | `auto` (default) isolates a code change whose roots are all Git repository top levels with a commit; `worktree` always edits new linked Git worktrees and commits each approved task there; `in_place` edits the roots (the browser's cleared **Isolated Git worktree**, `taskrail submit --in-place`), see below |
 | `task_spec` | Generated typed input: version 1, literal named fields, a display integrity reference and optional child context/requirement lineage; do not edit only its Markdown display |
 | `assigned_contract` | Generated child reference (`parent_run`, `task_id`); the workflow authenticates it against the sealed reviewed parent before skipping child planning |
 | `check_specs` | Selected server recipe IDs and runtime criterion IDs; commands and approval policy remain server-owned |
@@ -119,14 +119,18 @@ this correction.
 
 ## Worktree isolation
 
-With `"isolation": "worktree"` every root must be the top level of a Git repository.
-Before planning, the run creates one linked worktree per root from its current
+A code change runs in worktrees by default: with `"isolation": "auto"` (or no
+`isolation`) when every root is the top level of a Git repository with a commit and
+not already on a `taskrail/` branch, as a task or follow-up of an isolated run is.
+Answers, designs, delivery checks and other roots work in place. With
+`"isolation": "worktree"` every root must be such a top level, otherwise the run
+stops. Before planning, the run creates one linked worktree per root from its current
 `HEAD` on a new branch `taskrail/<run>`, under `worktree_base` (default: a
 `worktrees` folder beside the run store). Uncommitted changes in the source checkout
 are not included. The whole run, including Continue, works in the worktrees; the
 source checkout and its other branches may change meanwhile without stopping the
-run. The browser form starts new tasks this way unless you clear **Isolated Git
-worktree**.
+run. Clear **Isolated Git worktree** in the browser form, or pass
+`taskrail submit --in-place`, to edit the roots themselves.
 
 These `taskrail/` branches hold only the run's own work, so a task there is a unit of
 change rather than a list of files:

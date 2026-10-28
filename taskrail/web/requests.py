@@ -15,11 +15,12 @@ READ_ONLY = "read_only"
 WORKTREE = "worktree"
 AUTO_APPROVE = "auto_approve"
 DECOMPOSE = "decompose"
-FLAGS = (READ_ONLY, WORKTREE, DESIGN, AUTO_APPROVE, DECOMPOSE)
+FLAGS = (READ_ONLY, DESIGN, AUTO_APPROVE, DECOMPOSE)
+# Without the worktree choice a run stays in place; with it, isolation is the default.
+IN_PLACE = '"isolation": "in_place"'
 HEADER_OPTIONS = MappingProxyType(
     {
         READ_ONLY: '"read_only": true',
-        WORKTREE: '"isolation": "worktree"',
         DESIGN: '"design": true',
         AUTO_APPROVE: '"auto_approve": true',
         DECOMPOSE: '"decompose": true',
@@ -68,7 +69,8 @@ class Submission:
         if not isinstance(payload, dict):
             raise ValueError("The request must be a JSON object")
         self.fields = dict(payload)
-        self.flags = {flag: self.fields.pop(flag, False) for flag in FLAGS}
+        flags = (*FLAGS, WORKTREE)
+        self.flags = {flag: self.fields.pop(flag, False) for flag in flags}
         self.parent = self.fields.pop("parent_run", None)
         self.mode = self.fields.pop("submission_mode", "new")
         context = split_context(self.fields.pop("split_context", ""))
@@ -142,6 +144,8 @@ class Submission:
         The mode's instructions come from the header flags at prompt time (mode_rules).
         """
         options = [HEADER_OPTIONS[flag] for flag in FLAGS if self.flags[flag]]
+        if not self.flags[WORKTREE]:
+            options.append(IN_PLACE)
         if self.flags[DESIGN] and not self.flags[READ_ONLY]:
             options.append(HEADER_OPTIONS[READ_ONLY])
         for name in (PHASE, CHANGE, check_parents.PARENT):

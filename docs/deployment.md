@@ -214,7 +214,7 @@ request for the host with `"sandbox": false`.
 ## Worktree isolation
 
 `worktree_base` (absolute; default `worktrees` beside `run_base`) holds the linked
-worktrees of runs with `"isolation": "worktree"`; it must lie outside every declared
+worktrees of isolated runs, the default for code changes; it must lie outside every declared
 root. Worktrees are created with hooks and repository filters disabled and are never
 removed automatically. See [task format](task-format.md#worktree-isolation).
 

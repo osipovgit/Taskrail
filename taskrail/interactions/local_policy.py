@@ -43,5 +43,5 @@ def in_place(option):
 
 
 def inline_script(argv):
-    """Inline code or ambiguous interpreter options always need a personal decision."""
-    return inline_code.personal(argv)
+    """Inline code or ambiguous interpreter options, which the operator should read whole."""
+    return inline_code.detected(argv)

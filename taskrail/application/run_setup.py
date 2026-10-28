@@ -76,7 +76,7 @@ def open_state(config, run, request, ready):
         if state.get(WORKTREES):
             adopt(config, state[WORKTREES])
         return state
-    if ready and config["isolation"]:
+    if ready:
         isolate(config, run.name)
     return new_state(run, config, request)
 
