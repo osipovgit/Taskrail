@@ -13,6 +13,8 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
+from sandbox_fixture import without_sandbox
+
 from taskrail.core import protected_paths
 from taskrail.git import deadline, process
 from taskrail.interactions import (
@@ -31,6 +33,7 @@ from taskrail.interactions.session import StageSession
 
 class InteractionTests(unittest.TestCase):
     def setUp(self):
+        without_sandbox(self)
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
         self.run = Path(self.tmp.name) / "run"

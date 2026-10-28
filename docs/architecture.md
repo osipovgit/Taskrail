@@ -14,7 +14,7 @@ UI updates read the ordered stage index and public event stream.
 | `interactions/` | Same-session executor turns: one request parser (`request_envelope.py`), routing (`request_routes.py`, `local_route.py`), exact-command approvals, adopted command effects, active clock |
 | `git/` | Controlled Git grammar, scope checks, isolated process execution and output snapshots |
 | `core/` | Result contract, schema validation, the prompt text catalog (`prompt-texts.json`), requirement labels, file/path utilities and stop/read-only guards |
-| `infrastructure/` | opencode launch (1.x direct, 2.x through an adapter), process watch, JSONL event summary, permission profiles |
+| `infrastructure/` | opencode launch (1.x direct, 2.x through an adapter), process watch, JSONL event summary, permission profiles, the bubblewrap sandbox of local commands (`sandbox.py`) |
 | `observability/` | Public progress, usage and compaction telemetry |
 | `executor/` | Separate system service: peer-authenticated socket, immutable tickets, root-only approval, SSH transport, Jenkins client |
 | `web/server.py`, `http_handler.py`, `http_policy.py` | Loopback HTTP API, request checks and static resources |

@@ -137,9 +137,10 @@ Models and timeouts belong in server-side settings. The workflow edits original
 sources, preserves existing work, allows controlled Git operations and never rolls
 back automatically. It runs built-in syntax checks, the operator's
 [verification commands](deployment.md#verification-commands) and static review.
-Other project tests, containers, deployments and CI run only when an agent requests
-them through `LOCAL_REQUEST` or an SSH action and you approve; otherwise they remain
-deferred. A
+Agents run project tests and linters through `LOCAL_REQUEST`, without a decision in
+the [local command sandbox](access.md#local-commands) where the host has one.
+Commands outside it, containers, deployments and CI run only after your approval,
+SSH and Jenkins through the executor; otherwise they remain deferred. A
 no-change result requires independent plan review and sufficient evidence.
 
 An answer-only task rejects any implementation plan and never reaches the

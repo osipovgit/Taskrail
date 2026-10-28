@@ -68,6 +68,9 @@ fi
 printf 'Autostart: '
 systemctl --user is-enabled "$service" || true
 printf 'Installed Taskrail %s\nUI: http://127.0.0.1:8787 (default port)\nSettings: %s/settings.json\nHistory: %s/runs\n' "$version" "$config_dir" "$state_dir"
+if ! PATH=/usr/bin:/bin command -v bwrap >/dev/null; then
+    echo 'Install bubblewrap (for example: sudo apt install bubblewrap) so agents run local commands in a sandbox without approval; until then each one waits for you.'
+fi
 
 if [[ "${executor_reset:-no}" == yes ]]; then
     sudo bash "$source_dir/deploy/install-executor.sh" --client="$(id -un)" --autostart=disable

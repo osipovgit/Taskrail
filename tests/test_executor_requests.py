@@ -8,6 +8,7 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 from live_fixture import LiveFixture
+from sandbox_fixture import without_sandbox
 
 from taskrail.application.live import execute_task
 from taskrail.core import prompt_texts
@@ -107,6 +108,7 @@ class LiveRequestTests(LiveFixture, unittest.TestCase):
         self.assertIn("Invalid Git request fields", feedback)
 
     def test_command_effects_are_adopted_journaled_and_reported(self):
+        without_sandbox(self)
         self.real_repository()
         (self.root / ".gitignore").write_text(".cache-tool/\n")
         header = {"roots": {"project": str(self.root)}, "auto_approve": True}

@@ -1,7 +1,8 @@
 # Deployment and operations
 
 Run as your normal Linux user with working opencode credentials. Requirements: user
-systemd, Python 3.10+ with venv, bash, tar and flock. No runtime pip/npm download is
+systemd, Python 3.10+ with venv, bash, tar and flock; bubblewrap is recommended (see
+[local command sandbox](#local-command-sandbox)). No runtime pip/npm download is
 required. The UI binds to `127.0.0.1:8787`; it is not a public multi-user service.
 
 ## Install and update
@@ -187,6 +188,17 @@ Format repair runs with every tool denied by default. opencode's free Zen models
 reject such tool-less requests (`FreeTierError`); for them set `format_repair_tools`
 to `read`, which keeps read-only tools in format passes (edits stay denied) and
 instructs the model to re-read only evidence it already cites.
+
+## Local command sandbox
+
+With bubblewrap (`bwrap` on `/bin` or `/usr/bin`; on Debian and Ubuntu
+`sudo apt install bubblewrap`), agents' local commands and configured checks run at
+once in a sandbox without network, host writes or hidden home files
+([access](access.md#local-commands)). The installer reports when it is missing.
+`taskrail check` names the network isolation in use: a private network namespace, or
+a seccomp socket filter on hosts that forbid configuring one (x86-64 and ARM64).
+Without a working bubblewrap every local command waits for approval, as does a
+request for the host with `"sandbox": false`.
 
 ## Worktree isolation
 

@@ -8,6 +8,8 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
+from sandbox_fixture import without_sandbox
+
 from taskrail.application import (
     check_batches,
     check_configuration,
@@ -31,6 +33,7 @@ from taskrail.web import delivery_checks, delivery_payload, integration_review, 
 
 class CheckRecipesTest(unittest.TestCase):
     def setUp(self):
+        without_sandbox(self)
         self.directory = tempfile.TemporaryDirectory()
         self.addCleanup(self.directory.cleanup)
         self.base = Path(self.directory.name)
