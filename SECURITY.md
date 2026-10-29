@@ -11,12 +11,12 @@ issue, pull request or discussion for a suspected vulnerability. Include the
 affected version or commit, the configuration involved, reproduction steps and the
 impact you observed. Redact secrets, tokens and private source from logs.
 
-You will get an acknowledgement within seven days. Confirmed issues are fixed on
-the main branch and disclosed in the release notes once a fixed release exists.
+The maintainer reviews reports privately. Confirmed issues are fixed on
+`master` and disclosed once a fixed release is available.
 
 ## Supported versions
 
-Only the latest release and the main branch receive security fixes.
+Only the latest release and `master` receive security fixes.
 
 ## Scope and trust model
 

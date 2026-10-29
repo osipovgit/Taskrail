@@ -26,6 +26,11 @@ cover.
 
 ## Pull requests
 
+- Create a feature branch and open a pull request for every change, including
+  documentation and dependency updates. Never commit or push directly to `master`.
+- Merge only when all required pipelines pass for the latest revision and the
+  repository owner has personally reviewed and accepted the change. Agents must
+  not merge, enable auto-merge or bypass repository rules.
 - Keep each pull request focused on one change and explain why it is needed.
 - `make check` must pass with zero new Ruff, Wemake, ESLint, Stylelint or formatting
   findings. Do not disable rules or add suppressions to hide findings.
