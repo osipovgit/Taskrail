@@ -4,35 +4,32 @@ import json
 
 from taskrail.core import prompt_texts, protected_paths
 from taskrail.infrastructure import profile_rules
-from taskrail.infrastructure.agent_sync import REPAIR_DENIED, atomic_write
+from taskrail.infrastructure.agent_sync import atomic_write
 
 FRONTMATTER = "---\n"
 
 
-def make_profile(source, destination, name, access, format_only=False):
+def make_profile(source, destination, name, access):
     """Write the profile; access holds roots, readable and writable paths and the worktree.
 
     Returns the profile path and the rules opencode must report for it.
     """
-    permissions = closed_permissions(access, format_only)
-    instructions = prompt_texts.text("profile.converter") if format_only else body(source)
+    permissions = closed_permissions(access)
+    instructions = body(source)
     target = destination / f"{name}.md"
     atomic_write(target, profile_text(name, permissions, instructions).encode())
     return target, expected_rules(permissions)
 
 
-def closed_permissions(access, format_only):
+def closed_permissions(access):
     """Glob and grep use patterns, not paths; external directory rights bound their roots."""
-    permissions = profile_rules.permissions(
+    return profile_rules.permissions(
         access["roots"],
         access["readable"],
         access["writable"],
         access.get("worktree"),
         access.get("protected", protected_paths.DEFAULT_PATTERNS),
     )
-    if format_only:
-        permissions.update(dict.fromkeys(REPAIR_DENIED[format_only], "deny"))
-    return permissions
 
 
 def profile_text(name, permissions, instructions):

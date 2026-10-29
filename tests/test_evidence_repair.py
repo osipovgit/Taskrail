@@ -82,7 +82,7 @@ class EvidenceRepairTests(unittest.TestCase):
         workflow = SimpleNamespace(flow=dict(stage="planner"), state=dict(stages=[]), config={})
         retries = Retries(SimpleNamespace(workflow=workflow))
         outcome = dict(status="INVALID_RESULT", contract_error="Missing evidence")
-        with patch.object(retries, "format_repair", return_value=True) as repair:
+        with patch.object(retries, "result_repair", return_value=True) as repair:
             self.assertTrue(retries.allowed(outcome))
             repair.assert_called_once()
             outcome["validation_errors"] = ["Missing evidence"]
@@ -102,13 +102,10 @@ class EvidenceRepairTests(unittest.TestCase):
                     state=dict(stages=[dict(directory="01-review")], requirements=[]),
                     config={},
                 )
-                attempts = SimpleNamespace(
-                    workflow=workflow, request="Original task", format_only=False
-                )
+                attempts = SimpleNamespace(workflow=workflow, request="Original task")
                 retries = Retries(attempts)
                 outcome = dict(status="INVALID_RESULT", contract_error=error, final_text="DONE")
                 self.assertEqual(retries.allowed(outcome), repaired)
-                self.assertFalse(attempts.format_only)
                 self.assertEqual(error in attempts.request, repaired)
                 self.assertFalse(retries.allowed(outcome))
 

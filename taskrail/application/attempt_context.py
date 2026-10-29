@@ -37,22 +37,19 @@ def save_request(folder, record, request, workflow):
     """Store exactly what is sent to the model with its reproducible fingerprint."""
     state = workflow.state
     (folder / "tool-result.md").touch(exist_ok=True)
-    if record["mode"] != "format-repair":
-        access = folder / "access.json"
-        rights = (state["roots"], record.get("writable_files", []))
-        protected = protected_paths.patterns(workflow.config)
-        atomic_json(access, manifest(folder.parent, folder, *rights, protected))
-        request = request.replace(
-            "# Orchestrator instructions\n",
-            "# Orchestrator instructions\n{}\n".format(
-                prompt_texts.text("request.manifest", path=access)
-            ),
-            1,
-        )
-    (folder / "request.md").write_text(request, encoding="utf-8")
-    record["instruction_modules"] = (
-        [] if record["mode"] == "format-repair" else state.get("instruction_modules", [])
+    access = folder / "access.json"
+    rights = (state["roots"], record.get("writable_files", []))
+    protected = protected_paths.patterns(workflow.config)
+    atomic_json(access, manifest(folder.parent, folder, *rights, protected))
+    request = request.replace(
+        "# Orchestrator instructions\n",
+        "# Orchestrator instructions\n{}\n".format(
+            prompt_texts.text("request.manifest", path=access)
+        ),
+        1,
     )
+    (folder / "request.md").write_text(request, encoding="utf-8")
+    record["instruction_modules"] = state.get("instruction_modules", [])
     record["instruction_sha256"] = hashlib.sha256(request.encode()).hexdigest()
     atomic_json(folder / "stage.json", record)
     save_run(folder.parent, state)

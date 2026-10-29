@@ -1,4 +1,4 @@
-"""Response envelopes, role contracts, format repair requests and installer prompts."""
+"""Response envelopes, role contracts and installer prompts."""
 
 import json
 import os
@@ -7,7 +7,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from taskrail.application import decision_adapter, instruction_sources, prompts
+from taskrail.application import instruction_sources
 from taskrail.core import json_response, schema
 
 BASE = Path(__file__).resolve().parents[1]
@@ -49,8 +49,6 @@ class ResponseContractTests(unittest.TestCase):
         ):
             with self.subTest(response=response), self.assertRaises(ValueError):
                 decoded(response)
-        with self.assertRaisesRegex(ValueError, "Empty final response"):
-            decision_adapter.stage_decision(" \n", {})
 
     def test_roles_fail_before_model_launch_and_bundled_roles_pass(self):
         for role in instruction_sources.ROLES:
@@ -61,33 +59,6 @@ class ResponseContractTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "Outdated role instructions.*planner.md"):
                 instruction_sources.validate_role_source(path)
 
-    def test_repair_names_requirements_by_label_without_research_permissions(self):
-        requirements = [
-            dict(id="R-0a1b2c3d4e5f", parent_id="R-ffffffffffff", kind="task", text="Fix it")
-        ]
-        schemas = dict(implementer="implementer-decision", reviewer="decision")
-        schemas["plan-reviewer"] = "decision"
-        for stage, name in schemas.items():
-            request = prompts.repair("{}", "No outcome for R-0a1b2c3d4e5f", stage, 1, requirements)
-            self.assertIn('"R1": {', request)
-            self.assertIn("No outcome for R1", request)
-            self.assertNotIn("R-", request)
-            self.assertIn("Do not research", request)
-            self.assertNotIn("source research", request)
-            contract = request.split("\nSchema:\n", 1)[1].split("\nAssigned requirements:", 1)[0]
-            decoded = json.loads(contract)
-            self.assertEqual(decoded, schema.SCHEMAS[name])
-            self.assertEqual(decoded["properties"]["schema_version"]["enum"], [2])
-        self.assertIn(
-            "cannot edit files", prompts.repair("{}", "x", "implementer", 1, requirements)
-        )
-        self.assertIn(
-            "planned is allowed for approved tasks",
-            prompts.repair("{}", "x", "plan-reviewer", 1, []),
-        )
-
-
-class InstallerOptionTests(unittest.TestCase):
     def test_explicit_keep_does_not_prompt_on_terminal(self):
         for arguments, prompts_expected, expected in (
             (["--autostart=keep", "--wait=3600"], False, "keep:3600"),

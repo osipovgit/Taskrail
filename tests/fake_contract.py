@@ -3,8 +3,6 @@
 import json
 from pathlib import Path
 
-REASONED = frozenset(("gap", "not_evaluated", "contradicted", "deferred"))
-
 
 def absolute(name, roots):
     if Path(name).is_absolute():
@@ -29,35 +27,32 @@ def earlier_invalid(run, record):
     )
 
 
-def enrich(value, context, target, role, observed=True, read_wrapper=False):
-    """Fixture value with coverage and evidence; observed emits the cited read first."""
+def enrich(value, context, target, role, read_wrapper=False):
+    """Fixture value with coverage and evidence; emits the cited read first."""
     evidence = []
-    if observed:
-        content = target.read_text()
-        content = "\n".join(
-            f"{number}: {line}" for number, line in enumerate(content.splitlines(), 1)
-        )
-        if read_wrapper:
-            content = f"<path>{target}</path>\n<type>file</type>\n<content>{content}\n</content>"
-        print(
-            json.dumps(
-                {
-                    "type": "tool_use",
-                    "part": {
-                        "id": "source-read",
-                        "callID": "source-read",
-                        "tool": "read",
-                        "state": {
-                            "status": "completed",
-                            "input": {"filePath": str(target)},
-                            "output": content,
-                            "metadata": {"truncated": False},
-                        },
+    content = target.read_text()
+    content = "\n".join(f"{number}: {line}" for number, line in enumerate(content.splitlines(), 1))
+    if read_wrapper:
+        content = f"<path>{target}</path>\n<type>file</type>\n<content>{content}\n</content>"
+    print(
+        json.dumps(
+            {
+                "type": "tool_use",
+                "part": {
+                    "id": "source-read",
+                    "callID": "source-read",
+                    "tool": "read",
+                    "state": {
+                        "status": "completed",
+                        "input": {"filePath": str(target)},
+                        "output": content,
+                        "metadata": {"truncated": False},
                     },
-                }
-            ),
-            flush=True,
-        )
+                },
+            }
+        ),
+        flush=True,
+    )
     evidence.append(
         {
             "id": "E1",
@@ -116,40 +111,6 @@ def enrich(value, context, target, role, observed=True, read_wrapper=False):
             else []
         )
     return value
-
-
-def decision(value, role):
-    """The compact V2 decision an implementer or reviewer authors for a fixture value.
-
-    Evidence no outcome cites is attached to the first outcome, so it is still validated.
-    """
-    cited = {
-        claim["id"]: "{path}:{line_start}-{line_end}".format(**claim) for claim in value["evidence"]
-    }
-    outcomes = []
-    used = set()
-    for entry in value["coverage"]:
-        authored = dict(
-            requirement=entry["id"],
-            result=entry["outcome"],
-            evidence=[cited[name] for name in entry["evidence_ids"]],
-        )
-        if entry["outcome"] in REASONED:
-            authored["reason"] = entry["explanation"]
-        used.update(entry["evidence_ids"])
-        outcomes.append(authored)
-    if outcomes:
-        outcomes[0]["evidence"].extend(cited[name] for name in cited if name not in used)
-    gaps = value["blocking_gaps"] if value["status"] == "BLOCKED" else []
-    authored = dict(
-        schema_version=2, outcomes=outcomes, missing_inputs=list(gaps), summary=value["summary"]
-    )
-    if role != "implementer":
-        authored["findings"] = [
-            dict(requirement=entry["criterion"], evidence=[cited["E1"]], problem=entry["evidence"])
-            for entry in value.get("findings", [])
-        ]
-    return authored
 
 
 CHECK_PREFIXES = ("Jenkins check:", "Server check:")

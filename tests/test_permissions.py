@@ -166,12 +166,6 @@ class AccessManifestTests(unittest.TestCase):
             permissions = json.loads(profile.read_text().split("---")[1])["permission"]
             for path in paths:
                 self.assertEqual(permissions["read"][str(path)], "allow")
-            converted, _ = make_profile(
-                role, root / "profiles", "convert", access, format_only=True
-            )
-            self.assertNotIn("GIT_REQUEST", converted.read_text())
-            converter = json.loads(converted.read_text().split("---")[1])["permission"]
-            self.assertEqual(converter["read"], "deny")
             for private in (run / "evidence.json", task.parent / "git-metadata.json"):
                 self.assertNotIn(str(private), permissions["read"])
 

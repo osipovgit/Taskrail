@@ -392,7 +392,6 @@ class InteractionTests(unittest.TestCase):
                     state = dict(stages=[record])
                     environment = dict(
                         self.context,
-                        format_only=False,
                         expected={},
                         git_before={},
                         allowed=[],
@@ -469,7 +468,6 @@ class InteractionTests(unittest.TestCase):
                 )
                 environment = dict(
                     self.context,
-                    format_only=False,
                     expected={},
                     git_before={},
                     allowed=[],
@@ -533,7 +531,6 @@ class InteractionTests(unittest.TestCase):
         )
         environment = dict(
             self.context,
-            format_only=False,
             expected={},
             git_before={},
             allowed=[],

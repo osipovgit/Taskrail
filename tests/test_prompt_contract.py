@@ -60,18 +60,17 @@ class LabelTests(unittest.TestCase):
 
 
 class FrozenTextTests(unittest.TestCase):
-    def test_declined_unknown_and_repair_feedback_keep_a_continued_runs_catalog(self):
+    def test_declined_and_unknown_feedback_keep_a_continued_runs_catalog(self):
         self.addCleanup(prompt_texts.ACTIVE.adopt, prompt_texts.release())
         frozen = prompt_texts.release()
         frozen.update(
             {
                 "feedback.remote_declined": "Frozen denial: skip the action",
                 "feedback.remote_unknown": "Frozen uncertainty: inspect before another action",
-                "repair.header": "Frozen repair boundary: only reformat observed facts",
             }
         )
         updated = dict(frozen)
-        for key in ("feedback.remote_declined", "feedback.remote_unknown", "repair.header"):
+        for key in ("feedback.remote_declined", "feedback.remote_unknown"):
             updated[key] = "New release instructions"
         with tempfile.TemporaryDirectory() as directory:
             run = Path(directory)
@@ -94,9 +93,6 @@ class FrozenTextTests(unittest.TestCase):
                 (run / execution_wait.LEDGER).write_text(json.dumps([dict(status="UNKNOWN")]))
                 with self.assertRaisesRegex(ValueError, "Frozen uncertainty"):
                     execution_wait.resume(run, dict(attempts=[]))
-                repaired = prompts.repair("{}", "Missing outcome", "reviewer", 1, [])
-                self.assertTrue(repaired.startswith(frozen["repair.header"]))
-                self.assertNotIn("New release instructions", repaired)
             self.assertEqual((run / "00-input/contract.json").read_bytes(), contract)
 
     def test_runtime_artifacts_and_feedback_use_the_frozen_catalog(self):
@@ -177,28 +173,6 @@ class FrozenTextTests(unittest.TestCase):
 
 
 class CapabilityTests(unittest.TestCase):
-    def test_format_repairs_are_bounded_and_never_offer_executor_routes(self):
-        requirements = [dict(id="R-0123456789ab", kind="task", text="Fix the requested behavior")]
-        for stage in ("implementer", "plan-reviewer", "reviewer"):
-            with (
-                self.subTest(stage=stage),
-                mock.patch.object(
-                    execution_requests,
-                    "available",
-                    side_effect=AssertionError("Repair cannot execute"),
-                ),
-            ):
-                request = prompts.repair("{}", "Missing outcome", stage, 1, requirements)
-            encoded = request.split("\nSchema:\n", 1)[1].split("\nAssigned requirements:", 1)[0]
-            contract = json.loads(encoded)
-            self.assertEqual(contract["properties"]["schema_version"]["enum"], [2])
-            self.assertNotIn("status", contract["properties"])
-            self.assertNotIn("_REQUEST", encoded)
-            profile = prompt_texts.text("profile.converter") + prompt_texts.text(
-                "profile.runtime_rules"
-            )
-            self.assertLess(len((request + profile).encode()), BUDGETS[STAGES[stage]])
-
     def test_absent_and_unreachable_executors_do_not_advertise_remote_schemas(self):
         with mock.patch("taskrail.application.execution_requests.Path.exists", return_value=False):
             self.assertEqual(

@@ -17,7 +17,6 @@ from taskrail.infrastructure import (
     opencode_server,
     permission_check,
 )
-from taskrail.infrastructure.agent_profile import make_profile
 from taskrail.infrastructure.agent_sync import launch_settings
 from taskrail.infrastructure.event_summary import parse_events
 from taskrail.infrastructure.opencode_events import EventTranslator
@@ -114,27 +113,6 @@ class SettingsTests(unittest.TestCase):
         for models in ([], {"planner": ""}, {"planner": None}):
             with self.assertRaisesRegex(ValueError, "settings.models"):
                 launch_settings({"models": models}, Path("/"))
-
-
-class RepairToolTests(unittest.TestCase):
-    def test_read_mode_keeps_reads_and_never_edits(self):
-        with tempfile.TemporaryDirectory() as temp:
-            root = Path(temp)
-            role = root / "role.md"
-            role.write_text("role")
-            target = root / "a.py"
-            target.write_text("x")
-            for mode, read in (("none", "deny"), ("read", "allow")):
-                access = dict(roots=[root], readable=[], writable=[target])
-                profile, _ = make_profile(role, root / "profiles", mode, access, format_only=mode)
-                rules = json.loads(profile.read_text().split("---")[1])["permission"]
-                self.assertEqual(rules["edit"], "deny")
-                self.assertEqual(rules["glob"], read)
-            self.assertEqual(
-                launch_settings({"opencode_version": "1.x"}, root)["format_repair_tools"], "none"
-            )
-            with self.assertRaisesRegex(ValueError, "format_repair_tools"):
-                launch_settings({"format_repair_tools": "all"}, root)
 
 
 class DirectoryTests(unittest.TestCase):

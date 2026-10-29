@@ -1,6 +1,5 @@
 """Run one opencode turn and summarize its JSON event stream."""
 
-import re
 import time
 from types import MappingProxyType
 
@@ -14,18 +13,14 @@ PROMPT_ARGUMENT = "Execute_the_task_in_the_attached_file"
 ATTACHED = "attached_files"
 RUNTIME = "runtime"
 DEBUG_LOGS = ("--print-logs", "--log-level", "DEBUG")
-OPTIONAL = MappingProxyType(dict(debug=False, progress=False, format_only=False, runtime=None))
-UNAVAILABLE_TOOL = re.compile(
-    r"Model tried to call unavailable tool '[^']+'. Available tools:\s*\.?"
-)
-UNAVAILABLE_RESOLUTION = "Rejected unavailable tool in a tool-free format pass; nothing executed. Final JSON still requires validation."
+OPTIONAL = MappingProxyType(dict(debug=False, progress=False, runtime=None))
 
 
 def run_agent(launch):
     """Launch, watch and classify one turn; the raw response is saved unchanged.
 
     launch: command, workspace, agent, model, prompt, attempt and timeout, plus the
-    optional debug, progress, format_only and runtime.
+    optional debug, progress and runtime.
     """
     options = dict(OPTIONAL, **launch)
     attempt = options["attempt"]
@@ -65,8 +60,6 @@ def summarize(watch, process, options):
     )
     usage_limits.explain(outcome, watch.telemetry, turn.budgets["context_budget"])
     stderr = turn.error_text()
-    if options["format_only"] and status == SUCCESS and code == 0 and AUTO_REJECT not in stderr:
-        recover_unavailable_format_tools(outcome)
     status = final_status(status, code, outcome, stderr)
     outcome.update(
         status=status,
@@ -104,31 +97,3 @@ def final_status(status, code, outcome, stderr):
         (not outcome["completed"] or not outcome["final_text"].strip(), "INCOMPLETE"),
     )
     return next((name for failed, name in failures if failed), SUCCESS)
-
-
-def recover_unavailable_format_tools(outcome):
-    """Retain rejected calls as warnings only for a completed, tool-free format pass.
-
-    The caller still validates the final JSON and source integrity. Any permission
-    denial, available tool, successful call or other transport error stays fatal.
-    """
-    failures = outcome.get("tool_errors", [])
-    if not only_unavailable_tools(outcome, failures):
-        return
-    for failure in failures:
-        failure["resolution"] = UNAVAILABLE_RESOLUTION
-        outcome["warnings"].append(dict(failure))
-    outcome["errors"] = []
-
-
-def only_unavailable_tools(outcome, failures):
-    """Every call failed only because the format pass offers no tools."""
-    answered = outcome.get("completed") and outcome.get("final_text", "").strip()
-    if not answered or outcome.get("permission") or not failures:
-        return False
-    messages = [failure["error"] for failure in failures]
-    if outcome.get("errors") != messages:
-        return False
-    if outcome.get("tool_calls") != len(failures):
-        return False
-    return all(UNAVAILABLE_TOOL.fullmatch(message) for message in messages)

@@ -1,98 +1,11 @@
-import copy
 import json
 import sys
 import tempfile
 import unittest
 from pathlib import Path
 
-from taskrail.infrastructure.runner import recover_unavailable_format_tools, run_agent
+from taskrail.infrastructure.runner import run_agent
 from taskrail.observability.activity import Progress, event_activity
-
-
-class FormatTests(unittest.TestCase):
-    def result(self):
-        error = "Model tried to call unavailable tool 'invalid'. Available tools: ."
-        return dict(
-            completed=True,
-            final_text='{"status":"BLOCKED"}',
-            permission=False,
-            tool_calls=1,
-            errors=[error],
-            tool_errors=[dict(tool="invalid", error=error)],
-            warnings=[],
-        )
-
-    def test_only_unavailable_calls_with_no_available_tools_are_nonfatal(self):
-        result = self.result()
-        recover_unavailable_format_tools(result)
-        self.assertEqual(result["errors"], [])
-        self.assertEqual(len(result["warnings"]), 1)
-        self.assertEqual(len(result["tool_errors"]), 1)
-        for change in (
-            dict(permission=True),
-            dict(completed=False),
-            dict(final_text=""),
-            dict(tool_calls=2),
-            dict(errors=["Transport failure"]),
-        ):
-            result = self.result()
-            result.update(change)
-            before = copy.deepcopy(result)
-            recover_unavailable_format_tools(result)
-            self.assertEqual(result, before)
-        for error in (
-            "PermissionDeniedError",
-            "Tool execution aborted",
-            "Model tried to call unavailable tool 'invalid'. Available tools: read, glob.",
-        ):
-            result = self.result()
-            result["errors"] = [error]
-            result["tool_errors"][0]["error"] = error
-            before = copy.deepcopy(result)
-            recover_unavailable_format_tools(result)
-            self.assertEqual(result, before)
-
-    def test_unavailable_tool_recovery_is_limited_to_format_only_runs(self):
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            script = root / "fake.py"
-            error = "Model tried to call unavailable tool 'invalid'. Available tools: ."
-            events = [
-                dict(
-                    type="tool_use",
-                    part=dict(tool="invalid", state=dict(status="error", input={}, error=error)),
-                ),
-                dict(
-                    type="text",
-                    part=dict(
-                        messageID="m",
-                        text='{"status":"BLOCKED","summary":"Missing evidence","steps":[]}',
-                    ),
-                ),
-                dict(type="step_finish", part=dict(messageID="m", reason="stop")),
-            ]
-            script.write_text(
-                "print(" + repr("\n".join(json.dumps(event) for event in events)) + ")"
-            )
-            request = root / "request.md"
-            request.write_text("Convert the supplied text only")
-            for flag, expected in ((False, "TOOL_ERROR"), (True, "OK")):
-                result = run_agent(
-                    dict(
-                        command=[sys.executable, str(script)],
-                        workspace=root,
-                        agent="converter",
-                        model="fake",
-                        prompt=request,
-                        attempt=root / str(flag),
-                        timeout=5,
-                        format_only=flag,
-                    )
-                )
-                self.assertEqual(result["status"], expected)
-                self.assertTrue(result["tool_errors"])
-                if flag:
-                    self.assertEqual(json.loads(result["final_text"])["status"], "BLOCKED")
 
 
 class ToolFailureTests(unittest.TestCase):

@@ -80,8 +80,8 @@ reviewers accept that recorded choice.
   derives everything else: changed_files from the source scan, completed_steps from
   the approved contract, checks from their records. It reports no requirement
   outcomes or citations; the independent review judges every requirement. A final
-  message without either word gets a correction in the same session, never a
-  format repair. Besides its allowed files it keeps `<run>/progress.md` (Done,
+  message without either word gets a correction in the same session and no other
+  attempt. Besides its allowed files it keeps `<run>/progress.md` (Done,
   Remaining, Verify), which survives an interrupted, timed-out or overflowing
   session: every turn has it attached, and a later session does not re-check
   finished work. It is a note, never evidence, so a rejected overwrite of it is only
@@ -232,7 +232,7 @@ An exact native read-before-overwrite or edit `oldString` no-match error becomes
 warning only after a later successful native read and write of the same server-approved
 file in the same session,
 before the final response. This applies to the planner's plan and the implementer's
-allowed files, never to read-only stages or format repair. The original rejection and
+allowed files, never to read-only stages. The original rejection and
 the read/write event references remain recorded; unresolved errors still stop the stage.
 opencode remembers reads per process, and each turn after an executor request is a new
 process of the session, so every turn attaches the stage's run file (`plan.md` or
@@ -297,7 +297,7 @@ self or cyclic dependency, a requirement split between tasks without a distinct
 `[scope]` for each part, a gap under any decision but blocked, or a task count the
 decision rules out (split needs two tasks, single exactly one, no change none). A blocked plan
 authorizes nothing. A planner result that still fails goes to one full attempt with
-tools, never to a tool-less format repair. Error messages name requirements by label.
+tools. Error messages name requirements by label.
 
 
 
@@ -373,7 +373,7 @@ stopped. The pause does not count as active stage time, and Stop still works. Th
 not a new writer, so nothing is replayed; when the continuations are spent the stage
 ends as before and Continue stays available. Under `stop_on_provider_limit: true` an
 exhausted quota is not continued. Denial means the command is
-skipped; consider the operator's alternative. Format repair cannot request execution.
+skipped; consider the operator's alternative.
 
 All roles disable automatic compaction. `model_context_tokens` (one window, or one per
 model with a `default`) defaults to 94,208

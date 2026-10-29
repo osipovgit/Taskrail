@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 
 from acceptance.corpus import path, write
-from fake_contract import decision, enrich, plan_text
+from fake_contract import enrich, plan_text, review_text
 
 
 def execute(context, role, args, emit):
@@ -25,6 +25,7 @@ def execute(context, role, args, emit):
     elif role == "implementer":
         value["status"] = "IMPLEMENTED"
     value = enrich(value, context, target, role)
+    run = Path(context["task_file"]).parent.parent
     if role == "planner":
         for step in value["steps"]:
             step.update(action=case["goal"], checks=["Inspect the scenario acceptance oracle"])
@@ -39,14 +40,16 @@ def execute(context, role, args, emit):
                 )
                 for number, name in enumerate(planned, 1)
             ]
-        run = Path(context["task_file"]).parent.parent
         planned_text = plan_text(value, context)
         if case.get("answer"):
             planned_text += "\n## Answer\n" + case["answer"].replace("{source}", str(target)) + "\n"
         (run / "plan.md").write_text(planned_text)
         response = "DONE"
+    elif role == "implementer":
+        response = "DONE: " + value["summary"]
     else:
-        response = json.dumps(decision(value, role))
+        (run / "review.md").write_text(review_text(value, context))
+        response = "DONE"
     emit(json.dumps(dict(type="text", part=dict(id="result", messageID="msg1", text=response))))
     emit(
         json.dumps(

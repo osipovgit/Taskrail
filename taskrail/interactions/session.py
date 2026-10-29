@@ -149,14 +149,14 @@ class StageSession:
 def result_feedback(session, outcome):
     """Return a final result that fails validation to the same session, three times per stage.
 
-    The session still has its context and tools; a later format repair has neither.
+    The session still has its context and tools; a later full attempt starts without them.
     """
     check = session.environment.get("check_result")
     context = session.context
     correction = plan_feedback(session, outcome)
     if correction is not None:
         return correction
-    if check is None or session.environment["format_only"] or outcome["status"] != "OK":
+    if check is None or outcome["status"] != "OK":
         return None
     if context[RESULT_CORRECTIONS] >= MAX_RESULT_CORRECTIONS:
         return None
@@ -174,7 +174,6 @@ def plan_feedback(session, outcome):
     """Recover a rejected plan edit without restarting or asserting a fictitious read."""
     context = session.context
     eligible = session.active[1][ROLE] == "planner"
-    eligible = eligible and not session.environment["format_only"]
     if not eligible or context[RESULT_CORRECTIONS] >= MAX_RESULT_CORRECTIONS:
         return None
     feedback = plan_write.read_before_write(outcome, session.environment["run"])

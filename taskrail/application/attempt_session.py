@@ -34,7 +34,7 @@ def token_allowance(workflow):
     return budget - observed
 
 
-def session_environment(workflow, profile, files, format_only, check_result):
+def session_environment(workflow, profile, files, check_result):
     """What the stage session needs to keep scope and integrity guards between turns.
 
     On a task branch the writer's changes beyond the plan are adopted before each check.
@@ -43,7 +43,6 @@ def session_environment(workflow, profile, files, format_only, check_result):
     on_branch = workflow.config.get(TASK_BRANCH) is True
     adopts = on_branch and bool(workflow.writable())
     return dict(
-        format_only=format_only,
         check_result=check_result,
         run=workflow.run,
         config=workflow.config,
@@ -59,7 +58,7 @@ def session_environment(workflow, profile, files, format_only, check_result):
     )
 
 
-def launch_options(workflow, active, allowance, format_only):
+def launch_options(workflow, active, allowance):
     """The opencode invocation of one attempt."""
     folder, record = active
     config = workflow.config
@@ -73,19 +72,16 @@ def launch_options(workflow, active, allowance, format_only):
         attempt=folder,
         debug=workflow.runtime["debug"],
         progress=True,
-        format_only=format_only,
         runtime=dict(
             token_budget=allowance,
             context_budget=context_windows.role_capacity(config, record["role"]),
             env_allow=config["agent_env_allow"],
             autocompact=False,
             writable_files=record.get("writable_files", ())
-            if record["stage"] == "implementer" and not format_only
+            if record["stage"] == "implementer"
             else (),
-            plan_file=str(workflow.run / "plan.md")
-            if record["stage"] == "planner" and not format_only
-            else None,
-            attached_files=() if format_only else record.get(stage_artifacts.ATTACHED, ()),
+            plan_file=str(workflow.run / "plan.md") if record["stage"] == "planner" else None,
+            attached_files=record.get(stage_artifacts.ATTACHED, ()),
         ),
     )
 

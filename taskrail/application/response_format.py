@@ -11,7 +11,7 @@ import json
 from types import MappingProxyType
 
 from taskrail.application import executor_contracts, plan_file, progress_file, review_file
-from taskrail.core import protected_paths, schema
+from taskrail.core import protected_paths
 from taskrail.core.prompt_texts import text
 
 PLANNER = "planner"
@@ -31,12 +31,7 @@ FINISHES = MappingProxyType(
 
 def finish(stage):
     """The stage's final-result instruction, shared by continuations and corrections."""
-    return text(FINISHES.get(stage, "format.json_finish"))
-
-
-def decisions(stage):
-    """The decision rules of a JSON stage: shared rules and the stage's own."""
-    return "{} {}".format(text("format.decisions"), text(f"format.decisions.{stage}"))
+    return text(FINISHES[stage])
 
 
 def continuation(stage, request):
@@ -47,8 +42,7 @@ def continuation(stage, request):
 
 def correction(stage, error):
     """Correct a rejected result; the continuation that follows restates the format."""
-    patch = "" if stage in FINISHES else text("format.patch")
-    return "{}\n".format(text("format.correction", error=error, patch=patch))
+    return "{}\n".format(text("format.correction", error=error))
 
 
 def section(stage, state, run, config, catalog=None):
@@ -66,12 +60,6 @@ def section(stage, state, run, config, catalog=None):
         rules = review_file.instructions(run, stage)
         routing = text("format.request_routing")
     return "\n".join([rules, routing, *map(schema_line, alternatives)])
-
-
-def own_schema(stage, state):
-    """The review result contract, for plan review as well."""
-    schema.contract_version(state.get("contract_version"))
-    return schema.SCHEMAS["decision"]
 
 
 def schema_line(contract):

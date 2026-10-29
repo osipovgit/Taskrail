@@ -107,9 +107,7 @@ class WriterHandoffTests(unittest.TestCase):
         )
         config = dict(read_retries=retries, roots={"project": Path("/repo")})
         workflow = SimpleNamespace(run=run, state=state, config=config, flow=dict(stage=stage))
-        attempts = SimpleNamespace(
-            workflow=workflow, request="REQUEST", format_only=False, recovery=None
-        )
+        attempts = SimpleNamespace(workflow=workflow, request="REQUEST", recovery=None)
         with patch("taskrail.application.attempt_retries.access_recovery.restore") as access:
             access.return_value = SimpleNamespace(count=0)
             return Retries(attempts)

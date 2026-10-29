@@ -46,7 +46,6 @@ class StageAttempts:
         self.request = first_request(workflow)
         self.recovery = workflow.runtime["recovery"]
         workflow.runtime["recovery"] = None
-        self.format_only = False
         self.retries = Retries(self)
 
     def run(self):
@@ -59,7 +58,7 @@ class StageAttempts:
             verdict = self.conclude(active[1], outcome)
             if verdict is None:
                 self.retry(active[1], outcome)
-            elif not self.retries.rebuild(verdict):
+            else:
                 return verdict, active[1]
         return None
 
@@ -75,8 +74,7 @@ class StageAttempts:
         folder, record = open_record(workflow, self.retries.mode())
         record["writable_files"] = [str(path) for path in planned_files(workflow)]
         stage_artifacts.record_access(workflow, record)
-        recovery = None if self.format_only else self.recovery
-        prompt = attempt_prompt(workflow, (folder, record), self.request, recovery)
+        prompt = attempt_prompt(workflow, (folder, record), self.request, self.recovery)
         attempt_context.save_request(folder, record, prompt, workflow)
         return folder, record
 
@@ -84,7 +82,7 @@ class StageAttempts:
         """Run the stage session unless the observed token budget is spent."""
         workflow = self.workflow
         files = planned_files(workflow)
-        profile = install_profile(workflow, active, files, self.format_only)
+        profile = install_profile(workflow, active, files)
         outcome = session_budget.admission(
             workflow.config,
             active,
@@ -107,10 +105,8 @@ class StageAttempts:
         outcome = run_stage(
             active,
             workflow.state,
-            session_environment(
-                workflow, profile, files, self.format_only, checker(workflow, active)
-            ),
-            launch_options(workflow, active, allowance, self.format_only),
+            session_environment(workflow, profile, files, checker(workflow, active)),
+            launch_options(workflow, active, allowance),
         )
         self.settle(active, outcome)
         return outcome

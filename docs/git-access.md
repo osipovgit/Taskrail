@@ -22,8 +22,7 @@ object surrounded by prose or a Markdown fence. It never repairs arguments or
 chooses among multiple objects. Requests that can change state must be the entire
 response. A request with unknown or missing fields, a wrong version or an empty reason
 runs nothing; the same session is told what to fix. Root and command validation still
-apply. Read requests are routed to the executor before final-result validation,
-without a tool-less format-repair pass.
+apply. Read requests are routed to the executor before final-result validation.
 
 ## Permissions
 
