@@ -12,6 +12,7 @@ from taskrail.application import (
     plan_file,
     plan_result,
 )
+from taskrail.application.implementer_result import stage_result as implementation
 from taskrail.core import (
     coverage,
     plan_contract,
@@ -23,6 +24,8 @@ from taskrail.git.requests import output_directory
 EVIDENCE_FILES = "declared roots, verified source views, preimages or executor snapshots (not run artifacts such as changes.diff or recovery.md)"
 PLAN_FILES = "declared roots (files_read and proposed_change_files name project files; cite executor snapshots only in evidence)"
 EVIDENCE = "evidence"
+IMPLEMENTER = "implementer"
+ROLE = "role"
 
 
 def validate(response, context):
@@ -40,9 +43,12 @@ def validate(response, context):
 
 
 def decoded(response, context):
-    """The planner's result comes from its plan file, every other from its response."""
+    """The planner's result comes from its plan file, the implementer's from its final
+    DONE or BLOCKED, every other from its response."""
     if context["stage"] == plan_result.PLANNER:
         return plan_result.stage_result(context)
+    if context[ROLE] == IMPLEMENTER:
+        return implementation(response, context)
     return decision_adapter.stage_decision(response, context)
 
 
@@ -51,13 +57,14 @@ def checked(payload, context):
     atomic_json(context["folder"] / "response-object.json", payload)
     if declared_block.present(payload):
         payload = declared_block.stop_result(payload, context)
-    coverage.validate_coverage(
-        payload,
-        context["requirements"],
-        context["stage"],
-        execution_evidence.claim_ids(context["run"], payload[EVIDENCE]),
-        check_planning.criteria(payload, context),
-    )
+    if context[ROLE] != IMPLEMENTER:
+        coverage.validate_coverage(
+            payload,
+            context["requirements"],
+            context["stage"],
+            execution_evidence.claim_ids(context["run"], payload[EVIDENCE]),
+            check_planning.criteria(payload, context),
+        )
     run = context["run"]
     records = [record for record in evidence.validation_records(run) if evidence.current(record)]
     for claim in payload[EVIDENCE]:
@@ -102,7 +109,7 @@ def example(path, roots):
 
 def validate_role(payload, context):
     """Cross-check stage-specific declarations against engine-owned inputs."""
-    if context["role"] == "planner":
+    if context[ROLE] == "planner":
         plan_contract.validate_plan_steps(payload, context["requirements"])
         for filename in payload["files_read"] + payload["proposed_change_files"]:
             approved_path(filename, context["roots"], PLAN_FILES)
@@ -112,7 +119,7 @@ def validate_role(payload, context):
             if evidence.current(record)
         }
         schema.require(set(payload["files_read"]) <= observed, "Unobserved files_read claim")
-    elif context["role"] == "implementer":
+    elif context[ROLE] == IMPLEMENTER:
         plan_contract.validate_completion(payload, context["plan"], context["changed"])
     else:
         validate_review(payload, context["plan"])

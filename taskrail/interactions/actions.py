@@ -22,6 +22,7 @@ PUSH_NOTICE = (
 )
 REQUEST_NAME = re.compile(r"(?:GIT|LOCAL|ACTION|JENKINS)_REQUEST")
 CORRECTIONS = "corrections"
+PROSE_ROLES = frozenset(("planner", "implementer"))
 
 
 class Actions:
@@ -115,9 +116,10 @@ def incomplete_request(actions, text):
 
 
 def narrated(actions, text):
-    """A planner answers in plan.md, so only a request written as markup counts."""
-    planner = actions.session.active[1]["role"] == "planner"
-    return not planner or bool(REQUEST_NAME.search(text))
+    """The planner and the implementer answer in prose, so only a request written as
+    markup counts."""
+    prose = actions.session.active[1]["role"] in PROSE_ROLES
+    return not prose or bool(REQUEST_NAME.search(text))
 
 
 def not_json(text):
