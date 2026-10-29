@@ -1,4 +1,5 @@
-"""How a stage answers: the plan file for the planner, else one JSON object.
+"""How a stage answers: the plan file for the planner, DONE or BLOCKED for the
+implementer, else one JSON object.
 
 Every alternative is the validated contract, printed as compact JSON on one line, so
 the request stays small and no line is cut when the model reads it; a schema too long
@@ -7,6 +8,7 @@ the executor is installed. The texts live in core/prompt-texts.json.
 """
 
 import json
+from types import MappingProxyType
 
 from taskrail.application import executor_contracts, plan_file, progress_file
 from taskrail.core import protected_paths, schema
@@ -17,9 +19,12 @@ IMPLEMENTER = "implementer"
 LINE_LIMIT = 1800
 
 
+FINISHES = MappingProxyType({PLANNER: "format.plan_finish", IMPLEMENTER: "format.done_finish"})
+
+
 def finish(stage):
     """The stage's final-result instruction, shared by continuations and corrections."""
-    return text("format.plan_finish" if stage == PLANNER else "format.json_finish")
+    return text(FINISHES.get(stage, "format.json_finish"))
 
 
 def decisions(stage):
@@ -35,7 +40,7 @@ def continuation(stage, request):
 
 def correction(stage, error):
     """Correct a rejected result; the continuation that follows restates the format."""
-    patch = "" if stage == PLANNER else text("format.patch")
+    patch = "" if stage in FINISHES else text("format.patch")
     return "{}\n".format(text("format.correction", error=error, patch=patch))
 
 
@@ -47,20 +52,20 @@ def section(stage, state, run, config, catalog=None):
         protected = protected_paths.patterns(config)
         rules = plan_file.instructions(run, config["roots"], requirements, protected)
         routing = text("format.plan_routing")
+    elif stage == IMPLEMENTER:
+        rules = "\n".join((progress_file.instructions(run), text("format.done")))
+        routing = text("format.request_routing")
     else:
         alternatives.insert(0, own_schema(stage, state))
         rules = decisions(stage)
-        if stage == IMPLEMENTER:
-            rules = "\n".join((progress_file.instructions(run), rules))
         routing = text("format.routing")
     return "\n".join([rules, routing, *map(schema_line, alternatives)])
 
 
 def own_schema(stage, state):
-    """The stage result contract; plan review uses the reviewer's."""
+    """The review result contract, for plan review as well."""
     schema.contract_version(state.get("contract_version"))
-    name = "implementer-decision" if stage == IMPLEMENTER else "decision"
-    return schema.SCHEMAS[name]
+    return schema.SCHEMAS["decision"]
 
 
 def schema_line(contract):

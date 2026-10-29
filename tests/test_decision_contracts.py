@@ -58,20 +58,22 @@ class DecisionContractTests(unittest.TestCase):
     def validate(self, payload):
         return result_validation.validate(json.dumps(payload), self.context)
 
-    def test_implementation_derives_files_steps_and_status(self):
+    def test_implementation_derives_files_steps_and_status_from_its_final_word(self):
         self.context.update(role="implementer", stage="implementer")
-        with self.assertRaisesRegex(ValueError, "unknown fields: \\['findings'\\]"):
-            self.validate(self.decision())
-        writer = self.decision()
-        del writer["findings"]
-        result = self.validate(writer)
-        self.assertEqual(result["status"], "IMPLEMENTED")
-        self.assertEqual(result["changed_files"], [str(self.path)])
-        self.assertEqual(result["completed_steps"], ["T1"])
-        self.assertEqual(result["coverage"][0]["id"], "R-stable")
-        self.assertEqual(result["schema_version"], 1)
-        with self.assertRaisesRegex(ValueError, "unknown fields"):
-            self.validate(dict(writer, changed_files=[]))
+        done = result_validation.validate(
+            "Edited hello.py.\n**DONE:** hello() returns 2", self.context
+        )
+        self.assertEqual(done["status"], "IMPLEMENTED")
+        self.assertEqual(done["summary"], "hello() returns 2")
+        self.assertEqual(done["changed_files"], [str(self.path)])
+        self.assertEqual(done["completed_steps"], ["T1"])
+        self.assertEqual((done["coverage"], done["evidence"]), ([], []))
+        blocked = result_validation.validate("BLOCKED: the inventory is missing", self.context)
+        self.assertEqual(blocked["status"], "BLOCKED")
+        self.assertEqual(blocked["blocking_gaps"], ["the inventory is missing"])
+        self.assertEqual(blocked["completed_steps"], [])
+        with self.assertRaisesRegex(ValueError, "End your final message with DONE"):
+            result_validation.validate(json.dumps(self.decision()), self.context)
 
     def test_stored_records_and_other_versions_are_not_authored_decisions(self):
         result = self.validate(self.decision())

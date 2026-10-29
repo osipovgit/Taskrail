@@ -102,8 +102,8 @@ class EvidenceRepairTests(unittest.TestCase):
             with self.subTest(error=error):
                 workflow = SimpleNamespace(
                     run=self.run,
-                    flow=dict(stage="implementer"),
-                    state=dict(stages=[dict(directory="01-implement")], requirements=[]),
+                    flow=dict(stage="reviewer"),
+                    state=dict(stages=[dict(directory="01-review")], requirements=[]),
                     config={},
                 )
                 attempts = SimpleNamespace(
@@ -121,13 +121,13 @@ class EvidenceRepairTests(unittest.TestCase):
                 self.assertFalse(needs_sources(error, {"format_repair_tools": "read"}))
 
     def test_repair_receives_the_merged_draft_after_an_addressed_correction(self):
-        folder = self.run / "01-implement"
+        folder = self.run / "01-review"
         folder.mkdir()
         draft = dict(schema_version=2, outcomes=[], missing_inputs=["Missing contract"])
         (folder / "decision-draft.json").write_text(json.dumps(draft))
         workflow = SimpleNamespace(
             run=self.run,
-            flow=dict(stage="implementer"),
+            flow=dict(stage="reviewer"),
             state=dict(stages=[dict(directory=folder.name)], requirements=[], contract_version=1),
             config={},
         )

@@ -36,7 +36,7 @@ label before each requirement block (`[R1]`, `[R2 runtime]`, `[R3 constraint]`, 
 the requirement's own field and offset), the stage's instructions, and a compact Context
 JSON. Stable requirement IDs stay server-side; the model uses labels.
 
-Implementers and reviewers author compact decisions with `"schema_version": 2`.
+Reviewers author compact decisions with `"schema_version": 2`.
 The server derives canonical stored results with version 1.
 Executor requests retain version 1. Unknown wire versions and unsupported run or
 checkpoint versions are rejected. These responses contain one JSON object. The planner writes
@@ -74,15 +74,18 @@ reviewers accept that recorded choice.
   server derives the stored plan result from it: coverage, evidence, steps (one per
   task, with its files, owned requirements and scopes, dependencies, results and
   checks), files_read from observed reads and proposed_change_files from the tasks.
-- Implementer: semantic outcomes for every assigned criterion and required missing
-  inputs. The server derives changed_files from the source scan and completed_steps
-  from the accepted approved contract. IMPLEMENTED cannot retain unfinished work.
-  Besides its allowed files it keeps `<run>/progress.md` (Done, Remaining, Verify),
-  which survives an interrupted, timed-out or overflowing session: every turn has it
-  attached, and a later session does not re-check finished work. It is a note, never
-  evidence, so a rejected overwrite of it is only a warning.
-  The implementer re-reads each edited block once, at the end, to cite it; independent
-  review checks the result instead of repeated self-checks.
+- Implementer: no JSON result. It ends with `DONE: <what changed>` (one or two
+  sentences; on a task branch they become the commit message) or
+  `BLOCKED: <what it needs>`, the last such line of its final message. The server
+  derives everything else: changed_files from the source scan, completed_steps from
+  the approved contract, checks from their records. It reports no requirement
+  outcomes or citations; the independent review judges every requirement. A final
+  message without either word gets a correction in the same session, never a
+  format repair. Besides its allowed files it keeps `<run>/progress.md` (Done,
+  Remaining, Verify), which survives an interrupted, timed-out or overflowing
+  session: every turn has it attached, and a later session does not re-check
+  finished work. It is a note, never evidence, so a rejected overwrite of it is only
+  a warning.
 - Reviewer: semantic outcomes, findings grounded in observed references, and missing
   inputs. The server derives input completeness and aggregate verdict. Plan review
   can approve planned work; result and no-change review cannot. An approval cannot
@@ -195,10 +198,9 @@ server-assigned requirements under the request's `R<n>` labels. Each stage gets 
 one. Validation errors name requirements by these labels as well; a split task's
 requirement may also be named by its parent's ID when that ID names exactly one. It has no tools (or
 read-only tools with `format_repair_tools: read`, which may also re-read the
-`recovery.md` evidence of earlier attempts of the same stage), never edits, even for the
-implementer, cannot invent requirement IDs or quotations, and must not research. An
-implementer repair reports only edits already present; changed files are still
-checked against the observed source. If the repair reports BLOCKED because it
+`recovery.md` evidence of earlier attempts of the same stage), never edits, cannot
+invent requirement IDs or quotations, and must not research. The implementer gets no
+format repair. If the repair reports BLOCKED because it
 cannot rebuild the result without tools, the stage gets one full attempt with tools
 and the original validation error. An evidence error (a wrong range, file or
 evidence ID, malformed reference or unresolved source handle) goes to that full attempt

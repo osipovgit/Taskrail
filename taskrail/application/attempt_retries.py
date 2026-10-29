@@ -62,11 +62,12 @@ class Retries:
         return status in TRANSPORT and self.transport_retry()
 
     def format_repair(self, outcome):
-        """One repair of the response format; edits stay denied, even for the implementer.
+        """One repair of the response format; edits stay denied.
 
-        The planner's plan file is fixed with tools instead, in one full attempt.
+        The planner's plan file is fixed with tools instead, in one full attempt. The
+        implementer's final word was already corrected in its session; it gets none.
         """
-        if self.counts[FORMAT_KEY] >= 1:
+        if self.counts[FORMAT_KEY] >= 1 or self.stage == IMPLEMENTER:
             return False
         self.counts[FORMAT_KEY] += 1
         state = self.attempts.workflow.state
