@@ -2,7 +2,8 @@
 
 An outcome is the tasks that deliver the requirement (a part names its scope),
 `all tasks` for an obligation every task keeps, `done:` or `contradicted:` with cited
-lines, `runtime` with an optional description of the later check, or `gap:`.
+lines, `runtime` with an optional description of the later check, `n/a:` with why the
+requirement does not apply, or `gap:`.
 """
 
 import re
@@ -30,6 +31,7 @@ PREFIXES = MappingProxyType(
         DEFERRED: DEFERRED,
         GAP: GAP,
         "blocked": GAP,
+        "n/a": "not_applicable",
     }
 )
 CITED = frozenset((SATISFIED, "contradicted"))
@@ -82,6 +84,8 @@ class Coverage:
         if kind == DEFERRED:
             detail = detail or requirement[TEXT]
             self.found["unverified"].append(detail)
+        if kind == "not_applicable" and not detail:
+            self.problems.append("line {line}: {label} n/a needs its reason".format(**entry))
         evidence = self.cite(detail, entry[LINE]) if kind in CITED else []
         explanation = f"{entry[LABEL]}: {detail}"
         if kind == GAP:

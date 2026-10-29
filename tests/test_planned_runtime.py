@@ -114,20 +114,14 @@ class PlannedRuntimeTests(unittest.TestCase):
             folder=self.run / "01-plan",
             changed=[],
             check_config=self.config,
+            deliver_lines=True,
         )
 
     def test_markdown_and_compact_review_bind_the_local_check_to_its_child(self):
         plan = self.parsed()
-        decision = dict(
-            schema_version=2,
-            outcomes=[
-                dict(requirement=f"R{number}", result="planned", evidence=[])
-                for number in range(1, 4)
-            ],
-            findings=[],
-            missing_inputs=[],
-        )
-        review = result_validation.validate(json.dumps(decision), self.context(plan))
+        lines = "".join(f"- R{number}: planned\n" for number in range(1, 4))
+        (self.run / "review.md").write_text(f"## Requirements\n{lines}")
+        review = result_validation.validate("DONE", self.context(plan))
         self.assertEqual(review["status"], "APPROVE")
         state = dict(requirements=self.requirements, status="TASKS_READY", plan_review=review)
         parent = SimpleNamespace(config=self.config, state=state, flow=dict(plan=plan, allowed=[]))

@@ -1,6 +1,6 @@
 """Bounded retry policy of one stage: format repair, access and transport recovery."""
 
-from taskrail.application import access_recovery, decision_adapter, evidence, plan_recovery, prompts
+from taskrail.application import access_recovery, evidence, plan_recovery
 from taskrail.core import prompt_texts
 from taskrail.core.paths import tool_paths
 from taskrail.infrastructure import context_overflow
@@ -62,35 +62,15 @@ class Retries:
         return status in TRANSPORT and self.transport_retry()
 
     def format_repair(self, outcome):
-        """One repair of the response format; edits stay denied.
+        """One full attempt with tools corrects the plan or review file.
 
-        The planner's plan file is fixed with tools instead, in one full attempt. The
-        implementer's final word was already corrected in its session; it gets none.
+        The implementer's final word was already corrected in its session; it gets none.
         """
         if self.counts[FORMAT_KEY] >= 1 or self.stage == IMPLEMENTER:
             return False
         self.counts[FORMAT_KEY] += 1
-        state = self.attempts.workflow.state
-        self.repair = dict(
-            request=self.attempts.request,
-            error=outcome[CONTRACT_ERROR],
-            response=decision_adapter.repair_response(
-                outcome["final_text"],
-                self.attempts.workflow.run / state["stages"][-1]["directory"],
-            ),
-        )
-        config = self.attempts.workflow.config
-        if self.stage == "planner" or needs_sources(outcome[CONTRACT_ERROR], config):
-            return full_attempt(self)
-        self.attempts.format_only = True
-        self.attempts.request = prompts.repair(
-            self.repair["response"],
-            outcome[CONTRACT_ERROR],
-            self.stage,
-            state.get("contract_version"),
-            state["requirements"],
-        )
-        return True
+        self.repair = dict(request=self.attempts.request, error=outcome[CONTRACT_ERROR])
+        return full_attempt(self)
 
     def rebuild(self, verdict):
         """A format repair that reports BLOCKED gets one full attempt with tools instead."""
@@ -160,8 +140,7 @@ def full_attempt(retries):
     retries.counts[REBUILD_KEY] += 1
     attempts.format_only = False
     rebuild = note(prompt_texts.text("recovery.rebuild", error=retries.repair["error"]))
-    response = prompts.saved_response_prompt(retries.repair["response"])
-    attempts.request = "{}{}{}\n".format(retries.repair["request"], rebuild, response)
+    attempts.request = "{}{}".format(retries.repair["request"], rebuild)
     attempts.recovery = evidence.load_index(attempts.workflow.run)
     return True
 

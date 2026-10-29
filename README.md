@@ -67,8 +67,8 @@ has bubblewrap; commands that need more, Docker, CI and deployment wait for your
 approval, one by one or once per run. The optional
 [isolated SSH executor](docs/ssh-executor.md) runs exact remote scripts and Jenkins builds after personal
 root approval, with results returned to the same task. Deferred runtime checks
-remain visible. The planner writes Markdown and finishes with `DONE`; other results follow a strict
-JSON contract. Source quotations
+remain visible. The planner and the reviewers write Markdown files and finish with `DONE`;
+the implementer finishes with `DONE` or `BLOCKED`. Source quotations
 and per-requirement outcomes are checked before each transition.
 
 ## CLI

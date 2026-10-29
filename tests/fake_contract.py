@@ -199,3 +199,45 @@ def outcome(entry, steps, names, evidence, value):
     if kind == "deferred":
         return "runtime: " + (value.get("unverified") or ["Run the runtime check"])[0]
     return "gap: " + (value.get("blocking_gaps") or ["Missing input"])[0]
+
+
+REVIEW_WORDS = {
+    "satisfied": "done",
+    "contradicted": "fails",
+    "gap": "gap",
+    "not_evaluated": "gap",
+    "deferred": "later",
+    "planned": "planned",
+}
+
+
+def review_text(value, context):
+    """A reviewer's fixture value written as review.md."""
+    requirements = [entry["id"] for entry in context["requirements"]]
+    evidence = {entry["id"]: entry for entry in value.get("evidence", [])}
+    problems = {entry["criterion"]: entry["evidence"] for entry in value.get("findings", [])}
+    gaps = value.get("blocking_gaps") or ["Required input is missing"]
+    lines = ["# Review", "Summary: {}".format(value.get("summary") or "Fixture review"), ""]
+    lines.append("## Requirements")
+    used = {name for entry in value.get("coverage", []) for name in entry["evidence_ids"]}
+    unused = [name for name in evidence if name not in used]
+    for index, entry in enumerate(value.get("coverage", [])):
+        label = "R{}".format(requirements.index(entry["id"]) + 1)
+        word = REVIEW_WORDS[entry["outcome"]]
+        names = [*entry["evidence_ids"], *(unused if index == 0 else [])]
+        cited = [evidence[name] for name in names if name in evidence]
+        spans = ", ".join("`{path}:{line_start}-{line_end}`".format(**item) for item in cited)
+        if word == "done":
+            detail = spans
+        elif word == "fails":
+            problem = problems.get(entry["id"], entry.get("explanation") or "Fixture defect")
+            detail = f"{spans} ({problem})"
+        elif word == "gap":
+            detail = gaps[0]
+        elif word == "later":
+            detail = (value.get("unverified") or ["Run the runtime check"])[0]
+        else:
+            lines.append(f"- {label}: planned: {spans}" if spans else f"- {label}: planned")
+            continue
+        lines.append(f"- {label}: {word}: {detail}")
+    return "\n".join(lines) + "\n"

@@ -83,11 +83,11 @@ class ContextContractTests(unittest.TestCase):
         self.assertIn("only the windows named in the feedback", continuation)
         self.assertIn("formatted source view", continuation)
         self.assertNotIn("attached JSON contract", prompt_texts.text("profile.runtime_rules"))
-        self.assertIn("one JSON object", response_format.finish("reviewer"))
+        self.assertIn("review.md", response_format.finish("reviewer"))
         feedback = response_format.correction("planner", "no matching observed read")
         self.assertIn("no matching observed read", feedback)
         self.assertNotIn("corrections", feedback)
-        self.assertIn('"corrections"', response_format.correction("reviewer", "bad"))
+        self.assertNotIn('"corrections"', response_format.correction("reviewer", "bad"))
 
     def test_requirements_exclude_navigation_but_task_keeps_all_context(self):
         text = (

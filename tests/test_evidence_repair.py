@@ -8,7 +8,7 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 from taskrail.application import citation_review, evidence, source_guidance, source_views
-from taskrail.application.attempt_retries import Retries, needs_sources
+from taskrail.application.attempt_retries import Retries
 
 
 class EvidenceRepairTests(unittest.TestCase):
@@ -92,17 +92,13 @@ class EvidenceRepairTests(unittest.TestCase):
             outcome["contract_error"] = "Different defect"
             self.assertTrue(retries.allowed(outcome))
 
-    def test_malformed_evidence_needs_sources_but_keeps_the_retry_bounded(self):
-        errors = (
-            "Invalid evidence reference: /run/check.json: exit_code 0; use path:from-to",
-            "Invalid evidence line range",
-            "EVIDENCE_REFERENCE at /outcomes/0/evidence/0: Unknown delivered source handle: S9",
-        )
-        for error in errors:
-            with self.subTest(error=error):
+    def test_an_invalid_review_gets_one_full_attempt_and_the_implementer_none(self):
+        error = "review.md: line 5: R1 needs its reason"
+        for stage, repaired in (("reviewer", True), ("implementer", False)):
+            with self.subTest(stage=stage):
                 workflow = SimpleNamespace(
                     run=self.run,
-                    flow=dict(stage="reviewer"),
+                    flow=dict(stage=stage),
                     state=dict(stages=[dict(directory="01-review")], requirements=[]),
                     config={},
                 )
@@ -110,43 +106,11 @@ class EvidenceRepairTests(unittest.TestCase):
                     workflow=workflow, request="Original task", format_only=False
                 )
                 retries = Retries(attempts)
-                response = '{"schema_version":2,"outcomes":[],"missing_inputs":[]}'
-                outcome = dict(status="INVALID_RESULT", contract_error=error, final_text=response)
-                self.assertTrue(retries.allowed(outcome))
+                outcome = dict(status="INVALID_RESULT", contract_error=error, final_text="DONE")
+                self.assertEqual(retries.allowed(outcome), repaired)
                 self.assertFalse(attempts.format_only)
-                self.assertIn('"saved_response"', attempts.request)
-                self.assertIn(error, attempts.request)
-                self.assertEqual(retries.mode(), "research-recovery")
+                self.assertEqual(error in attempts.request, repaired)
                 self.assertFalse(retries.allowed(outcome))
-                self.assertFalse(needs_sources(error, {"format_repair_tools": "read"}))
-
-    def test_repair_receives_the_merged_draft_after_an_addressed_correction(self):
-        folder = self.run / "01-review"
-        folder.mkdir()
-        draft = dict(schema_version=2, outcomes=[], missing_inputs=["Missing contract"])
-        (folder / "decision-draft.json").write_text(json.dumps(draft))
-        workflow = SimpleNamespace(
-            run=self.run,
-            flow=dict(stage="reviewer"),
-            state=dict(stages=[dict(directory=folder.name)], requirements=[], contract_version=1),
-            config={},
-        )
-        attempts = SimpleNamespace(workflow=workflow, request="Original task", format_only=False)
-        correction = dict(schema_version=2, corrections=[dict(path="/outcomes", value=[])])
-        outcome = dict(
-            status="INVALID_RESULT",
-            contract_error="Missing fields",
-            final_text=json.dumps(correction),
-        )
-        retries = Retries(attempts)
-        with patch(
-            "taskrail.application.attempt_retries.prompts.repair", return_value="repair"
-        ) as repair:
-            self.assertTrue(retries.allowed(outcome))
-            self.assertEqual(json.loads(repair.call_args.args[0]), draft)
-        self.assertTrue(retries.rebuild(dict(status="BLOCKED")))
-        self.assertIn("Missing contract", attempts.request)
-        self.assertNotIn('"corrections"', attempts.request)
 
     def test_repeated_ranges_prepare_each_source_view_once(self):
         second = self.root / "other.json"

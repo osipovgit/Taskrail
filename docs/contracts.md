@@ -36,14 +36,14 @@ label before each requirement block (`[R1]`, `[R2 runtime]`, `[R3 constraint]`, 
 the requirement's own field and offset), the stage's instructions, and a compact Context
 JSON. Stable requirement IDs stay server-side; the model uses labels.
 
-Reviewers author compact decisions with `"schema_version": 2`.
-The server derives canonical stored results with version 1.
-Executor requests retain version 1. Unknown wire versions and unsupported run or
-checkpoint versions are rejected. These responses contain one JSON object. The planner writes
-`plan.md` and ends with `DONE`; its executor requests still use JSON. Continuations
-and validation feedback retain the stage's original format. The JSON parser also
-accepts one unambiguous object surrounded by
-prose or Markdown; the surrounding text is neither evidence nor instructions.
+No role writes a JSON result. The planner writes `plan.md` and a reviewer `review.md`,
+both in the run directory and attached to every turn, and each ends with `DONE`; the
+implementer ends with `DONE:` or `BLOCKED:`. The server derives the canonical stored
+result, version 1, from them. Executor requests are the only JSON responses and keep
+version 1. Unknown wire versions and unsupported run or checkpoint versions are
+rejected. Continuations and validation feedback retain the stage's original format.
+The request parser also accepts one unambiguous object surrounded by prose or
+Markdown; the surrounding text is neither evidence nor instructions.
 Multiple objects, incomplete JSON, unknown fields and duplicate keys are invalid.
 All result and tool paths are canonical absolute paths. Root aliases in task
 metadata are labels; the engine resolves them.
@@ -86,10 +86,14 @@ reviewers accept that recorded choice.
   session: every turn has it attached, and a later session does not re-check
   finished work. It is a note, never evidence, so a rejected overwrite of it is only
   a warning.
-- Reviewer: semantic outcomes, findings grounded in observed references, and missing
-  inputs. The server derives input completeness and aggregate verdict. Plan review
-  can approve planned work; result and no-change review cannot. An approval cannot
-  contain defects or required gaps.
+- Reviewer: writes `review.md`, a `Summary:` line and one line per requirement:
+  `R1: done: <citations>`, `R1: fails: <citations> (<problem>)`, `R1: gap: <missing
+  input>`, `R1: n/a: <why it does not apply>`, `R1: later: <runtime check>` and, in
+  plan review, `R1: planned`. Other lines are free notes. The server derives a finding
+  from each failure, the blocking gaps, input completeness and the verdict: a gap
+  blocks, a failure requests changes, otherwise the review approves. Plan review can
+  approve planned work; result and no-change review cannot. `n/a` covers a conditional
+  requirement whose condition did not occur and never blocks.
 
 Documentation and test work are valid standalone deliverables when the user requests
 them. The planner and reviewer reject only artificial companion tasks that separate
@@ -178,36 +182,17 @@ lines per citation, never from a protected file) and records it as read, so the 
 only checks its claim against it instead of reading again or restarting; otherwise it
 names the bounded missing windows. Repeated identical planner rejection
 after same-session correction stops automatic fresh research retries. The session
-keeps its context and tools. For a rejected V2 decision it may replace only the erroneous
-field instead of regenerating every outcome:
+keeps its context and tools and edits only the lines the feedback names; every problem
+of `plan.md` or `review.md` names its line. When a review has no correction left, a
+requirement whose citations it never confirmed becomes a gap that says so, instead of
+failing the stage.
 
-```json
-{"schema_version":2,"corrections":[{"path":"/outcomes/0/result","value":"satisfied"}]}
-```
-
-Corrections target the saved unvalidated `decision-draft.json`, at most 20 fields
-per message. Only semantic decision fields are addressable. Existing array slots
-may be replaced, or a whole array supplied; arbitrary insertion and deletion are
-not inferred. The complete merged candidate passes every normal gate again before
-it can advance the workflow. A correction has no execution or permission effects.
-Malformed references and unresolved handles identify the exact JSON pointer, allowing
-the model to replace one citation without repeating every requirement outcome.
-
-Format repair receives the saved response, the validation error, the schema and the
-server-assigned requirements under the request's `R<n>` labels. Each stage gets at most
-one. Validation errors name requirements by these labels as well; a split task's
-requirement may also be named by its parent's ID when that ID names exactly one. It has no tools (or
-read-only tools with `format_repair_tools: read`, which may also re-read the
-`recovery.md` evidence of earlier attempts of the same stage), never edits, cannot
-invent requirement IDs or quotations, and must not research. The implementer gets no
-format repair. If the repair reports BLOCKED because it
-cannot rebuild the result without tools, the stage gets one full attempt with tools
-and the original validation error. An evidence error (a wrong range, file or
-evidence ID, malformed reference or unresolved source handle) goes to that full attempt
-directly when repair has no read tools. Recovery retains the rejected response as
-untrusted draft data; after an addressed correction it receives the merged draft,
-not just the last patch. It preserves existing edits and does not replay completed
-writes or checks. Research recovery receives bounded observed source
+A plan or review still invalid after the corrections gets one full attempt with tools
+and the validation error; its file keeps its text. Validation errors name requirements
+by the request's `R<n>` labels; a split task's requirement may also be named by its
+parent's ID when that ID names exactly one. The implementer gets no repair attempt.
+A full attempt preserves existing edits and does not replay completed writes or
+checks. Research recovery receives bounded observed source
 material and keeps unresolved requirements explicit. `recovery.md` starts with an
 index: each recorded call with its target, window, size and the line range of its
 block in the file. The recovery prompt names the index lines and asks for windows of

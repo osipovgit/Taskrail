@@ -42,7 +42,12 @@ def report_result(context, prompt, header, emit):
             observed(text, offset, 200, emit)
         observed(source, 1, 7, emit)
         claims.append(dict(id="E2", path=str(source), line_start=2, line_end=6))
-        response = json.dumps(review(context, claims))
+        references = ", ".join("{path}:{line_start}-{line_end}".format(**claim) for claim in claims)
+        labels = range(1, len(context["requirements"]) + 1)
+        lines = ["Summary: Report reviewed", "## Requirements"]
+        lines += [f"- R{number}: done: {references}" for number in labels]
+        (run / "review.md").write_text("\n".join(lines) + "\n")
+        response = "DONE"
     for kind, part in (
         ("text", dict(text=response)),
         ("step_finish", dict(reason="stop", tokens=dict(input=100, output=10))),
@@ -66,18 +71,3 @@ def observed(path, offset, limit, emit, clip=False):
     identity = f"{path.name}-{offset}"
     part = dict(id=identity, callID=identity, tool="read", state=state)
     emit(json.dumps(dict(type="tool_use", part=part)), flush=True)
-
-
-def review(context, claims):
-    """Independent reviewer reaches the same sources through the real permission profile."""
-    cited = ["{path}:{line_start}-{line_end}".format(**claim) for claim in claims]
-    return dict(
-        schema_version=2,
-        summary="Observed reports match the answer",
-        outcomes=[
-            dict(requirement=entry["id"], result="satisfied", evidence=cited)
-            for entry in context["requirements"]
-        ],
-        findings=[],
-        missing_inputs=[],
-    )
