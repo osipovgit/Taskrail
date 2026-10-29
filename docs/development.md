@@ -26,11 +26,13 @@ local HTTP workers. They exercise contracts, permissions, workflow and recovery,
 checkpoints, budgets, telemetry, UI DOM behavior and deployment. Deployment tests use
 private release copies and system paths, with unconditional privilege-command stubs;
 they never invoke the host's sudo, systemd or executor reset.
-GitHub Actions (`.github/workflows/ci.yml`) runs `make check` on Python 3.12, the
-regression suite with pinned test dependencies on Python 3.10 to 3.14, and `taskrail init` plus `taskrail check`
-against a pinned opencode 1.x without calling a model. CodeQL (only while the
-repository is public; private repositories need GitHub Code Security) and Dependabot
-watch the code and pinned dependencies. `tests/fixtures/` holds recorded opencode 1.19.3
+GitHub Actions runs the same [quality groups](testing.md#required-checks) as
+`make check`, with Python regressions on Python 3.10 to 3.14 and an additional
+permission check against pinned opencode 1.x without calling a model. CodeQL runs
+while the repository is public; private repositories need GitHub Code Security.
+Dependabot groups weekly updates by ecosystem. See
+[repository administration](repository.md) for required checks and owner review.
+`tests/fixtures/` holds recorded opencode 1.19.3
 and 2.0.30 event streams; when opencode changes its events, record a new stream with
 paths replaced by `/fixture` and keep both. `make test` runs the Python tests with a temporary
 `HOME`, so the locks of running tasks and installed settings cannot affect them.

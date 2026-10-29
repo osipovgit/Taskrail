@@ -4,16 +4,21 @@ on:
   push:
     branches: [master]
   pull_request:
+  workflow_dispatch:
   schedule:
     - cron: "17 3 * * 1"
 
 permissions:
   contents: read
 
+concurrency:
+  group: security-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   visibility:
     # Code scanning needs a public repository (or GitHub Code Security for a private one).
-    name: Check repository visibility
+    name: Security / Availability
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     outputs:
@@ -24,11 +29,15 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           private=$(gh api "repos/${GITHUB_REPOSITORY}" --jq .private)
-          if [ "$private" = "false" ]; then echo "public=true" >> "$GITHUB_OUTPUT"; else echo "public=false" >> "$GITHUB_OUTPUT"; fi
+          case "$private" in
+            false) echo "public=true" >> "$GITHUB_OUTPUT" ;;
+            true) echo "public=false" >> "$GITHUB_OUTPUT" ;;
+            *) exit 1 ;;
+          esac
           echo "Repository private: $private"
 
   analyze:
-    name: Analyze ${{ matrix.language }}
+    name: Security / ${{ matrix.language }}
     needs: visibility
     if: needs.visibility.outputs.public == 'true'
     runs-on: ubuntu-24.04
@@ -42,11 +51,36 @@ jobs:
       matrix:
         language: [python, javascript-typescript]
     steps:
-      - uses: actions/checkout@v7
-      - uses: github/codeql-action/init@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: github/codeql-action/init@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4
         with:
           languages: ${{ matrix.language }}
           queries: security-and-quality
-      - uses: github/codeql-action/analyze@v4
+      - uses: github/codeql-action/analyze@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4
         with:
           category: /language:${{ matrix.language }}
+
+  gate:
+    name: Security gate
+    if: always()
+    needs: [visibility, analyze]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Require analysis for public repositories
+        env:
+          VISIBILITY: ${{ needs.visibility.result }}
+          PUBLIC: ${{ needs.visibility.outputs.public }}
+          ANALYSIS: ${{ needs.analyze.result }}
+        run: |
+          test "$VISIBILITY" = success
+          if [ "$PUBLIC" = true ]; then
+            test "$ANALYSIS" = success
+          elif [ "$PUBLIC" = false ]; then
+            test "$ANALYSIS" = skipped
+            echo "CodeQL is unavailable without private code scanning entitlement."
+          else
+            exit 1
+          fi

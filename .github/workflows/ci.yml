@@ -4,25 +4,28 @@ on:
   push:
     branches: [master]
   pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   quality:
-    name: make check
+    name: Quality / Lint and formatting
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-python@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
         with:
           python-version: "3.12"
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: "24"
       - name: Install pinned development tools
@@ -30,11 +33,11 @@ jobs:
           python -m venv .venv
           .venv/bin/python -m pip install -r requirements-dev.txt
           npm ci --ignore-scripts
-      - name: Run the quality gate
-        run: make check PYTHON=.venv/bin/python
+      - name: Check Python, UI and shell sources
+        run: make lint format-check PYTHON=.venv/bin/python
 
   runtime:
-    name: tests on Python ${{ matrix.python }}
+    name: Tests / Python ${{ matrix.python }}
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     strategy:
@@ -42,20 +45,35 @@ jobs:
       matrix:
         python: ["3.10", "3.11", "3.12", "3.13", "3.14"]
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-python@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
         with:
           python-version: ${{ matrix.python }}
       - name: Install pinned test dependencies
         run: python -m pip install -r requirements-dev.txt
-      - name: Run regression tests with a private HOME
-        run: |
-          taskrail_test_home=$(mktemp -d)
-          trap 'rm -rf -- "$taskrail_test_home"' EXIT
-          HOME="$taskrail_test_home" python -m unittest discover -s tests
+      - name: Run Python regressions
+        run: make test-python
+
+  ui:
+    name: Tests / UI
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: "24"
+      - name: Install pinned UI tools
+        run: npm ci --ignore-scripts
+      - name: Run UI regressions
+        run: make test-ui
 
   opencode:
-    name: permission check on opencode ${{ matrix.opencode }}
+    name: Compatibility / opencode ${{ matrix.opencode }}
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     strategy:
@@ -63,18 +81,41 @@ jobs:
       matrix:
         opencode: ["1.19.3"]
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-python@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
         with:
           python-version: "3.12"
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: "24"
       - name: Install the pinned opencode CLI
         run: npm install --prefix "$RUNNER_TEMP/opencode" "opencode-ai@${{ matrix.opencode }}"
-      - name: Initialize settings and verify real permission enforcement (no model call)
+      - name: Verify permission enforcement without a model call
         run: |
           export HOME="$RUNNER_TEMP/home" PATH="$RUNNER_TEMP/opencode/node_modules/.bin:$PATH"
           mkdir -p "$HOME"
-          python -m taskrail init --opencode "$(command -v opencode)" --format-repair-tools none
+          python -m taskrail init --opencode "$(command -v opencode)"
           python -m taskrail check
+
+  gate:
+    name: CI gate
+    if: always()
+    needs: [quality, runtime, ui, opencode]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Require every group to succeed
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+
+          results = json.loads(os.environ["RESULTS"])
+          failed = [name for name, job in results.items() if job["result"] != "success"]
+          if not results or failed:
+              raise SystemExit("Required groups did not succeed: " + ", ".join(failed))
+          PY

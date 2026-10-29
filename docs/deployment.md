@@ -252,8 +252,9 @@ scan:
 ```
 
 Settings define the exact argv; task files, imported drafts and models cannot add
-commands. Execution requires personal approval per command or the operator's
-Allow all actions for the run; only built-in read-only listings are exempt. A command
+commands. Execution follows the [local command policy](access.md#local-commands):
+sandboxed commands run at once; commands outside the sandbox require personal
+approval per command or the operator's Allow all actions for the run. A command
 runs only for runs whose declared roots include its `cwd`; in a
 [worktree-isolated](task-format.md#worktree-isolation) run it runs in that root's worktree. It runs without a shell,
 as the service user, with the filtered environment and the local command policy (no

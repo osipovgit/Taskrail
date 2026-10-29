@@ -1,9 +1,11 @@
 # Taskrail
 
 A local, browser-first application for research, scoped code changes and independent
-review through [opencode](https://opencode.ai). It edits original project roots,
-preserves unrelated work and uses controlled Git access without automatic rollback. Git history is available to
-all roles; task-required writes are restricted to the implementer. CLI remains supported.
+review through [opencode](https://opencode.ai). Code changes use isolated Git
+worktrees by default in the browser; tasks can also edit declared project roots.
+It preserves unrelated work and uses controlled Git access without automatic
+rollback. Git history is available to all roles; task-required writes are restricted
+to the implementer. CLI remains supported.
 
 ## Start
 
@@ -68,7 +70,8 @@ approval, one by one or once per run. The optional
 [isolated SSH executor](docs/ssh-executor.md) runs exact remote scripts and Jenkins builds after personal
 root approval, with results returned to the same task. Deferred runtime checks
 remain visible. The planner and the reviewers write Markdown files and finish with `DONE`;
-the implementer finishes with `DONE` or `BLOCKED`. Source quotations
+the implementer finishes with `DONE` or `BLOCKED`. See the
+[response contracts](docs/contracts.md). Source quotations
 and per-requirement outcomes are checked before each transition.
 
 ## CLI
@@ -111,3 +114,5 @@ first. [Access routes](docs/access.md) describe what agents may read, edit and r
 
 Taskrail is licensed under the [Apache License 2.0](LICENSE). Report vulnerabilities
 privately as described in [SECURITY.md](SECURITY.md); see [CONTRIBUTING.md](CONTRIBUTING.md) to contribute.
+Every change requires a pull request, passing required pipelines and the repository
+owner's personal review. Direct commits and pushes to `master` are prohibited.

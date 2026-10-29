@@ -13,6 +13,31 @@ transition regression belongs in the normal suite as well. Do not make the optio
 targets dependencies of `check` or CI, and do not present a scripted model decision
 as evidence of real model quality. Lint and formatting still inspect all test code.
 
+## Required checks
+
+The local entry point is `make check`. CI uses its component targets so the Python
+3.12 suite runs once, alongside the other supported Python versions.
+
+| Group | Local command | GitHub job |
+|---|---|---|
+| Python lint and design | `make lint-python` | Quality / Lint and formatting |
+| JavaScript and CSS lint | `make lint-ui` | Quality / Lint and formatting |
+| Shell syntax, lint and formatting | `make lint-shell` | Quality / Lint and formatting |
+| Python and UI formatting | `make format-check` | Quality / Lint and formatting |
+| Python regressions | `make test-python` | Tests / Python 3.10–3.14 |
+| UI regressions | `make test-ui` | Tests / UI |
+| CLI permission compatibility | `taskrail init`, then `taskrail check` in disposable settings | Compatibility / opencode 1.19.3 |
+| Static security analysis | GitHub CodeQL | Security / Python and JavaScript |
+
+`make test` combines Python and UI regressions. Use the pinned Python environment,
+for example `make test-python PYTHON=.venv/bin/python`.
+`CI gate` requires every CI group to succeed, including every Python matrix entry.
+`Security gate` requires both CodeQL languages on public repositories; the private
+repository path explicitly reports that analysis is unavailable. A failed,
+cancelled or unexpectedly skipped dependency cannot pass either gate.
+Repository rules must require both statuses; YAML alone does not prevent a merge.
+See [repository administration](repository.md).
+
 ## Scenario corpus
 
 `tests/fixtures/acceptance/corpus.json` owns the task text, initial projects, expected

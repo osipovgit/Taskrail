@@ -644,7 +644,10 @@ class SelectionTests(unittest.TestCase):
         for major in ("0.8.0", "3.0.0", "custom-cli 9.1.0"):
             with self.subTest(version=major), self.assertRaisesRegex(ValueError, "Unsupported"):
                 self.version(major)
-        failures = (OSError("unavailable"), subprocess.TimeoutExpired(["custom-cli", "--version"], 30))
+        failures = (
+            OSError("unavailable"),
+            subprocess.TimeoutExpired(["custom-cli", "--version"], 30),
+        )
         for failure in failures:
             with (
                 self.subTest(error=failure),
