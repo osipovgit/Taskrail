@@ -8,7 +8,7 @@ import time
 import uuid
 from pathlib import Path
 
-from fake_contract import attempt, decision, earlier_invalid, enrich, plan_text
+from fake_contract import attempt, decision, earlier_invalid, enrich, plan_text, review_text
 from fake_file_writes import event as file_event
 from fake_file_writes import implement
 from fake_report_repair import report_result
@@ -63,7 +63,9 @@ run = request_file.parent.parent
 format_only = record["mode"] == "format-repair"
 # Every turn attaches the stage's own run file after the prompt, and only that file.
 attached = [args[index + 1] for index, item in enumerate(args) if item == "--file"][1:]
-own = dict(planner=run / "plan.md", implementer=run / "progress.md").get(role)
+owned = dict(planner="plan.md", implementer="progress.md", reviewer="review.md")
+owned["plan-reviewer"] = "review.md"
+own = run / owned[role] if role in owned else None
 assert attached == ([] if format_only or own is None else [str(own)]), attached
 continued = "--session" in args
 rebuilt = not format_only and earlier_invalid(run, record)
@@ -525,6 +527,7 @@ bad_citation = mode == "bad-citation" and not continued
 bad_citation = bad_citation or (mode == "bad-citation-kept" and not rebuilt)
 if bad_citation and role == "plan-reviewer":
     value["evidence"][0].update(line_start=9, line_end=9)
+reviewed = dict(value)
 if role != "planner":
     value = decision(value, role)
 malformed = mode == "format-unavailable" or (mode == "repair-blocked" and not rebuilt)
@@ -542,6 +545,9 @@ response = json.dumps(value)
 if role == "implementer":
     gaps = value.get("missing_inputs") or []
     response = "BLOCKED: " + "; ".join(gaps) if gaps else "DONE: " + value.get("summary", "done")
+if role in ("plan-reviewer", "reviewer") and not format_only:
+    (run / "review.md").write_text(review_text(reviewed, context))
+    response = "DONE"
 plan_broken = mode in ("invalid-once", "timeout-then-invalid") and not (continued or rebuilt)
 if mode == "prose-block" and role == "planner":
     value.update(status="BLOCKED", blocking_gaps=["Mandatory local commands unavailable"])

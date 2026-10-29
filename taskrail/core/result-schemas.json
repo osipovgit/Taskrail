@@ -57,7 +57,8 @@
                 "deferred",
                 "gap",
                 "contradicted",
-                "not_evaluated"
+                "not_evaluated",
+                "not_applicable"
               ]
             },
             "evidence_ids": {

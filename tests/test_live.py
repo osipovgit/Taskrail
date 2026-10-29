@@ -304,11 +304,12 @@ class LiveTests(LiveFixture, unittest.TestCase):
     def test_live_prompt_has_complete_schema(self):
         run, _status, _state = self.run_mode()
         prompt = (run / "02-plan-review/request.md").read_text()
+        self.assertIn(f"REVIEW FILE: write your review in {run / 'review.md'}", prompt)
         schemas = prompt.split("Schemas:\n", 1)[1].split("\nContext:", 1)[0]
         schema = json.loads(schemas.splitlines()[0])
         self.assertNotIn("ACTION_REQUEST", schemas)
-        self.assertIn("findings", schema["properties"])
-        self.assertNotIn("quote", json.dumps(schema))
+        self.assertEqual(schema["properties"]["status"], {"const": "GIT_REQUEST"})
+        self.assertNotIn("findings", schemas)
         planning = (run / "01-plan/request.md").read_text()
         self.assertIn(f"PLAN FILE: edit the Markdown file {run / 'plan.md'}", planning)
         self.assertIn("[R1]\nReturn 2", planning)
@@ -585,6 +586,7 @@ class LiveTests(LiveFixture, unittest.TestCase):
                 "budgets.json",
                 "plan.md",
                 "progress.md",
+                "review.md",
                 "source-packet-planner.json",
                 "source-packet-plan-reviewer.json",
                 "source-packet-implementer.json",
@@ -595,9 +597,7 @@ class LiveTests(LiveFixture, unittest.TestCase):
             directory = run / record["directory"]
             self.assertTrue((directory / "result.json").exists())
             if record["mode"] == "model":
-                drafted = (directory / "decision-draft.json").is_file()
-                self.assertEqual(drafted, record["stage"] not in {"planner", "implementer"})
-                names = {p.name for p in directory.iterdir()} - {"plan.md", "decision-draft.json"}
+                names = {p.name for p in directory.iterdir()} - {"plan.md", "review.md"}
                 self.assertEqual(
                     names,
                     {
@@ -752,18 +752,6 @@ class LiveTests(LiveFixture, unittest.TestCase):
         self.assertEqual(plan["proposed_change_files"], [str(self.root / "hello.py")])
         self.assertIn("## T1: Return 2", (run / "01-plan/plan.md").read_text())
 
-    def test_format_repair_rejected_unavailable_calls_keep_valid_conclusion(self):
-        run, status, state = self.run_mode("format-unavailable")
-        self.assertEqual(status, "READY_FOR_REVIEW")
-        repaired = next(stage for stage in state["stages"] if stage["mode"] == "format-repair")
-        self.assertEqual(repaired["stage"], "plan-reviewer")
-        self.assertEqual(repaired["errors"], [])
-        self.assertEqual(len(repaired["tool_errors"]), 2)
-        self.assertEqual(len(repaired["warnings"]), 2)
-        self.assertEqual(repaired["status"], "RESULT_VALID")
-        profile = (run / repaired["directory"] / "agent.md").read_text()
-        self.assertIn("format converter", profile)
-
     def continue_with_ok_model(self, run):
         settings = json.loads(self.settings.read_text())
         settings["command"][-1] = "ok"
@@ -855,18 +843,6 @@ class LiveTests(LiveFixture, unittest.TestCase):
         _, status, state = self.run_mode("review-repair")
         self.assertEqual(status, "READY_FOR_REVIEW")
         self.assertEqual(len(state["attempts"]), 6)
-
-    def test_compact_decisions_and_addressed_correction_complete_the_workflow(self):
-        run, status, state = self.run_mode("compact-correction")
-        self.assertEqual(status, "READY_FOR_REVIEW", state.get("summary"))
-        self.assertEqual(state["stages"][1]["session_turns"], 2)
-        saved = json.loads((run / "03-implement/result.json").read_text())
-        self.assertEqual(saved["schema_version"], 1)
-        self.assertEqual(saved["completed_steps"], ["T1"])
-        self.assertEqual(saved["changed_files"], [str(self.root / "hello.py")])
-        self.assertEqual(saved["status"], "IMPLEMENTED")
-        correction = (run / "02-plan-review/tool-result.md").read_text()
-        self.assertIn("FIELD_ENUM at /outcomes/0/result", correction)
 
     def test_plan_repair(self):
         _, status, state = self.run_mode("plan-repair")
@@ -1036,16 +1012,13 @@ class LiveTests(LiveFixture, unittest.TestCase):
         self.assertEqual((self.root / "unrelated.txt").read_text(), "user dirty work\n")
         self.assertEqual(state["stages"][-1]["stage"], "reviewer")
 
-    def test_narration_without_a_request_continues_the_same_session(self):
-        run, status, state = self.run_mode("narrate")
+    def test_a_reviewer_answers_in_its_file_so_its_prose_ends_the_stage(self):
+        _run, status, state = self.run_mode("narrate")
         self.assertEqual(status, "READY_FOR_REVIEW", state.get("summary"))
         review = [stage for stage in state["stages"] if stage["stage"] == "plan-reviewer"]
-        self.assertEqual([stage["mode"] for stage in review], ["model"])
-        self.assertEqual(review[0]["session_turns"], 2)
-        prompt = (run / review[0]["directory"] / "tool-result.md").read_text()
-        self.assertIn("did not follow the advertised response format", prompt)
-        self.assertIn("You are the reviewer stage", prompt)
-        self.assertIn(str(run / review[0]["directory"] / "request.md"), prompt)
+        self.assertEqual(
+            [(stage["mode"], stage["session_turns"]) for stage in review], [("model", 1)]
+        )
 
     def test_rejected_citation_is_corrected_in_the_same_session(self):
         run, status, state = self.run_mode("bad-citation")
@@ -1056,14 +1029,14 @@ class LiveTests(LiveFixture, unittest.TestCase):
         self.assertIn("Evidence E1", prompt)
         self.assertIn("range outside source of 3 lines", prompt)
 
-    def test_kept_wrong_citation_gets_a_full_attempt_instead_of_a_blind_repair(self):
+    def test_a_citation_still_wrong_after_the_corrections_becomes_a_gap(self):
         run, status, state = self.run_mode("bad-citation-kept")
-        self.assertEqual(status, "READY_FOR_REVIEW", state.get("summary"))
-        planner = [stage for stage in state["stages"] if stage["stage"] == "plan-reviewer"]
-        self.assertEqual([stage["mode"] for stage in planner], ["model", "research-recovery"])
-        self.assertEqual(planner[0]["session_turns"], MAX_RESULT_CORRECTIONS + 1)
-        request = (run / planner[1]["directory"] / "request.md").read_text()
-        self.assertIn("PREVIOUS FINAL RESPONSE WAS INVALID: Evidence E1", request)
+        self.assertEqual(status, "BLOCKED", state.get("summary"))
+        review = [stage for stage in state["stages"] if stage["stage"] == "plan-reviewer"]
+        self.assertEqual([stage["mode"] for stage in review], ["model"])
+        self.assertEqual(review[0]["session_turns"], MAX_RESULT_CORRECTIONS + 1)
+        result = json.loads((run / review[0]["directory"] / "result.json").read_text())
+        self.assertIn("evidence not confirmed", result["blocking_gaps"][0])
 
     def test_markup_request_gets_the_json_format_in_the_same_session(self):
         run, status, state = self.run_mode("markup-request")
@@ -1092,18 +1065,6 @@ class LiveTests(LiveFixture, unittest.TestCase):
         request = (run / resumed["directory"] / "request.md").read_text()
         self.assertIn(note, request)
         self.assertIn("Do not blindly replay edits", request)
-
-    def test_blocked_format_repair_gets_one_full_attempt(self):
-        run, status, state = self.run_mode("repair-blocked")
-        self.assertEqual(status, "READY_FOR_REVIEW", state.get("summary"))
-        planner = [stage for stage in state["stages"] if stage["stage"] == "plan-reviewer"]
-        self.assertEqual(
-            [stage["mode"] for stage in planner], ["model", "format-repair", "research-recovery"]
-        )
-        request = (run / planner[-1]["directory"] / "request.md").read_text()
-        self.assertIn(
-            "PREVIOUS FINAL RESPONSE WAS INVALID: FIELD_KEYS at /: Missing fields", request
-        )
 
     def test_large_change_waits_for_the_operator(self):
         run, status, state = self.run_mode("ok", max_change_lines=1)

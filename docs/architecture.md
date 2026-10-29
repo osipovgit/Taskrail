@@ -72,8 +72,10 @@ The browser has no runtime
 dependencies; Node packages are only linting and formatting tools. The runtime needs
 Python 3.10+ for both the runtime and development tools, and Node 24.19+ for UI linting.
 
-The response contract lives in `core/result-schemas.json`: models author compact
-version 2 decisions and the server materializes canonical version 1 records. A run
+Models write no JSON results: the server reads `plan.md`, `review.md` and the
+implementer's final `DONE` or `BLOCKED` and stores canonical version 1 records
+(`core/plan_document.py`, `core/review_document.py`). `core/result-schemas.json` holds
+the planner's stored shape and the executor request contracts. A run
 frozen with other schemas stays viewable, but Continue refuses it; use Restart.
 Application helpers compose prompts, bind source evidence, freeze instructions and
 account for durable budgets. The engine owns requirement IDs and the actual

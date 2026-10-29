@@ -10,7 +10,7 @@ the executor is installed. The texts live in core/prompt-texts.json.
 import json
 from types import MappingProxyType
 
-from taskrail.application import executor_contracts, plan_file, progress_file
+from taskrail.application import executor_contracts, plan_file, progress_file, review_file
 from taskrail.core import protected_paths, schema
 from taskrail.core.prompt_texts import text
 
@@ -19,7 +19,14 @@ IMPLEMENTER = "implementer"
 LINE_LIMIT = 1800
 
 
-FINISHES = MappingProxyType({PLANNER: "format.plan_finish", IMPLEMENTER: "format.done_finish"})
+FINISHES = MappingProxyType(
+    {
+        PLANNER: "format.plan_finish",
+        IMPLEMENTER: "format.done_finish",
+        "plan-reviewer": "format.review_finish",
+        "reviewer": "format.review_finish",
+    }
+)
 
 
 def finish(stage):
@@ -56,9 +63,8 @@ def section(stage, state, run, config, catalog=None):
         rules = "\n".join((progress_file.instructions(run), text("format.done")))
         routing = text("format.request_routing")
     else:
-        alternatives.insert(0, own_schema(stage, state))
-        rules = decisions(stage)
-        routing = text("format.routing")
+        rules = review_file.instructions(run, stage)
+        routing = text("format.request_routing")
     return "\n".join([rules, routing, *map(schema_line, alternatives)])
 
 

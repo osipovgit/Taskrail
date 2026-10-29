@@ -5,12 +5,12 @@ from pathlib import Path
 from taskrail.application import (
     check_planning,
     citation_review,
-    decision_adapter,
     declared_block,
     evidence,
     execution_evidence,
     plan_file,
     plan_result,
+    review_result,
 )
 from taskrail.application.implementer_result import stage_result as implementation
 from taskrail.core import (
@@ -43,20 +43,23 @@ def validate(response, context):
 
 
 def decoded(response, context):
-    """The planner's result comes from its plan file, the implementer's from its final
-    DONE or BLOCKED, every other from its response."""
+    """The planner's result comes from plan.md, a reviewer's from review.md and the
+    implementer's from its final DONE or BLOCKED."""
     if context["stage"] == plan_result.PLANNER:
         return plan_result.stage_result(context)
     if context[ROLE] == IMPLEMENTER:
         return implementation(response, context)
-    return decision_adapter.stage_decision(response, context)
+    return review_result.stage_result(context)
 
 
 def checked(payload, context):
     """Coverage, evidence and role checks of a decoded result."""
     atomic_json(context["folder"] / "response-object.json", payload)
-    if declared_block.present(payload):
+    run = context["run"]
+    records = [record for record in evidence.validation_records(run) if evidence.current(record)]
+    if context["stage"] == plan_result.PLANNER and declared_block.present(payload):
         payload = declared_block.stop_result(payload, context)
+    payload = review_result.settled(payload, records, context)
     if context[ROLE] != IMPLEMENTER:
         coverage.validate_coverage(
             payload,
@@ -65,8 +68,6 @@ def checked(payload, context):
             execution_evidence.claim_ids(context["run"], payload[EVIDENCE]),
             check_planning.criteria(payload, context),
         )
-    run = context["run"]
-    records = [record for record in evidence.validation_records(run) if evidence.current(record)]
     for claim in payload[EVIDENCE]:
         approved_path(
             claim["path"],

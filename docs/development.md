@@ -42,7 +42,7 @@ changes. Their execution, live provider acceptance and coverage measurement requ
 explicit user request; `make check` and CI run the ordinary regression suite only.
 
 Deterministic-contract tests cover lossless inputs, strict plan parsing, requirement
-lineage, compact decisions, source packets, context admission, durable command replay
+lineage, review files, source packets, context admission, durable command replay
 guards and criterion-bound check evidence. Subprocess workflow tests cover direct
 child implementation, independent integration review and same-session plan edit
 recovery. Run an individual workflow test with a private `HOME`, as `make test` does;

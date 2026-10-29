@@ -53,7 +53,7 @@ def validate_outcome(outcome, requirement, evidence, executed_evidence=(), plann
 
 def runtime_outcome(outcome, requirement, executed_evidence, planned_runtime):
     """Runtime acceptance needs this criterion's matching, current check assessment."""
-    if outcome[OUTCOME] in {"deferred", "not_evaluated", "gap"}:
+    if outcome[OUTCOME] in {"deferred", "not_evaluated", "gap", "not_applicable"}:
         return
     if outcome[OUTCOME] == "planned":
         require(
