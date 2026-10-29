@@ -113,7 +113,6 @@ reset directories.
 | `models` | `{}` | Role to `provider/model`; a missing role uses opencode's configured default model |
 | `agent_directory` | opencode agent directory | Where managed role profiles are written; relative to the settings file |
 | `agent_env_allow` | `[]` | Extra environment variables opencode may receive despite their secret-shaped names; common provider keys are always allowed |
-| `format_repair_tools` | `none` | `read` keeps read-only tools in format repair passes, for providers that reject tool-less requests |
 | `permission_worktree` | inferred | Base directory for relative permission names (Git worktree for 1.x, first root for 2.x); required when `.git` is a file or symlink |
 | `tool_output_dir` | opencode location | Absolute directory (`~` allowed) where a compatible CLI keeps truncated tool output; its automatic `external_directory` allow rule is accepted only for this directory |
 | `opencode_server` | `true` | `false` runs each 1.x turn as its own process instead of on the stage's private server |
@@ -194,11 +193,6 @@ A valid ready proposal proceeds to independent plan review without another plann
 call; the original context-stop diagnostics remain recorded. An invalid proposal
 gets exact validation errors in its bounded recovery attempt. Admission refusals,
 permission failures, source violations and interrupted writers never use this path.
-
-Format repair runs with every tool denied by default. opencode's free Zen models
-reject such tool-less requests (`FreeTierError`); for them set `format_repair_tools`
-to `read`, which keeps read-only tools in format passes (edits stay denied) and
-instructs the model to re-read only evidence it already cites.
 
 ## Local command sandbox
 

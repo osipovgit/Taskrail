@@ -35,13 +35,12 @@ def init_command(argv):
     parser.add_argument(COMMAND_ARGUMENT)
     parser.add_argument("--opencode", help="opencode command, default: opencode on PATH")
     parser.add_argument("--model", action="append", default=[], help="ROLE=provider/model")
-    parser.add_argument("--format-repair-tools", choices=("none", "read"))
     parser.add_argument("--force", action="store_true", help="Replace existing settings")
     args = parser.parse_args(argv)
     from taskrail.onboarding import init
 
     try:
-        target = init(args.opencode, args.model, args.format_repair_tools, force=args.force)
+        target = init(args.opencode, args.model, force=args.force)
     except (OSError, ValueError) as error:
         sys.stderr.write(f"{ERROR_PREFIX}{error}\n")
         return 2

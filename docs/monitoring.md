@@ -84,7 +84,8 @@ For diagnostics, share the run index/report and affected stage, plus budgets and
 evidence for retry issues. Redact secrets and sensitive source before sharing.
 
 `max_repairs` (default 3, at most 5) limits plan repairs after plan review and repair
-cycles after failed checks or result review; each stage gets at most one format repair.
+cycles after failed checks or result review; an invalid plan or review gets at most one
+full attempt.
 `read_retries` (default 3, at most 3) limits read-only research retries. Tool calls remain diagnostic metrics.
 
 Polling continues while text is selected, but DOM updates pause during a pointer

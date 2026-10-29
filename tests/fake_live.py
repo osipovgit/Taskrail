@@ -8,7 +8,7 @@ import time
 import uuid
 from pathlib import Path
 
-from fake_contract import attempt, decision, earlier_invalid, enrich, plan_text, review_text
+from fake_contract import attempt, earlier_invalid, enrich, plan_text, review_text
 from fake_file_writes import event as file_event
 from fake_file_writes import implement
 from fake_report_repair import report_result
@@ -60,15 +60,14 @@ prompt = request_file.read_text()
 record = attempt(args)
 role = record["stage"]
 run = request_file.parent.parent
-format_only = record["mode"] == "format-repair"
 # Every turn attaches the stage's own run file after the prompt, and only that file.
 attached = [args[index + 1] for index, item in enumerate(args) if item == "--file"][1:]
 owned = dict(planner="plan.md", implementer="progress.md", reviewer="review.md")
 owned["plan-reviewer"] = "review.md"
 own = run / owned[role] if role in owned else None
-assert attached == ([] if format_only or own is None else [str(own)]), attached
+assert attached == ([] if own is None else [str(own)]), attached
 continued = "--session" in args
-rebuilt = not format_only and earlier_invalid(run, record)
+rebuilt = earlier_invalid(run, record)
 saved_context = profiles / "fixture-context.json"
 request = (request_file.parent / "request.md").read_text()
 if "Context:\n" in request:
@@ -82,14 +81,13 @@ context["requirements"] = [
     for entry in json.loads((run / "run.json").read_text())["requirements"]
 ]
 header = json.loads((profiles / (agent + ".md")).read_text().split("---")[1])
-if not format_only:
-    for file in [request_file, Path(context["task_file"])] + (
-        [Path(context["diff_file"])] if context.get("diff_file") else []
-    ):
-        assert header["permission"]["read"].get(str(file)) == "allow", str(file)
-        assert header["permission"]["external_directory"].get(str(file.parent) + "/*") == "allow", (
-            str(file.parent)
-        )
+for file in [request_file, Path(context["task_file"])] + (
+    [Path(context["diff_file"])] if context.get("diff_file") else []
+):
+    assert header["permission"]["read"].get(str(file)) == "allow", str(file)
+    assert header["permission"]["external_directory"].get(str(file.parent) + "/*") == "allow", str(
+        file.parent
+    )
 if mode == "scenario":
     from acceptance.fixture_agent import execute
 
@@ -290,9 +288,7 @@ if role == "plan-reviewer":
         name = entry["path"]
         assert Path(name).is_absolute(), name
         Path(name).read_bytes()
-if role == "implementer" and format_only:
-    assert header["permission"]["edit"] == "deny", header["permission"]["edit"]
-elif role == "implementer":
+if role == "implementer":
     assert all(Path(name).is_absolute() for name in context["allowed_files"])
     for name in context["allowed_files"]:
         relative = os.path.relpath(name, root)
@@ -443,30 +439,9 @@ if mode == "structured-steps" and role == "planner":
             dependency="none",
         )
     ]
-if mode == "format-unavailable" and role == "plan-reviewer" and format_only:
-    for index in range(2):
-        print(
-            json.dumps(
-                dict(
-                    type="tool_use",
-                    part=dict(
-                        id="unavailable-" + str(index),
-                        tool="invalid",
-                        state=dict(
-                            status="error",
-                            input={},
-                            error="Model tried to call unavailable tool 'invalid'. Available tools: .",
-                        ),
-                    ),
-                )
-            )
-        )
-
 if mode == "review-preimage" and role == "reviewer":
     target = run / "00-input/preimages/project/hello.py"
-value = enrich(
-    value, context, target, role, observed=not format_only, read_wrapper=mode == "wrapped-no-change"
-)
+value = enrich(value, context, target, role, read_wrapper=mode == "wrapped-no-change")
 if mode == "wrapped-no-change":
     value["evidence"][0]["line_end"] = len(target.read_text().splitlines())
 if mode == "two-tasks" and role == "planner" and value["proposed_change_files"]:
@@ -520,33 +495,16 @@ if mode == "git-actions":
                 line_end=2,
             )
         )
-if mode == "repair-blocked" and role == "plan-reviewer" and format_only:
-    value.update(status="BLOCKED", blocking_gaps=["The saved response omits sources"])
-    value["coverage"] = [dict(entry, outcome="gap") for entry in value["coverage"]]
 bad_citation = mode == "bad-citation" and not continued
 bad_citation = bad_citation or (mode == "bad-citation-kept" and not rebuilt)
 if bad_citation and role == "plan-reviewer":
     value["evidence"][0].update(line_start=9, line_end=9)
-reviewed = dict(value)
-if role != "planner":
-    value = decision(value, role)
-malformed = mode == "format-unavailable" or (mode == "repair-blocked" and not rebuilt)
-if malformed and role == "plan-reviewer" and not format_only:
-    value.pop("missing_inputs")
-if mode == "compact-correction" and role == "plan-reviewer":
-    if continued:
-        value = dict(
-            schema_version=2,
-            corrections=[dict(path="/outcomes/0/result", value="planned")],
-        )
-    else:
-        value["outcomes"][0]["result"] = "typo"
 response = json.dumps(value)
 if role == "implementer":
-    gaps = value.get("missing_inputs") or []
+    gaps = value["blocking_gaps"] if value["status"] == "BLOCKED" else []
     response = "BLOCKED: " + "; ".join(gaps) if gaps else "DONE: " + value.get("summary", "done")
-if role in ("plan-reviewer", "reviewer") and not format_only:
-    (run / "review.md").write_text(review_text(reviewed, context))
+if role in ("plan-reviewer", "reviewer"):
+    (run / "review.md").write_text(review_text(value, context))
     response = "DONE"
 plan_broken = mode in ("invalid-once", "timeout-then-invalid") and not (continued or rebuilt)
 if mode == "prose-block" and role == "planner":

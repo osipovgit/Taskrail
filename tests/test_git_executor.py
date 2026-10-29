@@ -54,7 +54,6 @@ class GitExecutorTests(unittest.TestCase):
             git_before=git_metadata(self.roots),
             scan=lambda: snapshot(self.roots),
             git_metadata=git_metadata,
-            format_only=False,
         )
 
     def payload(self, argv, root=None):
@@ -662,15 +661,6 @@ class GitExecutorTests(unittest.TestCase):
         payload["unexpected"] = True
         with self.assertRaisesRegex(ValueError, "fields"):
             requests.extract("Now\n" + json.dumps(payload))
-        self.env["format_only"] = True
-        self.assertIsNone(
-            dispatch.consume(
-                dict(status="OK", final_text=json.dumps(self.payload(["status"]))),
-                (self.run, {}),
-                {},
-                self.env,
-            )
-        )
 
     def test_two_git_calls_keep_one_stage_and_explicit_session(self):
         folder = self.run / "01-plan"

@@ -73,11 +73,11 @@ class OnboardingTests(unittest.TestCase):
         fake = self.root / "opencode"
         fake.write_text(f"#!{sys.executable}\nprint('1.19.3')\n")
         fake.chmod(0o755)
-        target = init(str(fake), ["planner=p/a", "reviewer=p/b"], "read")
+        target = init(str(fake), ["planner=p/a", "reviewer=p/b"])
         written = json.loads(target.read_text())
         self.assertEqual(written["command"], [str(fake)])
         self.assertEqual(written["models"], {"planner": "p/a", "reviewer": "p/b"})
-        self.assertEqual(written["format_repair_tools"], "read")
+        self.assertNotIn("format_repair_tools", written)
         self.assertNotIn("agent_source", written)
         self.assertEqual(stat.S_IMODE(target.stat().st_mode), 0o600)
         with self.assertRaisesRegex(ValueError, "--force"):

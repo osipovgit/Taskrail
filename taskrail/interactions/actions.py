@@ -33,9 +33,7 @@ class Actions:
         self.folder = session.active[0]
 
     def route(self, outcome):
-        """Keep tool-free format repair separate from executable requests."""
-        if self.session.environment["format_only"]:
-            return None
+        """An executor request, an access decision or a near-miss request; else None."""
         if outcome["status"] == "BLOCKED_PERMISSION":
             return self.access_action(outcome)
         if outcome["status"] != "OK":
@@ -97,8 +95,8 @@ def incomplete_request(actions, text):
     """Return a near-miss request or bare narration to the same session, twice per stage.
 
     A turn that only describes its next step, or writes a request as XML or tool-call
-    markup, would otherwise go to a format repair without tools or context. A planner
-    answers in plan.md, so its final text is not narration; the plan check corrects it.
+    markup, would otherwise fail validation and end the session. Every role answers in
+    prose and its run file, so only request markup counts as narration.
     """
     context = actions.session.context
     if context[CORRECTIONS] >= request_routes.MAX_CORRECTIONS:
@@ -122,7 +120,7 @@ def narrated(text):
 def not_json(text):
     """Text without one JSON object: narration or a request written as markup.
 
-    A single JSON object, even an invalid result, goes to validation and format repair.
+    A single JSON object, even an invalid request, goes to request routing and validation.
     """
     if not text.strip():
         return False

@@ -149,19 +149,18 @@ class SessionBudgetTests(unittest.TestCase):
             runtime=dict(debug=False, profile_suffix="test"),
         )
         for role in ("planner", "implementer", "reviewer"):
-            for format_only in (False, True):
-                with self.subTest(role=role, format_only=format_only):
-                    files = [str(self.root / "source.py")]
-                    active = (self.root, dict(role=role, stage=role, writable_files=files))
-                    launch = launch_options(workflow, active, 100000, format_only)
-                    self.assertIs(launch["runtime"]["autocompact"], False)
-                    self.assertEqual(launch["runtime"]["context_budget"], 86016)
-                    self.assertEqual(launch["runtime"]["token_budget"], 100000)
-                    plan_file = str(self.root / "plan.md")
-                    expected = plan_file if role == "planner" and not format_only else None
-                    self.assertEqual(launch["runtime"]["plan_file"], expected)
-                    writable = files if role == "implementer" and not format_only else ()
-                    self.assertEqual(launch["runtime"]["writable_files"], writable)
+            with self.subTest(role=role):
+                files = [str(self.root / "source.py")]
+                active = (self.root, dict(role=role, stage=role, writable_files=files))
+                launch = launch_options(workflow, active, 100000)
+                self.assertIs(launch["runtime"]["autocompact"], False)
+                self.assertEqual(launch["runtime"]["context_budget"], 86016)
+                self.assertEqual(launch["runtime"]["token_budget"], 100000)
+                plan_file = str(self.root / "plan.md")
+                expected = plan_file if role == "planner" else None
+                self.assertEqual(launch["runtime"]["plan_file"], expected)
+                writable = files if role == "implementer" else ()
+                self.assertEqual(launch["runtime"]["writable_files"], writable)
 
     def test_context_uses_latest_input_and_both_cache_categories(self):
         telemetry = Telemetry()

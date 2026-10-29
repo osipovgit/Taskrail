@@ -12,7 +12,7 @@ LEDGER = "git-execution.json"
 
 def consume(outcome, active, state, environment):
     """Return updated fingerprints only for a completed, scope-checked Git request."""
-    if outcome["status"] != "OK" or environment["format_only"]:
+    if outcome["status"] != "OK":
         return None
     payload = requests.extract(outcome["final_text"])
     if payload is None:

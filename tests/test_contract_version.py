@@ -1,8 +1,8 @@
-"""Only the current contract can enter planning, repair or continuation."""
+"""Only the current contract can enter result validation or continuation."""
 
 import unittest
 
-from taskrail.application import prompts, result_context
+from taskrail.application import result_context
 from taskrail.core import schema
 
 
@@ -11,7 +11,7 @@ class VersionTests(unittest.TestCase):
         for version in (0, 2, None, True, "1"):
             with self.subTest(version=version):
                 with self.assertRaisesRegex(ValueError, "Unsupported contract version"):
-                    prompts.contract("planner", version)
+                    schema.contract_version(version)
                 with self.assertRaisesRegex(ValueError, "Unsupported contract version"):
                     result_context.parse({}, {}, {"contract_version": version}, {})
         with self.assertRaisesRegex(ValueError, "Unsupported contract version"):

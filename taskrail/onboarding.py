@@ -90,7 +90,7 @@ def storage_result(explicit):
     return True, f"Run history: {runs}"
 
 
-def init(opencode=None, models=(), repair=None, force=False):
+def init(opencode=None, models=(), force=False):
     """Write user settings from the bundled defaults; arguments override, prompts fill gaps."""
     target = Path.home() / ".config/taskrail/settings.json"
     if target.exists() and not force:
@@ -100,7 +100,6 @@ def init(opencode=None, models=(), repair=None, force=False):
     default = shutil.which("opencode") or "opencode"
     settings[COMMAND] = [opencode or ask("opencode command", default)]
     settings["models"] = role_models(models)
-    settings["format_repair_tools"] = repair or ask("format repair tools (none/read)", "none")
     launch_settings(settings, target.parent)
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(f"{json.dumps(settings, indent=2)}\n")

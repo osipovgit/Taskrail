@@ -1,4 +1,4 @@
-"""Turn explicit model blockers into a safe stop, never a validated work proposal."""
+"""Turn a plan's explicit blockers into a safe stop, never a validated work proposal."""
 
 from taskrail.core.files import atomic_json
 
@@ -28,10 +28,6 @@ def stop_result(payload, context):
         ],
         coverage=[blocked_requirement(entry) for entry in context["requirements"]],
     )
-    if context["role"] == "reviewer":
-        stopped["input_complete"] = False
-    if context["role"] == "implementer":
-        stopped["changed_files"] = context["changed"]
     return stopped
 
 

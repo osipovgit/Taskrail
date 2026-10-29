@@ -7,7 +7,7 @@ from taskrail.application.recovery import write_evidence
 from taskrail.core import prompt_texts, protected_paths
 from taskrail.infrastructure import artifact_access, opencode_api
 from taskrail.infrastructure.agent_profile import make_profile
-from taskrail.infrastructure.agent_sync import atomic_write, repair_mode
+from taskrail.infrastructure.agent_sync import atomic_write
 from taskrail.infrastructure.permission_check import verify_launch
 
 ROLE = "role"
@@ -56,16 +56,15 @@ def attempt_prompt(workflow, active, request, recovery):
     )
 
 
-def install_profile(workflow, active, files, format_only):
+def install_profile(workflow, active, files):
     """Write the closed opencode profile and verify that opencode enforces it."""
     folder, record = active
-    access = profile_access(workflow, active, files, format_only)
+    access = profile_access(workflow, active, files)
     profile, permissions = make_profile(
         workflow.run / "00-input/agents" / f"{record[ROLE]}.md",
         workflow.config["destination"],
         agent_name(workflow, record),
         access,
-        format_only=repair_mode(workflow.config, format_only),
     )
     workflow.runtime["profiles"].add(profile)
     atomic_write(folder / "agent.md", profile.read_bytes())
@@ -79,12 +78,8 @@ def install_profile(workflow, active, files, format_only):
     return profile
 
 
-def profile_access(workflow, active, files, format_only):
-    """Readable run artifacts, writable files and the base of relative permission names.
-
-    A format repair may also re-read the recovery evidence of earlier attempts of its
-    stage, which the saved response may cite.
-    """
+def profile_access(workflow, active, files):
+    """Readable run artifacts, writable files and the base of relative permission names."""
     folder, record = active
     base = opencode_api.relative_base(workflow.config, workflow.config[ROOTS], files)
     if base is not None:
@@ -93,10 +88,7 @@ def profile_access(workflow, active, files, format_only):
     access["protected"] = protected_paths.patterns(workflow.config)
     access[ROOTS] = workflow.config[ROOTS].values()
     access["readable"] = artifact_access.model_inputs(workflow.run, folder)
-    stage_artifacts.grant(access, workflow, record, format_only)
-    if format_only:
-        earlier = artifact_access.stage_recoveries(workflow.run, workflow.state, record)
-        access["readable"].extend(earlier)
+    stage_artifacts.grant(access, workflow, record)
     return access
 
 

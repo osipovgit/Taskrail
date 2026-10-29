@@ -1,4 +1,5 @@
-"""Bounded retry policy of one stage: format repair, access and transport recovery."""
+"""Bounded retry policy of one stage: a full attempt for an invalid result, access and
+transport recovery."""
 
 from taskrail.application import access_recovery, evidence, plan_recovery
 from taskrail.core import prompt_texts
@@ -9,22 +10,11 @@ from taskrail.observability.progress import say
 IMPLEMENTER = "implementer"
 TRANSPORT = frozenset(("TIMEOUT", "INCOMPLETE", "PROCESS_ERROR"))
 TRANSPORT_KEY = "transport"
-FORMAT_KEY = "format"
-REBUILD_KEY = "rebuild"
+RESULT_KEY = "result"
 CONTRACT_ERROR = "contract_error"
 LARGE_OUTPUT = 10000
 NAMED_OUTPUTS = 5
 # Errors only a pass that can read sources again can fix.
-EVIDENCE_ERRORS = (
-    "EVIDENCE_REFERENCE",
-    "Invalid evidence reference",
-    "Invalid evidence line range",
-    "matching observed read",
-    "range outside source",
-    "reversed line range",
-    "Unknown evidence ID",
-    "Source claim needs observed evidence",
-)
 
 
 class Retries:
@@ -35,13 +25,11 @@ class Retries:
         self.attempts = attempts
         self.stage = attempts.workflow.flow["stage"]
         self.access = access_recovery.restore(attempts.workflow.state, self.stage)
-        self.counts = {TRANSPORT_KEY: 0, FORMAT_KEY: 0, REBUILD_KEY: 0}
+        self.counts = {TRANSPORT_KEY: 0, RESULT_KEY: 0}
         self.repair = {}
 
     def mode(self):
         """The record mode of the next attempt."""
-        if self.attempts.format_only:
-            return "format-repair"
         if self.access.count:
             return "access-recovery"
         if self.attempts.recovery:
@@ -54,37 +42,28 @@ class Retries:
             return False
         status = outcome["status"]
         if status == "INVALID_RESULT":
-            return self.format_repair(outcome)
+            return self.result_repair(outcome)
         if status == "BLOCKED_PERMISSION":
             return self.access_recovery(outcome)
         if status == context_overflow.STATUS:
             return self.transport_retry(*context_notes(self, outcome), handoff=True)
         return status in TRANSPORT and self.transport_retry()
 
-    def format_repair(self, outcome):
+    def result_repair(self, outcome):
         """One full attempt with tools corrects the plan or review file.
 
         The implementer's final word was already corrected in its session; it gets none.
         """
-        if self.counts[FORMAT_KEY] >= 1 or self.stage == IMPLEMENTER:
+        if self.counts[RESULT_KEY] >= 1 or self.stage == IMPLEMENTER:
             return False
-        self.counts[FORMAT_KEY] += 1
+        self.counts[RESULT_KEY] += 1
         self.repair = dict(request=self.attempts.request, error=outcome[CONTRACT_ERROR])
-        return full_attempt(self)
-
-    def rebuild(self, verdict):
-        """A format repair that reports BLOCKED gets one full attempt with tools instead."""
-        if not self.attempts.format_only or verdict["status"] != "BLOCKED":
-            return False
-        if self.counts[REBUILD_KEY]:
-            return False
-        say("  Format repair could not rebuild the result; one full attempt follows")
         return full_attempt(self)
 
     def access_recovery(self, outcome):
         """Continue a read-only stage with allowed sources after a new denial."""
         workflow = self.attempts.workflow
-        if self.stage == IMPLEMENTER or self.attempts.format_only:
+        if self.stage == IMPLEMENTER:
             return False
         if not self.access.accept(outcome, workflow.config["timeout"]):
             return False
@@ -112,8 +91,7 @@ class Retries:
         for note in notes:
             if note not in self.attempts.request:
                 self.attempts.request += note
-        if not self.attempts.format_only:
-            self.attempts.recovery = evidence.load_index(workflow.run)
+        self.attempts.recovery = evidence.load_index(workflow.run)
         return True
 
 
@@ -128,17 +106,9 @@ def final(stage, outcome, config):
     return bool(outcome.get("admission_blocked")) or repaired
 
 
-def needs_sources(error, config):
-    """An evidence error that a repair without read tools cannot fix."""
-    readable = config.get("format_repair_tools") == "read"
-    return not readable and any(marker in error for marker in EVIDENCE_ERRORS)
-
-
 def full_attempt(retries):
     """One attempt with tools and the recorded evidence, given the invalid result's error."""
     attempts = retries.attempts
-    retries.counts[REBUILD_KEY] += 1
-    attempts.format_only = False
     rebuild = note(prompt_texts.text("recovery.rebuild", error=retries.repair["error"]))
     attempts.request = "{}{}".format(retries.repair["request"], rebuild)
     attempts.recovery = evidence.load_index(attempts.workflow.run)
