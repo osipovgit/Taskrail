@@ -37,6 +37,7 @@ def restore(config, run, state):
         protected, saved.get(protected_paths.KEY, [])
     )
     config["check_specs"] = state.get("check_specs", saved.get("check_specs", []))
+    config["required_local_checks"] = state.get("required_local_checks", [])
 
 
 def frozen(run, state):

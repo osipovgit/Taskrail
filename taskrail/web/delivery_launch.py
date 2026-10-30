@@ -22,8 +22,10 @@ from taskrail.web import (
     integration_review,
     run_attempts,
 )
+from taskrail.web.correction_launch import advance as advance_correction
 from taskrail.web.delivery_steps import INTEGRATION, SERVER, VALIDATION
 from taskrail.web.run_activity import BusyError
+from taskrail.web.run_errors import ERRORS, clear, launch_failure
 
 PENDING = MappingProxyType({"integrating": INTEGRATION, "validating": VALIDATION, SERVER: SERVER})
 OFFERS = MappingProxyType({VALIDATION: "jenkins", SERVER: "hosts"})
@@ -35,24 +37,25 @@ UNAVAILABLE = MappingProxyType(
 )
 INDEX = "run.json"
 PHASES = "phases"
+STEP = "step"
 
 
 def advance(launcher):
     """Move every delivery to its next automatic step."""
     for run in launcher.base.iterdir():
-        if run.joinpath(INDEX).is_file():
+        if not run.is_symlink() and run.joinpath(INDEX).is_file():
             proceed_quietly(launcher, run)
 
 
 def proceed_quietly(launcher, run):
     """A busy project or an unreadable run waits for the next round."""
     try:
-        proceed(launcher, run)
+        if proceed(launcher, run) is not False:
+            clear(run)
     except BusyError:
         return
-    except (ValueError, OSError, KeyError) as error:
-        with epic_record.changing(run) as epic:
-            epic["launch_error"] = str(error)
+    except ERRORS as error:
+        launch_failure(run, error)
 
 
 def proceed(launcher, run):
@@ -60,13 +63,16 @@ def proceed(launcher, run):
     state = json.loads(history.read_artifact(run, INDEX))
     delivery = delivery_state.view(run, state)
     if delivery is None:
-        return
-    if delivery["step"] == "implementing" and "tasks" in delivery:
-        epic_launch.continue_quietly(launcher, run)
-        return
-    name = PENDING.get(delivery["step"])
+        return None
+    if delivery[STEP] in {"integration_failed", "corrected"}:
+        advance_correction(launcher, run, delivery)
+        return None
+    if delivery[STEP] == "implementing" and "tasks" in delivery:
+        return epic_launch.continue_quietly(launcher, run)
+    name = PENDING.get(delivery[STEP])
     if name and name not in delivery["phases"]:
         start_phase(launcher, run, name)
+    return None
 
 
 def start_phase(launcher, run, name):
@@ -91,6 +97,10 @@ def start_phase(launcher, run, name):
 
 def restart_phase(launcher, run, name, attempt):
     """Run the latest attempt of a stopped phase again under the same delivery."""
+    if name == "correction":
+        raise ValueError(
+            "Continue an interrupted correction after inspecting its edits; corrective writers are not restarted automatically"
+        )
     with epic_record.changing(run) as epic:
         if epic.get(PHASES, {}).get(name) != attempt:
             raise ValueError("Only the latest attempt of a delivery phase can restart")
@@ -110,7 +120,7 @@ def confirm(launcher, run):
     with epic_record.changing(run) as epic:
         state = json.loads(history.read_artifact(run, INDEX))
         delivery = delivery_state.view(run, state)
-        if delivery is None or delivery["step"] != "confirm":
+        if delivery is None or delivery[STEP] != "confirm":
             raise ValueError("Only a finished change that waits for confirmation can be confirmed")
         with integration_review.confirmation_lock(run, delivery) as snapshot:
             epic["confirmed"] = time.time()

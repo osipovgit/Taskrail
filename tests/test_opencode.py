@@ -854,7 +854,9 @@ class AdapterTests(unittest.TestCase):
             self.assertEqual(server.attachment()["TASKRAIL_OPENCODE_SERVER"], "http://127.0.0.1:9")
         self.assertTrue((self.root / "serve-started").exists())
         missing = str(self.root / "no-opencode")
-        with opencode_api.stage_server([missing], self.workspace, ()) as server:
+        with self.assertRaisesRegex(ValueError, "Cannot probe wrapper"):
+            opencode_api.stage_server([missing], self.workspace, ())
+        with opencode_api.stage_server([missing], self.workspace, (), attach=False) as server:
             self.assertIsNone(server)
 
     def test_denied_read_stops_the_turn_for_a_decision(self):

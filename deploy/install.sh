@@ -23,20 +23,34 @@ preflight=(--check)
 "$python_bin" -I -c \
     'import sys; sys.path.insert(0, sys.argv.pop(1)); from taskrail.deployment.settings_init import main; main()' \
     "$source_dir" "$source_dir" "$config_dir" "$initial_settings" "$app_dir" "$agent_mode" "${preflight[@]}"
-# shellcheck source=deploy/fresh.sh
-source "$source_dir/deploy/fresh.sh"
-version=$(PYTHONPATH="$source_dir" "$python_bin" -c 'from taskrail.core.version import VERSION; print(VERSION)')
-release=$(mktemp -d "$app_dir/releases/$version-XXXXXXXX")
+version=$("$python_bin" -I -c 'import sys; sys.path.insert(0, sys.argv[1]); from taskrail.core.version import VERSION; print(VERSION)' "$source_dir")
+# A fresh reset removes app_dir, so preparation lives beside it, on the same filesystem.
+staging=$(mktemp -d "$HOME/.local/share/.taskrail-stage-XXXXXXXX")
+release=$staging/release
+mkdir "$release"
+cleanup() {
+    rm -rf -- "$staging"
+    rm -f -- "$app_dir/current.next.$$"
+    if [[ -n ${installed_release:-} && ! "$app_dir/current" -ef "$installed_release" ]]; then
+        rm -rf -- "$installed_release"
+    fi
+}
+trap cleanup EXIT
 # Copy the application only; project source roots and task history are never copied.
 tar -C "$source_dir" --exclude='__pycache__' --exclude='*.pyc' -cf - \
     taskrail deploy pyproject.toml README.md LICENSE |
     tar -C "$release" -xf -
 "$python_bin" -m venv --without-pip "$release/venv"
-PYTHONPATH="$release" "$release/venv/bin/python" -c 'from taskrail.web.service import ApplicationService'
-# Initialize persistent configuration once. Updates preserve user settings and agents.
+"$release/venv/bin/python" -I -c \
+    'import sys; sys.path.insert(0, sys.argv[1]); from taskrail.web.service import ApplicationService' "$release"
+# Configuration, copied roles and the environment are prepared before any reset.
+prepare_options=()
+[[ "$fresh" == yes ]] && prepare_options+=(--fresh)
 "$python_bin" -I -c \
-    'import sys; sys.path.insert(0, sys.argv.pop(1)); from taskrail.deployment.settings_init import main; main()' \
-    "$source_dir" "$source_dir" "$config_dir" "$initial_settings" "$app_dir" "$agent_mode"
+    'import sys; sys.path.insert(0, sys.argv.pop(1)); from taskrail.deployment.settings_stage import main; main()' \
+    "$source_dir" "$source_dir" "$config_dir" "$initial_settings" "$app_dir" "$agent_mode" "${prepare_options[@]}" "$staging/config"
+# shellcheck source=deploy/fresh.sh
+source "$source_dir/deploy/fresh.sh"
 # Stop the UI only after validating the new release and obtaining the execution lock.
 systemctl --user stop "$service" 2>/dev/null || {
     if systemctl --user is-active --quiet "$service"; then
@@ -44,6 +58,11 @@ systemctl --user stop "$service" 2>/dev/null || {
         exit 1
     fi
 }
+installed_release=$(mktemp -d "$app_dir/releases/$version-XXXXXXXX")
+rmdir "$installed_release"
+mv -- "$release" "$installed_release"
+release=$installed_release
+cp -a -- "$staging/config/." "$config_dir/"
 ln -s "$release" "$app_dir/current.next.$$"
 mv -Tf "$app_dir/current.next.$$" "$app_dir/current"
 install -m 644 "$release/deploy/taskrail.service" "$unit_dir/$service"
@@ -58,6 +77,9 @@ flock -u 9
 exec 9>&-
 systemctl --user restart "$service"
 systemctl --user is-active --quiet "$service"
+"$release/venv/bin/python" -I -c \
+    'import sys; sys.path.insert(0, sys.argv.pop(1)); from taskrail.deployment.releases import main; main()' \
+    "$release" "$app_dir" "$config_dir/settings.json"
 if [[ "$boot" == yes ]]; then
     # Explicit opt-in: this affects the user's service manager, not just Taskrail.
     loginctl enable-linger "$(id -un)" || {

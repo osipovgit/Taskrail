@@ -34,6 +34,20 @@ def run_gate(document, **environment):
 
 
 class MergeGateTests(unittest.TestCase):
+    def test_sandbox_job_requires_actual_execution_and_is_a_merge_dependency(self):
+        document = workflow("ci.yml")
+        job = document["jobs"]["sandbox"]
+        self.assertIn("sandbox", document["jobs"]["gate"]["needs"])
+        self.assertNotIn("continue-on-error", job)
+        required = [
+            step
+            for step in job["steps"]
+            if step.get("env", {}).get("TASKRAIL_REQUIRE_SANDBOX") == "1"
+        ]
+        self.assertEqual(len(required), 1)
+        self.assertNotIn("continue-on-error", required[0])
+        self.assertIn("test_sandbox", required[0]["run"])
+
     def test_compatibility_workflow_uses_supported_initialization_arguments(self):
         steps = workflow("ci.yml")["jobs"]["opencode"]["steps"]
         command = next(

@@ -49,7 +49,9 @@ function tone(status) {
 
 function phaseNames(delivery) {
   const names = [];
-  if (delivery.tasks) names.push('integration');
+  const correctedReview = delivery.corrections?.at(-1)?.review;
+  if (delivery.tasks && (!correctedReview || correctedReview !== delivery.phases.integration?.run))
+    names.push('integration');
   if (delivery.checks.jenkins.length) names.push('validation');
   const confirming = delivery.step === 'confirm' || delivery.confirmed;
   if (confirming || delivery.checks.server.length) names.push('confirm');
@@ -108,6 +110,13 @@ export function graphLayout(delivery) {
   const sinks = nodes.filter((node) => !dependents.has(node.id)).map((node) => node.id);
   let column = nodes.length ? Math.max(...nodes.map((node) => node.column)) + 1 : 0;
   let previous = sinks;
+  for (const correction of delivery.corrections || []) {
+    for (const record of correctionNodes(correction)) {
+      nodes.push({ ...record, column, after: previous });
+      previous = [record.id];
+      column += 1;
+    }
+  }
   for (const name of phaseNames(delivery)) {
     const record = delivery.phases[name] || {};
     nodes.push({
@@ -132,6 +141,29 @@ export function graphLayout(delivery) {
   }
   const edges = nodes.flatMap((node) => node.after.map((from) => [from, node.id]));
   return { nodes, edges };
+}
+
+function correctionNodes(correction) {
+  const review = {
+    key: 'review:' + correction.run,
+    id: 'review:' + correction.run,
+    label: 'Rejected integration · ' + correction.id,
+    run: correction.review,
+    status: 'CHANGES_REQUESTED',
+    kind: 'phase',
+    attempts: [],
+  };
+  const writer = {
+    key: 'correction:' + correction.run,
+    id: 'correction:' + correction.run,
+    label: correction.title,
+    run: correction.run,
+    status: TASK_LABELS[correction.status] || correction.status,
+    kind: 'phase',
+    attempts: [],
+    record: correction,
+  };
+  return [review, writer];
 }
 
 function position(node) {
@@ -294,7 +326,7 @@ export function nodePanel(layout, delivery, actions) {
   if (!node) return el('p', 'Select a task or phase to see its run here.', 'muted graph-hint');
   const panel = el('div', undefined, 'graph-panel');
   const heading = el('div', undefined, 'graph-panel-head');
-  heading.append(el('h4', node.label), badge(node.status));
+  heading.append(el('h4', node.label));
   const close = el('button', 'Close');
   close.type = 'button';
   close.onclick = () => actions.pick('');

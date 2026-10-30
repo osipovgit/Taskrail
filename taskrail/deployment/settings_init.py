@@ -10,6 +10,7 @@ import tempfile
 from pathlib import Path
 
 from taskrail.cli_service import DEFAULT_PORT
+from taskrail.deployment import settings_check
 from taskrail.infrastructure.opencode_cli import DEFAULT_COMMAND, validate_command
 
 SETTINGS = "settings.json"
@@ -44,6 +45,8 @@ class Installation:
         else:
             initial = self.source / "taskrail" / SETTINGS
         settings = json.loads(initial.read_text())
+        if not isinstance(settings, dict):
+            raise ValueError("Settings must be a JSON object")
         settings["timeout_seconds"] = FIRST_TIMEOUT_SECONDS
         settings["command"] = resolved(settings.get("command", list(DEFAULT_COMMAND)))
         if supplied:
@@ -70,6 +73,7 @@ class Installation:
         if not target.exists() or not copy:
             if not source.is_dir():
                 raise ValueError(f"Imported role directory does not exist: {source}")
+            settings_check.validate_roles(source)
             if copy:
                 shutil.copytree(source, target)
             else:
@@ -147,10 +151,7 @@ def main(argv=None):
     arguments = parsed(argv)
     installation = Installation(arguments.source, arguments.config, arguments.app)
     if arguments.check:
-        if arguments.fresh or not installation.target.exists():
-            installation.first_settings(arguments.supplied, copy_roles=False)
-        else:
-            json.loads(installation.target.read_text())
+        settings_check.preflight(installation, arguments)
         service_environment(arguments.config, check=True, fresh=arguments.fresh)
         return
     installation.initialize(arguments.supplied)

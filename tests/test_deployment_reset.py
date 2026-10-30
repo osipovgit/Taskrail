@@ -2,7 +2,9 @@
 
 import json
 import os
+import shutil
 import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -48,6 +50,7 @@ class DeploymentResetTests(unittest.TestCase):
             self.home / ".config/systemd/user/taskrail.service.d/source",
         ):
             with self.subTest(root=root):
+                root.mkdir(parents=True, exist_ok=True)
                 record = self.record(".trash/old/run", root)
                 with self.assertRaisesRegex(ValueError, "overlap a declared project"):
                     prepare(self.home, [BASE])
@@ -147,6 +150,28 @@ class DeploymentResetTests(unittest.TestCase):
         self.assertFalse(self.history.exists())
         self.assertFalse(self.config.exists())
 
+    def test_fresh_preserves_legacy_worktrees_even_when_history_names_them(self):
+        worktree = self.state / "worktrees/run/project"
+        worktree.mkdir(parents=True)
+        (worktree / ".git").write_text("gitdir: /existing/repository/worktrees/project\n")
+        edits = worktree / "uncommitted.txt"
+        edits.write_text("User work must survive a fresh install\n")
+        record = self.record("isolated", worktree)
+        state = json.loads(record.read_text())
+        state["worktrees"] = dict(project=dict(source=str(self.project)))
+        record.write_text(json.dumps(state))
+        erase(prepare(self.home, [BASE]))
+        self.assertEqual(edits.read_text(), "User work must survive a fresh install\n")
+        self.assertTrue((worktree / ".git").is_file())
+
+    def test_custom_worktree_base_inside_deleted_storage_blocks_fresh(self):
+        options = json.loads((self.config / "settings.json").read_text())
+        options["worktree_base"] = str(self.app / "custom-worktrees")
+        (self.config / "settings.json").write_text(json.dumps(options))
+        with self.assertRaisesRegex(ValueError, "preserved worktrees"):
+            prepare(self.home, [BASE])
+        self.assertTrue((self.config / "settings.json").exists())
+
     def test_bash_gate_checks_scripts_after_the_first(self):
         valid, invalid = self.home / "valid.sh", self.home / "invalid.sh"
         valid.write_text("true\n")
@@ -185,7 +210,7 @@ class DeploymentImportPreflightTests(unittest.TestCase):
         self.sentinel.parent.mkdir(parents=True)
         self.sentinel.write_text("previous release")
         self.imported = self.home / "imported.json"
-        self.command = ["/bin/true"]
+        self.command = [str(self.fixture.binaries / "opencode")]
 
     def install_fresh(self):
         return subprocess.run(
@@ -220,13 +245,13 @@ class DeploymentImportPreflightTests(unittest.TestCase):
 
     def test_imported_roles_cannot_be_destroyed_by_the_requested_reset(self):
         roles = self.config / "agents"
-        roles.mkdir()
-        (roles / "planner.md").write_text("custom role")
+        shutil.copytree(BASE / "taskrail/agents", roles)
+        custom = (roles / "planner.md").read_text()
         self.imported.write_text(json.dumps(dict(command=self.command, agent_source=str(roles))))
         result = self.install_fresh()
         self.assert_preserved(result)
         self.assertIn("outside reset directories", result.stderr)
-        self.assertEqual((roles / "planner.md").read_text(), "custom role")
+        self.assertEqual((roles / "planner.md").read_text(), custom)
 
     def test_service_environment_is_validated_before_reset(self):
         self.imported.write_text(json.dumps(dict(command=self.command)))
@@ -239,17 +264,68 @@ class DeploymentImportPreflightTests(unittest.TestCase):
 
     def test_role_symlink_targets_must_survive_reset_and_broken_imports_fail_early(self):
         roles = self.home / "roles"
-        roles.mkdir()
+        shutil.copytree(BASE / "taskrail/agents", roles)
         target = self.config / "saved-planner.md"
-        target.write_text("custom role")
+        custom = (roles / "planner.md").read_text()
+        target.write_text(custom)
         link = roles / "planner.md"
+        link.unlink()
         link.symlink_to(target)
         self.imported.write_text(json.dumps(dict(command=self.command, agent_source=str(roles))))
         result = self.install_fresh()
         self.assert_preserved(result)
         self.assertIn("outside reset directories", result.stderr)
-        self.assertEqual(target.read_text(), "custom role")
+        self.assertEqual(target.read_text(), custom)
         target.unlink()
         result = self.install_fresh()
         self.assert_preserved(result)
-        self.assertIn("planner.md", result.stderr)
+        self.assertIn("Missing source agent: planner", result.stderr)
+
+    def test_invalid_runtime_settings_and_empty_role_tree_fail_before_stop(self):
+        roles = self.home / "empty-roles"
+        roles.mkdir()
+        for options in (dict(max_repairs="invalid"), dict(agent_source=str(roles))):
+            with self.subTest(options=options):
+                self.imported.write_text(json.dumps(dict(command=self.command, **options)))
+                self.assert_preserved(self.install_fresh())
+
+    def test_venv_failure_keeps_old_install_and_cleans_its_staging_directory(self):
+        self.imported.write_text(json.dumps(dict(command=self.command)))
+        python = self.home / "python-wrapper"
+        python.write_text(
+            '#!/bin/sh\nif [ "$1" = -m ] && [ "$2" = venv ]; then exit 72; fi\n'
+            f'exec "{sys.executable}" "$@"\n'
+        )
+        python.chmod(0o755)
+        self.environment["PYTHON"] = str(python)
+        self.assert_preserved(self.install_fresh())
+        self.assertEqual(list((self.home / ".local/share").glob(".taskrail-stage-*")), [])
+
+    def test_release_import_failure_keeps_old_install_and_cleans_staging(self):
+        self.imported.write_text(json.dumps(dict(command=self.command)))
+        (self.release / "taskrail/web/service.py").write_text(
+            "raise ImportError('broken release')\n"
+        )
+        result = self.install_fresh()
+        self.assert_preserved(result)
+        self.assertIn("broken release", result.stderr)
+        self.assertEqual(list((self.home / ".local/share").glob(".taskrail-stage-*")), [])
+
+    def test_application_stop_failure_does_not_reset_the_executor(self):
+        self.imported.write_text(json.dumps(dict(command=self.command)))
+        executor = self.fixture.system / "opt/taskrail-executor"
+        executor.mkdir(parents=True)
+        (executor / "keep").write_text("executor retained")
+        systemctl = self.fixture.binaries / "systemctl"
+        systemctl.write_text(
+            '#!/bin/sh\nprintf "%s\\n" "$*" >> "$HOME/privilege.log"\n'
+            'if [ "$1 $2" = "--user stop" ]; then exit 1; fi\nexit 0\n'
+        )
+        result = self.install_fresh()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(self.sentinel.read_text(), "previous release")
+        self.assertEqual((executor / "keep").read_text(), "executor retained")
+        calls = (self.home / "privilege.log").read_text().splitlines()
+        resets = [call for call in calls if "reset-executor.sh" in call]
+        self.assertTrue(resets)
+        self.assertTrue(all("--check" in call for call in resets))

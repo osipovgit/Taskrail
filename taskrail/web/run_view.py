@@ -5,7 +5,7 @@ from pathlib import Path
 
 from taskrail.core.paths import tool_paths
 from taskrail.observability.progress import clock
-from taskrail.web import delivery_state, history, lifecycle, run_family, split_approvals
+from taskrail.web import delivery_state, history, lifecycle, run_errors, run_family, split_approvals
 from taskrail.web.run_activity import activity
 from taskrail.web.run_files import contained, optional_json, stage_telemetry, text_tail
 from taskrail.web.run_messages import public_messages
@@ -27,6 +27,17 @@ def run_view(base, name):
     if not RUN_ID.fullmatch(name) or name in {".", ".."}:
         raise ValueError("Invalid run ID")
     run = contained(base, name)
+    try:
+        return readable_view(base, name, run)
+    except run_errors.ERRORS as error:
+        run = contained(base, name)
+        if not run.is_dir() or run.is_symlink():
+            raise
+        return run_errors.view(run, error)
+
+
+def readable_view(base, name, run):
+    """Build the normal view only when its persisted authority can be read."""
     submission = find_submission(Path(base), name)
     launch = launch_record(submission)
     state = run_state(run, launch)

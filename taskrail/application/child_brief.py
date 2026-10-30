@@ -61,9 +61,10 @@ def earlier_task(parent, step):
 
 
 def later_task(step):
-    """A later task and the files it owns."""
+    """A later task's behavior boundary, including work in a shared file."""
     files = listed(step["files"])
-    return f"- {heading(step)}. Files: {files}"
+    outcomes = "; ".join(step.get("done_when", [])) or step["action"]
+    return prompt_texts.text("child.excluded", task=heading(step), outcomes=outcomes, files=files)
 
 
 def listed(files):

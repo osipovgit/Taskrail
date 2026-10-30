@@ -85,7 +85,10 @@ evidence for retry issues. Redact secrets and sensitive source before sharing.
 
 `max_repairs` (default 3, at most 5) limits plan repairs after plan review and repair
 cycles after failed checks or result review; an invalid plan or review gets at most one
-full attempt.
+full attempt. A split also uses its frozen `max_repairs` as the total number of fresh
+integration correction tasks. Their individual attempts remain subject to ordinary
+stage budgets. The delivery graph shows each correction and the remaining count;
+an unfinished writer or exhausted count stops automatic correction.
 `read_retries` (default 3, at most 3) limits read-only research retries. Tool calls remain diagnostic metrics.
 
 Polling continues while text is selected, but DOM updates pause during a pointer
@@ -132,3 +135,14 @@ one stage ID, session ID and cumulative active-time limit. Operator approval pau
 the timer indefinitely; ordinary command execution consumes the remaining time.
 The separate SSH executor uses its own action timeout while the model waits.
 Token counters remain observational; no cumulative-usage warning is shown.
+
+An expanded Activity log keeps its heading and **Close log** button visible while
+scrolling through its events. Closing returns keyboard focus to that log's summary.
+The expanded task panel shows its title and Close button; outcome badges remain on
+the graph node and the relevant stage rather than repeating between those controls.
+
+Unreadable saved task records appear as **Saved data needs recovery** in Needs you.
+The service continues other tasks and writes a separate `recovery-required.json`
+diagnostic when the normal delivery record cannot be read. It never replaces the
+damaged authority record or grants actions from it. Repair the saved data from a
+trusted copy; a successful later inspection clears the diagnostic.

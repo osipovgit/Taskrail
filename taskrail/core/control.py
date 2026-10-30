@@ -29,6 +29,10 @@ def check_plan(plan, config):
     """Reject changes suggested for a read-only request."""
     if config.get("read_only") and (plan["proposed_change_files"] or plan["steps"]):
         raise ValueError("Answer-only tasks require Decision: no change and no tasks")
+    if config.get("phase") == "correction" and (
+        plan.get("decision") == "split" or len(plan["steps"]) > 1
+    ):
+        raise ValueError("An integration correction requires one atomic task or no change")
 
 
 def check_delta(delta, allowed, git_unchanged):

@@ -16,6 +16,8 @@ from taskrail.web import (
     lifecycle,
     run_attempts,
 )
+from taskrail.web.correction_state import attach as attach_corrections
+from taskrail.web.correction_state import entries as correction_entries
 
 NOT_DELIVERY = ("read_only", "design", "phase")
 STEP = "step"
@@ -31,7 +33,9 @@ def view(run, state):
         run_attempts.add_task_attempts(run, epic, split["tasks"])
     delivery = dict(split or {}, status=lifecycle.display_status(run, state))
     delivery["phases"] = phases(run, epic)
+    delivery["corrections"] = correction_entries(run, epic)
     integration_review.invalidate(delivery, epic)
+    attach_corrections(delivery, run, epic)
     delivery["launch_error"] = epic.get("launch_error")
     delivery["checks"] = delivery_checks.checks(run, state)
     delivery["confirmed"] = bool(epic.get("confirmed"))
@@ -85,5 +89,7 @@ def list_fields(run, state, current):
     fields[STEP] = delivery[STEP]
     if current != delivery_steps.DONE:
         current = delivery_steps.GROUPS[delivery[STEP]]
+        if delivery[STEP] == "corrected" and not delivery.get("auto_continue"):
+            current = "attention"
     fields["group"] = current
     return fields

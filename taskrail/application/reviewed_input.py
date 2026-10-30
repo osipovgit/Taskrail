@@ -3,7 +3,7 @@
 import json
 
 from taskrail.application import child_brief, reviewed_artifacts
-from taskrail.core import schema, task_spec
+from taskrail.core import prompt_texts, schema, task_spec
 from taskrail.core.files import atomic_json, digest
 
 REFERENCE = "00-input/reviewed-task-spec.json"
@@ -23,6 +23,11 @@ def capture(workflow, parent, step):
         context=child_brief.context(parent, step),
         task_sha256=digest(workflow.config["task_text"].encode()),
     )
+    install(workflow, spec)
+
+
+def install(workflow, spec):
+    """Persist one authenticated task projection for fresh turns and continuation."""
     atomic_json(workflow.run / REFERENCE, spec)
     workflow.state[SIGNATURE] = digest(reviewed_artifacts.read(workflow.run, REFERENCE))
     workflow.config[SPEC] = spec
@@ -57,7 +62,7 @@ def criterion(entry):
     """A narrowed assignment keeps its complete original text and explicit scope."""
     text = entry["text"]
     scope = entry.get("scope")
-    return f"{text}\nOnly this assigned part: {scope}" if scope else text
+    return prompt_texts.text("child.part", requirement=text, scope=scope) if scope else text
 
 
 def restore(workflow):
@@ -65,7 +70,7 @@ def restore(workflow):
     expected = workflow.state.get(SIGNATURE)
     if expected is None:
         schema.require(
-            workflow.state.get("phase") != "task",
+            workflow.state.get("phase") not in {"task", "correction"},
             "Missing authenticated child input; restart required",
         )
         return

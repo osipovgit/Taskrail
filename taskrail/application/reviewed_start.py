@@ -11,8 +11,10 @@ from taskrail.application import (
     task_scope,
 )
 from taskrail.application.changes import capture_preimages
+from taskrail.application.correction_start import begin as begin_correction
 from taskrail.application.execution_context import adopt as inherit_execution_context
 from taskrail.application.plan_validation import canonical_plan
+from taskrail.application.step_checks import install as install_step_checks
 from taskrail.core import schema, task_lineage
 from taskrail.core.files import atomic_json
 
@@ -32,6 +34,8 @@ def begin(workflow):
         )
     elif phase == "task":
         child(workflow)
+    elif phase == "correction":
+        begin_correction(workflow)
 
 
 def child(workflow):
@@ -83,6 +87,7 @@ def install(workflow, plan, stage):
     workflow.state["contract_start"] = dict(stage=stage, origin="reviewed-contract")
     workflow.flow.update(plan=plan, allowed=plan["proposed_change_files"], stage=stage)
     if stage == "implementer":
+        install_step_checks(workflow, plan)
         capture_preimages(
             workflow.run,
             workflow.config["roots"],

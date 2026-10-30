@@ -83,11 +83,24 @@ request runs at once in a sandbox, without a decision, and is recorded in the
 approval ledger with `"rule": "sandbox"`:
 
 - the host system is read-only; `/tmp`, `/var/tmp` and `/run` are private and empty;
-- home is an empty scratch directory showing, read-only, only its visible entries,
-  known toolchain directories (`~/.local/bin`, `~/.local/lib`, pipx, uv, pyenv, nvm,
-  cargo, rustup, SDKMAN, Maven, Gradle, Ansible collections and roles, and the like)
-  and the prefix of the requested program, such as its virtual environment; hidden
-  credentials such as `~/.ssh`, `~/.config` or `~/.local/share` stay out of reach;
+- home is an empty scratch directory. Only explicit runtime and cache components
+  are mounted read-only: virtual environments, installed interpreters, tool binaries,
+  version-manager shim code and selectors (`~/.pyenv/version`, `~/.rbenv/version`,
+  `~/.tool-versions` and Rust's selected-toolchain settings),
+  Maven's `repository`, Gradle's `caches` and wrapper distributions, Cargo's binaries
+  and registries, and Ansible collections and roles. Unrelated visible home entries
+  and package-manager configuration are hidden. A custom tool receives only its
+  executable or conventional `bin`, `lib`, `lib64`, `share` and `pyvenv.cfg` components;
+- credential directories and known credential/configuration names are masked after
+  all mounts, including declared roots, custom tool prefixes and symlink aliases.
+  These mandatory masks include SSH/cloud credentials, Maven settings, Gradle
+  properties, Cargo credentials/configuration, Gem credentials, npm/pip authentication,
+  Git credentials/configuration and provider `auth.json` files. Configured protected
+  patterns add masks; they cannot remove these mandatory sandbox masks. Arbitrarily
+  named secrets in exposed runtime/cache files still need explicit protected patterns;
+- a declared project's ordinary `.config` files, including linter configuration,
+  remain readable. Credential patterns still apply inside them; aliases into the
+  user's `~/.config` and runtime/cache `.config` directories remain private;
 - the implementer's roots are writable; a reading stage's roots take writes that
   vanish when the command ends (bubblewrap 0.10 or later), else they are read-only;
   Git metadata is always read-only and [protected files](#protected-paths) are unreadable;
@@ -100,8 +113,15 @@ A command that needs the network or host files outside the sandbox adds
 `"sandbox": false` and says why in its reason. It then goes through the approval below,
 as does every command on a host without a working bubblewrap and a program that is
 not installed, so you can install it and allow the command. `taskrail check` names
-the sandbox in use. Configured checks from settings run in the same sandbox with
-writable roots; the source guard still stops a check that changes source.
+the sandbox in use. Every run also records `local-preflight.json` before model work,
+with the sandbox/fallback explanation and executable paths for required local checks.
+The check repeats after reviewed recipe selection, before implementation. Missing
+required tools stop early with installation guidance and execute no command. Install
+them and Continue, or correct the check and Restart. Configured checks run in the same
+sandbox with writable roots; the source guard still stops a check that changes source.
+An installed `ansible-lint` uses this route without asking in a working sandbox.
+The required Linux CI sandbox job fails if bubblewrap cannot execute the real isolation
+regressions; an unavailable sandbox is not a successful skipped check.
 
 ### Approval
 
@@ -136,6 +156,13 @@ anyway, inline shell or Python code included. Without it, the card of inline cod
 an agent requests (`bash -c`, `sh -c`, `python -c` and the like, also behind `env`,
 `timeout` or `xargs`, with unknown interpreter options or `env --split-string`) says so:
 its code is not checked by the command routes above, so read the whole script.
+
+Personal **Allow all actions** card grants survive Continue and appear in Restart
+drafts. A linked split/delivery child refreshes the family grant before each decision,
+including when it was already running when the operator granted it. Parent membership
+must match the server's recorded task or phase attempt; a claimed parent in task text
+alone grants nothing. Revoking a parent overrides copied child flags. Previously
+revoked workers stay revoked until a fresh personal decision restores them.
 
 Commands run on the host use exec without implicit shell expansion and a host
 environment without secret-shaped variables, provider keys included. Explicit Bash

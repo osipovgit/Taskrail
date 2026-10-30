@@ -10,14 +10,18 @@ from taskrail.application import (
     integration_changes,
     reviewed_artifacts,
     run_state,
+    step_checks,
 )
+from taskrail.application.correction_checks import selected as corrective_specs
+from taskrail.application.correction_history import required as corrective_gates
 from taskrail.core import delivery_record
 from taskrail.core.files import digest
 from taskrail.core.schema import require
 
 PARENT = "check_parent"
 INTEGRATION = "integration"
-PHASES = frozenset((INTEGRATION, "validation", "server"))
+PHASES = frozenset((INTEGRATION, "validation", "server", "correction"))
+LOCAL_PHASES = frozenset((INTEGRATION, "correction"))
 FINISHED = frozenset(("READY_FOR_REVIEW", "NO_CHANGES_REQUIRED", "TASKS_READY"))
 REQUIREMENTS = "requirements"
 SPECS = "check_specs"
@@ -57,6 +61,11 @@ def adopt(workflow, resume=False):
     verify(workflow, parent, state)
     execution_context.adopt(workflow, parent, state)
     check_configuration.adopt(workflow, parent, state)
+    if workflow.config[PHASE] in LOCAL_PHASES:
+        selected = state.get(step_checks.KEY, [])
+        selected = corrective_gates(parent, selected, workflow.config, workflow.run.name)
+        workflow.config[step_checks.KEY] = selected
+        workflow.state[step_checks.KEY] = selected
     workflow.state[SEAL] = receipt(workflow)
     if workflow.config[PHASE] == INTEGRATION:
         integration_changes.capture(workflow, parent)
@@ -83,6 +92,7 @@ def receipt(workflow):
         roots=run_state.stored_roots(workflow.config["roots"]),
         requirements=workflow.state[REQUIREMENTS],
         specs=workflow.config.get(SPECS, []),
+        required_checks=workflow.config.get(step_checks.KEY, []),
     )
     return digest(json.dumps(payload, sort_keys=True).encode())
 
@@ -98,13 +108,15 @@ def verify(workflow, parent, state):
     phases = delivery_record.read(parent).get("phases", {})
     require(phases.get(phase) == workflow.run.name, "Check parent does not link this phase")
     selected = selected_specs(state, phase)
+    if phase in LOCAL_PHASES:
+        selected = corrective_specs(parent, state, workflow.run.name)
     require(workflow.config.get(SPECS, []) == selected, "Parent check bindings changed")
     verify_requirements(workflow, state, selected)
 
 
 def selected_specs(state, phase):
     """Integration repeats local checks; delivery runs only its declared remote phase."""
-    selected = "check" if phase == INTEGRATION else phase
+    selected = "check" if phase in LOCAL_PHASES else phase
     return [spec for spec in state.get(SPECS, []) if spec[PHASE] == selected]
 
 
@@ -113,8 +125,10 @@ def verify_requirements(workflow, state, specs):
     original = {entry["id"]: entry for entry in state[REQUIREMENTS]}
     current = {entry["id"]: entry for entry in workflow.state[REQUIREMENTS]}
     criteria = {criterion for spec in specs for criterion in spec["criteria"]}
-    if workflow.config[PHASE] == INTEGRATION:
+    if workflow.config[PHASE] in LOCAL_PHASES:
         criteria = set(original)
+    if workflow.config[PHASE] == "correction":
+        require(current == original, "Parent check requirements changed")
     require(criteria <= original.keys(), "Unknown parent check requirement")
     require(
         all(current.get(name) == original[name] for name in criteria),

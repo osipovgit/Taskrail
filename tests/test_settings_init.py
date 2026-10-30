@@ -3,6 +3,7 @@
 import io
 import json
 import os
+import shutil
 import tempfile
 import unittest
 from contextlib import redirect_stdout
@@ -27,7 +28,7 @@ class SettingsInitTests(unittest.TestCase):
         self.binaries.mkdir()
         for name in ("opencode", "wrapper"):
             executable = self.binaries / name
-            executable.write_text("#!/bin/sh\nexit 0\n")
+            executable.write_text("#!/bin/sh\nprintf '1.19.3\\n'\n")
             executable.chmod(0o755)
         path = patch.dict(os.environ, PATH=f'{self.binaries}:/usr/bin:/x"y\\z')
         path.start()
@@ -58,8 +59,9 @@ class SettingsInitTests(unittest.TestCase):
 
     def test_imported_settings_copy_roles_once_and_keep_relative_folders_meaningful(self):
         imported = self.home / "imported"
-        (imported / "roles").mkdir(parents=True)
-        (imported / "roles/planner.md").write_text("Imported planner")
+        shutil.copytree(BASE / "taskrail/agents", imported / "roles")
+        custom = "Instruction contract: 1.\nImported planner"
+        (imported / "roles/planner.md").write_text(custom)
         supplied = imported / "settings.json"
         supplied.write_text(
             json.dumps(
@@ -79,11 +81,11 @@ class SettingsInitTests(unittest.TestCase):
         self.assertEqual(settings["agent_source"], str(self.config / "agents"))
         self.assertEqual(settings["run_base"], str(imported / "runs"))
         self.assertEqual(settings["agent_directory"], "/absolute/profiles")
-        self.assertEqual((self.config / "agents/planner.md").read_text(), "Imported planner")
+        self.assertEqual((self.config / "agents/planner.md").read_text(), custom)
         (self.config / "settings.json").unlink()
         (imported / "roles/planner.md").write_text("Changed planner")
         self.initialize(str(supplied))
-        self.assertEqual((self.config / "agents/planner.md").read_text(), "Imported planner")
+        self.assertEqual((self.config / "agents/planner.md").read_text(), custom)
 
     def test_exported_bundled_settings_import_without_an_adjacent_roles_folder(self):
         supplied = self.home / "exported.json"
@@ -96,13 +98,13 @@ class SettingsInitTests(unittest.TestCase):
 
     def test_fresh_preflight_validates_an_import_without_copying_or_writing(self):
         roles = self.home / "roles"
-        roles.mkdir()
+        shutil.copytree(BASE / "taskrail/agents", roles)
         supplied = self.home / "exported.json"
         supplied.write_text(json.dumps(dict(command=["wrapper"], agent_source="roles")))
         arguments = [str(BASE), str(self.config), str(supplied), str(self.app), "keep"]
         main([*arguments, "--check", "--fresh"])
         self.assertEqual(list(self.config.iterdir()), [])
-        roles.rmdir()
+        shutil.rmtree(roles)
         (self.config / "agents").mkdir()
         with self.assertRaisesRegex(ValueError, "Imported role directory"):
             main([*arguments, "--check", "--fresh"])

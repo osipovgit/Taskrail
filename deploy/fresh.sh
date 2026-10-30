@@ -15,7 +15,7 @@ executor_reset=no
 if [[ -e /etc/systemd/system/taskrail-executor.service || -d /opt/taskrail-executor ]]; then
     executor_reset=yes
     sudo -v
-    sudo bash "$source_dir/deploy/reset-executor.sh"
+    sudo bash "$source_dir/deploy/reset-executor.sh" --replacement="$source_dir" --check
 fi
 systemctl --user stop "$service" 2>/dev/null || {
     if systemctl --user is-active --quiet "$service"; then
@@ -23,9 +23,13 @@ systemctl --user stop "$service" 2>/dev/null || {
         exit 1
     fi
 }
+# No deletion occurs until both services have stopped successfully. Executor reset
+# performs its own journal and stop checks before deleting any executor files.
+if [[ "$executor_reset" == yes ]]; then
+    sudo bash "$source_dir/deploy/reset-executor.sh" --replacement="$source_dir"
+fi
 systemctl --user disable "$service" 2>/dev/null || true
 fresh_reset remove
 systemctl --user daemon-reload
 systemctl --user reset-failed "$service" 2>/dev/null || true
 mkdir -p "$app_dir/releases" "$config_dir" "$state_dir/runs"
-agent_mode=bundled

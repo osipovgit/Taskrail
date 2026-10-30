@@ -481,7 +481,7 @@ class LiveTests(LiveFixture, unittest.TestCase):
 
     def test_timeout_retry_corrects_the_plan_in_its_session(self):
         run, status, state = self.run_mode("timeout-then-invalid")
-        self.assertEqual(status, "READY_FOR_REVIEW")
+        self.assertEqual(status, "READY_FOR_REVIEW", state.get("summary"))
         self.assertEqual([a["status"] for a in state["attempts"][:2]], ["TIMEOUT", "OK"])
         self.assertEqual(state["stages"][1]["session_turns"], 2)
         self.assertNotIn("FORMAT REPAIR ONLY", (run / "02-plan/request.md").read_text())
@@ -583,6 +583,7 @@ class LiveTests(LiveFixture, unittest.TestCase):
                 "checkpoint.json",
                 "evidence.json",
                 "observations.json",
+                "local-preflight.json",
                 "budgets.json",
                 "plan.md",
                 "progress.md",
@@ -611,6 +612,7 @@ class LiveTests(LiveFixture, unittest.TestCase):
                         "response-object.json",
                         "result.json",
                         "events.jsonl",
+                        "turn-inputs.json",
                         "stderr.log",
                         "activity.json",
                         "telemetry.json",
@@ -639,7 +641,7 @@ class LiveTests(LiveFixture, unittest.TestCase):
         value = dict(
             status="PLAN_READY",
             summary="fix",
-            steps=["fix"],
+            steps=[dict(action="fix", required_checks=[])],
             files_read=[str(self.root / "hello.py")],
             proposed_change_files=[str(self.root / "hello.py")],
         )

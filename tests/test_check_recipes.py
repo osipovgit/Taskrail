@@ -21,6 +21,7 @@ from taskrail.application import (
     check_specs,
     execution_evidence,
     execution_wait,
+    step_checks,
     verify_commands,
 )
 from taskrail.application.source_guard import SourceGuard
@@ -102,6 +103,23 @@ class CheckRecipesTest(unittest.TestCase):
         self.assertEqual(checks[0]["status"], "FAIL")
         self.assertEqual(check_results.read(self.run)[0]["assessment"]["status"], "unknown")
         self.assertEqual(check_results.trusted(self.run), {})
+
+    def test_reviewed_task_gate_runs_and_failed_exit_cannot_pass(self):
+        workflow = self.workflow()
+        workflow.config["check_specs"] = []
+        step_checks.install(workflow, dict(steps=[dict(required_checks=["health"])]))
+        with patch(
+            "taskrail.interactions.approval_policy.decision",
+            return_value=dict(decision="allow", alternative=""),
+        ):
+            passed = verify_commands.run_commands(workflow, self.folder)
+            self.assertEqual(passed[0]["status"], "PASS")
+            self.recipe["request"] = dict(self.command, argv=[sys.executable, "-c", "exit(7)"])
+            failed = verify_commands.run_commands(workflow, self.folder)
+        self.assertEqual(failed[0]["status"], "FAIL")
+        results = check_results.read(self.run)
+        self.assertEqual([entry["criteria"] for entry in results], [[], []])
+        self.assertEqual(results[-1]["execution"]["exit_code"], 7)
 
     def test_configured_verify_command_cannot_bypass_denial_or_spawn_a_process(self):
         with (

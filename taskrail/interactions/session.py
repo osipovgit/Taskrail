@@ -1,10 +1,16 @@
 """Continue executor turns through an explicit opencode session inside one stage."""
 
-from taskrail.application import budgets, evidence_delivery, plan_write, response_format
+from taskrail.application import (
+    budgets,
+    evidence_delivery,
+    plan_write,
+    progress_file,
+    response_format,
+)
 from taskrail.application.artifacts import save_run
-from taskrail.core import control
+from taskrail.core import control, prompt_texts
 from taskrail.core.files import atomic_json, changed
-from taskrail.infrastructure import opencode_api
+from taskrail.infrastructure import invalid_tools, opencode_api
 from taskrail.infrastructure.runner import run_agent
 from taskrail.interactions import events, provider_resume, request_limits
 from taskrail.interactions.actions import Actions
@@ -149,13 +155,14 @@ class StageSession:
 
 def received_turn(session, options):
     """Keep prepared evidence pending until its receiving session completed the turn."""
+    run = session.environment[RUN]
     prompt = session.launch["prompt"].read_text()
-    outcome = run_agent(options)
+    outcome = progress_file.overflow(run, session.active[1][ROLE])
+    outcome = outcome or run_agent(options)
     expected = session.context[SESSION_ID]
     unexpected = expected and outcome.get("sessions") != [expected]
     if unexpected and outcome["status"] == "OK":
         outcome.update(status="SESSION_ERROR", errors=["Unexpected opencode session identity"])
-    run = session.environment[RUN]
     evidence_delivery.confirm(run, session.active[0], prompt, outcome, expected)
     return outcome
 
@@ -171,7 +178,7 @@ def result_feedback(session, outcome):
     if correction is not None:
         return correction
     if check is None or outcome["status"] != "OK":
-        return None
+        return unavailable_tool_feedback(session, outcome)
     if context[RESULT_CORRECTIONS] >= MAX_RESULT_CORRECTIONS:
         return None
     error = check(outcome)
@@ -181,6 +188,17 @@ def result_feedback(session, outcome):
     context[VALIDATION_ERRORS].append(error)
     feedback = response_format.correction(session.active[1][ROLE], error)
     events.append(session.active[0], "correction", dict(response="final result"), feedback)
+    return feedback
+
+
+def unavailable_tool_feedback(session, outcome):
+    """A rejected tool name needs guidance, without weakening final result validation."""
+    errors = invalid_tools.correction(outcome)
+    if not errors or session.context[RESULT_CORRECTIONS] >= MAX_RESULT_CORRECTIONS:
+        return None
+    session.context[RESULT_CORRECTIONS] += 1
+    feedback = prompt_texts.text("recovery.invalid_tool", error="; ".join(errors))
+    events.append(session.active[0], "correction", dict(response="unavailable tool"), feedback)
     return feedback
 
 

@@ -8,6 +8,9 @@ const STEP_TEXT = {
   needs_you: 'Implementation needs you',
   integrating: 'Integration review',
   integration_failed: 'Integration review needs you',
+  correcting: 'Correcting integration findings',
+  corrected: 'Correction finished; integration review pending',
+  correction_failed: 'Integration correction needs you',
   validating: 'Jenkins validation',
   approval: 'A check waits for root approval',
   validation_failed: 'Jenkins validation failed',
@@ -36,15 +39,25 @@ function taskControls(delivery, actions) {
   const autoLabel = el('label', undefined, 'epic-auto');
   autoLabel.append(
     auto,
-    el('span', ' Start the next task automatically after each successful one'),
+    el('span', ' Continue tasks and bounded integration corrections automatically'),
   );
   controls.append(next, autoLabel);
-  if (['integration_failed', 'confirm'].includes(delivery.step)) {
+  if (delivery.correction_available) {
+    const correct = el('button', 'Correct integration findings', 'primary');
+    correct.type = 'button';
+    correct.onclick = () => actions.act('integration_correct');
+    controls.append(correct);
+  }
+  if (['integration_failed', 'corrected', 'confirm'].includes(delivery.step)) {
     const repeat = el('button', 'Repeat integration review');
     repeat.type = 'button';
     repeat.onclick = () => actions.act('integration_review');
     controls.append(repeat);
   }
+  if (delivery.corrections?.length)
+    controls.append(
+      el('span', 'Corrections remaining: ' + delivery.corrections_remaining, 'muted'),
+    );
   return controls;
 }
 

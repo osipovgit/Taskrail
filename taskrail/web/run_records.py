@@ -4,6 +4,7 @@ from functools import partial
 from types import MappingProxyType
 
 from taskrail.web import (
+    correction_launch,
     delivery_launch,
     epic_launch,
     epic_record,
@@ -30,6 +31,7 @@ LAUNCHES = MappingProxyType(
         EPIC_NEXT: epic_launch.start_next,
         CONFIRM: delivery_launch.confirm,
         INTEGRATION: integration_launch.repeat,
+        "integration_correct": correction_launch.start,
     }
 )
 ACTIONS = frozenset((*RECORDS, *PAUSES, *LAUNCHES))

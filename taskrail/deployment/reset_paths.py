@@ -6,6 +6,7 @@ from pathlib import Path
 from taskrail.infrastructure.opencode_cli import agent_directory
 
 MAIN = (".local/share/taskrail", ".config/taskrail", ".local/state/taskrail")
+PRESERVED_STATE = frozenset(("live.lock", "worktrees"))
 EXTRA = (
     ".config/systemd/user/taskrail.service",
     ".config/systemd/user/taskrail.service.d",
@@ -63,13 +64,30 @@ class ResetPaths:
     def targets(self):
         """Every removed directory or file participates in overlap validation."""
         extras = tuple(self.home / name for name in EXTRA)
-        return (*self.main, self.history, *extras, *self.profiles)
+        state = self.main[2]
+        children = state.iterdir() if state.exists() else ()
+        removable = tuple(child for child in children if child.name not in PRESERVED_STATE)
+        additional = (self.history, *extras, *self.profiles)
+        return (*self.main[:2], *removable, *additional)
 
     def validate(self, protected):
         """Reject redirected storage and all release/settings intersections."""
         forbidden = (self.home, Path("/"))
+        if self.main[2].resolve() != self.main[2]:
+            raise ValueError("Unsafe reset state directory; no files deleted")
+        worktrees = self.main[2] / "worktrees"
+        preserved = [worktrees]
+        if self.options.get("worktree_base"):
+            preserved.append(Path(self.options["worktree_base"]).expanduser().resolve())
         for target in self.targets():
-            if target.resolve() != target or target in forbidden:
-                raise ValueError(f"Unsafe reset path; no files deleted: {target}")
-            if any(overlaps(target, source) for source in protected):
-                raise ValueError("Extract release and supplied settings outside reset directories")
+            validate_target(target, forbidden, protected, preserved)
+
+
+def validate_target(target, forbidden, protected, preserved):
+    """Check one concrete removal target without expanding a preserved directory."""
+    if target.resolve() != target or target in forbidden:
+        raise ValueError(f"Unsafe reset path; no files deleted: {target}")
+    if any(overlaps(target, source) for source in protected):
+        raise ValueError("Extract release and supplied settings outside reset directories")
+    if any(overlaps(target, source) for source in preserved):
+        raise ValueError("Reset paths overlap preserved worktrees; no files deleted")

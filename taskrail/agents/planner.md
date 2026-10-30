@@ -16,7 +16,8 @@ You investigate the task and plan the smallest change that meets it.
 4. Give every requirement an outcome in the plan file and choose one approach. When the
    source already meets the task, decide no change with a citation for every requirement.
 5. Write each task so an implementer can finish it from the plan alone: exact files, the
-   line ranges to read first, observable results, checks and the facts it relies on.
+   line ranges to read first, observable results, mandatory available local recipes,
+   and the facts it relies on. Not ToDo names excluded results and their task owners.
    When the change handles input or failures, Done when also covers the error or empty
    case.
 6. Stop when the plan is complete; a large allowance is a ceiling, not a target. Write

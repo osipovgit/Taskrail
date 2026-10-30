@@ -1,6 +1,7 @@
 """Bounded, contained reads of run artifacts for the dashboard."""
 
 import json
+import os
 from functools import lru_cache
 from pathlib import Path
 
@@ -15,14 +16,15 @@ CACHED_FILES = 128
 
 def contained(base, relative):
     """A path inside base; symlinks and escapes are refused."""
-    root = Path(base).resolve()
-    candidate = root / relative
-    if candidate.is_symlink():
-        raise ValueError("Symlinks are not served")
-    resolved = candidate.resolve()
-    if root not in resolved.parents:
+    root = os.path.realpath(base)
+    prefix = root.rstrip(os.sep) + os.sep
+    candidate = Path(root) / relative
+    resolved = os.path.realpath(candidate)
+    if not resolved.startswith(prefix) or resolved == root:
         raise ValueError("Path outside runs directory")
-    return resolved
+    if os.path.abspath(candidate) != resolved:
+        raise ValueError("Symlinks are not served")
+    return Path(resolved)
 
 
 def read_json(path, limit=JSON_LIMIT):

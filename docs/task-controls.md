@@ -7,6 +7,7 @@
 | Restart from scratch (standalone run) | Stopped run | Open the prefilled task form; submit explicitly to create a new run once no run is active on its projects |
 | Restart reviewed task (split child) | Latest attempt of the next unfinished task; no active writer | Start a linked attempt from the approved parent plan, directly at implementation; preserve previous edits and original preimages |
 | Restart this phase (integration review, Jenkins validation, server checks) | Latest stopped attempt of the phase | Start the phase again under the same delivery; the earlier run stays one of its attempts |
+| Correct integration findings | Rejected integration, no unfinished correction, remaining repair budget | Start a fresh linked task with planning, plan review, implementation, local checks and result review; owned isolated branches also receive a verified commit |
 | Stop task | Running | Write a stop request; the worker cleans up opencode and saves an interruption checkpoint |
 | Continue with extra budget | Eligible checkpoint; explicit confirmation | Add two attempts and one attempt timeout to the interrupted stage; retain consumption |
 | Continue interrupted run | Eligible checkpoint, unchanged source, no active run on its projects | Append new attempts to the same run, starting at the interrupted stage; a stage that reported **Blocked** can continue too, with your note answering its question; an interrupted or blocked implementer first inspects its existing edits |
@@ -50,8 +51,9 @@ Every **Develop** task goes through the same steps:
    authenticates the approved parent plan, criteria, file scope and prerequisite
    source/Git snapshots; independent result review still follows. A child is never
    planned again: it cannot split. Its brief lists the earlier tasks, which may already
-   contain parts of its work, and the later tasks, whose work it leaves to them unless
-   it cannot be complete without it. In isolated worktrees it may change files beyond
+   contain parts of its work, and the later tasks' owned results under **Not ToDo**.
+   If completion requires transferring another task's deliverable, it reports the exact
+   scope decision needed. In isolated worktrees it may change necessary files beyond
    its plan and ends with verified commit receipts
    ([worktree isolation](task-format.md#worktree-isolation)). A contract that cannot be met
    reports the required parent replanning instead of launching nested tasks.
@@ -60,10 +62,26 @@ Every **Develop** task goes through the same steps:
    interactions between tasks. The server prepares its scope, writes the combined diff
    of all task runs against the files before the split to its `changes.diff`, lists the
    files each task changed and starts one independent reviewer, preceded by configured
-   local checks when present. Findings end the review as **Changes requested**; there
-   is no writer to repair them, so the review is not repeated automatically.
+   local checks when present. Findings end the review as **Changes requested**. With
+   auto-continue enabled and repair budget remaining, the service starts a separate
+   correction task from the original goal, constraints and authenticated findings.
+   It plans one atomic change, receives independent plan approval, implements, checks,
+   reviews it and commits it on an owned isolated branch. In-place mode retains its
+   existing Git boundary. A successful correction starts a fresh integration review
+   over the combined original and corrective changes. Its required local gates remain
+   mandatory in that review. Each rejected review can start at most one correction;
+   the parent's frozen `max_repairs` limits their total. Turning auto-continue off
+   pauses both automatic correction and automatic repeat review; the corresponding
+   buttons remain available for explicit starts.
+   Corrective plans can add local catalog checks. Original Jenkins/server obligations
+   remain unchanged; adding a remote binding requires a new parent plan.
    Child success reports and manual done marks cannot bypass this phase. It runs
    even without an SSH/Jenkins executor and must finish `NO_CHANGES_REQUIRED`.
+   A failed or interrupted correction waits for inspection. Continue is available only
+   with an eligible unchanged checkpoint; otherwise inspect its edits and replan the
+   parent. Corrective writers cannot Restart or be hidden by repeating review;
+   unresolved Git writes also block further delivery. Exhausted repair budget requires
+   operator attention.
 4. **Jenkins validation.** Planned `Jenkins check:` entries run when Jenkins is
    configured. A build needs root approval unless its job is configured with
    `"approval": "none"` ([Jenkins jobs](ssh-executor.md)).
@@ -83,14 +101,15 @@ Every **Develop** task goes through the same steps:
    Before confirmation, SSH requests may only inspect ([SSH executor](ssh-executor.md)).
 
 The run page shows these steps in a **Delivery** panel as one graph: the tasks of a
-split in columns by their dependencies, then integration review, Jenkins validation,
+split in columns by their dependencies, rejected integration reviews and their numbered
+correction tasks in execution order, then fresh integration review, Jenkins validation,
 your confirmation and server checks. Each node shows its status and, after a retry,
 how many earlier attempts it has. Select a node to work with its run inside the same
 card: its stages, decision requests, actions, diff and report; a run that waits for
 your decision is shown without a click. Earlier attempts collapse into one line
 (`2 earlier attempts · #1 Invalid result · #2 Tool error`) that expands to open any
 of them. The address `#parent/child` opens a node directly. The next task starts automatically after each successful
-one (**Start the next task automatically after each successful one** is on); it stops
+one (**Continue tasks and bounded integration corrections automatically** is on); it stops
 at the first task that does not finish successfully, and before a task marked **Pause
 before this task**, for example when you want to review the code before a task that
 checks it on a server. **Start S-n** starts the next task by hand; a task whose run
@@ -117,7 +136,8 @@ Required acceptance text is never replaced by a truncated summary. An oversized
 submission fails visibly and pauses auto-continue instead of looping silently.
 **Allow all actions** covers the whole split or delivery: given in the task form, on a
 decision of the parent or on a decision of any task or phase run, it applies to every
-task and check run started afterwards. **Stop allowing all actions** in the parent,
+task and check run started afterwards, and existing authenticated workers before their
+next approval request. **Stop allowing all actions** in the parent,
 current child or an older attempt revokes it for the whole recorded family, including
 active tasks, phase attempts and linked workers that have not started yet. Each worker
 checks revocation before its next automatic decision; an already approved action keeps
@@ -125,7 +145,8 @@ its approval. A late response to an earlier approval card cannot undo a later re
 A fresh **Allow all actions** decision restores that worker and future children; other
 revoked workers still require a personal decision. Unconfigured Jenkins/SSH phases are shown as skipped; integration
 review is never skipped. **Repeat integration review** starts a new read-only review
-when the earlier one stopped or its evidence is stale; it also invalidates later
+when the earlier one stopped or its evidence is stale and every corrective writer is
+finished; it also invalidates later
 validation and confirmation. Earlier phase links remain in the parent's history.
 
 A task or check run is linked to its parent before its worker starts, and every change
@@ -177,8 +198,9 @@ A child restart uses the parent's sealed plan, typed requirements, effective roo
 and file scope. The new attempt is linked before its worker starts; completed,
 superseded or running child attempts cannot be retried this way. The API restart
 action has the same behavior; submitting a detached restart draft or a follow-up for a
-task or phase run is rejected. **Restart this phase** starts a delivery phase again
-under the same parent, so the parent never loses the link to its current phase run. An already detached run is not automatically reattached: stop it and
+task or phase run is rejected. **Restart this phase** starts an integration, validation
+or server phase again under the same parent; corrections use eligible Continue or
+parent replanning. The parent retains its phase links. An already detached run is not automatically reattached: stop it and
 recover through the original parent, inspecting its changes before accepting files.
 
 ## Conversation context
@@ -225,13 +247,14 @@ Same-origin and CSRF-token checks apply to every mutation (`POST /api/tasks`,
 `/api/actions`, `/api/decision`). `/api/actions` accepts
 `{"id":"run-id","action":"restart|resume|resume_budget|stop|delete"}`, and a
 continuation may add `"note"`; `resume_budget`
-is **Continue with extra budget**, and restart returns a `draft` without launching
-anything. `/api/tasks` accepts the task fields plus the booleans `read_only`,
+is **Continue with extra budget**. Restart returns a `draft` for a standalone run,
+launches a linked attempt for an eligible split child, integration, validation or server phase,
+and refuses corrective writers. `/api/tasks` accepts the task fields plus the booleans `read_only`,
 `worktree`, `design` and `auto_approve`, and optionally `parent_run` with `submission_mode`
 `restart`, `followup`, `answer` or `design`; without a parent the mode is `new`. `/api/decision` answers one pending approval ticket with
 `allow`, `deny` or `alternative`; an `allow` may add `"allow_all": true`. Commands and settings stay server-owned. Reads use
 `GET /api/session`, `/api/runs`, `/api/run` and `/api/analytics`. `/api/actions` also
-accepts `epic_next`, `epic_auto_on`, `epic_auto_off`, `confirm`, `integration_review`,
+accepts `epic_next`, `epic_auto_on`, `epic_auto_off`, `confirm`, `integration_review`, `integration_correct`,
 `done`, `reopen`, `revoke_auto_approve`, and with a `"task"` field `epic_pause` and
 `epic_unpause`.
 
@@ -255,10 +278,12 @@ taskrail submit --json payload.json       # the fields of POST /api/tasks
 `/api/actions` actions. For a standalone run, `action RUN restart` prints the saved
 `draft`; submit the edited fields with `parent_run` and `submission_mode: "restart"`
 in the JSON payload. For a split child, `action CHILD_RUN restart` launches a new
-linked attempt of the same reviewed task directly, and `action PHASE_RUN restart` runs a
-delivery phase again under its parent; `submit --restart` or `--followup` naming a task
+linked attempt of the same reviewed task directly, and `action PHASE_RUN restart` runs
+integration, validation or server checks again under their parent. A correction can
+only Continue from an eligible checkpoint; otherwise replan the parent.
+`submit --restart` or `--followup` naming a task
 or phase run is rejected because a detached run would lose its parent.
-Automatic steps of a split (the next task, integration review,
+Automatic steps of a split (the next task, bounded integration correction and review,
 Jenkins validation, server checks after confirmation) need the managed service.
 
 ## Decisions and continuation
@@ -281,8 +306,9 @@ further actions in this run** on a card and choose Allow. Local commands, read a
 and the change limit are then approved without asking, and each automatic approval is
 recorded in the same ledger with `"automatic": true`. The run shows an **All actions
 allowed** badge and a **Stop allowing all actions** button, which takes effect before
-the next decision and also on Continue. A choice made on a card lasts until the worker
-exits; Continue asks again unless the task form enabled it and it was not stopped.
+the next decision and also on Continue. A personal card choice is durable across worker
+exit, Continue and Restart until revoked. Copied child metadata alone cannot grant or
+restore permission after a family revocation.
 Sandboxed local commands and read-only requests never ask ([access](access.md#local-commands)).
 Allow all actions also covers inline shell or Python code (`bash -c`, `python -c`); pushes
 always ask. SSH tickets keep

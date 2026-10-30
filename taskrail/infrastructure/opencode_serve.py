@@ -7,12 +7,11 @@ keep both. The server listens on loopback behind a random password and stops wit
 stage. A CLI whose `run` has no `--attach` keeps one process per turn.
 """
 
-import functools
 import secrets
 import subprocess
 import threading
 
-from taskrail.infrastructure import opencode_cli, server_readiness
+from taskrail.infrastructure import server_readiness
 from taskrail.infrastructure.process_group import stop_group
 
 ATTACH = "TASKRAIL_OPENCODE_ATTACH"
@@ -23,21 +22,25 @@ CLOSE_SECONDS = 5
 PASSWORD_BYTES = 32
 
 
-@functools.cache
-def supported(command):
-    """Whether `run` of this CLI attaches to a server; asked once per command."""
+def supported(command, workspace, environment):
+    """Only successful help without --attach establishes an unsupported capability."""
     try:
         completed = subprocess.run(
             [*command, "run", "--help"],
-            env=opencode_cli.environment(),
+            cwd=workspace,
+            env=environment,
             stdin=subprocess.DEVNULL,
             capture_output=True,
             text=True,
             timeout=HELP_SECONDS,
             check=False,
         )
-    except (OSError, subprocess.SubprocessError):
-        return False
+    except (OSError, subprocess.SubprocessError) as error:
+        raise ValueError("Cannot probe wrapper run --help; no model session started") from error
+    if completed.returncode:
+        raise ValueError(
+            f"Wrapper run --help failed with exit {completed.returncode}; no model session started"
+        )
     return "--attach" in completed.stdout + completed.stderr
 
 

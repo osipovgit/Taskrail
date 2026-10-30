@@ -1,9 +1,10 @@
 """The run list: started runs and launches that have not created a run yet."""
 
+import contextlib
 from operator import itemgetter
 from types import MappingProxyType
 
-from taskrail.web import delivery_state, history, lifecycle, run_family, run_groups
+from taskrail.web import delivery_state, history, lifecycle, run_errors, run_family, run_groups
 from taskrail.web.run_files import contained, read_json
 
 SUMMARY_LIMIT = 500
@@ -28,16 +29,16 @@ def run_entry(path):
     """A readable run directory, or None; a task or phase run is shown in its parent."""
     if path.is_symlink() or not path.is_dir():
         return None
-    if run_family.shown_inside(path.parent, path):
-        return None
     try:
         return run_summary(path)
-    except (OSError, ValueError, AttributeError):
-        return None
+    except run_errors.ERRORS as error:
+        return run_errors.summary(path, error) if path.joinpath("run.json").is_file() else None
 
 
 def run_summary(path):
     """ID, title, display status and a bounded summary."""
+    if run_family.shown_inside(path.parent, path):
+        return None
     state = read_json(contained(path, "run.json"))
     task = history.read_artifact(path, history.TASK_FILE)
     request = task.split(history.HISTORY, 1)[0]
@@ -87,10 +88,12 @@ def pending_entry(folder):
         return None
     try:
         launch = read_json(contained(folder, "launch.json"))
-    except (OSError, ValueError):
+    except run_errors.ERRORS:
         return None
     # A continuation, task or phase launch is shown in its own or its parent's card.
-    shown_elsewhere = run_family.shown_inside(folder.parent.parent, folder)
+    shown_elsewhere = True
+    with contextlib.suppress(*run_errors.ERRORS):
+        shown_elsewhere = run_family.shown_inside(folder.parent.parent, folder)
     if not isinstance(launch, dict) or launch.get("resume") or shown_elsewhere:
         return None
     if not REQUIRED_LAUNCH_FIELDS.issubset(launch):

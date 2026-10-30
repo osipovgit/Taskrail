@@ -42,9 +42,11 @@ def part(text, scope):
 def brief(run, draft, entries, current):
     """A bounded index; the immutable artifact holds every full contract and outcome."""
     lines = [prompt_texts.current("child.scope")]
-    lines.extend(["", f"Parent run: {run.name}. Current task: {current['id']}."])
+    lines.extend(
+        [prompt_texts.current("child.position", parent=run.name, task=current[IDENTIFIER])]
+    )
     lines.append(prompt_texts.current("child.reference"))
-    lines.extend(["", current_contract(current), "", "Prerequisites:"])
+    lines.extend(["", current_contract(current), "", prompt_texts.current("child.prerequisites")])
     needed = task_graph.ancestors(entries, current[IDENTIFIER])
     remaining = min(INDEX_BUDGET, BRIEF_BUDGET - len("\n".join(lines)))
     for task in entries:
@@ -61,8 +63,14 @@ def current_contract(task):
     """Checks and notes are essential input and cannot silently become a truncated pointer."""
     checks = "\n".join(task["checks"])
     notes = task.get("notes", "")
-    text = "Current task:\n{}\nAction: {}\nChecks:\n{}\nNotes:\n{}".format(
-        task_line(task, task), task["goal"], checks, notes
+    text = prompt_texts.current(
+        "child.contract",
+        task=task_line(task, task),
+        action=task["goal"],
+        checks=checks,
+        required="\n".join(task.get("required_checks", [])),
+        excluded="\n".join(task.get("not_todo", [])),
+        notes=notes,
     )
     if len(text) > CONTRACT_BUDGET:
         raise ValueError(
