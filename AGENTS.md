@@ -5,8 +5,12 @@ Preserve user input and historical artifacts verbatim. Conversation may be Russi
 
 ## Repository changes
 
-Use a feature branch and a pull request for every change. Never commit or push
-directly to `master`. Merge only after all required pipelines pass for the latest
+Use a feature branch for every task. After validation, commit and push the changes,
+open a pull request targeting `master`, and include its URL in the final response.
+A task is not complete with only local changes or a pushed branch. If access
+prevents opening the PR, report the blocker and keep the task incomplete.
+Never commit or push directly to `master`.
+Merge only after all required pipelines pass for the latest
 revision and the repository owner has personally reviewed and accepted it.
 Agents must not merge, enable auto-merge or bypass repository rules.
 Keep machine-specific settings, adapters and task history outside version control.
