@@ -83,17 +83,7 @@ class StageAttempts:
         workflow = self.workflow
         files = planned_files(workflow)
         profile = install_profile(workflow, active, files)
-        outcome = session_budget.admission(
-            workflow.config,
-            active,
-            session_budget.plan_inputs(
-                workflow.flow["plan"], workflow.config["roots"], active[1]["role"]
-            ),
-        )
-        if outcome:
-            active[0].joinpath("events.jsonl").touch(exist_ok=True)
-            self.settle(active, outcome)
-            return outcome
+        session_budget.capture(workflow.config, active)
         announce(active[1])
         allowance = token_allowance(workflow)
         if allowance is not None and allowance <= 0:

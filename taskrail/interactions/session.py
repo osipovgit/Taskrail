@@ -4,7 +4,6 @@ from taskrail.application import (
     budgets,
     evidence_delivery,
     plan_write,
-    progress_file,
     response_format,
 )
 from taskrail.application.artifacts import save_run
@@ -157,8 +156,7 @@ def received_turn(session, options):
     """Keep prepared evidence pending until its receiving session completed the turn."""
     run = session.environment[RUN]
     prompt = session.launch["prompt"].read_text()
-    outcome = progress_file.overflow(run, session.active[1][ROLE])
-    outcome = outcome or run_agent(options)
+    outcome = run_agent(options)
     expected = session.context[SESSION_ID]
     unexpected = expected and outcome.get("sessions") != [expected]
     if unexpected and outcome["status"] == "OK":

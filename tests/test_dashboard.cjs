@@ -893,9 +893,13 @@ async function main() {
     stages.stageContextLabel({
       status: 'RUNNING',
       context_budget: { input_capacity_tokens: 86016 },
-      telemetry: { last_input: 43008, unreported_characters: 4000 },
+      telemetry: {
+        last_input: 43008,
+        unreported_characters: 400000,
+        tokens: { input: 1000000, total: 2000000 },
+      },
     }),
-    'Context ≈51% · ≈44,008 of 86,016 tokens',
+    'Context 50% · 43,008 of 86,016 tokens',
   );
   assert.equal(
     stages.stageContextLabel({
@@ -904,11 +908,32 @@ async function main() {
         input_capacity_tokens: 10000,
         request_bytes: 12000,
         role_bytes: 2000,
+        attached_bytes: 50000,
+        planned_input_bytes: 1000000,
+        estimated_input_tokens: 1000000,
         framing_tokens: 1024,
       },
       telemetry: { observed_characters: 6000 },
     }),
-    'Context ≈60% · ≈6,024 of 10,000 tokens',
+    'Context unknown · capacity 10,000 tokens',
+  );
+  for (const reported of [undefined, null, NaN, Infinity, -1]) {
+    assert.equal(
+      stages.stageContextLabel({
+        status: 'RESULT_VALID',
+        context_budget: { input_capacity_tokens: 10000 },
+        telemetry: { peak_input: reported, tokens: { total: 2000000 } },
+      }),
+      'Context unknown · capacity 10,000 tokens',
+    );
+  }
+  assert.equal(
+    stages.stageContextLabel({
+      status: 'RUNNING',
+      context_budget: { input_capacity_tokens: 10000, attached_bytes: 50000 },
+      telemetry: { last_input: 0 },
+    }),
+    'Context 0% · 0 of 10,000 tokens',
   );
   assert.equal(stages.stageContextLabel({ status: 'RUNNING', telemetry: {} }), '');
   assert.equal(

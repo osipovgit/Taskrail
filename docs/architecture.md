@@ -144,10 +144,11 @@ comes with a digest of its severities, most mentioned files and rules
 (`interactions/output_digest.py`). Response schemas are compact JSON, one alternative
 per line. SSH and Jenkins schemas use the same available targets/jobs and stage
 permissions as their instructions (`application/response_format.py`); an absent,
-unreachable or empty executor advertises neither capability. All roles run with automatic compaction disabled. Admission measures each role's
-request, frozen role and approved source inputs against the configured context
-capacity and reserve; usage monitoring separately checks provider input including
-cache and explicit compaction events. A session ends at a boundary between 90 and 95
+unreachable or empty executor advertises neither capability. All roles run with automatic compaction disabled.
+Request, role and attachment byte counts are diagnostics, not admission
+limits. Context enforcement uses the latest provider-reported input including cache,
+explicit overflow errors and compaction events. Missing usage stays unknown.
+A session ends at a measured boundary between 90 and 95
 percent of its model's window; the next attempt starts a fresh session instead of
 compacting. Read-only recovery starts it from recorded evidence while retaining the
 plan file; a writer continues from its kept edits and `progress.md`, never after

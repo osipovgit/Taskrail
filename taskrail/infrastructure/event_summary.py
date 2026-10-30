@@ -6,6 +6,7 @@ import re
 from collections import defaultdict
 
 from taskrail.infrastructure import (
+    context_overflow,
     invalid_tools,
     opencode_cli,
     provider_limits,
@@ -155,6 +156,9 @@ class EventSummary:
             tool_errors=self.failures["tool_errors"],
             permission=self.failures["permission"],
             provider_limit=provider_limits.reached(self.failures[ERRORS]),
+            provider_context_exceeded=context_overflow.exceeded(
+                [entry[ERROR] for entry in self.failures["session"]]
+            ),
             completed=final is not None,
             final_text=text,
         )

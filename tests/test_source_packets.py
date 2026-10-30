@@ -11,7 +11,6 @@ from taskrail.application import (
     evidence,
     evidence_delivery,
     recovery,
-    session_budget,
     source_delivery,
     source_packet,
     source_windows,
@@ -164,17 +163,6 @@ class SourcePacketTests(unittest.TestCase):
         self.assertEqual(context["source_packet"][0]["path"], str(self.path))
         self.assertNotIn("source_sha256", context["source_packet"][0])
 
-    def test_partial_packet_cannot_exempt_other_approved_inputs(self):
-        packet = self.prepare("module.py:1-2")
-        other = self.root / "large.py"
-        other.write_text("value = 1\n" * 10000)
-        folder = self.run / "03-implement"
-        folder.mkdir()
-        folder.joinpath("agent.md").write_text("Implement approved work")
-        folder.joinpath("request.md").write_text(json.dumps(source_delivery.public(packet)))
-        outcome = session_budget.admission({}, (folder, dict(role="planner")), [self.path, other])
-        self.assertTrue(outcome["admission_blocked"])
-
     def test_plan_review_sees_selected_and_configured_checks_without_commands(self):
         recipe = dict(
             kind="local",
@@ -271,21 +259,6 @@ class SourcePacketTests(unittest.TestCase):
         self.assertIn(str(canonical), manifest["readable_artifacts"])
         self.assertNotIn(str(inputs / "task.md"), manifest["readable_artifacts"])
         self.assertNotIn(str(inputs / "history.md"), manifest["readable_artifacts"])
-
-    def test_partial_packet_cannot_exempt_its_own_unread_suffix(self):
-        self.path.write_text("value = 1\n" * 10000)
-        packet = self.prepare("module.py:1-2")
-        folder = self.run / "03-implement"
-        folder.mkdir()
-        folder.joinpath("agent.md").write_text("Implement approved work")
-        folder.joinpath("request.md").write_text(json.dumps(source_delivery.public(packet)))
-        record = dict(role="planner")
-        outcome = session_budget.admission({}, (folder, record), [self.path])
-        self.assertTrue(outcome["admission_blocked"])
-        delivered = len(b"value = 1") * 2
-        self.assertEqual(
-            record["context_budget"]["planned_input_bytes"], self.path.stat().st_size - delivered
-        )
 
 
 if __name__ == "__main__":

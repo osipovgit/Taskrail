@@ -612,7 +612,6 @@ class LiveTests(LiveFixture, unittest.TestCase):
                         "response-object.json",
                         "result.json",
                         "events.jsonl",
-                        "turn-inputs.json",
                         "stderr.log",
                         "activity.json",
                         "telemetry.json",

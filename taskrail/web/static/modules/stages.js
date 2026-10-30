@@ -97,38 +97,21 @@ export function stageClockLabel(stage, now = Date.now()) {
   if (stage.status === 'WAITING_APPROVAL') label += ' · Waiting for approval';
   return label;
 }
-// Rough size of the text a session received: about four characters per token.
-const CHARACTERS_PER_TOKEN = 4;
-// The session's context against its model's window: the input the provider reported for
-// the latest step plus what arrived since, or, without reports, the request and every
-// text and tool call. '≈' marks an estimate; a finished stage shows its peak.
-export function contextUse(stage) {
-  const budget = stage.context_budget || {};
+// Only provider input reports measure the boundary; bytes and cumulative usage do not.
+export function stageContextLabel(stage) {
+  const capacity = stage.context_budget?.input_capacity_tokens;
+  if (!Number.isFinite(capacity) || capacity <= 0) return '';
   const telemetry = stage.telemetry || {};
   const running = stage.status === 'RUNNING';
   const reported = running ? telemetry.last_input : telemetry.peak_input;
-  if (Number.isFinite(reported)) {
-    const pending = running ? telemetry.unreported_characters || 0 : 0;
-    return { tokens: reported + pending / CHARACTERS_PER_TOKEN, estimated: pending > 0 };
-  }
-  if (!Number.isFinite(telemetry.observed_characters) || !Number.isFinite(budget.request_bytes))
-    return null;
-  const sent = budget.request_bytes + (budget.role_bytes || 0) + telemetry.observed_characters;
-  return { tokens: sent / CHARACTERS_PER_TOKEN + (budget.framing_tokens || 0), estimated: true };
-}
-export function stageContextLabel(stage) {
-  const capacity = stage.context_budget?.input_capacity_tokens;
-  const use = contextUse(stage);
-  if (!Number.isFinite(capacity) || capacity <= 0 || !use) return '';
-  const tokens = Math.round(use.tokens);
-  const about = use.estimated ? '≈' : '';
-  const prefix = stage.status === 'RUNNING' ? 'Context ' : 'Peak context ';
+  if (!Number.isFinite(reported) || reported < 0)
+    return 'Context unknown · capacity ' + capacity.toLocaleString('en-GB') + ' tokens';
+  const tokens = Math.round(reported);
+  const prefix = running ? 'Context ' : 'Peak context ';
   return (
     prefix +
-    about +
     Math.round((100 * tokens) / capacity) +
     '% · ' +
-    about +
     tokens.toLocaleString('en-GB') +
     ' of ' +
     capacity.toLocaleString('en-GB') +

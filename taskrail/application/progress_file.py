@@ -35,24 +35,6 @@ def grant(access, run):
     access["readable"].extend(progress_archive.paths(run))
 
 
-def overflow(run, role):
-    """Prepare a fresh profile before granting exact access to a newly archived note."""
-    target = path(run)
-    if role != "implementer" or not target.exists():
-        return None
-    if target.stat().st_size <= progress_archive.MAX_BYTES:
-        return None
-    return dict(
-        status="CONTEXT_EXCEEDED",
-        final_text="",
-        errors=["Progress note exceeds its handoff limit; a bounded fresh session is required"],
-        completed=False,
-        tokens={},
-        elapsed_seconds=0,
-        usage_complete=False,
-    )
-
-
 def instructions(run):
     """How the implementer keeps its progress."""
     return prompt_texts.text("progress.format", path=path(run))

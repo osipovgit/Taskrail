@@ -2,7 +2,6 @@
 
 import json
 
-from taskrail.observability.delivered import Delivered
 from taskrail.observability.telemetry_parts import (
     TEXT_PREVIEW_LIMIT,
     Steps,
@@ -27,7 +26,6 @@ class Telemetry:
         self.tool_calls = ToolCalls()
         self.steps = Steps()
         self.timeline = Timeline()
-        self.delivered = Delivered()
 
     @property
     def tokens(self):
@@ -52,7 +50,6 @@ class Telemetry:
         if number(stamp) is not None:
             keep_first(self.times, FIRST_EVENT, stamp)
             self.times["last_event"] = stamp
-        self.delivered.observe(kind, part)
         self.timeline.add(self.entry(kind, part, stamp))
 
     def fresh(self, kind, part, line):
@@ -84,7 +81,6 @@ class Telemetry:
             **self.steps.summary(),
             **self.tool_calls.summary(),
             **self.times,
-            **self.delivered.summary(),
             **self.timeline.summary(),
         )
 

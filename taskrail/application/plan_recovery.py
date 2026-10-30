@@ -11,8 +11,6 @@ def recover(workflow, record, outcome):
     """Only a fully validated plan may proceed to the existing independent plan review."""
     if record["stage"] != "planner" or outcome["status"] != STATUS:
         return None
-    if outcome.get("admission_blocked"):
-        return None
     try:
         verdict = validated(workflow, record, outcome)
     except (ValueError, TypeError) as error:

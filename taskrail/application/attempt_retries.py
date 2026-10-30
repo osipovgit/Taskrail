@@ -104,14 +104,13 @@ class Retries:
 
 
 def final(stage, outcome, config):
-    """An outcome no retry should repeat: blocked admission, a planner error already
-    returned for repair, or, when stop_on_provider_limit is set, a provider limit."""
+    """Do not repeat an already repaired planner error or a configured provider limit."""
     if outcome.get("provider_limit") and config.get("stop_on_provider_limit"):
         say("  Provider quota or billing limit reached; no retry until it resets")
         return True
     repaired = stage == "planner" and outcome["status"] == "INVALID_RESULT"
     repaired = repaired and outcome.get(CONTRACT_ERROR) in outcome.get("validation_errors", [])
-    return bool(outcome.get("admission_blocked")) or repaired
+    return repaired
 
 
 def full_attempt(retries):
