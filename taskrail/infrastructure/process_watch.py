@@ -6,7 +6,7 @@ import time
 
 from taskrail.core.control import check_stop
 from taskrail.core.files import atomic_json
-from taskrail.infrastructure import opencode_cli, usage_limits
+from taskrail.infrastructure import context_overflow, opencode_cli, usage_limits
 from taskrail.infrastructure.event_summary import decoded
 from taskrail.infrastructure.process_group import stop_group
 from taskrail.observability.activity import Progress
@@ -122,11 +122,21 @@ def announce(watch):
 
 
 def turn_status(telemetry, budgets, lines):
-    """Stop on an exceeded token budget or a denied tool call."""
+    """Stop on measured limits, permission denials or an explicit provider overflow."""
     status = usage_limits.exceeded(telemetry, **budgets)
     if status == SUCCESS and any(permission_denied_event(line) for line in lines):
         return "BLOCKED_PERMISSION"
+    if status == SUCCESS and any(context_exceeded_event(line) for line in lines):
+        return context_overflow.STATUS
     return status
+
+
+def context_exceeded_event(line):
+    """Only a provider error can reject the context; tool output is untrusted content."""
+    event = decoded(line)
+    if event is None or event.get("type") != ERROR:
+        return False
+    return context_overflow.exceeded([event.get(ERROR, "")])
 
 
 def permission_denied_event(line):

@@ -3,7 +3,7 @@
 import time
 from types import MappingProxyType
 
-from taskrail.infrastructure import context_overflow, turn_budget, turn_io, usage_limits
+from taskrail.infrastructure import context_overflow, turn_io, usage_limits
 from taskrail.infrastructure.event_summary import parse_events
 from taskrail.infrastructure.opencode_serve import ATTACH
 from taskrail.infrastructure.process_watch import SUCCESS, TurnWatch
@@ -27,11 +27,7 @@ def run_agent(launch):
     attempt.mkdir(exist_ok=True)
     turn = turn_io.TurnIO(attempt, options[RUNTIME])
     watch = TurnWatch(turn, attempt, options["progress"])
-    outcome = turn_budget.admission(options, watch.telemetry)
-    if outcome is None:
-        outcome = summarize(watch, start(watch, options), options)
-    else:
-        turn.path.touch(exist_ok=True)
+    outcome = summarize(watch, start(watch, options), options)
     outcome.update(model=options["model"], agent=options["agent"])
     attempt.joinpath("response.raw.txt").write_text(outcome["final_text"], encoding="utf-8")
     return outcome
@@ -95,7 +91,7 @@ def final_status(status, code, outcome, stderr):
     errors = outcome["errors"]
     failures = (
         (outcome["permission"] or AUTO_REJECT in stderr, "BLOCKED_PERMISSION"),
-        (context_overflow.exceeded(errors), context_overflow.STATUS),
+        (outcome.get("provider_context_exceeded"), context_overflow.STATUS),
         (code != 0, "PROCESS_ERROR"),
         (bool(errors), "TOOL_ERROR"),
         (not outcome["completed"] or not outcome["final_text"].strip(), "INCOMPLETE"),
