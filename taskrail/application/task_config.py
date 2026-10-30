@@ -32,7 +32,11 @@ def configuration(task, settings=None, roots_override=None, checks_override=None
     options = json.loads(source.read_text()) if source.exists() else {}
     meta = task_header(text, options, roots_override)
     if checks_override is not None:
-        options = dict(options, verify_commands=checks_override.get("verify_commands", []))
+        options = dict(
+            options,
+            verify_commands=checks_override.get("verify_commands", []),
+            permission_worktree=checks_override.get("permission_worktree"),
+        )
     return dict(
         launch_settings(options, source.parent),
         **limits(options),
@@ -67,11 +71,8 @@ def task_header(text, options, roots_override):
 
     A Markdown task file without typed fields is read into them.
     """
-    headers = HEADER.findall(text)
-    if len(headers) > 1:
-        raise ValueError("Only one taskrail-task header is supported")
-    meta = json.loads(headers[0]) if headers else {}
-    if not isinstance(meta, dict) or not isinstance(options, dict):
+    meta = input_header.parse(text)
+    if not isinstance(options, dict):
         raise ValueError("Task header and settings must be JSON objects")
     if roots_override is not None:
         meta[ROOTS] = roots_override

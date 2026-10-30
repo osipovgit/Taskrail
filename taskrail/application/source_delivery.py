@@ -40,7 +40,7 @@ def novel_lines(packet, entry):
 
 
 def retain(run, target, packet):
-    """Register delivered exact lines as observations, never unused candidate ranges."""
+    """Retain reusable discovery; session delivery alone can authorize citation evidence."""
     index = evidence.load_index(run, evidence.OBSERVATIONS)
     numbered = enumerate(packet, 1)
     delivered = [observation(entry, target, position) for position, entry in numbered]

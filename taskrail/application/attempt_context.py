@@ -3,7 +3,7 @@
 import hashlib
 import sys
 
-from taskrail.application import budgets
+from taskrail.application import budgets, source_packet
 from taskrail.application.artifacts import save_run
 from taskrail.core import prompt_texts, protected_paths
 from taskrail.core.files import atomic_json
@@ -49,6 +49,7 @@ def save_request(folder, record, request, workflow):
         1,
     )
     (folder / "request.md").write_text(request, encoding="utf-8")
+    source_packet.queue_delivery(folder.parent, folder, record[STAGE], request)
     record["instruction_modules"] = state.get("instruction_modules", [])
     record["instruction_sha256"] = hashlib.sha256(request.encode()).hexdigest()
     atomic_json(folder / "stage.json", record)

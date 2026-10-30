@@ -5,11 +5,17 @@ import os
 import time
 from pathlib import Path
 
-from taskrail.application import check_configuration, child_inputs, run_state
+from taskrail.application import (
+    check_configuration,
+    child_inputs,
+    execution_context,
+    inherited_settings,
+    run_state,
+)
 from taskrail.application.artifacts import save_run
 from taskrail.application.checkpoints import RESUMABLE, budget_paused
 from taskrail.application.task_config import configuration
-from taskrail.application.worktree_isolation import adopt, isolate
+from taskrail.application.worktree_isolation import isolate
 from taskrail.core.files import atomic_json
 from taskrail.infrastructure.agent_sync import atomic_write
 from taskrail.observability.progress import say
@@ -50,8 +56,10 @@ def configure(request):
     if request["resume"]:
         restored = stored_index(request[RUN_DIRECTORY])
         run = Path(request[RUN_DIRECTORY]).expanduser().resolve()
-        checks = check_configuration.frozen(run, restored)
+        checks = inherited_settings.continued(run, restored)
         restored = restored[ROOTS]
+    else:
+        checks = inherited_settings.for_request(request)
     config = configuration(
         request["task"], request["settings"], roots_override=restored, checks_override=checks
     )
@@ -73,8 +81,7 @@ def open_state(config, run, request, ready):
     """Create or reopen the run index; worktrees are created only once the locks are held."""
     if request["resume"]:
         state = resumed_state(run, config, request)
-        if state.get(WORKTREES):
-            adopt(config, state[WORKTREES])
+        execution_context.restore(run, config, state)
         return state
     if ready:
         isolate(config, run.name)
@@ -123,7 +130,9 @@ def new_state(run, config, request):
     atomic_write(inputs / "task.md", config["task_text"].encode())
     if imported is not None:
         atomic_write(inputs / "imported-response.raw.txt", imported.encode())
-    state = check_configuration.capture(config, run_state.initial_state(config))
+    state = execution_context.capture(
+        run, config, check_configuration.capture(config, run_state.initial_state(config))
+    )
     child_inputs.capture(config["task"], inputs, state)
     atomic_json(inputs / "settings.json", {key: config[key] for key in SETTINGS_SNAPSHOT})
     save_run(run, state)

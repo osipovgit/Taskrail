@@ -21,12 +21,19 @@ def parse(outcome, record, state, environment):
             roots=environment[ROOTS],
             run=environment["run"],
             folder=environment["run"] / record["directory"],
+            session_id=unique_session(outcome),
             plan=environment["plan"],
             changed=tool_paths(state["changed_files"], environment[ROOTS]),
             check_config=environment.get("check_config", {}),
             deliver_lines=environment.get("deliver_lines", False),
         ),
     )
+
+
+def unique_session(outcome):
+    """Ambiguous session identity cannot establish a citation audience."""
+    sessions = outcome.get("sessions", [])
+    return sessions[0] if len(sessions) == 1 else None
 
 
 def execution_context(run, state):

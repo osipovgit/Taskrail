@@ -87,6 +87,7 @@ class Submission:
         self.delivery[CHECK_SPECS] = self.fields.pop(CHECK_SPECS, [])
         self.delivery[check_parents.PARENT] = self.fields.pop(check_parents.PARENT, None)
         self.validate()
+        self.delivery["execution_parent"] = None
         self.previous = history.checked_run(base, self.parent) if self.parent else None
         if self.previous:
             self.inherit_worktrees(json.loads(history.read_artifact(self.previous, "run.json")))
@@ -137,6 +138,7 @@ class Submission:
         if self.mode in CONTINUING and index.get("worktrees"):
             self.fields["roots"] = worktree_isolation.root_entries(index["roots"])
             self.flags[WORKTREE] = False
+            self.delivery["execution_parent"] = self.parent
 
     def decorate(self, text):
         """Server-owned header options, task split context, then immutable past evidence.

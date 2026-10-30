@@ -1,20 +1,32 @@
 """Select declared local checks and retain every mandatory settings command."""
 
+from pathlib import Path
+
 from taskrail.application import check_recipes, check_specs
+from taskrail.core.schema import require
 from taskrail.executor import protocol
 
 CWD = "cwd"
 RECIPE = "recipe"
 
 
-def selected(workflow):
-    """Explicit checks replace only identical commands, never required gates."""
+def applicable(workflow):
+    """The same effective commands decide scheduling and execution."""
     checks = assigned(workflow.config, workflow.state["requirements"])
     covered = {protocol.fingerprint(check["recipe"]["request"]) for check in checks}
-    for command in workflow.config["verify_commands"]:
+    for command in workflow.config.get("verify_commands", []):
         if protocol.fingerprint(command) not in covered:
             checks.append(legacy(command))
-    return checks
+    return mapped_checks(checks, command_roots(workflow.config))
+
+
+def command_roots(config):
+    """Map configured source directories to the authenticated effective worktrees."""
+    roots = [str(root) for root in config["roots"].values()]
+    locations = {root: root for root in roots}
+    for entry in config.get("worktrees", {}).values():
+        locations[entry["source"]] = entry["worktree"]
+    return locations
 
 
 def assigned(config, requirements):
@@ -48,7 +60,7 @@ def mapped_checks(checks, locations):
 def mapped_check(check, locations):
     """Map source roots to worktrees before presenting the exact approval request."""
     command = check[RECIPE]["request"]
-    location = locations.get(command[CWD])
+    location = mapped_directory(command[CWD], locations)
     if location is None:
         if check["spec"]["criteria"]:
             raise ValueError("Selected check cwd is outside the declared roots")
@@ -57,3 +69,22 @@ def mapped_check(check, locations):
     recipe["request"] = dict(command, cwd=location)
     check[RECIPE] = recipe
     return check
+
+
+def mapped_directory(cwd, locations):
+    """Keep descendant checks within their source and effective roots, including symlinks."""
+    directory = Path(cwd)
+    roots = [
+        Path(root)
+        for root in locations
+        if directory.is_relative_to(root)
+        or directory.resolve().is_relative_to(Path(root).resolve())
+    ]
+    if not roots:
+        return None
+    source = max(roots, key=lambda path: len(path.parts))
+    require(directory.resolve().is_relative_to(source.resolve()), "Check cwd escapes source root")
+    effective = Path(locations[str(source)]).resolve()
+    target = (effective / directory.resolve().relative_to(source.resolve())).resolve()
+    require(target.is_relative_to(effective), "Check cwd escapes effective root")
+    return str(target)

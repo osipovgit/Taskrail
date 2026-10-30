@@ -66,7 +66,9 @@ class CheckRecipesTest(unittest.TestCase):
             check_specs=[self.spec],
             check_recipes={"health": self.recipe},
         )
-        return SimpleNamespace(config=config, state=self.state, run=self.run, guard=self.guard)
+        return SimpleNamespace(
+            config=config, state=self.state, run=self.run, guard=self.guard, flow={}
+        )
 
     def completed(self, status="SUCCEEDED", code=0):
         assessment = check_diagnostics.assess("exit-code", dict(status=status, exit_code=code))

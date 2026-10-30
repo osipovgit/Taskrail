@@ -19,21 +19,11 @@ RECIPE = "recipe"
 
 def run_commands(workflow, folder):
     """Run the commands whose cwd is a declared root of this run, in settings order."""
-    locations = command_roots(workflow.config)
-    selected = check_selection.mapped_checks(check_runner.selected(workflow), locations)
+    selected = check_selection.applicable(workflow)
     return [
         run_command(workflow, folder / LOG_NAME.format(number), chosen)
         for number, chosen in enumerate(selected, 1)
     ]
-
-
-def command_roots(config):
-    """Configured cwd -> effective root; an isolated run uses the source root's worktree."""
-    roots = [str(root) for root in config["roots"].values()]
-    locations = {root: root for root in roots}
-    for entry in config["worktrees"].values():
-        locations[entry["source"]] = entry["worktree"]
-    return locations
 
 
 def run_command(workflow, log, check):

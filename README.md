@@ -59,7 +59,7 @@ Failed checks/review may request bounded repairs. Interrupted writers are never
 replayed automatically. Partial changes remain available for inspection. A task can
 run in [isolated Git worktrees](docs/task-format.md#worktree-isolation) on a new
 branch, the default in the browser, leaving the source checkout untouched: there each
-approved task becomes one commit and may change files beyond its plan. Tasks on different projects run in
+approved task is finalized with verified commits and may change files beyond its plan. Tasks on different projects run in
 parallel; one project runs one task at a time.
 
 A finished change waits as **Ready for your review** until you confirm it; **No

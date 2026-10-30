@@ -534,7 +534,11 @@ if role == "planner" and header["permission"]["edit"].get(str(plan)) == "allow":
             plan.read_text()
         plan.write_text(plan_text(value, context))
     response = "DONE"
-writer_prose = mode == "writer-prose-always" or (mode == "writer-prose" and not continued)
+writer_prose = mode in {"writer-prose-always", "writer-extra-prose-always"} or (
+    mode == "writer-prose" and not continued
+)
+if mode == "writer-extra-prose-always" and role == "implementer":
+    (root / "extra.txt").write_text("Required companion change\n")
 if writer_prose and role == "implementer":
     response = "I changed hello.py; the work is done."
 if mode == "narrate" and role == "plan-reviewer" and not continued:

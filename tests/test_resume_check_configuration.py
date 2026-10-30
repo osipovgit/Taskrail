@@ -83,6 +83,24 @@ class ResumeCheckConfigurationTests(unittest.TestCase):
             run_setup.configure(self.request)
         launch.assert_not_called()
 
+    def test_resume_restores_automatic_base_before_validating_changed_settings(self):
+        options = json.loads(self.settings.read_text())
+        options["permission_worktree"] = str(self.base / "removed-current-base")
+        atomic_json(self.settings, options)
+        config, _ = run_setup.configure(self.request)
+        self.assertIsNone(config["permission_worktree"])
+
+    def test_generated_phase_resolves_parent_catalog_before_current_settings(self):
+        text = self.task.read_text()
+        header, remainder = text.split("\n", 1)[1].split("\n```", 1)
+        metadata = dict(json.loads(header), phase="integration", check_parent=self.run.name)
+        self.task.write_text("```taskrail-task\n" + json.dumps(metadata) + "\n```" + remainder)
+        config, _ = run_setup.configure(
+            dict(self.request, resume=False, run_dir=self.base / "integration")
+        )
+        self.assertEqual(config["check_recipes"], self.frozen["check_recipes"])
+        self.assertEqual(config["check_specs"], [self.spec])
+
 
 if __name__ == "__main__":
     unittest.main()

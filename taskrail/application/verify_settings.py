@@ -40,7 +40,7 @@ def parse_command(command):
 
 
 def absolute(cwd):
-    """A declared root is matched by its exact absolute path."""
+    """An absolute directory is checked against declared roots when the command is selected."""
     if not isinstance(cwd, str) or not Path(cwd).is_absolute():
         raise ValueError(SHAPE)
     return cwd

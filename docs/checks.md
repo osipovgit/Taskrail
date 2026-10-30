@@ -43,9 +43,10 @@ Only the operator's settings define `check_recipes`. Each recipe fixes `kind`,
 }
 ```
 
-Local recipes use `phase: check`, a declared root as `cwd`, an explicit argv and
-the existing local command policy. In an isolated run, the application maps the
-root to its worktree. Source or Git changes during verification stop the run.
+Local recipes use `phase: check`, a declared root or its subdirectory as `cwd`,
+an explicit argv and the existing local command policy. In an isolated run, the
+application maps that directory to the same relative location in its authenticated
+worktree. Source or Git changes during verification stop the run.
 Local recipes and `verify_commands` run without a decision in the
 [local command sandbox](access.md#local-commands), with writable roots; on a host
 without one they require personal approval of the exact command, or the operator's
@@ -103,9 +104,12 @@ verification command binds that execution to criteria rather than rerunning it.
 Written `Jenkins check:` and `Server check:` plan entries become the deferred
 verification of their delivery phase; they are never guessed into executable commands.
 
-Local checks run after syntax checks, including an approved no-change plan that
-selects them. Child tasks inherit only their assigned local checks. Integration
-review repeats the parent's local checks on the combined result. Fixed validation
+Local checks run after syntax checks. An approved no-change development plan still
+runs applicable mandatory `verify_commands` and selected local recipes. Plain
+answer/design research does not run engineering gates unless it explicitly binds
+checks to its criteria. Child tasks inherit their assigned recipes and applicable
+mandatory commands. Integration review repeats the parent's local checks on the
+combined result. Scheduling and execution use the same resolved check set. Fixed validation
 and server batches execute in code before review. A failed or unknown fixed
 batch stops; when all runtime criteria are covered by passed checks, the next
 model stage is the independent reviewer. Runtime requirements without a selected
@@ -116,9 +120,9 @@ recipe keep the ordinary planning path.
 `00-input/settings.json` freezes the catalog and mandatory commands; the run index
 records their digest. Continue verifies and restores that snapshot. A linked
 child or delivery phase authenticates its parent, roots and exact criterion
-bindings before inheriting the frozen catalog. A removed or rephased recipe in
-current settings can reject a new phase during initial validation; it never
-silently substitutes a different command. An interrupted run restores its own
+bindings before inheriting the frozen catalog. Generated delivery phases resolve
+check references against that catalog even if current settings removed or changed
+the recipe; they never substitute a different command. An interrupted run restores its own
 frozen configuration before parsing check references, independently of live
 recipe changes. An adopted delivery phase also records its exact parent, phase,
 roots, criteria and catalog digest, so continuation can verify those inputs

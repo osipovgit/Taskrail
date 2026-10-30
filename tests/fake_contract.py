@@ -38,6 +38,7 @@ def enrich(value, context, target, role, read_wrapper=False):
         json.dumps(
             {
                 "type": "tool_use",
+                "sessionID": "ses1",
                 "part": {
                     "id": "source-read",
                     "callID": "source-read",

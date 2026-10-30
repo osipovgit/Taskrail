@@ -57,6 +57,7 @@ class PlannedRuntimeTests(unittest.TestCase):
         events = self.run / "01-plan/events.jsonl"
         observed = dict(
             type="tool_use",
+            sessionID="planner-session",
             part=dict(
                 tool="read",
                 callID="read-source",
@@ -98,7 +99,8 @@ class PlannedRuntimeTests(unittest.TestCase):
         state = dict(contract_version=1, requirements=self.requirements, changed_files=[])
         record = dict(role="planner", stage="planner", directory="01-plan")
         environment = dict(roots=self.roots, run=self.run, plan=None, check_config=self.config)
-        plan = result_context.parse(dict(final_text="DONE"), record, state, environment)
+        outcome = dict(final_text="DONE", sessions=["planner-session"])
+        plan = result_context.parse(outcome, record, state, environment)
         plan_validation.canonical_plan(plan, self.roots)
         plan_validation.validate_plan(plan, self.roots, self.base / "task.md", self.config)
         return plan
