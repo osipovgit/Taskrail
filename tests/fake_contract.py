@@ -141,6 +141,8 @@ def plan_text(value, context):
         lines += [f"Depends on: {depends}", "Files: " + ", ".join(step["files"])]
         lines += ["Done when:", f"- {step['action']}", "Verify:"]
         lines += [f"- {check}" for check in step.get("checks") or ["Static review"]]
+        if step.get("required_checks"):
+            lines += ["Required checks: " + ", ".join(step["required_checks"])]
     checks = [entry for entry in value.get("unverified", []) if entry.startswith(CHECK_PREFIXES)]
     lines += ["", "## After the change", *[f"- {entry}" for entry in checks]]
     return "\n".join(lines) + "\n"

@@ -36,6 +36,9 @@ config=/etc/taskrail-executor
 state=/var/lib/taskrail-executor
 unit_file=/etc/systemd/system/taskrail-executor.service
 marker=$config/maintenance
+/usr/bin/python3 -I -B -c \
+    'import sys; sys.path.insert(0, sys.argv.pop(1)); from taskrail.deployment.executor_check import main; main()' \
+    "$source_root" "$config" "$source_root" "$release" "$state"
 getent group taskrail-executor >/dev/null || groupadd --system taskrail-executor
 id taskrail-executor >/dev/null 2>&1 || useradd --system --gid taskrail-executor --home-dir /nonexistent --shell /usr/sbin/nologin taskrail-executor
 getent group taskrail-executor-clients >/dev/null || groupadd --system taskrail-executor-clients
@@ -56,6 +59,16 @@ cleanup() {
 }
 trap cleanup EXIT
 prepare_executor_package "$source_root/taskrail" "$staging"
+# Parse all effective private configuration before maintenance or package replacement.
+/usr/bin/python3 -I -B -c \
+    'import sys; sys.path.insert(0, sys.argv.pop(1)); from taskrail.deployment.executor_check import main; main()' \
+    "$staging" "$config" "$source_root" "$release" "$state"
+# All deployment artifacts must be readable and prepared before stopping the service.
+mkdir "$staging/deploy"
+for name in executor-service ssh-askpass taskrail-executor-approve; do
+    install -m 0755 -o root -g root "$source_root/deploy/$name" "$staging/deploy/$name"
+done
+sed "s/@CLIENT_UID@/$client_uid/g" "$source_root/deploy/taskrail-executor.service" >"$staging/service"
 # No new submissions or approvals from here on; refuse while an action runs; the stop
 # must succeed, and the journal is checked again after it.
 begin_maintenance "$marker" "$state" "$unit_file" RUNNING
@@ -68,9 +81,9 @@ if ! mv -- "$staging/taskrail" "$release/taskrail"; then
     exit 1
 fi
 for name in executor-service ssh-askpass; do
-    install -m 0755 -o root -g root "$source_root/deploy/$name" "$release/deploy/$name"
+    install -m 0755 -o root -g root "$staging/deploy/$name" "$release/deploy/$name"
 done
-install -m 0755 -o root -g root "$source_root/deploy/taskrail-executor-approve" /usr/local/bin/taskrail-executor-approve
+install -m 0755 -o root -g root "$staging/deploy/taskrail-executor-approve" /usr/local/bin/taskrail-executor-approve
 install -d -m 0700 -o taskrail-executor -g taskrail-executor "$state"
 if [[ ! -f /etc/taskrail-executor/hosts.json ]]; then
     install -m 0640 -o root -g taskrail-executor "$source_root/deploy/executor-hosts.example.json" /etc/taskrail-executor/hosts.json
@@ -89,8 +102,7 @@ for private_file in "${private_files[@]}"; do
     chown root:taskrail-executor "$private_file"
     chmod 0640 "$private_file"
 done
-sed "s/@CLIENT_UID@/$client_uid/g" "$source_root/deploy/taskrail-executor.service" >"$unit_file"
-chmod 0644 "$unit_file"
+install -m 0644 -o root -g root "$staging/service" "$unit_file"
 systemctl daemon-reload
 case "$autostart" in
     enable) systemctl enable taskrail-executor.service ;;

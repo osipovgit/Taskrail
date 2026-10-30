@@ -6,6 +6,7 @@ import re
 from collections import defaultdict
 
 from taskrail.infrastructure import (
+    invalid_tools,
     opencode_cli,
     provider_limits,
     read_warnings,
@@ -43,8 +44,11 @@ def parse_events(path, start=0, plan_file=None, writable_files=(), notes=()):
         if event is not None:
             summary.observe(event_line, event)
             writes.observe(event_line, event)
-    return writes.recover(
-        read_warnings.classify_missing_reads(summary.outcome()), summary.identity["final_line"]
+    return invalid_tools.recover(
+        writes.recover(
+            read_warnings.classify_missing_reads(summary.outcome()), summary.identity["final_line"]
+        ),
+        summary.identity["final_line"],
     )
 
 

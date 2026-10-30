@@ -1,9 +1,8 @@
 """Bounded retry policy of one stage: a full attempt for an invalid result, access and
 transport recovery."""
 
-from taskrail.application import access_recovery, evidence, plan_recovery
+from taskrail.application import access_recovery, context_handoff, evidence, plan_recovery
 from taskrail.core import prompt_texts
-from taskrail.core.paths import tool_paths
 from taskrail.infrastructure import context_overflow
 from taskrail.observability.progress import say
 
@@ -27,6 +26,7 @@ class Retries:
         self.access = access_recovery.restore(attempts.workflow.state, self.stage)
         self.counts = {TRANSPORT_KEY: 0, RESULT_KEY: 0}
         self.repair = {}
+        self.handoffs = set()
 
     def mode(self):
         """The record mode of the next attempt."""
@@ -46,8 +46,16 @@ class Retries:
         if status == "BLOCKED_PERMISSION":
             return self.access_recovery(outcome)
         if status == context_overflow.STATUS:
-            return self.transport_retry(*context_notes(self, outcome), handoff=True)
+            return self.handoff(outcome)
         return status in TRANSPORT and self.transport_retry()
+
+    def handoff(self, outcome):
+        """Do not spend another fresh session repeating an unchanged context failure."""
+        signature = context_handoff.signature(self.attempts.workflow)
+        if signature in self.handoffs:
+            return False
+        self.handoffs.add(signature)
+        return self.transport_retry(*context_notes(self, outcome), handoff=True)
 
     def result_repair(self, outcome):
         """One full attempt with tools corrects the plan or review file.
@@ -122,7 +130,7 @@ def context_notes(retries, outcome):
         context = note(prompt_texts.text("recovery.context"))
         return context, overflow_outputs(workflow), plan_recovery.feedback(outcome)
     names = workflow.state.get("changed_files") or []
-    changed = ", ".join(tool_paths(names, workflow.config["roots"])) or "none"
+    changed = context_handoff.changed_paths(workflow, names)
     handoff = prompt_texts.text("recovery.handoff", files=changed)
     return note(handoff), overflow_outputs(workflow)
 

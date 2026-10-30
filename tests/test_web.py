@@ -149,8 +149,11 @@ class DashboardTests(unittest.TestCase):
 
     def test_corrupt_index_does_not_break_run_list(self):
         self.index.write_text("{")
-        self.assertEqual(json.loads(self.get("/api/runs")), [])
-        with self.assertRaises(HTTPError) as error:
-            self.get("/api/run?id=example")
-        with error.exception as response:
-            self.assertEqual(response.code, 404)
+        listed = json.loads(self.get("/api/runs"))
+        self.assertEqual(listed[0]["id"], "example")
+        self.assertEqual(listed[0]["status"], "RECOVERY_REQUIRED")
+        self.assertEqual(listed[0]["group"], "attention")
+        detail = json.loads(self.get("/api/run?id=example"))
+        self.assertEqual(detail["status"], "RECOVERY_REQUIRED")
+        self.assertEqual(detail["actions"], {})
+        self.assertEqual(self.index.read_text(), "{")

@@ -35,8 +35,6 @@ class StageServerTests(unittest.TestCase):
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
         self.base = Path(temporary.name)
-        opencode_serve.supported.cache_clear()
-        self.addCleanup(opencode_serve.supported.cache_clear)
 
     def cli(self, help_text):
         script = self.base / "opencode"
@@ -106,7 +104,13 @@ class WriterHandoffTests(unittest.TestCase):
             changed_files=["project/hello.py"],
         )
         config = dict(read_retries=retries, roots={"project": Path("/repo")})
-        workflow = SimpleNamespace(run=run, state=state, config=config, flow=dict(stage=stage))
+        workflow = SimpleNamespace(
+            run=run,
+            state=state,
+            config=config,
+            flow=dict(stage=stage),
+            guard=SimpleNamespace(expected={}),
+        )
         attempts = SimpleNamespace(workflow=workflow, request="REQUEST", recovery=None)
         with patch("taskrail.application.attempt_retries.access_recovery.restore") as access:
             access.return_value = SimpleNamespace(count=0)
@@ -116,12 +120,19 @@ class WriterHandoffTests(unittest.TestCase):
         retries = self.retries("implementer")
         with patch("taskrail.application.attempt_retries.evidence.load_index"):
             self.assertTrue(retries.allowed(dict(status="CONTEXT_EXCEEDED")))
+            retries.attempts.workflow.guard.expected["project/hello.py"] = "changed"
             self.assertTrue(retries.allowed(dict(status="CONTEXT_EXCEEDED")))
             self.assertFalse(retries.allowed(dict(status="CONTEXT_EXCEEDED")))
         request = retries.attempts.request
         self.assertIn("FILLED ITS CONTEXT", request)
         self.assertIn("/repo/hello.py", request)
         self.assertEqual(request.count("FILLED ITS CONTEXT"), 1)
+
+    def test_an_unchanged_context_failure_does_not_spend_another_fresh_session(self):
+        retries = self.retries("implementer")
+        with patch("taskrail.application.attempt_retries.evidence.load_index"):
+            self.assertTrue(retries.allowed(dict(status="CONTEXT_EXCEEDED")))
+            self.assertFalse(retries.allowed(dict(status="CONTEXT_EXCEEDED")))
 
     def test_a_writer_is_never_retried_after_another_interruption(self):
         retries = self.retries("implementer")

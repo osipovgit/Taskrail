@@ -16,6 +16,7 @@ from taskrail.web import (
     epic_tasks,
     history,
     parent_context,
+    run_errors,
     split_approvals,
     task_brief,
 )
@@ -83,10 +84,11 @@ def continue_quietly(launcher, run):
     try:
         start_next(launcher, run, automatic=True)
     except BusyError:
-        return
-    except (ValueError, OSError, KeyError) as error:
-        with epic_record.changing(run) as epic:
-            epic.update(auto_continue=False, launch_error=str(error))
+        return False
+    except run_errors.ERRORS as error:
+        run_errors.launch_failure(run, error)
+        return False
+    return True
 
 
 def continues(epic, entries):

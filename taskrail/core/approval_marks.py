@@ -20,6 +20,12 @@ def revoked(run):
     return (run / OFF).exists() or marker(run).exists()
 
 
+def granted(run):
+    """Only the personal decision writer creates durable grants outside source roots."""
+    path = marker(run).with_suffix(".grant.json")
+    return path.is_file() and not path.is_symlink()
+
+
 @contextlib.contextmanager
 def changing(run):
     """Serialize operator grants and revocations, including workers not created yet."""
@@ -40,7 +46,9 @@ def revoke(run):
 
 
 def grant(run):
-    """Only the operator decision writer clears a denial, never a delayed worker."""
+    """Persist a personal grant before clearing denial; workers never call this."""
     with changing(run):
+        path = marker(run).with_suffix(".grant.json")
+        atomic_json(path, dict(granted_at=time.time()))
         marker(run).unlink(missing_ok=True)
         (run / OFF).unlink(missing_ok=True)

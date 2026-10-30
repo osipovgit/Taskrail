@@ -32,13 +32,21 @@ loginctl show-user "$USER" -p Linger
 administrator; a denial is reported without sudo or a workaround. `--boot=no`
 leaves lingering unchanged and does not disable other user services.
 
-Updates wait for every active run (runs share the installation lock), validate an offline venv, switch
-`current` and restart. They preserve history, settings, custom roles and original
+Updates wait for every active run (runs share the installation lock), prepare an offline
+venv and configuration in a private staging directory, and validate the incoming package
+with isolated Python imports before stopping the service. The installer then switches
+`current` and restarts. It preserves history, settings, custom roles and original
 project edits. They never execute Git, rewrite run artifacts or roll back source
 or application changes. If startup fails, inspect the journal. The update
 script uses a trusted local release, not an automatic Internet download feed. An
 installed release holds the application, deployment scripts, README and license;
 documentation stays in the source tree.
+
+Failed preparation removes only its own staging directory. After successful startup,
+the installer retains the current and previous successful release and any older release
+explicitly used by `agent_source`. Older successful releases are pruned only when they
+carry this installer's exact success marker; legacy or unrecognized directories remain
+for manual inspection. A failed startup keeps the switched release for diagnosis.
 
 ## Run on a remote server
 
@@ -73,6 +81,7 @@ Root approval of SSH actions happens in a terminal on the server.
 | Systemd unit | `~/.config/systemd/user/taskrail.service` |
 | CLI | `~/.local/bin/taskrail` |
 | History and trash | `~/.local/state/taskrail/runs/` |
+| Isolated project worktrees | `~/.local/share/taskrail-worktrees/` |
 | Installation lock (shared by runs) | `~/.local/state/taskrail/live.lock` |
 | Project and run locks | `~/.local/state/taskrail/locks/` |
 
@@ -100,8 +109,10 @@ source templates. See [instruction contracts](contracts.md).
 An imported settings file without `agent_source` selects bundled roles, as in
 `taskrail init`. Only an explicit `agent_source` imports a custom directory; relative
 paths resolve beside the supplied settings file. Before a fresh reset, the installer
-checks the settings, agent executable, service environment and readable custom role
-tree. Keep supplied settings, imported roles and their symlink targets outside all
+checks runtime settings, the agent executable/version, service environment and all three
+custom role contracts, then prepares their installable copies. Invalid or incomplete
+roles stop the update; `--agents=bundled` explicitly selects the incoming bundled roles.
+Keep supplied settings, imported roles and their symlink targets outside all
 reset directories.
 
 ## opencode
@@ -113,7 +124,7 @@ reset directories.
 | `models` | `{}` | Role to `provider/model`; a missing role uses opencode's configured default model |
 | `agent_directory` | opencode agent directory | Where managed role profiles are written; relative to the settings file |
 | `agent_env_allow` | `[]` | Extra environment variables opencode may receive despite their secret-shaped names; common provider keys are always allowed |
-| `permission_worktree` | inferred | Base directory for relative permission names (Git worktree for 1.x, first root for 2.x); required when `.git` is a file or symlink |
+| `permission_worktree` | inferred | Base directory for relative permission names (Git worktree for 1.x, first root for 2.x). Server-owned isolation supplies it automatically; unowned/in-place 1.x roots with a `.git` file or symlink require an explicit value |
 | `tool_output_dir` | opencode location | Absolute directory (`~` allowed) where a compatible CLI keeps truncated tool output; its automatic `external_directory` allow rule is accepted only for this directory |
 | `opencode_server` | `true` | `false` runs each 1.x turn as its own process instead of on the stage's private server |
 | `stop_on_provider_limit` | `false` | `true` stops a stage at the first exhausted provider quota or billing limit instead of spending its retries ([contracts](contracts.md)) |
@@ -134,6 +145,11 @@ untouched 2.x stream in `events.raw.jsonl`. Every call sets
 secret-shaped variables (`*_TOKEN`, `*_KEY`, `*_SECRET`, `*_PASSWORD`, their `*_FILE`
 locators, `SSH_AUTH_SOCK`, `GIT_ASKPASS` and similar); opencode alone keeps common
 provider keys and the names in `agent_env_allow`.
+The configured argv prefix, including an nga wrapper's profile arguments, is
+preserved for version detection, permission checks, capability probes, servers and
+clients. All these calls use the same credential allowlist. A successful help
+response without `--attach` selects separate 1.x processes; a failed or timed-out
+probe stops explicitly. It never silently disables the shared session server.
 
 The 2.x readiness announcement has a bounded timeout within the stage's remaining
 budget and responds to Stop, including when no complete line arrives. Malformed
@@ -143,7 +159,7 @@ compatibility with that interface.
 
 Managed profiles default to `$OPENCODE_CONFIG_DIR/agent`, else
 `$XDG_CONFIG_HOME/opencode/agent`. opencode names a file either absolutely or relative
-to one base directory: the Git worktree for 1.x, the first root (the run directory)
+to one base directory: the Git worktree for 1.x, the first declared project root
 for 2.x. Profiles allow every declared path in both forms and deny everything else.
 
 ## Context limits
@@ -167,8 +183,9 @@ must be positive and smaller than every window. A session ends at the window min
 the reserve, kept between 90 and 95 percent of the window. Keep the provider's own
 model limits accurate.
 
-Before any role starts, the server counts the request and frozen role instructions;
-writer admission also counts approved read/edit input files. Exact source lines already
+Before any role starts, the server counts the request, frozen role instructions and
+all attached `plan.md`, `review.md` or `progress.md` bytes; writer admission also
+counts approved read/edit input files. Exact source lines already
 delivered in the request are counted once. The estimate uses one UTF-8 byte per token,
 plus 1024 tokens for framing. The
 reviewable estimate must fit below context minus reserve. This conservative admission
@@ -176,7 +193,10 @@ check can reject a large file even if only a small part would be needed: narrow 
 task or adjust capacity to a verified model limit. Unknown future tool output and
 provider envelopes cannot be predicted. Runtime monitoring stops on reported input
 (including cached input) reaching the same boundary, or any explicit compaction
-marker. Usage events can arrive after a provider has consumed tokens.
+marker. Before every continuation, current prompt and attachment sizes are measured
+again. Admission uses the greater of reported context and a conservative byte
+estimate of earlier transmitted inputs and observed outputs, including when the
+provider reports no usage. Usage events can arrive after a provider has consumed tokens.
 
 A refusal or overflow is `CONTEXT_EXCEEDED`; an admission refusal consumes no model
 turn and is not retried with the same oversized input. A session that reaches the
@@ -184,7 +204,11 @@ boundary is not compacted: the stage continues in a fresh session, up to `read_r
 times. A reading stage starts it from recorded evidence; the implementer keeps its edits
 and continues from `progress.md` (Done, Remaining), told to read the files it already
 changed before editing them. Nothing is rolled back, and a writer interrupted any other
-way is never replayed. When fresh sessions do not suffice, replan into smaller atomic
+way is never replayed. Working progress is limited to 8 KiB: oversized notes are
+preserved verbatim under `00-input/progress-archive/`, and the next session receives
+bounded beginning/end excerpts with an exact archive reference. Only those archive
+files become readable. Another overflow without changed source or working notes
+stops instead of repeating the same handoff. When fresh sessions do not suffice, replan into smaller atomic
 tasks or deliberately correct the model limit. `max_observed_tokens` remains a separate cumulative cost cap.
 
 After a planner context stop, the server first validates its saved `plan.md` against
@@ -207,7 +231,7 @@ request for the host with `"sandbox": false`.
 
 ## Worktree isolation
 
-`worktree_base` (absolute; default `worktrees` beside `run_base`) holds the linked
+`worktree_base` (absolute; default `~/.local/share/taskrail-worktrees`) holds the linked
 worktrees of isolated runs, the default for code changes; it must lie outside every declared
 root. Worktrees are created with hooks and repository filters disabled and are never
 removed automatically. See [task format](task-format.md#worktree-isolation).
@@ -322,8 +346,9 @@ From an extracted release **outside** the managed installation/config/history pa
 bash deploy/install.sh --fresh --wait=3600 --autostart=keep --agents=bundled
 ```
 
-`--fresh` is destructive and opt-in. It waits for the workflow lock, stops the user
-service, removes installed releases, settings, imported roles, history/trash,
+`--fresh` is destructive and opt-in. It waits for the workflow lock, completely prepares
+and validates the replacement application/configuration, then stops the user
+service and any installed executor before deleting anything. It removes installed releases, settings, imported roles, history/trash,
 managed profiles, cache, the unit/drop-ins and launcher, then installs fresh defaults.
 A configured custom history directory is removed only after its contents and
 recorded project roots pass ownership checks. Live runs, archived runs and launcher
@@ -331,13 +356,19 @@ records all protect their declared roots. The same inventory covers cache, unit
 drop-ins, launcher and generated profile files; mixed, redirected or overlapping
 paths abort before deletion. Keep source projects and the extracted release outside
 those paths.
+Legacy `~/.local/state/taskrail/worktrees` is preserved in place, including uncommitted
+edits and its Git links. New worktrees live outside resettable application storage.
+A custom `worktree_base` overlapping a deletion target refuses the reset; move that
+storage deliberately before retrying. Worktrees are never pruned with old releases.
 Locked files retain their inodes during installation to prevent concurrent writers.
 The underlying opencode application, provider credentials and unrelated profiles
 are not owned by this application and are preserved. Old unmanaged directories that
 are not recorded in configuration are never guessed or recursively searched for deletion.
 
 If the isolated SSH executor is installed, the same flag requires `sudo` and resets
-its service, code, tickets, inventory/passwords and known host keys. RUNNING or UNKNOWN
+its service, code, tickets, inventory/passwords and known host keys. Failure to stop
+the application leaves the executor untouched; failure to stop the executor preserves
+both installations and their data. RUNNING or UNKNOWN
 remote tickets must first be reconciled. The executor is reinstalled disabled;
 configure its inventory and verified host keys again before starting it. Dedicated
 system account/group identities are retained. Application source edits are never

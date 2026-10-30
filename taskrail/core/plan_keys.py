@@ -27,9 +27,12 @@ KEYS = MappingProxyType(
         NOTES: NOTES,
         READ: READ,
         "read first": READ,
+        "not todo": "not_todo",
+        "not to do": "not_todo",
+        "required checks": "required_checks",
     }
 )
-LISTS = frozenset(("files", "done", VERIFY, DEPENDS, READ))
+LISTS = frozenset(("files", "done", VERIFY, DEPENDS, READ, "not_todo", "required_checks"))
 CONTINUED = LISTS | {"notes"}
 
 

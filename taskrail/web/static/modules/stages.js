@@ -36,6 +36,8 @@ export function renderPlan(parent, steps, requirements) {
     );
     list(box, 'Dependencies', step.depends_on);
     list(box, 'Checks', step.checks);
+    list(box, 'Required checks', step.required_checks);
+    list(box, 'Not ToDo', step.not_todo);
     parent.append(box);
   }
 }
@@ -238,8 +240,19 @@ export function stageCard(stage, requirements = []) {
     );
   }
   if (events.length) {
-    const log = el('details');
-    log.append(el('summary', 'Activity log · ' + stage.directory));
+    const log = el('details', undefined, 'activity-log');
+    const summary = el('summary', 'Activity log · ' + stage.directory);
+    const close = el('button', 'Close log', 'activity-log-close');
+    close.type = 'button';
+    close.onclick = (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      log.open = false;
+      summary.scrollIntoView?.({ block: 'nearest' });
+      summary.focus?.();
+    };
+    summary.append(close);
+    log.append(summary);
     for (const event of events) {
       if (event.kind === 'text') log.append(messageCard(event));
       else {

@@ -8,6 +8,7 @@ import math
 import re
 from types import MappingProxyType
 
+from taskrail.core import plan_exclusions
 from taskrail.core.plan_keys import uncode
 from taskrail.core.plan_markdown import FIELDS, LINE, TASKS
 from taskrail.core.plan_outcomes import PLACEHOLDER, absolute, cited_ranges
@@ -68,12 +69,16 @@ def step(task, coverage):
         done_when=done,
         notes=task[FIELDS].get("notes", ("", 0))[0],
         read=cited_ranges(coverage, task[FIELDS].get("read", ([], 0))),
+        not_todo=listed(task, "not_todo"),
+        required_checks=listed(task, "required_checks"),
     )
 
 
 def listed(task, key):
     """A list field; files may also be one comma-separated line."""
     entries = task[FIELDS].get(key, ([], 0))[0]
+    if key in {"not_todo", "required_checks"}:
+        entries = [entry for entry in entries if entry.casefold() not in NONE_WORDS]
     if key == "files":
         entries = [name.strip() for entry in entries for name in entry.split(",")]
         entries = map(uncode, (NEW_FILE.sub("", name) for name in entries))
@@ -106,6 +111,7 @@ def check(decision, planned, coverage):
     problems.extend(incomplete(planned))
     problems.extend(ownership_problems(coverage.owners, coverage.requirements))
     problems.extend(decision_problems(decision, planned))
+    problems.extend(plan_exclusions.problems(planned, known))
 
 
 def incomplete(planned):

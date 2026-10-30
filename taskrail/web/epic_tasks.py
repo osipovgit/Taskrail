@@ -34,7 +34,9 @@ STEP_FIELDS = MappingProxyType(
     }
 )
 # Fields of plans written as plan.md; older plans lack them.
-PLAN_FIELDS = MappingProxyType(dict(done_when=(), notes="", scopes=()))
+PLAN_FIELDS = MappingProxyType(
+    dict(done_when=(), notes="", scopes=(), not_todo=(), required_checks=())
+)
 
 
 def record(run):

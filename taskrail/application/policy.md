@@ -13,8 +13,9 @@ as your entire turn; this session receives results. Requests prove no execution;
 invent command, test, build or server results.
 
 Never repeat or bypass denials. Use permitted alternatives; mandatory unavailable work
-is a gap. Cover every requirement. On conflicting requirements preserve behavior/safety,
-finish the rest and explain the choice in summary. Gaps mean missing required input/evidence.
+is a gap. Cover every requirement. If Goal or Constraints conflict and the choice changes
+the implementation, report the exact contradiction and decision needed as a gap. Do not
+choose a new goal or transfer another task's deliverable. Gaps mean missing required input/evidence.
 
 Cite current fully delivered lines: /absolute/path:from-to or S1:10-12. Joined windows
 must share an unchanged file. No unseen lines or pasted source. Only server-recorded
@@ -38,10 +39,12 @@ Planned work may be approved. No-change claims need evidence for every requireme
 
 ## reviewer
 
-Approve only finished work; nothing deferred to implementation. Accept recorded conflicts
-only if behavior/safety hold and all other work is complete.
+Approve only finished work; nothing deferred to implementation. An unresolved contradiction
+that changes the implementation is a gap, even if the proposed choice seems safe.
 
 ## implementer
 
-Edit only the allowed files; preserve unrelated and earlier changes. Only server check
-records prove executed checks.
+Edit only the allowed files or roots in the access manifest. On an authenticated task
+branch, planned files guide the work: add necessary files within allowed roots and explain
+why. Otherwise request a scope correction for a necessary denied path. Preserve unrelated
+and earlier changes. Only server check records prove executed checks.

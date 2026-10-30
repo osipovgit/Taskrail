@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from taskrail.application import check_recipes, check_specs
+from taskrail.application import check_recipes, check_specs, step_checks
 from taskrail.core.schema import require
 from taskrail.executor import protocol
 
@@ -13,6 +13,10 @@ RECIPE = "recipe"
 def applicable(workflow):
     """The same effective commands decide scheduling and execution."""
     checks = assigned(workflow.config, workflow.state["requirements"])
+    bound = {check["spec"].get("recipe_id") for check in checks}
+    for gate in step_checks.selected(workflow.config):
+        if gate["spec"]["recipe_id"] not in bound:
+            checks.append(gate)
     covered = {protocol.fingerprint(check["recipe"]["request"]) for check in checks}
     for command in workflow.config.get("verify_commands", []):
         if protocol.fingerprint(command) not in covered:
@@ -62,7 +66,7 @@ def mapped_check(check, locations):
     command = check[RECIPE]["request"]
     location = mapped_directory(command[CWD], locations)
     if location is None:
-        if check["spec"]["criteria"]:
+        if check["spec"]["criteria"] or check.get("required"):
             raise ValueError("Selected check cwd is outside the declared roots")
         return None
     recipe = dict(check[RECIPE])
