@@ -138,6 +138,43 @@ class ApprovalInheritanceTests(unittest.TestCase):
             approval_policy.decision(self.child, self.request, {})
         asked.assert_called_once()
 
+    def test_redirected_policy_directory_cannot_grant_or_receive_authority(self):
+        external = self.base / "untrusted-policy"
+        external.mkdir()
+        (external / "child.grant.json").write_text("{}")
+        (self.base / approval_marks.DIRECTORY).symlink_to(external, target_is_directory=True)
+        self.assertFalse(approval_marks.granted(self.child))
+        self.assertFalse(approval_policy.enabled(self.child, dict(auto_approve=True)))
+        with self.assertRaisesRegex(ValueError, "redirected"):
+            approval_marks.grant(self.child)
+        self.assertEqual(sorted(path.name for path in external.iterdir()), ["child.grant.json"])
+
+    def test_redirected_input_directory_cannot_borrow_a_linked_workers_claim(self):
+        self.grant(self.parent)
+        borrowed = self.base / "untrusted-input"
+        (self.child / "00-input").rename(borrowed)
+        (self.child / "00-input").symlink_to(borrowed, target_is_directory=True)
+        self.assertFalse(approval_policy.enabled(self.child, dict(auto_approve=True)))
+        self.assertIsNone(approval_family.parent(self.child))
+
+    def test_symlinked_grant_file_cannot_activate_a_valid_worker(self):
+        marker = approval_marks.marker(self.child, ".grant.json")
+        marker.parent.mkdir()
+        external = self.base / "untrusted-grant.json"
+        external.write_text("{}")
+        marker.symlink_to(external)
+        self.assertFalse(approval_marks.granted(self.child))
+        self.assertFalse(approval_policy.enabled(self.child, {}))
+
+    def test_pending_dotted_worker_supports_grants_and_revocation_before_creation(self):
+        pending = self.base / "task.v2-123"
+        approval_marks.grant(pending)
+        self.assertFalse(pending.exists())
+        self.assertTrue(approval_marks.granted(pending))
+        self.assertTrue(approval_policy.at_start(pending, {}))
+        approval_marks.revoke(pending)
+        self.assertFalse(approval_policy.at_start(pending, dict(auto_approve=True)))
+
 
 class ApprovalContinueTests(LiveFixture, unittest.TestCase):
     def test_continued_worker_keeps_its_saved_grant_for_real_host_verification(self):

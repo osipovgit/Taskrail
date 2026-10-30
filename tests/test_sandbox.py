@@ -361,6 +361,10 @@ class SandboxRouteTests(unittest.TestCase):
 
 @unittest.skipUnless(AVAILABLE, "needs a working bubblewrap")
 class SandboxedRunTests(LiveFixture, unittest.TestCase):
+    def test_a_readonly_root_refuses_planner_writes_without_temporary_overlays(self):
+        with patch.object(sandbox, "overlays", return_value=False):
+            self.test_a_planner_command_runs_without_a_decision_and_leaves_no_trace()
+
     def test_a_planner_command_runs_without_a_decision_and_leaves_no_trace(self):
         self.real_repository()
         header = {"roots": {"project": str(self.root)}, "isolation": "in_place"}
@@ -373,7 +377,10 @@ class SandboxedRunTests(LiveFixture, unittest.TestCase):
         asked.assert_not_called()
         journal = json.loads((run / "local-actions.json").read_text())
         self.assertEqual(journal[0]["approval"]["rule"], approval_policy.SANDBOX)
-        self.assertEqual(journal[0]["status"], "SUCCEEDED")
+        expected = "SUCCEEDED" if sandbox.overlays() else "FAILED"
+        self.assertEqual(journal[0]["status"], expected, journal[0]["outcome"])
+        if not sandbox.overlays():
+            self.assertIn("Read-only file system", journal[0]["outcome"]["stderr"])
         self.assertNotIn("effects", journal[0])
         self.assertFalse((self.root / "notes.txt").exists())
         self.assertFalse((self.root / ".cache-tool").exists())

@@ -1,8 +1,9 @@
 """Project durable corrective attempts into delivery progress without granting approval."""
 
 from taskrail.application import reviewed_artifacts
-from taskrail.core import corrections
+from taskrail.core import corrections, owned_paths
 from taskrail.web import epic_tasks
+from taskrail.web.run_files import read_json
 
 STATUS = "status"
 
@@ -10,7 +11,10 @@ STATUS = "status"
 def budget(run):
     """Use the original run's frozen repair budget, never newly edited settings."""
     reference = "00-input/settings.json"
-    settings = reviewed_artifacts.document(run, reference) if (run / reference).exists() else {}
+    try:
+        settings = read_json(owned_paths.child(run, reference))
+    except FileNotFoundError:
+        settings = {}
     return corrections.limit(settings)
 
 

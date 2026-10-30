@@ -1,6 +1,6 @@
 """Live approval inheritance requires the server's exact parent-to-child record."""
 
-from taskrail.core import approval_marks, delivery_record, input_header
+from taskrail.core import approval_marks, delivery_record, input_header, owned_paths
 from taskrail.core.schema import require
 
 PHASES = frozenset(("integration", "validation", "server", "correction"))
@@ -34,16 +34,15 @@ def parent(run, strict=False):
 
 def linked(run):
     """Task text supplies a claim; only the server-owned epic record authenticates it."""
-    task = run / "00-input/task.md"
-    if not task.exists() and not (run / "run.json").exists():
+    run = owned_paths.child(run.parent, run.name)
+    task = owned_paths.child(run, "00-input/task.md")
+    if not task.exists() and not owned_paths.child(run, "run.json").exists():
         return None
-    unsafe = task.is_symlink() or run.is_symlink()
-    require(not unsafe and task.resolve().parent == task.parent, "Invalid approval task path")
     claim = reference(input_header.parse(task.read_text(encoding="utf-8")))
     if claim is None:
         return None
-    owner = run.parent / claim[0]
-    require(not owner.is_symlink() and owner != run, "Invalid approval parent")
+    owner = owned_paths.child(run.parent, claim[0])
+    require(owner != run, "Invalid approval parent")
     names = members(delivery_record.read(owner), claim)
     require(run.name in names, "Approval parent no longer links this worker")
     return owner

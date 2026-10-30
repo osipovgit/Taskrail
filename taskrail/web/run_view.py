@@ -30,6 +30,7 @@ def run_view(base, name):
     try:
         return readable_view(base, name, run)
     except run_errors.ERRORS as error:
+        run = contained(base, name)
         if not run.is_dir() or run.is_symlink():
             raise
         return run_errors.view(run, error)

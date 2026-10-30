@@ -147,7 +147,7 @@ class WrapperLifecycleTests(unittest.TestCase):
             self.assertEqual(result["status"], "OK", result)
             self.assertEqual(result["tokens"]["total"], 17)
         operations = {record["args"][0] for record in self.records()}
-        self.assertTrue({"--version", "serve", "api", "run"} <= operations)
+        self.assertLessEqual({"--version", "serve", "api", "run"}, operations)
 
     def test_gateway_and_reported_context_failures_keep_their_original_status(self):
         command = self.command("1.x")
