@@ -4,6 +4,8 @@ import json
 
 from taskrail.application import (
     child_inputs,
+    execution_context,
+    inherited_preimages,
     instruction_sources,
     resume_inputs,
     reviewed_input,
@@ -36,7 +38,7 @@ def start(workflow, resume):
         workflow.run, workflow.config
     )
     workflow.state["decompose"] = workflow.config.get("decompose") is True
-    on_branch = task_branch.detect(workflow.config["roots"])
+    on_branch = task_branch.detect(workflow.config["roots"], workflow.config["worktrees"])
     workflow.config[task_branch.KEY] = on_branch
     workflow.state[task_branch.KEY] = on_branch
     workflow.state.setdefault("auto_continue", True)
@@ -51,6 +53,7 @@ def begin(workflow):
     workflow.state["phase"] = workflow.config.get("phase")
     atomic_json(inputs / "manifest.json", workflow.guard.before)
     atomic_json(inputs / "git-metadata.json", workflow.guard.git_before)
+    execution_context.adopt_submission(workflow)
     reviewed_start.begin(workflow)
 
 
@@ -68,6 +71,7 @@ def validated_checkpoint(workflow):
     instruction_sources.verify(run, workflow.state)
     child_inputs.verify(run, workflow.state)
     resume_inputs.verify_preimages(run, workflow.state, workflow.guard.before)
+    inherited_preimages.restore(workflow)
     return checkpoint
 
 

@@ -37,6 +37,14 @@ repository path explicitly reports that analysis is unavailable. A failed,
 cancelled or unexpectedly skipped dependency cannot pass either gate.
 Repository rules must require both statuses; YAML alone does not prevent a merge.
 
+The ordinary regression suite includes real disposable Git repositories and linked
+worktrees for automatic commit ownership, content receipts, filter suppression,
+partial failure and interrupted writes. Split workflows use scripted 1.x and 2.x
+CLI transports to check inherited permissions, configured checks, child commits,
+restart/Continue and combined integration review. Evidence tests distinguish
+attempts and session IDs and reject unsent or omitted source deliveries. These
+tests require no model provider, production project or remote execution service.
+
 ## Scenario corpus
 
 `tests/fixtures/acceptance/corpus.json` owns the task text, initial projects, expected

@@ -52,7 +52,7 @@ Every **Develop** task goes through the same steps:
    planned again: it cannot split. Its brief lists the earlier tasks, which may already
    contain parts of its work, and the later tasks, whose work it leaves to them unless
    it cannot be complete without it. In isolated worktrees it may change files beyond
-   its plan and ends as one commit on the run's branch
+   its plan and ends with verified commit receipts
    ([worktree isolation](task-format.md#worktree-isolation)). A contract that cannot be met
    reports the required parent replanning instead of launching nested tasks.
 3. **Integration review for a split.** A separate read-only run checks the original

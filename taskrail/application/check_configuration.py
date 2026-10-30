@@ -58,14 +58,20 @@ def inherit(config, saved):
 
 def adopt(workflow, parent, state):
     """An authenticated child freezes its parent's catalog before any execution."""
-    inherited = frozen(parent, state)
-    require(
-        SIGNATURE in state or not any(inherited.get(name) for name in FIELDS),
-        "Parent check settings lack a seal",
-    )
+    inherited = parent_settings(parent, state)
     inherit(workflow.config, inherited)
     path = workflow.run / "00-input/settings.json"
     saved = frozen(workflow.run, workflow.state)
     inherit(saved, inherited)
     atomic_json(path, saved)
     capture(workflow.config, workflow.state)
+
+
+def parent_settings(parent, state):
+    """A parent may pass command authority only through its sealed catalog."""
+    inherited = frozen(parent, state)
+    require(
+        SIGNATURE in state or not any(inherited.get(name) for name in FIELDS),
+        "Parent check settings lack a seal",
+    )
+    return inherited

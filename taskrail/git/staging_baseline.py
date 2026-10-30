@@ -16,13 +16,19 @@ EXECUTABLE_BIT = 0o100
 def originals(environment):
     """Read immutable preimages separately from the run's later controlled commits."""
     found = {}
-    for name, signature in json.loads(
-        (environment["run"] / "00-input/manifest.json").read_text()
-    ).items():
+    for name, signature in source_manifest(environment).items():
         parts = name.split("/", 1)
         path = environment["roots"][parts[0]] / parts[1]
         found[str(path)] = signature
     return found
+
+
+def source_manifest(environment):
+    """Only the server may substitute authenticated original identities from prior attempts."""
+    original = environment.get("original_sources")
+    if original is not None:
+        return original
+    return json.loads((environment["run"] / "00-input/manifest.json").read_text())
 
 
 def updated(originals, previous, repo):

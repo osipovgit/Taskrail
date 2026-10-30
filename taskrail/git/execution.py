@@ -43,6 +43,7 @@ def perform(entry, previous, role, environment):
     entry[MUTATION] = policy.validate(entry[REQUEST][ARGV], role)
     entry["effective_argv"] = prepare(root, entry, previous, environment)
     overrides = settings(root, entry[REQUEST][ARGV])
+    overrides.extend(environment.get("identity_settings", ()))
     atomic_json(environment["run"] / "git-execution.json", [*previous, entry])
     outcome = process.invoke(root, entry["effective_argv"], overrides)
     entry.update(

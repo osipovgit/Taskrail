@@ -57,6 +57,9 @@ def refresh(run, events, roots):
             record["tool"],
             hashlib.sha256(record["output"].encode()).digest(),
             record.get("output_clipped", False),
+            record.get("audience"),
+            record.get("session_id"),
+            record.get("source_event"),
         ): record
         for record in records
     }
@@ -74,7 +77,7 @@ def refresh(run, events, roots):
 
 
 def validation_records(run):
-    """Recovery truncation cannot invalidate an otherwise observed source claim."""
+    """Reusable discovery records; these alone do not prove delivery to a new session."""
     return load_index(run, OBSERVATIONS)[RECORDS]
 
 

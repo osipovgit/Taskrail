@@ -9,6 +9,7 @@ from taskrail.application import (
     citation_review,
     context_projection,
     evidence,
+    evidence_delivery,
     recovery,
     session_budget,
     source_delivery,
@@ -58,7 +59,12 @@ class SourcePacketTests(unittest.TestCase):
 
     def test_a_rejected_citation_brings_its_current_lines_into_the_same_session(self):
         context = dict(
-            run=self.run, roots=self.config["roots"], check_config={}, deliver_lines=True
+            run=self.run,
+            folder=self.run,
+            session_id="review-session",
+            roots=self.config["roots"],
+            check_config={},
+            deliver_lines=True,
         )
         claim = dict(id="E7", path=str(self.path), line_start=15, line_end=16)
         with self.assertRaises(ValueError) as rejected:
@@ -67,7 +73,14 @@ class SourcePacketTests(unittest.TestCase):
         self.assertIn("Evidence E7", feedback)
         self.assertIn("15: value_15 = 15\n16: value_16 = 16", feedback)
         self.assertIn("Check the claim against these lines", feedback)
-        records = evidence.validation_records(self.run)
+        self.assertEqual(evidence_delivery.session_records(context), [])
+        evidence_delivery.confirm(
+            self.run,
+            self.run,
+            feedback,
+            dict(status="OK", completed=True, sessions=["review-session"]),
+        )
+        records = evidence_delivery.session_records(context)
         proofs = citation_review.validate([claim], records, context)
         self.assertEqual(proofs[0]["claim_id"], "E7")
         secret = self.root / ".env"
