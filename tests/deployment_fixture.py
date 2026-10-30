@@ -32,6 +32,13 @@ class DeploymentFixture:
                 '#!/bin/sh\nprintf "%s\\n" "$0 $*" >> "$HOME/privilege.log"\nexit 0\n'
             )
             executable.chmod(0o755)
+        opencode = self.binaries / "opencode"
+        opencode.write_text(
+            '#!/bin/sh\nif [ "$#" -eq 1 ] && [ "$1" = --version ]; then\n'
+            "    printf '1.19.3\\n'\n    exit 0\nfi\n"
+            "printf 'Deployment fixture must not call a model\\n' >&2\nexit 1\n"
+        )
+        opencode.chmod(0o755)
 
     def environment(self, environment):
         return dict(

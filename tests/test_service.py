@@ -275,13 +275,6 @@ class ServiceTests(unittest.TestCase):
             self.assertEqual(checked.returncode, 0, checked.stderr)
 
     def test_fresh_install_removes_managed_data_preserving_projects_and_cli_credentials(self):
-        binaries = self.home / "bin"
-        binaries.mkdir()
-        for name in ("systemctl", "opencode"):
-            executable = binaries / name
-            executable.write_text("#!/bin/sh\nexit 0\n")
-            executable.chmod(0o755)
-        self.environment["PATH"] = str(binaries) + os.pathsep + self.environment["PATH"]
         self.environment["PYTHON"] = sys.executable
         initial = self.installer(str(self.settings), "--autostart=no")
         self.assertEqual(initial.returncode, 0, initial.stderr)
@@ -308,7 +301,9 @@ class ServiceTests(unittest.TestCase):
         self.assertFalse(profile.exists())
         self.assertEqual(credential.read_text(), "synthetic credential")
         self.assertIn("return 1", (self.repo / "hello.py").read_text())
-        self.assertEqual(json.loads(config.read_text())["timeout_seconds"], 3600)
+        options = json.loads(config.read_text())
+        self.assertEqual(options["timeout_seconds"], 3600)
+        self.assertEqual(options["command"][0], str(self.deployment.binaries / "opencode"))
         self.assertTrue((app / "current/venv/bin/python").is_file())
 
     def test_fresh_refuses_a_mixed_custom_history_before_deletion(self):
@@ -335,10 +330,6 @@ class ServiceTests(unittest.TestCase):
         self.environment["PYTHON"] = sys.executable
         initial = self.installer(str(self.settings), "--autostart=no")
         self.assertEqual(initial.returncode, 0, initial.stderr)
-        # Fresh defaults require a resolvable CLI, never the developer's real opencode.
-        opencode = self.deployment.binaries / "opencode"
-        opencode.write_text("#!/bin/sh\nexit 0\n")
-        opencode.chmod(0o755)
         fresh = self.installer("--fresh", "--autostart=keep")
         self.assertEqual(fresh.returncode, 0, fresh.stderr)
         log = (self.home / "privilege.log").read_text()

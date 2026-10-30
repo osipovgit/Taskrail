@@ -36,7 +36,6 @@ for example `make test-python PYTHON=.venv/bin/python`.
 repository path explicitly reports that analysis is unavailable. A failed,
 cancelled or unexpectedly skipped dependency cannot pass either gate.
 Repository rules must require both statuses; YAML alone does not prevent a merge.
-See [repository administration](repository.md).
 
 ## Scenario corpus
 

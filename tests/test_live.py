@@ -972,7 +972,7 @@ class LiveTests(LiveFixture, unittest.TestCase):
         header["isolation"] = "copy"
         self.task.write_text(f"```taskrail-task\n{json.dumps(header)}\n```\nReturn 2")
         with self.assertRaisesRegex(ValueError, "isolation"):
-            configuration(self.task)
+            configuration(self.task, self.settings)
 
     def test_linked_worktree_ignores_other_branches_but_tracks_its_own(self):
         from taskrail.application.git_state import git_metadata
@@ -1242,7 +1242,8 @@ class LiveTests(LiveFixture, unittest.TestCase):
     def test_task_inside_repo_infers_root(self):
         task = self.root / "task.md"
         task.write_text("Fix it")
-        config = configuration(task)
+        self.configure_mode()
+        config = configuration(task, self.settings)
         self.assertEqual(config["roots"], {"project": self.root})
 
     def test_unknown_contract_cannot_continue(self):
