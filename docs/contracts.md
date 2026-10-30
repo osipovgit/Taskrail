@@ -375,27 +375,21 @@ skipped; consider the operator's alternative.
 All roles disable automatic compaction. `model_context_tokens` (one window, or one per
 model with a `default`) defaults to 94,208
 and `context_reserve_tokens` to 8,192; the reserve must be positive and smaller than
-every window; each role uses its model's window. Before starting any role, admission counts one token per UTF-8 byte
-of its actual frozen request, attached stage file and role instruction body, plus
-1,024 framing tokens. The actual prompt and every attachment are remeasured before
-each continuation; prior transmitted inputs and observed outputs remain charged.
-Writers also reserve bytes for every distinct approved read/edit input, subtracting
-only exact current line bytes already delivered in the packet. A partial window
-does not exempt its unread suffix or other approved files. This remains conservative
-until an explicit narrower source contract is available. Reaching capacity returns `CONTEXT_EXCEEDED`
-without starting the model and cannot consume automatic retries of the same oversized
-request. Split or narrow the task; configure a larger window only
-when the selected model supports it.
+every window; each role uses its model's window. Request, role and attachment sizes
+are recorded in bytes for diagnostics. They are not token counts and
+cannot refuse a model turn. Permission to read a file does not mean its entire contents
+enter the session.
 
 During execution, the latest reported provider input, including read/write cache,
 is checked against that capacity separately from cumulative token usage. A boundary
 or compaction marker stops the session, including on continuation startup and the
-final event drain. Unknown tool envelopes and provider behavior prevent admission
-from guaranteeing that arbitrary later work fits. Missing usage reports remain
-unknown; a provider overflow still stops the stage. A bounded context handoff may
+final event drain. An explicit provider overflow also stops it. Missing usage reports
+remain unknown; byte counts and cumulative usage cannot substitute for measured input.
+See [context limits](deployment.md#context-limits) for configuration. A bounded context handoff may
 start a fresh writer session from existing edits and progress notes; other writer
-interruptions are never replayed. Progress notes larger than 8 KiB are archived
-verbatim and replaced with bounded excerpts before that new session. Repeated
+interruptions are never replayed. Before a fresh session starts, progress notes larger
+than 8 KiB are archived verbatim and replaced with bounded excerpts. Their growth
+during an active session never itself triggers a context stop. Repeated
 overflow without changed source or working notes stops automatic handoffs.
 
 An unavailable `invalid` tool sentinel is a rejected request that executed nothing.

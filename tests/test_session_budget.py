@@ -62,83 +62,40 @@ class SessionBudgetTests(unittest.TestCase):
             with self.subTest(invalid=invalid), self.assertRaises(ValueError):
                 limits(dict(model_context_tokens=invalid))
 
-    def test_admission_uses_the_window_of_the_role_model(self):
+    def test_input_sizes_do_not_override_the_window_of_the_role_model(self):
         (self.root / "agent.md").write_text("Read-only role")
         (self.root / "request.md").write_text("x" * 30000)
         windows = {"lab/small": 20000, "lab/large": 200000}
         config = dict(model_context_tokens=windows, models={"planner": "lab/small"})
         record = dict(role="planner")
-        self.assertEqual(
-            session_budget.admission(config, (self.root, record), [])["status"],
-            "CONTEXT_EXCEEDED",
-        )
+        session_budget.capture(config, (self.root, record))
         self.assertEqual(record["context_budget"]["input_capacity_tokens"], 18000)
+        self.assertEqual(record["context_budget"]["request_bytes"], 30000)
+        self.assertNotIn("estimated_input_tokens", record["context_budget"])
         config["models"]["planner"] = "lab/large"
-        self.assertIsNone(session_budget.admission(config, (self.root, record), []))
+        session_budget.capture(config, (self.root, record))
+        self.assertEqual(record["context_budget"]["input_capacity_tokens"], 190000)
 
-    def test_writer_admission_counts_frozen_role_and_distinct_planned_bytes(self):
+    def test_input_diagnostics_keep_repeated_attachments_as_bytes(self):
         (self.root / "request.md").write_text("request")
         (self.root / "agent.md").write_text("frozen role")
-        source = self.root / "source.py"
-        source.write_text("\u0430" * 50000, encoding="utf-8")
-        record = dict(role="implementer")
-        outcome = session_budget.admission(
-            {}, (self.root, record), [source, source, self.root / "new.py"]
-        )
-        self.assertEqual(outcome["status"], "CONTEXT_EXCEEDED")
-        self.assertIn("Split this task", outcome["errors"][0])
+        attached = self.root / "progress.md"
+        attached.write_text("ж" * 50000, encoding="utf-8")
+        record = dict(role="implementer", attached_files=[str(attached), str(attached)])
+        session_budget.capture({}, (self.root, record))
         measured = record["context_budget"]
-        self.assertEqual(measured["planned_input_bytes"], 100000)
-        self.assertEqual(measured["estimated_input_tokens"], 100018 + 1024)
-        self.assertEqual(measured["bytes_per_token"], 1)
-        source.write_text("small")
-        self.assertIsNone(session_budget.admission({}, (self.root, record), [source]))
+        self.assertEqual(measured["attached_bytes"], 200000)
+        self.assertEqual(measured["request_bytes"], 7)
+        self.assertEqual(measured["role_bytes"], 11)
+        self.assertNotIn("bytes_per_token", measured)
 
-    def test_nonwriter_admission_does_not_need_planned_sources(self):
-        (self.root / "agent.md").write_text("Read-only role")
-        (self.root / "request.md").write_text("Small request")
-        for role in ("planner", "reviewer"):
-            with self.subTest(role=role):
-                self.assertIsNone(session_budget.admission({}, (self.root, dict(role=role)), []))
-
-    def test_permission_frontmatter_does_not_consume_model_context(self):
+    def test_permission_frontmatter_is_not_part_of_model_input_diagnostics(self):
         (self.root / "request.md").write_text("request")
         permissions = json.dumps(dict(permission=dict(read={"/" + "x" * 50000: "allow"})))
         (self.root / "agent.md").write_text(f"---\n{permissions}\n---\nfrozen role\n")
         record = dict(role="implementer")
-        self.assertIsNone(session_budget.admission({}, (self.root, record), []))
+        session_budget.capture({}, (self.root, record))
         self.assertEqual(record["context_budget"]["role_bytes"], len("frozen role\n"))
-
-    def test_plan_inputs_include_read_dependencies_and_new_edit_targets(self):
-        existing = self.root / "existing.py"
-        existing.write_text("source")
-        plan = dict(
-            files_read=["repo/existing.py"],
-            proposed_change_files=["repo/existing.py", "repo/new.py"],
-        )
-        self.assertEqual(
-            session_budget.plan_inputs(plan, dict(repo=self.root)),
-            [existing, self.root / "new.py"],
-        )
-        self.assertEqual(session_budget.plan_inputs(None, {}), [])
-        plan["files_read"] = ["repo/../outside.py"]
-        with self.assertRaisesRegex(ValueError, "Noncanonical"):
-            session_budget.plan_inputs(plan, dict(repo=self.root))
-
-    def test_review_does_not_validate_files_removed_by_the_implementer(self):
-        plan = dict(files_read=["repo/deleted.py"], proposed_change_files=["repo/deleted.py"])
-        for role in ("planner", "reviewer"):
-            with self.subTest(role=role):
-                self.assertEqual(session_budget.plan_inputs(plan, dict(repo=self.root), role), [])
-
-    def test_repair_admission_accepts_only_approved_deleted_inputs(self):
-        plan = dict(files_read=["repo/deleted.py"], proposed_change_files=["repo/deleted.py"])
-        self.assertEqual(
-            session_budget.plan_inputs(plan, dict(repo=self.root)), [self.root / "deleted.py"]
-        )
-        plan["files_read"].append("repo/missing-dependency.py")
-        with self.assertRaisesRegex(ValueError, "absent"):
-            session_budget.plan_inputs(plan, dict(repo=self.root))
 
     def test_every_role_disables_compaction_and_receives_context_headroom(self):
         workflow = SimpleNamespace(
@@ -229,7 +186,7 @@ class SessionBudgetTests(unittest.TestCase):
         launch.assert_not_called()
         self.assertEqual(outcome["status"], "CONTEXT_EXCEEDED")
 
-    def test_workflow_refuses_oversized_initial_stage_without_retry_or_edits(self):
+    def test_workflow_runs_large_initial_input_without_guessing_its_token_count(self):
         project = self.root / "repo"
         project.mkdir()
         project.joinpath(".git").mkdir()
@@ -241,24 +198,21 @@ class SessionBudgetTests(unittest.TestCase):
         header = json.dumps(dict(roots=dict(project=str(project))))
         options = self.workflow_settings()
         capacity = context_windows.capacity(options)
-        # The task itself exceeds capacity, independently of instruction wording.
+        # Bytes exceed the token boundary while the provider reports a smaller context.
         details = "context " * (capacity // len("context ") + 1)
         task.write_text(f"```taskrail-task\n{header}\n```\nReturn 2. {details}")
         settings = self.root / "settings.json"
         settings.write_text(json.dumps(options))
         run, status = execute_task(task, settings, run_dir=self.root / "result")
         state = json.loads(run.joinpath("run.json").read_text())
-        self.assertEqual(status, "CONTEXT_EXCEEDED", state.get("summary"))
-        self.assertEqual(source.read_text(), original)
-        self.assertEqual(len(state["stages"]), 1)
-        rejected = state["stages"][0]
-        self.assertEqual(rejected["role"], "planner")
-        self.assertGreater(rejected["context_budget"]["request_bytes"], capacity)
-        self.assertEqual(rejected["status"], "CONTEXT_EXCEEDED")
-        self.assertEqual(rejected["elapsed_seconds"], 0)
-        self.assertIn("Planner admission", state["summary"])
-        self.assertEqual(run.joinpath(rejected["directory"], "events.jsonl").read_bytes(), b"")
-        self.assertFalse(run.joinpath(rejected["directory"], "stderr.log").exists())
+        self.assertEqual(status, "READY_FOR_REVIEW", state.get("summary"))
+        self.assertIn("return 2", source.read_text())
+        first = state["stages"][0]
+        self.assertEqual(first["role"], "planner")
+        self.assertGreater(first["context_budget"]["request_bytes"], capacity)
+        self.assertNotEqual(first["status"], "CONTEXT_EXCEEDED")
+        self.assertGreater(first["elapsed_seconds"], 0)
+        self.assertTrue(run.joinpath(first["directory"], "events.jsonl").read_bytes())
 
     def workflow_settings(self):
         base = Path(__file__).resolve().parents[1]

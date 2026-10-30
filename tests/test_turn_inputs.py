@@ -1,17 +1,16 @@
-"""Actual attachments and repeated turns cannot evade context admission."""
+"""Provider context reports govern turns; large handoff notes stay bounded."""
 
 import json
+import sys
 import tempfile
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import patch
 
 from live_fixture import LiveFixture
 
-from taskrail.application import context_handoff, progress_archive, progress_file, session_budget
-from taskrail.infrastructure import artifact_access, runner, turn_budget
-from taskrail.observability.telemetry import Telemetry
+from taskrail.application import context_handoff, progress_archive, progress_file
+from taskrail.infrastructure import artifact_access, runner
 
 
 class TurnInputTests(unittest.TestCase):
@@ -24,78 +23,119 @@ class TurnInputTests(unittest.TestCase):
         self.prompt = self.folder / "request.md"
         self.prompt.write_text("task")
         (self.folder / "agent.md").write_text("role")
+        self.provider = self.run / "provider.py"
+        self.provider.write_text(
+            "import json, sys\n"
+            "from pathlib import Path\n"
+            "receipt = Path('provider-inputs.json')\n"
+            "turns = json.loads(receipt.read_text()) if receipt.exists() else []\n"
+            "files = [Path(sys.argv[i + 1]) for i, arg in enumerate(sys.argv) "
+            "if arg == '--file']\n"
+            "turns.append({str(path): len(path.read_bytes()) for path in files})\n"
+            "receipt.write_text(json.dumps(turns))\n"
+            "identity = str(len(turns))\n"
+            "events = [dict(type='text', part=dict(id='text-' + identity, "
+            "messageID=identity, text='DONE')), dict(type='step_finish', "
+            "part=dict(id='finish-' + identity, messageID=identity, reason='stop'))]\n"
+            "if '--overflow' in sys.argv:\n"
+            "    events = [dict(type='error', error='maximum context length exceeded')]\n"
+            "for event in events:\n"
+            "    print(json.dumps(dict(event, sessionID='same')), flush=True)\n"
+        )
 
     def options(self, note, session=None):
         return dict(
-            command=["must-not-start"],
+            command=[sys.executable, str(self.provider)],
             workspace=self.run,
             agent="test",
             model=None,
             prompt=self.prompt,
             attempt=self.folder,
             timeout=10,
-            runtime=dict(context_budget=5000, attached_files=[note], session_id=session),
+            runtime=dict(context_budget=86016, attached_files=[note], session_id=session),
         )
 
-    def test_each_stage_counts_the_actual_attached_result_or_progress(self):
-        for role, name in (
-            ("planner", "plan.md"),
-            ("reviewer", "review.md"),
-            ("implementer", "progress.md"),
-        ):
-            with self.subTest(role=role):
-                note = self.run / name
-                note.write_text("ж" * 950000)
-                record = dict(role=role, attached_files=[str(note)])
-                result = session_budget.admission({}, (self.folder, record), [])
-                self.assertEqual(result["status"], "CONTEXT_EXCEEDED")
-                self.assertEqual(record["context_budget"]["attached_bytes"], 1900000)
+    def test_reported_context_below_boundary_continues_despite_large_history(self):
+        note = self.run / "review.md"
+        note.write_text("")
+        for old_estimate, reported in ((262395, 76360), (147815, 43712)):
+            with self.subTest(old_estimate=old_estimate, reported=reported):
+                events = [
+                    dict(type="text", part=dict(id="history", text="x" * (old_estimate - 4))),
+                    dict(
+                        type="step_finish",
+                        part=dict(
+                            id="usage",
+                            tokens=dict(
+                                input=reported - 20000,
+                                cache=dict(read=20000),
+                                output=1,
+                                total=reported + 1,
+                            ),
+                        ),
+                    ),
+                ]
+                self.folder.joinpath("events.jsonl").write_text(
+                    "".join(json.dumps(event) + "\n" for event in events)
+                )
+                result = runner.run_agent(self.options(note, "same"))
+                self.assertEqual(result["status"], "OK", result["errors"])
+                self.assertEqual(result["final_text"], "DONE")
+                telemetry = json.loads(self.folder.joinpath("telemetry.json").read_text())
+                self.assertEqual(telemetry["last_input"], reported)
+                self.assertFalse(self.folder.joinpath("turn-inputs.json").exists())
 
-    def test_growth_between_turns_is_remeasured_before_spawning(self):
+    def test_growing_attachments_reach_the_provider_on_continued_turns(self):
         note = self.run / "review.md"
         note.write_text("short")
         options = self.options(note)
-        self.assertIsNone(turn_budget.admission(options, Telemetry()))
-        note.write_text("x" * 5000)
+        initial = runner.run_agent(options)
+        self.assertEqual(initial["status"], "OK", initial["errors"])
+        note.write_text("ж" * 950000, encoding="utf-8")
         options["runtime"]["session_id"] = "same"
-        (self.folder / "events.jsonl").write_text("")
-        with patch("taskrail.infrastructure.process_watch.subprocess.Popen") as launch:
-            result = runner.run_agent(options)
-        launch.assert_not_called()
-        self.assertEqual(result["status"], "CONTEXT_EXCEEDED")
-        self.assertTrue(result["admission_blocked"])
+        continued = runner.run_agent(options)
+        self.assertEqual(continued["status"], "OK", continued["errors"])
+        inputs = json.loads(self.run.joinpath("provider-inputs.json").read_text())
+        self.assertEqual([turn[str(note)] for turn in inputs], [5, 1900000])
+        self.assertFalse(self.folder.joinpath("turn-inputs.json").exists())
 
-    def test_continuations_accumulate_actual_bytes_without_provider_usage(self):
+    def test_missing_usage_and_obsolete_ledger_do_not_block_continuations(self):
         note = self.run / "plan.md"
-        note.write_text("x" * 1800)
-        options = self.options(note)
-        telemetry = Telemetry()
-        self.assertIsNone(turn_budget.admission(options, telemetry))
-        options["runtime"]["session_id"] = "same"
-        self.assertIsNone(turn_budget.admission(options, telemetry))
-        result = turn_budget.admission(options, telemetry)
-        self.assertEqual(result["status"], "CONTEXT_EXCEEDED")
-        self.assertFalse(result["admission_blocked"])
-        self.assertEqual(result["turn_admission"]["previous_tokens"], 3608)
-        options["runtime"]["session_id"] = None
-        self.assertIsNone(turn_budget.admission(options, telemetry))
+        note.write_text("x" * 180000)
+        event = dict(
+            type="tool_use",
+            part=dict(
+                id="read",
+                tool="read",
+                state=dict(status="completed", input={}, output="ж" * 210000),
+            ),
+        )
+        self.folder.joinpath("events.jsonl").write_text(json.dumps(event) + "\n")
+        ledger = self.folder / "turn-inputs.json"
+        ledger.write_text("historical incomplete ledger")
+        options = self.options(note, "same")
+        for _ in range(2):
+            result = runner.run_agent(options)
+            self.assertEqual(result["status"], "OK", result["errors"])
+        telemetry = json.loads(self.folder.joinpath("telemetry.json").read_text())
+        self.assertIsNone(telemetry["last_input"])
+        self.assertEqual(ledger.read_text(), "historical incomplete ledger")
 
-    def test_reported_context_and_multibyte_tool_output_are_counted(self):
+    def test_provider_context_rejection_remains_authoritative_without_usage(self):
         note = self.run / "review.md"
-        note.write_text("x" * 1000)
-        telemetry = Telemetry()
-        telemetry.observe(json.dumps(dict(type="text", part=dict(text="ж" * 2100))))
-        options = self.options(note, "session")
-        result = turn_budget.admission(options, telemetry)
-        self.assertEqual(result["turn_admission"]["previous_tokens"], 4200)
+        note.write_text("x" * 100000)
+        options = self.options(note)
+        options["command"].append("--overflow")
+        result = runner.run_agent(options)
+        self.assertEqual(result["status"], "CONTEXT_EXCEEDED")
+        self.assertIn("maximum context length exceeded", result["errors"])
+        self.assertTrue(self.run.joinpath("provider-inputs.json").exists())
+        self.assertFalse(self.folder.joinpath("turn-inputs.json").exists())
 
     def test_progress_is_bounded_with_lossless_archive_and_exact_read_access(self):
         original = "# Done\n" + "ж" * 20000 + "\n# Remaining\nFinish the boundary check\n"
         target = self.run / "progress.md"
         target.write_text(original)
-        self.assertEqual(
-            progress_file.overflow(self.run, "implementer")["status"], "CONTEXT_EXCEEDED"
-        )
         progress_file.prepare(self.run)
         self.assertLessEqual(target.stat().st_size, progress_archive.MAX_BYTES)
         archives = progress_archive.paths(self.run)
@@ -121,7 +161,21 @@ class TurnInputTests(unittest.TestCase):
 
 
 class ProgressHandoffTests(LiveFixture, unittest.TestCase):
-    def test_an_oversized_writer_note_is_archived_before_fresh_session_admission(self):
+    def test_large_active_note_continues_after_local_result_in_the_same_writer(self):
+        run, status, state = self.run_mode("large-progress-local")
+        self.assertEqual(status, "READY_FOR_REVIEW", state.get("summary"))
+        writers = [entry for entry in state["stages"] if entry["stage"] == "implementer"]
+        self.assertEqual(len(writers), 1)
+        self.assertEqual(writers[0]["session_turns"], 2)
+        self.assertEqual(writers[0]["session_id"], "ses1")
+        self.assertGreater((run / "progress.md").stat().st_size, 1900000)
+        self.assertEqual(progress_archive.paths(run), [])
+        actions = json.loads((run / "local-actions.json").read_text())
+        self.assertEqual(len(actions), 1)
+        self.assertEqual(actions[0]["status"], "SUCCEEDED")
+        self.assertEqual(actions[0]["stage"], writers[0]["directory"])
+
+    def test_an_oversized_writer_note_is_archived_before_fresh_session_launch(self):
         run, status, state = self.run_mode("large-progress-context")
         self.assertEqual(status, "READY_FOR_REVIEW", state.get("summary"))
         writers = [entry for entry in state["stages"] if entry["stage"] == "implementer"]

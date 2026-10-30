@@ -8,7 +8,6 @@ from taskrail.application import (
     evidence,
     evidence_delivery,
     result_validation,
-    session_budget,
     source_packet,
 )
 from taskrail.core.files import atomic_json
@@ -169,20 +168,6 @@ class DecisionContractTests(unittest.TestCase):
         self.assertEqual(result["coverage"][0]["outcome"], "gap")
         self.assertIn("evidence not confirmed", result["blocking_gaps"][0])
         self.assertEqual(result["evidence"], [])
-
-    def test_packet_and_admission_are_bounded_by_delivered_bytes(self):
-        self.path.write_text("x = 1\n" * 10000)
-        self.observe()
-        source_packet.prepare(self.run, "reviewer", self.context["roots"])
-        self.folder.joinpath("agent.md").write_text("Review source")
-        self.folder.joinpath("request.md").write_text("A small request and its exact source range")
-        record = dict(role="reviewer")
-        self.assertIsNone(session_budget.admission({}, (self.folder, record), []))
-        self.assertEqual(record["context_budget"]["planned_input_bytes"], 0)
-        self.folder.joinpath("request.md").write_text("large" * 20000)
-        outcome = session_budget.admission({}, (self.folder, record), [])
-        self.assertTrue(outcome["admission_blocked"])
-        self.assertEqual(outcome["status"], "CONTEXT_EXCEEDED")
 
 
 if __name__ == "__main__":

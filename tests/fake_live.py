@@ -563,11 +563,29 @@ if mode == "context-overflow" and role == "planner" and record["mode"] == "model
     overflow = dict(type="error", error=dict(name="APIError", data=dict(message=message)))
     print(json.dumps(dict(overflow, sessionID="ses1")))
     sys.exit(0)
-if mode == "large-progress-context" and role == "implementer" and record["mode"] == "model":
+if (
+    mode in {"large-progress-context", "large-progress-local"}
+    and role == "implementer"
+    and record["mode"] == "model"
+    and not continued
+):
     (run / "progress.md").write_text("# Done\n" + "x" * 1900000 + "\n# Remaining\nFinish review\n")
-    overflow = dict(name="APIError", data=dict(message="context_length_exceeded"))
-    print(json.dumps(dict(type="error", error=overflow, sessionID="ses1")))
-    sys.exit(0)
+    if mode == "large-progress-context":
+        overflow = dict(name="APIError", data=dict(message="context_length_exceeded"))
+        print(json.dumps(dict(type="error", error=overflow, sessionID="ses1")))
+        sys.exit(0)
+    response = json.dumps(
+        dict(
+            schema_version=1,
+            status="LOCAL_REQUEST",
+            cwd=str(root),
+            argv=["ls", "."],
+            reason="Inspect the source listing",
+        )
+    )
+if mode == "large-progress-local" and role == "implementer" and continued:
+    assert (run / "progress.md").stat().st_size > 1900000
+    assert "SUCCEEDED" in prompt
 if mode == "provider-interrupted" and role == "implementer" and not continued:
     target.write_text(target.read_text().replace("return 1", "return 2"))
     gateway = dict(name="APIError", data=dict(message="Retries exhausted", isRetryable=False))

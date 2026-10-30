@@ -183,29 +183,27 @@ must be positive and smaller than every window. A session ends at the window min
 the reserve, kept between 90 and 95 percent of the window. Keep the provider's own
 model limits accurate.
 
-Before any role starts, the server counts the request, frozen role instructions and
-all attached `plan.md`, `review.md` or `progress.md` bytes; writer admission also
-counts approved read/edit input files. Exact source lines already
-delivered in the request are counted once. The estimate uses one UTF-8 byte per token,
-plus 1024 tokens for framing. The
-reviewable estimate must fit below context minus reserve. This conservative admission
-check can reject a large file even if only a small part would be needed: narrow the
-task or adjust capacity to a verified model limit. Unknown future tool output and
-provider envelopes cannot be predicted. Runtime monitoring stops on reported input
-(including cached input) reaching the same boundary, or any explicit compaction
-marker. Before every continuation, current prompt and attachment sizes are measured
-again. Admission uses the greater of reported context and a conservative byte
-estimate of earlier transmitted inputs and observed outputs, including when the
-provider reports no usage. Usage events can arrive after a provider has consumed tokens.
+The server records request, frozen role and attachment sizes in bytes
+for diagnostics. These counts never block a turn: file bytes are not model tokens,
+and an approved source file may be read only in small ranges. Repeated prompts,
+provider framing and future tool output also prevent byte totals from measuring
+context occupancy.
 
-A refusal or overflow is `CONTEXT_EXCEEDED`; an admission refusal consumes no model
-turn and is not retried with the same oversized input. A session that reaches the
+Runtime monitoring stops only when the latest provider-reported input, including cache
+read/write tokens, reaches the reserved capacity, the provider reports an explicit
+context overflow, or a compaction marker appears. Missing usage is unknown and does
+not imply that capacity was exceeded. These checks also cover continuation startup
+and the final event drain. Reports may arrive after the provider has consumed tokens;
+the configured reserve cannot guarantee that every later tool result will fit.
+
+An observed boundary or overflow is `CONTEXT_EXCEEDED`. A session that reaches the
 boundary is not compacted: the stage continues in a fresh session, up to `read_retries`
 times. A reading stage starts it from recorded evidence; the implementer keeps its edits
 and continues from `progress.md` (Done, Remaining), told to read the files it already
 changed before editing them. Nothing is rolled back, and a writer interrupted any other
-way is never replayed. Working progress is limited to 8 KiB: oversized notes are
-preserved verbatim under `00-input/progress-archive/`, and the next session receives
+way is never replayed. Before a fresh session starts, its attached progress notes are
+bounded to 8 KiB. Growth during an active session never itself exhausts context.
+Oversized notes are preserved verbatim under `00-input/progress-archive/`, and the next session receives
 bounded beginning/end excerpts with an exact archive reference. Only those archive
 files become readable. Another overflow without changed source or working notes
 stops instead of repeating the same handoff. When fresh sessions do not suffice, replan into smaller atomic
@@ -215,8 +213,8 @@ After a planner context stop, the server first validates its saved `plan.md` aga
 the same source evidence, requirement coverage, scope and dependency contracts.
 A valid ready proposal proceeds to independent plan review without another planner
 call; the original context-stop diagnostics remain recorded. An invalid proposal
-gets exact validation errors in its bounded recovery attempt. Admission refusals,
-permission failures, source violations and interrupted writers never use this path.
+gets exact validation errors in its bounded recovery attempt. Permission failures,
+source violations and interrupted writers never use this path.
 
 ## Local command sandbox
 
