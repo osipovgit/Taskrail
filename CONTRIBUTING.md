@@ -26,8 +26,11 @@ cover.
 
 ## Pull requests
 
-- Create a feature branch and open a pull request for every change, including
-  documentation and dependency updates. Never commit or push directly to `master`.
+- Create a feature branch for every task, including documentation and dependency
+  updates. After validation, commit and push the changes, open a pull request
+  targeting `master`, and provide its URL. Local changes or a pushed branch alone
+  do not complete a task; report missing PR access as a blocker.
+  Never commit or push directly to `master`.
 - Merge only when all required pipelines pass for the latest revision and the
   repository owner has personally reviewed and accepted the change. Agents must
   not merge, enable auto-merge or bypass repository rules.
