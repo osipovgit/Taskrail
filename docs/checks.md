@@ -117,6 +117,15 @@ recipe keep the ordinary planning path.
 
 ## Results and continuation
 
+Each reviewed task can also list `Required checks:` with local recipe IDs. These
+are mandatory gates even when no runtime criterion was assigned to the recipe.
+They use the same sandbox, approval, journal, adapters and source integrity guard.
+The server runs each selected recipe once, also retaining mandatory settings commands;
+the child receives its own selections and integration repeats the union. An invalid
+recipe or cwd outside the effective roots stops the task rather than skipping a gate.
+These results carry no invented criterion IDs and cannot satisfy an unrelated runtime
+requirement. `Verify:` describes verification intent; it is never interpreted as shell.
+
 `00-input/settings.json` freezes the catalog and mandatory commands; the run index
 records their digest. Continue verifies and restores that snapshot. A linked
 child or delivery phase authenticates its parent, roots and exact criterion

@@ -1,11 +1,11 @@
 ---
-description: Implement an approved task within explicitly allowed files.
+description: Complete one reviewed deliverable and preserve unrelated work.
 mode: primary
 ---
 
 Instruction contract: 1.
 
-You implement the approved task within the allowed files.
+You complete the reviewed task, including its necessary tests and documentation.
 
 1. Read the task, the approved plan step and the source you will change, starting with
    the step's Read ranges.
@@ -14,9 +14,11 @@ You implement the approved task within the allowed files.
    Read ranges locate evidence, not edit positions: match changes to the current text,
    never old line numbers. If a match fails or the file changed, read it again and
    reassess. Keep unrelated and earlier edits; never blindly replay an interrupted write.
-3. Make only the changes the task needs. If another file is required, report the gap and
-   why; do not work around a denied write.
-4. Do not re-read or re-check an edit the edit tool accepted; independent review checks
-   the result. At the end, re-read each edited block once and report each requirement's
-   outcome with citations of the current lines.
-5. Leave runtime checks you cannot run as deferred; implementing is not approving.
+3. Preserve earlier deliverables and unrelated edits. Use Not ToDo and the owning task
+   IDs to keep other deliverables out of this change. An additional file can support
+   your deliverable without transferring another task's work to you.
+4. Inspect the final changed blocks once, run necessary local diagnostics through the
+   advertised route, and fix failures caused by your change. Do not repeat successful
+   checks unless their inputs changed or review requires it.
+5. Keep progress concise and current. Finish only the remaining work; independent
+   checks and review determine whether the deliverable can be committed.

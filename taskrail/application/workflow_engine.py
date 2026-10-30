@@ -14,6 +14,7 @@ from taskrail.application import (
 )
 from taskrail.application.changes import capture_preimages, write_diff
 from taskrail.application.check_stage import run_checks
+from taskrail.application.correction_start import refresh as refresh_correction
 from taskrail.application.run_locks import run_locks
 from taskrail.application.run_report import report
 from taskrail.application.stage_attempts import StageAttempts
@@ -74,7 +75,8 @@ def prepare_stages(workflow, resume):
     """Authenticate inherited inputs before executing a fixed batch or launching models."""
     workflow_start.start(workflow, resume)
     check_parents.adopt(workflow, resume)
-    check_batches.run_configured(workflow)
+    workflow.checkpoint()
+    check_batches.prepare(workflow)
 
 
 def model_stage(workflow):
@@ -90,6 +92,7 @@ def model_stage(workflow):
     if record["stage"] == "plan-reviewer":
         planned_checks.activate(workflow)
         reviewed_artifacts.seal(workflow)
+        refresh_correction(workflow)
     effect = workflow.flow.pop("effect", None)
     if effect == "commit":
         commit(workflow)

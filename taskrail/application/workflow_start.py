@@ -35,7 +35,7 @@ def start(workflow, resume):
     else:
         begin(workflow)
     workflow.state[approval_policy.AUTO_APPROVE] = approval_policy.at_start(
-        workflow.run, workflow.config
+        workflow.run, workflow.config, workflow.state
     )
     workflow.state["decompose"] = workflow.config.get("decompose") is True
     on_branch = task_branch.detect(workflow.config["roots"], workflow.config["worktrees"])

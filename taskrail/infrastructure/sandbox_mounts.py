@@ -1,51 +1,20 @@
 """The file system a sandboxed command sees, as bubblewrap mount options.
 
-/tmp, /var/tmp and /run are private and empty, which also hides host sockets. Home is
-an empty scratch directory showing, read-only, its visible entries, known toolchain
-directories and the installation of the requested program, so credentials in hidden
-directories stay out of reach. Protected files in the roots are unreadable and their
-Git metadata is read-only.
+/tmp, /var/tmp and /run are private and empty. Home exposes only selected runtime
+directories. Credential masks are applied after every mount, including project roots
+and custom installations, so later binds cannot expose a masked configuration again.
 """
 
 import os
 from pathlib import Path
 
-from taskrail.core import protected_paths
+from taskrail.infrastructure import sandbox_paths, sandbox_secrets
 
 GIT = ".git"
 NULL = "/dev/null"
 READ_ONLY = "--ro-bind"
 TEMPORARY = "--tmpfs"
 PRIVATE = ("/tmp", "/var/tmp", "/run")
-# Hidden home entries that hold interpreters, package managers and their libraries.
-TOOLCHAINS = (
-    ".local/bin",
-    ".local/lib",
-    ".local/share/pipx",
-    ".local/share/uv",
-    ".local/share/virtualenvs",
-    ".pyenv",
-    ".conda",
-    ".nvm",
-    ".volta",
-    ".fnm",
-    ".bun",
-    ".deno",
-    ".cargo",
-    ".rustup",
-    ".sdkman",
-    ".jdks",
-    ".m2",
-    ".gradle",
-    ".ivy2",
-    ".sbt",
-    ".asdf",
-    ".rbenv",
-    ".gem",
-    ".tfenv",
-    ".ansible/collections",
-    ".ansible/roles",
-)
 
 
 def private():
@@ -55,35 +24,18 @@ def private():
 
 
 def home():
-    """An empty home with its visible entries and toolchains shown read-only."""
-    directory = Path.home()
-    options = [TEMPORARY, str(directory)]
-    for name in (*visible(directory), *TOOLCHAINS):
-        path = str(directory / name)
-        options.extend(("--ro-bind-try", path, path))
-    return options
-
-
-def visible(directory):
-    """Names of the entries of a directory that are not hidden, sorted."""
-    names = (entry.name for entry in os.scandir(directory))
-    return sorted(name for name in names if not name.startswith("."))
+    """An empty home with only existing runtime and cache components shown read-only."""
+    return [TEMPORARY, str(Path.home()), *readonly(sandbox_paths.home())]
 
 
 def installation(program):
-    """The program's prefix, such as a virtual environment, read-only wherever it lives.
+    """Only the executable and conventional runtime components of a private prefix."""
+    return readonly(sandbox_paths.installation(program))
 
-    A prefix that is home, contains it or is a top-level home entry such as ~/.local
-    would reveal more than the program, so only its own directory is shown then.
-    """
-    path = Path(program)
-    if not path.is_absolute():
-        return []
-    prefix = path.parent.parent
-    home_directory = Path.home()
-    if home_directory.is_relative_to(prefix) or prefix.parent == home_directory:
-        prefix = path.parent
-    return [READ_ONLY, str(prefix), str(prefix)]
+
+def readonly(paths):
+    """Read-only mounts for an explicit set of existing paths."""
+    return [option for path in paths for option in (READ_ONLY, str(path), str(path))]
 
 
 def project(roots, writable, protected, overlays):
@@ -98,8 +50,7 @@ def project(roots, writable, protected, overlays):
         metadata = str(root / GIT)
         if os.path.exists(metadata):
             options.extend((READ_ONLY, metadata, metadata))
-        for secret in hidden(root, protected):
-            options.extend((READ_ONLY, NULL, str(secret.resolve())))
+    options.extend(sandbox_secrets.masks(roots.values(), protected, project=True))
     return options
 
 
@@ -108,12 +59,8 @@ def discarded(directory):
     return ["--overlay-src", directory, "--tmp-overlay", directory]
 
 
-def hidden(root, protected=protected_paths.DEFAULT_PATTERNS):
-    """Protected files inside a root, outside its Git metadata."""
-    for directory, names, files in os.walk(root):
-        if GIT in names:
-            names.remove(GIT)
-        for name in files:
-            path = Path(directory, name)
-            if protected_paths.matches(path, protected):
-                yield path
+def credentials(program, protected):
+    """Mask credentials exposed by runtime mounts after all project binds."""
+    return sandbox_secrets.masks(
+        (*sandbox_paths.home(), *sandbox_paths.installation(program)), protected
+    )

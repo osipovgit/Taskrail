@@ -4,28 +4,49 @@ import contextlib
 import fcntl
 import time
 
+from taskrail.core import owned_paths
 from taskrail.core.files import atomic_json
 
 OFF = "auto-approve.off"
 DIRECTORY = ".approval-policy"
 
 
-def marker(run):
+def marker(run, suffix=".off"):
     """Keep revocation independent of the parent and of worker startup."""
-    return run.parent / DIRECTORY / f"{run.name}.off"
+    run = owned_paths.child(run.parent, run.name)
+    return owned_paths.child(run.parent, f"{DIRECTORY}/{run.name}{suffix}")
 
 
 def revoked(run):
     """A marker can only remove authority; it never grants anything."""
-    return (run / OFF).exists() or marker(run).exists()
+    try:
+        return denied(run)
+    except ValueError:
+        return True
+
+
+def denied(run):
+    """Validate both denial locations before reading either existence flag."""
+    local = owned_paths.child(run, OFF)
+    policy = marker(run)
+    return local.exists() or policy.exists()
+
+
+def granted(run):
+    """Only the personal decision writer creates durable grants outside source roots."""
+    try:
+        path = marker(run, ".grant.json")
+    except ValueError:
+        return False
+    return path.is_file()
 
 
 @contextlib.contextmanager
 def changing(run):
     """Serialize operator grants and revocations, including workers not created yet."""
-    path = marker(run)
+    path = marker(run, ".lock")
     path.parent.mkdir(exist_ok=True)
-    with path.with_suffix(".lock").open("a") as stream:
+    with path.open("a") as stream:
         fcntl.flock(stream, fcntl.LOCK_EX)
         yield
 
@@ -35,12 +56,15 @@ def revoke(run):
     with changing(run):
         payload = dict(revoked_at=time.time())
         atomic_json(marker(run), payload)
-        if run.is_dir() and not run.is_symlink():
-            atomic_json(run / OFF, payload)
+        local = owned_paths.child(run, OFF)
+        if local.parent.is_dir():
+            atomic_json(local, payload)
 
 
 def grant(run):
-    """Only the operator decision writer clears a denial, never a delayed worker."""
+    """Persist a personal grant before clearing denial; workers never call this."""
     with changing(run):
+        path = marker(run, ".grant.json")
+        atomic_json(path, dict(granted_at=time.time()))
         marker(run).unlink(missing_ok=True)
-        (run / OFF).unlink(missing_ok=True)
+        owned_paths.child(run, OFF).unlink(missing_ok=True)

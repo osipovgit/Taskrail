@@ -214,6 +214,14 @@
             "notes": {
               "type": "string"
             },
+            "not_todo": {
+              "type": "array",
+              "items": {"type": "string", "minLength": 1}
+            },
+            "required_checks": {
+              "type": "array",
+              "items": {"type": "string", "minLength": 1}
+            },
             "read": {
               "type": "array",
               "items": {

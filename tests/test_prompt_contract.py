@@ -214,6 +214,7 @@ class RequestBudgetTests(LiveFixture, unittest.TestCase):
                 ("implementer", "reviewer"),
             ),
             ({"phase": "integration"}, ("reviewer",)),
+            ({"phase": "correction"}, tuple(STAGES)),
             ({"phase": "server", "confirmed_change": "change"}, ("planner", "reviewer")),
         )
         for catalog in catalogs:

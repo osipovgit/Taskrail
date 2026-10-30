@@ -65,10 +65,10 @@ Required missing evidence means BLOCKED, even when the result format is valid. A
 checks that must run after the change in unverified, one per entry, prefixed
 `Jenkins check: <server>/<job>: <parameters and expected result>` or
 `Server check: <what to run and the expected result>`; the server starts Jenkins
-validation and, after the operator confirms the change, server checks from them. Requirements
-that cannot all be met literally are not a gap: the agent keeps behavior and safety
-constraints, does the rest, records the choice in summary and unverified, and
-reviewers accept that recorded choice.
+validation and, after the operator confirms the change, server checks from them. A conflict
+between Goal and Constraints that changes implementation is a blocking gap naming the
+exact decision needed. Neither implementation nor review may silently choose a new goal
+or transfer an excluded deliverable from another task.
 
 - Planner: writes `plan.md` in the run directory (see [plan file](#plan-file)); the
   server derives the stored plan result from it: coverage, evidence, steps (one per
@@ -98,7 +98,10 @@ reviewers accept that recorded choice.
 Documentation and test work are valid standalone deliverables when the user requests
 them. The planner and reviewer reject only artificial companion tasks that separate
 tests or documentation from the implementation that owes them. Each task still needs
-observable acceptance criteria, an explicit file boundary and appropriate verification.
+observable acceptance criteria, planned files and appropriate verification. On an
+authenticated task branch, necessary additional files within permitted roots remain
+allowed; Not ToDo records excluded outcomes and their owning task IDs. In-place runs
+retain their exact approved file boundary.
 
 Review lines use the assigned requirement labels. A failure needs its problem;
 `gap`, `n/a` and `later` need their explanations. An explained `n/a` is valid in
@@ -373,7 +376,9 @@ All roles disable automatic compaction. `model_context_tokens` (one window, or o
 model with a `default`) defaults to 94,208
 and `context_reserve_tokens` to 8,192; the reserve must be positive and smaller than
 every window; each role uses its model's window. Before starting any role, admission counts one token per UTF-8 byte
-of its actual frozen request and role instruction body, plus 1,024 framing tokens.
+of its actual frozen request, attached stage file and role instruction body, plus
+1,024 framing tokens. The actual prompt and every attachment are remeasured before
+each continuation; prior transmitted inputs and observed outputs remain charged.
 Writers also reserve bytes for every distinct approved read/edit input, subtracting
 only exact current line bytes already delivered in the packet. A partial window
 does not exempt its unread suffix or other approved files. This remains conservative
@@ -387,8 +392,19 @@ is checked against that capacity separately from cumulative token usage. A bound
 or compaction marker stops the session, including on continuation startup and the
 final event drain. Unknown tool envelopes and provider behavior prevent admission
 from guaranteeing that arbitrary later work fits. Missing usage reports remain
-unknown; a provider overflow still stops the stage. Writers are never retried
-automatically after a context failure.
+unknown; a provider overflow still stops the stage. A bounded context handoff may
+start a fresh writer session from existing edits and progress notes; other writer
+interruptions are never replayed. Progress notes larger than 8 KiB are archived
+verbatim and replaced with bounded excerpts before that new session. Repeated
+overflow without changed source or working notes stops automatic handoffs.
+
+An unavailable `invalid` tool sentinel is a rejected request that executed nothing.
+When it precedes a completed final `DONE`, it remains a warning and the saved
+artifact still passes the ordinary requirement and source-evidence validation.
+Without completion, an isolated unavailable-tool rejection receives bounded
+same-session guidance. Permission denials, failed writes and unrelated errors
+retain their normal failure handling; narrative mentions of `DONE` do not complete
+a turn.
 
 Short local and Git outputs are delivered inline, capped at 24,000 characters.
 Long local output is delivered as status, exit code, independent stream previews and
@@ -417,9 +433,10 @@ never retried silently.
 ```
 
 A JENKINS_REQUEST is available only when the executor has a Jenkins configuration.
-`status`, `console` and `tests` read `"last"` or a numbered build after UI approval;
+`status`, `console` and `tests` read `"last"` or a numbered build without a UI decision;
 their results are snapshots under `00-input/local`. `build` uses `"build": "new"`,
-only configured parameter names, and a root-approved ticket in `execution.json`.
+only configured parameter names, and a ticket in `execution.json` approved by root
+or by the executor's root-configured job policy (`approval: none`).
 
 Configured checks can run without model-authored execution requests. Server
 settings own `check_recipes`, each with `kind`, `phase`, an exact `request`, an output

@@ -82,7 +82,7 @@ def stage_server(command, workspace, allow, compact=True, **options):
     startup = options.get("startup")
     if ADAPTER not in command:
         attach = options.get("attach", True) and bool(command)
-        if not (attach and opencode_serve.supported(tuple(command))):
+        if not (attach and opencode_serve.supported(command, workspace, environment)):
             return contextlib.nullcontext()
         return opencode_serve.StageServer(command, str(workspace), environment, startup)
     target = json.loads(command[-1])

@@ -7,28 +7,22 @@ it; revoking it in any of these runs revokes it for the parent too.
 
 import json
 
-from taskrail.core import approval_marks
+from taskrail.core import approval_family, approval_marks
 from taskrail.interactions import approval_policy, approvals
-from taskrail.web import epic_record, epic_tasks, history, run_family
+from taskrail.web import epic_record, history, run_family
 
 KEY = approval_policy.AUTO_APPROVE
 
 
 def allows_all(run, draft):
     """Whether a run started now for this parent allows all actions."""
-    if approval_marks.revoked(run):
-        return False
     state = json.loads(history.read_artifact(run, "run.json"))
-    granted = epic_tasks.record(run).get(KEY) is True
-    return approval_policy.at_start(run, draft) or approval_policy.active(run, state) or granted
+    return approval_policy.at_start(run, draft, state)
 
 
 def shown(run, state):
     """What a run card shows: its own setting or, for a parent, the one given for its runs."""
-    if approval_policy.active(run, state):
-        return True
-    split = epic_tasks.record(run).get(KEY) is True
-    return split and not approval_marks.revoked(run)
+    return approval_policy.active(run, state)
 
 
 def decide(run, payload):
@@ -55,7 +49,5 @@ def revoke(run):
 
 
 def parent_of(run):
-    """The parent run of a task or phase run that still exists, or None."""
-    if not run_family.shown_inside(run.parent, run):
-        return None
-    return run.parent / run_family.parent_link(run)[0]
+    """Only server-linked children can grant or revoke their parent's authority."""
+    return approval_family.parent(run)

@@ -37,14 +37,14 @@ BASE = (
 DESKTOP = ("DISPLAY", "WAYLAND_DISPLAY", "XAUTHORITY", "DBUS_SESSION_BUS_ADDRESS")
 
 
-def health():
+def health(approved=False):
     """Informational check line: how local commands run here, or why bubblewrap does not."""
-    current = mode()
-    if current is not None:
-        return True, f"Local commands: sandboxed without approval; network cut off by a {current}"
+    if mode() is not None:
+        return True, f"Local commands: sandboxed without approval; network cut off by a {mode()}"
     failures = [f"{kind}: {error}" for kind, error in attempts()]
     reason = "; ".join(failures) or "bwrap not found"
-    return True, f"Local commands: each one waits for approval; no sandbox ({reason})"
+    policy = "personally allowed for this run" if approved else "each one waits for approval"
+    return True, f"Local commands: {policy}; no sandbox ({reason})"
 
 
 def executable():
@@ -110,6 +110,7 @@ def command(argv, cwd, roots, writable, protected=protected_paths.DEFAULT_PATTER
         *sandbox_mounts.home(),
         *sandbox_mounts.installation(argv[0]),
         *sandbox_mounts.project(roots, writable, protected, overlays()),
+        *sandbox_mounts.credentials(argv[0], protected),
     ]
     desktop = [option for name in DESKTOP for option in ("--unsetenv", name)]
     command = [*mounts, *desktop, "--chdir", str(cwd), "--", *argv]

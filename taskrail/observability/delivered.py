@@ -13,6 +13,7 @@ TEXT = "text"
 FINISHED = frozenset(("completed", "error"))
 OBSERVED = "observed_characters"
 UNREPORTED = "unreported_characters"
+BYTES = "observed_bytes"
 CACHE = ("read", "write")
 
 
@@ -21,16 +22,18 @@ class Delivered:
 
     def __init__(self):
         """Nothing delivered yet."""
-        self.counts = {OBSERVED: 0, UNREPORTED: 0}
+        self.counts = {OBSERVED: 0, UNREPORTED: 0, BYTES: 0}
 
     def observe(self, kind, part):
         """Count one fresh event."""
         if reports_input(kind, part):
             self.counts[UNREPORTED] = 0
             return
-        size = characters(kind, part)
+        received = delivered_text(kind, part)
+        size = len(received)
         self.counts[OBSERVED] += size
         self.counts[UNREPORTED] += size
+        self.counts[BYTES] += len(received.encode("utf-8"))
 
     def summary(self):
         """Both counts."""
@@ -49,13 +52,13 @@ def reports_input(kind, part):
     return counted != [None, None]
 
 
-def characters(kind, part):
-    """Characters a text part or a finished tool call adds to the session."""
+def delivered_text(kind, part):
+    """Text a model response or a finished tool call adds to the session."""
     if kind == TEXT:
-        return len(str(part.get(TEXT, "")))
+        return str(part.get(TEXT, ""))
     state = part.get("state") or {}
     if kind != "tool_use" or state.get("status") not in FINISHED:
-        return 0
+        return ""
     arguments = json.dumps(state.get("input") or {}, ensure_ascii=False)
     output = state.get("output") or state.get("error") or ""
-    return len(arguments) + len(str(output))
+    return arguments + str(output)

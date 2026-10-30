@@ -3,7 +3,7 @@
 import json
 from functools import partial
 
-from taskrail.application import delivery_confirmation
+from taskrail.application import correction_history, delivery_confirmation
 from taskrail.web import (
     delivery_state,
     epic_record,
@@ -27,7 +27,9 @@ def start(launcher, run):
         delivery = delivery_state.view(run, state)
         if delivery is None or delivery["step"] != "integrating":
             raise ValueError("Integration review requires all child tasks to finish")
-        epic[integration_review.SEAL] = integration_review.signature(delivery["tasks"])
+        epic[integration_review.SEAL] = integration_review.signature(
+            [*delivery["tasks"], *delivery.get("corrections", [])]
+        )
         link = partial(epic_record.link, run, epic, (PHASES, INTEGRATION))
         return launcher.submit(integration_review.payload(run, state), before_start=link)
 
@@ -35,6 +37,7 @@ def start(launcher, run):
 def repeat(launcher, run):
     """An operator can replace a stopped read-only review, never an active writer."""
     with epic_record.changing(run) as epic:
+        correction_history.completed(run)
         state = json.loads(history.read_artifact(run, INDEX))
         delivery = delivery_state.view(run, state)
         if delivery is None or delivery["implementation"] != "done" or "tasks" not in delivery:

@@ -83,6 +83,10 @@ def launch_options(workflow, active, allowance):
             else (),
             plan_file=str(workflow.run / "plan.md") if record["stage"] == "planner" else None,
             attached_files=record.get(stage_artifacts.ATTACHED, ()),
+            input_overhead=sum(
+                record.get("context_budget", {}).get(key, 0)
+                for key in ("role_bytes", "framing_tokens")
+            ),
         ),
     )
 

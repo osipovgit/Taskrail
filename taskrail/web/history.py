@@ -6,6 +6,7 @@ import re
 from taskrail.application import worktree_isolation
 from taskrail.core import task_markdown, task_spec
 from taskrail.core.input_header import HEADER
+from taskrail.interactions import approval_policy
 
 HISTORY = "\n## Conversation history\n"
 TASK_FILE = "00-input/task.md"
@@ -76,9 +77,9 @@ def task_draft(run):
     draft["worktree"] = parsed.metadata.get("isolation") != "in_place"
     draft[DESIGN] = parsed.metadata.get(DESIGN) is True
     draft[DECOMPOSE] = parsed.metadata.get(DECOMPOSE) is True
-    draft["auto_approve"] = parsed.metadata.get("auto_approve") is True
     draft["verification"] = "\n".join(parsed.metadata.get("verification", []))
     index = json.loads(read_artifact(run, "run.json"))
+    draft["auto_approve"] = approval_policy.at_start(run, parsed.metadata, index)
     draft["roots"] = worktree_isolation.source_roots(index)
     return draft
 

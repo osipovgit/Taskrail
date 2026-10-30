@@ -53,11 +53,3 @@ def labelled(message, requirements):
     for number, entry in enumerate(requirements, 1):
         message = message.replace(entry["id"], f"R{number}")
     return message
-
-
-def labelled_requirements(requirements):
-    """Each requirement's label, kind and text, without server identities."""
-    return {
-        f"R{number}": dict(kind=entry["kind"], text=entry["text"])
-        for number, entry in enumerate(requirements, 1)
-    }

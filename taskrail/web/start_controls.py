@@ -28,6 +28,8 @@ def starts(run, state, activity):
 
 def restart(run, state, activity):
     """A restart draft opens in the editor; a task or phase restart starts at once."""
+    if state.get(check_parents.PHASE) == "correction":
+        return False
     if not (run / RUN_INDEX).is_file() or activity.held:
         return False
     return not activity.waiting or not state.get(check_parents.PHASE)

@@ -26,7 +26,7 @@ READ_ONLY_FLAGS = MappingProxyType({"design": "mode.design", "read_only": "mode.
 PLANNING_RULES = frozenset(("mode.change", "mode.decompose"))
 # Stages of a run with a writer whose rules change on a Taskrail branch.
 BRANCH_STAGES = frozenset(("implementer", "reviewer"))
-WRITING_PHASES = frozenset((None, "task"))
+WRITING_PHASES = frozenset((None, "task", "correction"))
 
 
 def render(config, stage):
@@ -56,6 +56,8 @@ def mode_rule(config, stage):
 def mode_key(config, stage):
     """The catalog key of the rule, or None."""
     phase = config.get("phase")
+    if phase == "correction":
+        return "mode.correction"
     if phase in PHASE_RULES and (phase == "integration" or stage != PLANNER):
         return PHASE_RULES[phase]
     if config.get("decompose"):

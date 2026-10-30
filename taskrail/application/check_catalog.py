@@ -22,6 +22,11 @@ def context(config, stage, plan):
     catalog = config.get("check_recipes", {})
     if stage == "plan-reviewer":
         selections = (plan or {}).get("check_selections", [])
+        selections = selections + [
+            dict(recipe_id=name)
+            for step in (plan or {}).get("steps", [])
+            for name in step.get("required_checks", [])
+        ]
         catalog = selected_catalog(catalog, checks + selections)
     return dict(check_catalog=public_catalog(catalog), configured_checks=checks)
 

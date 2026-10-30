@@ -76,7 +76,7 @@ the agents' input.
 | `verification` | Deferred runtime checks to report, not commands to execute |
 | `read_only` | `true` for an answer-only task (the browser's **Answer only**) |
 | `decompose` | `true` always splits the Goal into task runs, even a small plan; see [delivery](task-controls.md#delivery-of-a-code-change) |
-| `phase` | Server-generated for the runs of a delivery (`task`, `integration`, `validation`, `server`); do not set it by hand |
+| `phase` | Server-generated for delivery runs (`task`, `integration`, `correction`, `validation`, `server`); do not set it by hand |
 | `task_scope` | Required for server-generated `task` phases: exact reviewed file paths; child planning cannot widen them or create another split |
 | `design` | `true` for a design discussion (the browser's **Design discussion**); implies `read_only` |
 | `auto_approve` | `true` approves local commands, read access and the change limit of this run without asking (the browser's **Allow all actions**); SSH keeps its root-only approval |
@@ -111,6 +111,14 @@ Every planner turn has `plan.md` attached, so the planner edits it without readi
 again.
 Unknown plan sections, unparsed ownership text and mismatched scope delimiters are
 errors, with line numbers. Put `## Answer` last: its remaining Markdown is the answer.
+Each task can declare `Not ToDo: T2: <excluded result>` to name another task's
+behavioral ownership, even when both tasks edit the same file. The child also receives
+later tasks' observable results. A necessary additional file is allowed on an owned
+task branch; taking over another task's deliverable requires an explicit scope decision.
+`Required checks:` lists exact local recipe IDs, one per bullet, or `none`. Selected
+gates run before that task can finish and again on the combined integration result.
+Unknown recipes, remote recipes and model-authored commands are rejected. `Verify`
+remains human-readable verification guidance and never authorizes arbitrary commands.
 Optional `## Check selections` lines have the form `recipe-id: R2, R4`; only advertised
 recipes and runtime requirements are accepted. This selects existing server actions,
 not model-authored commands. A write-before-read rejection for this exact plan file
@@ -126,8 +134,8 @@ a standalone submission does not infer ownership from a branch name. Answers,
 designs, delivery checks and other roots work in place. With
 `"isolation": "worktree"` every root must be such a top level, otherwise the run
 stops. Before planning, the run creates one linked worktree per root from its current
-`HEAD` on a new branch `taskrail/<run>`, under `worktree_base` (default: a
-`worktrees` folder beside the run store). Uncommitted changes in the source checkout
+`HEAD` on a new branch `taskrail/<run>`, under `worktree_base` (default:
+`~/.local/share/taskrail-worktrees`, separate from application state). Uncommitted changes in the source checkout
 are not included. The whole run, including Continue, works in the worktrees; the
 source checkout and its other branches may change meanwhile without stopping the
 run. Clear **Isolated Git worktree** in the browser form, or pass

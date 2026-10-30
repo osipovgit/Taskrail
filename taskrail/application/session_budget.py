@@ -61,6 +61,7 @@ def measured(config, folder, files, record):
     sizes = dict(
         request_bytes=request.stat().st_size if request.exists() else 0,
         role_bytes=len(role.encode("utf-8")),
+        attached_bytes=attachment_bytes(record),
         planned_input_bytes=planned_bytes(folder, existing, stage),
     )
     return dict(
@@ -70,6 +71,12 @@ def measured(config, folder, files, record):
         estimated_input_tokens=sum(sizes.values()) + FRAMING_TOKENS,
         input_capacity_tokens=context_windows.role_capacity(config, record["role"]),
     )
+
+
+def attachment_bytes(record):
+    """Each --file occurrence is transmitted, including repeated paths."""
+    paths = map(Path, record.get("attached_files", ()))
+    return sum(path.stat().st_size for path in paths)
 
 
 def planned_bytes(folder, existing, stage):

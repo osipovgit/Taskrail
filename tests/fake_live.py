@@ -17,6 +17,9 @@ args = sys.argv[1:]
 if "--version" in args:
     print("1.0.0")
     sys.exit(0)
+if args[-2:] == ["run", "--help"]:
+    print("run --session --dir --agent --format --file")
+    sys.exit(0)
 profiles = Path(args[args.index("--profiles") + 1])
 mode = args[args.index("--mode") + 1]
 if "agent" in args:
@@ -404,11 +407,14 @@ elif role == "implementer":
     if mode == "multi":
         secondary = Path(context["roots"]["jenkins"]) / "pipeline.groovy"
         secondary.write_text(secondary.read_text().replace("old", "new"))
+    if mode == "integration-fix":
+        target.write_text(target.read_text() + "# marker\n")
     value = dict(status="IMPLEMENTED", summary="fixed")
 else:
     reject = (
         mode == "review-repair" and role == "reviewer" and "marker" not in target.read_text()
     ) or (mode == "plan-repair" and role == "plan-reviewer" and not context.get("feedback"))
+    reject = reject or (mode == "integration-reject" and role == "reviewer")
     value = dict(
         status="REQUEST_CHANGES" if reject else "APPROVE",
         summary="review",
@@ -442,6 +448,8 @@ if mode == "structured-steps" and role == "planner":
 if mode == "review-preimage" and role == "reviewer":
     target = run / "00-input/preimages/project/hello.py"
 value = enrich(value, context, target, role, read_wrapper=mode == "wrapped-no-change")
+if mode == "integration-fix" and role == "planner":
+    value["steps"][0]["required_checks"] = ["audit"]
 if mode == "wrapped-no-change":
     value["evidence"][0]["line_end"] = len(target.read_text().splitlines())
 if mode == "two-tasks" and role == "planner" and value["proposed_change_files"]:
@@ -461,6 +469,8 @@ if mode == "two-tasks" and role == "planner" and value["proposed_change_files"]:
         "Jenkins check: ci/shop-tests: passes",
         "Server check: health returns 200",
     ]
+    if any(recipe["id"] == "health" for recipe in context.get("check_catalog", [])):
+        value["steps"][0]["required_checks"] = ["health"]
 if mode == "git-actions":
     for index, job in enumerate(git_jobs):
         output_path = Path(job["output_file"])
@@ -553,6 +563,11 @@ if mode == "context-overflow" and role == "planner" and record["mode"] == "model
     overflow = dict(type="error", error=dict(name="APIError", data=dict(message=message)))
     print(json.dumps(dict(overflow, sessionID="ses1")))
     sys.exit(0)
+if mode == "large-progress-context" and role == "implementer" and record["mode"] == "model":
+    (run / "progress.md").write_text("# Done\n" + "x" * 1900000 + "\n# Remaining\nFinish review\n")
+    overflow = dict(name="APIError", data=dict(message="context_length_exceeded"))
+    print(json.dumps(dict(type="error", error=overflow, sessionID="ses1")))
+    sys.exit(0)
 if mode == "provider-interrupted" and role == "implementer" and not continued:
     target.write_text(target.read_text().replace("return 1", "return 2"))
     gateway = dict(name="APIError", data=dict(message="Retries exhausted", isRetryable=False))
@@ -577,6 +592,20 @@ if mode == "failed-read" and role == "planner":
         status="error", input=dict(filePath=str(root)), error=f"Error: {root} is a directory"
     )
     print(json.dumps(dict(type="tool_use", part=dict(id="failed-read", tool="read", state=failed))))
+if mode.startswith("invalid-tool-") and role == "reviewer":
+    if not continued or mode == "invalid-tool-bad-review":
+        rejected = dict(status="error", input={}, error="Model tried unavailable tool 'invalid'")
+        print(
+            json.dumps(
+                dict(type="tool_use", part=dict(id="invalid", tool="invalid", state=rejected))
+            )
+        )
+    if mode == "invalid-tool-incomplete" and not continued:
+        response = "The review is almost ready."
+    elif mode == "invalid-tool-bad-review":
+        (run / "review.md").write_text("Summary: Done\n")
+    else:
+        response = "Every requirement was checked against current source.\nDONE"
 for event, part in [
     ("text", dict(text=response)),
     ("step_finish", dict(reason="stop", tokens={"input": 10, "output": 2})),

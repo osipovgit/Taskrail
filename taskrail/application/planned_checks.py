@@ -1,6 +1,7 @@
 """Bind reviewed recipe selections to runtime criteria without model-authored commands."""
 
-from taskrail.application import check_specs, check_stage
+from taskrail.application import check_specs, check_stage, local_preflight, step_checks
+from taskrail.core import prompt_texts
 from taskrail.core.schema import require
 
 SPECS = "check_specs"
@@ -12,10 +13,12 @@ IDENTIFIER = "id"
 def validate(plan, config):
     """Unknown recipes and criterion bindings are format errors before plan review."""
     selections = plan.get("check_selections", [])
+    step_checks.validate(step_checks.names(plan), config.get(RECIPES, {}))
     if selections:
-        check_specs.from_selections(
+        selected = check_specs.from_selections(
             selections, config.get(RECIPES, {}), config["task_spec"]["requirements"]
         )
+        local_correction(selected, config)
 
 
 def activate(workflow):
@@ -28,8 +31,20 @@ def activate(workflow):
         workflow.config.get(RECIPES, {}),
         workflow.state["requirements"],
     )
+    local_correction(chosen, workflow.config)
     install(workflow, chosen)
+    step_checks.install(workflow, plan)
+    local_preflight.prepare(workflow)
     check_stage.schedule(workflow)
+
+
+def local_correction(selected, config):
+    """The bounded corrective workflow cannot change remote delivery bindings."""
+    if config.get("phase") == "correction":
+        require(
+            all(spec["phase"] == "check" for spec in selected),
+            prompt_texts.text("correction.local_checks"),
+        )
 
 
 def install(workflow, chosen):

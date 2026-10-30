@@ -1,8 +1,9 @@
 """Per-run "allow all actions": approve operator decisions automatically, with a ledger.
 
-The setting lives in the worker's run state only, so a command cannot turn it on
-by writing a file. The operator turns it off with a marker file, which can only
-remove the permission. It covers local commands and the change limit; SSH actions
+The initial setting lives in trusted task input. Personal card grants are durable
+outside project roots and inherited only through authenticated family links. The
+operator can revoke them; ancestor denials override copied flags. It covers local
+commands and the change limit; SSH actions
 and Jenkins builds keep their separate root-only approval. A command that runs in
 the sandbox needs no decision; its automatic approval is recorded the same way.
 """
@@ -10,7 +11,7 @@ the sandbox needs no decision; its automatic approval is recorded the same way.
 import time
 import uuid
 
-from taskrail.core import approval_marks
+from taskrail.core import approval_family, approval_marks
 from taskrail.core.files import atomic_json
 from taskrail.interactions import approvals, read_only
 
@@ -41,20 +42,28 @@ def decision(run, request, state, scope=None, personal=False):
 
 
 def enabled(run, state):
-    """The run's setting, switched off for good once the operator revoked it."""
-    if approval_marks.revoked(run):
+    """Refresh live family grants; a denial always wins over persisted run state."""
+    granted, denied = approval_family.status(run, state.get("phase"))
+    if denied:
         state[AUTO_APPROVE] = False
+    elif granted:
+        state[AUTO_APPROVE] = True
     return state.get(AUTO_APPROVE) is True
 
 
-def at_start(run, config):
-    """The task header's setting, unless the operator revoked it for this run."""
-    return config.get(AUTO_APPROVE) is True and not approval_marks.revoked(run)
+def at_start(run, config, state=None):
+    """Continue preserves a card grant; task input cannot override later revocation."""
+    saved = state or {}
+    allowed = config.get(AUTO_APPROVE) is True
+    allowed = allowed or saved.get(AUTO_APPROVE) is True
+    effective = dict(saved, auto_approve=allowed)
+    effective.setdefault("phase", config.get("phase"))
+    return enabled(run, effective)
 
 
 def active(run, state):
     """What the UI shows: allowed and not revoked since the worker last saved its state."""
-    return state.get(AUTO_APPROVE) is True and not approval_marks.revoked(run)
+    return enabled(run, dict(state))
 
 
 def revoke(run):

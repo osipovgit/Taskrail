@@ -6,6 +6,7 @@ instead of re-checking finished work. The implementer may write it besides its
 allowed files; it is a note, never evidence, and the review still checks the result.
 """
 
+from taskrail.application import progress_archive
 from taskrail.core import prompt_texts
 from taskrail.infrastructure.agent_sync import atomic_write
 
@@ -18,10 +19,11 @@ def path(run):
 
 
 def prepare(run):
-    """Write the template once; existing progress is continued, never replaced."""
+    """Keep a bounded working note and preserve every oversized version verbatim."""
     target = path(run)
     if not target.exists():
         atomic_write(target, prompt_texts.text("progress.template").encode())
+    progress_archive.bound(run, target)
     return target
 
 
@@ -30,6 +32,25 @@ def grant(access, run):
     target = prepare(run)
     access["writable"] = [*access["writable"], target]
     access["readable"].append(target)
+    access["readable"].extend(progress_archive.paths(run))
+
+
+def overflow(run, role):
+    """Prepare a fresh profile before granting exact access to a newly archived note."""
+    target = path(run)
+    if role != "implementer" or not target.exists():
+        return None
+    if target.stat().st_size <= progress_archive.MAX_BYTES:
+        return None
+    return dict(
+        status="CONTEXT_EXCEEDED",
+        final_text="",
+        errors=["Progress note exceeds its handoff limit; a bounded fresh session is required"],
+        completed=False,
+        tokens={},
+        elapsed_seconds=0,
+        usage_complete=False,
+    )
 
 
 def instructions(run):

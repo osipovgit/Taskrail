@@ -252,6 +252,42 @@ class MaintenanceScriptTests(unittest.TestCase):
                     self.assertNotIn("stop ", calls)
                 self.log.unlink()
 
+    def test_invalid_or_redirected_private_configuration_fails_before_maintenance(self):
+        hosts = self.config / "hosts.json"
+        private = self.home / "private-inventory"
+        private.write_text("{}")
+        for name, content in (("hosts.json", "{"), ("jenkins.json", "[]")):
+            with self.subTest(name=name):
+                path = self.config / name
+                path.write_text(content)
+                failed = self.execute("install-executor.sh", "--client=fixture")
+                self.assertNotEqual(failed.returncode, 0)
+                self.assertFalse(self.log.exists())
+                self.assertEqual((self.package / "previous").read_text(), "previous package")
+                self.assertEqual(path.read_text(), content)
+                path.unlink()
+        hosts.symlink_to(private)
+        failed = self.execute("install-executor.sh", "--client=fixture")
+        self.assertNotEqual(failed.returncode, 0)
+        self.assertFalse(self.log.exists())
+        self.assertEqual(private.read_text(), "{}")
+        self.assertEqual((self.package / "previous").read_text(), "previous package")
+
+    def test_combined_reset_validates_replacement_before_stopping_or_deleting(self):
+        (self.release / "deploy/executor-service").unlink()
+        failed = self.execute("reset-executor.sh", f"--replacement={self.release}")
+        self.assertNotEqual(failed.returncode, 0)
+        self.assertEqual((self.package / "previous").read_text(), "previous package")
+        self.assertNotIn("stop ", self.log.read_text())
+        self.assertEqual(list(self.package.parent.glob(".reset-*")), [])
+
+    def test_combined_reset_check_prepares_without_stopping_or_deleting(self):
+        checked = self.execute("reset-executor.sh", f"--replacement={self.release}", "--check")
+        self.assertEqual(checked.returncode, 0, checked.stderr)
+        self.assertEqual((self.package / "previous").read_text(), "previous package")
+        self.assertNotIn("stop ", self.log.read_text())
+        self.assertEqual(list(self.package.parent.glob(".reset-*")), [])
+
     def test_the_reset_keeps_running_and_uncertain_journals(self):
         ticket = self.state / "ticket.json"
         for status in ("RUNNING", "UNKNOWN"):

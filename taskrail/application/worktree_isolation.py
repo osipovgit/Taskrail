@@ -23,7 +23,8 @@ def isolation_settings(meta, options, run_base):
     mode = meta.get("isolation", AUTO)
     if mode not in MODES:
         raise ValueError("isolation must be in_place, worktree or auto")
-    base = Path(options.get("worktree_base", run_base.parent / "worktrees")).expanduser()
+    default = Path.home() / ".local/share/taskrail-worktrees"
+    base = Path(options.get("worktree_base", default)).expanduser()
     if not base.is_absolute():
         raise ValueError("worktree_base must be an absolute directory")
     isolation = None if mode == AUTO else mode == WORKTREE

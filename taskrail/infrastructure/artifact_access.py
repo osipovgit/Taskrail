@@ -31,9 +31,13 @@ def model_inputs(run, folder):
         run / "00-input/local",
         run / "00-input/checks",
         run / "00-input/source-views",
-        run / "run.json",
     ]
     paths.extend(result_inputs(run))
+    paths.extend(
+        path
+        for path in sorted(run.joinpath("00-input/progress-archive").glob("*.md"))
+        if path.is_file() and not path.is_symlink()
+    )
     optional_files = (
         run / "plan.md",
         run / "00-input/parent-task.md",

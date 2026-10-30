@@ -93,6 +93,11 @@ def run_task(task, settings, **options):
     from taskrail.application.live import execute_task
 
     status = execute_task(task, settings, **options)[1]
+    if status == "TASKS_READY":
+        sys.stderr.write(
+            "The reviewed split is ready. Automatic child tasks and delivery phases require "
+            "the managed Taskrail service using this run directory.\n"
+        )
     return 0 if status in SUCCESS else FAILED
 
 

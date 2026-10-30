@@ -2,6 +2,7 @@
 
 from types import MappingProxyType
 
+from taskrail.web.correction_state import step as correction_step
 from taskrail.web.epic_tasks import FINISHED
 
 RUNNING_STATUSES = frozenset(("STARTING", "RUNNING"))
@@ -30,6 +31,9 @@ GROUPS = MappingProxyType(
         "needs_you": ATTENTION,
         "integrating": RUNNING,
         "integration_failed": ATTENTION,
+        "correcting": RUNNING,
+        "corrected": RUNNING,
+        "correction_failed": ATTENTION,
         "validating": RUNNING,
         "validation_failed": ATTENTION,
         "approval": ATTENTION,
@@ -49,7 +53,11 @@ def step(delivery):
     code = delivery["implementation"]
     if code != DONE:
         return "implementing" if code == RUNNING else "needs_you"
-    validation = phase_step(delivery, INTEGRATION) or phase_step(delivery, VALIDATION)
+    validation = (
+        correction_step(delivery)
+        or phase_step(delivery, INTEGRATION)
+        or phase_step(delivery, VALIDATION)
+    )
     if validation:
         return validation
     if not delivery["confirmed"]:

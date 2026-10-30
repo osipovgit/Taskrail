@@ -79,9 +79,11 @@ class DeliveryApprovalTests(unittest.TestCase):
         return run
 
     def family(self):
-        # Phase metadata exercises the same membership route as split task contracts.
-        for name in ("old", "current", "phase"):
-            self.make_run(name, phase="validation", check_parent="parent")
+        for name in ("old", "current"):
+            self.make_run(
+                name, phase="task", assigned_contract=dict(parent_run="parent", task_id="S-1")
+            )
+        self.make_run("phase", phase="validation", check_parent="parent")
         self.make_run("unrelated")
         record = dict(
             auto_approve=True,
@@ -151,6 +153,8 @@ class DeliveryApprovalTests(unittest.TestCase):
 
     def test_delayed_allow_all_answer_cannot_clear_a_newer_revoke(self):
         self.family()
+        record = delivery_record.read(self.parent)
+        atomic_json(self.parent / "epic.json", dict(record, auto_approve=False))
         run = self.runs / "current"
         state = dict(auto_approve=False)
         answer = dict(id="current", ticket="t", decision="allow", alternative="", allow_all=True)

@@ -26,6 +26,7 @@ The local entry point is `make check`. CI uses its component targets so the Pyth
 | Python and UI formatting | `make format-check` | Quality / Lint and formatting |
 | Python regressions | `make test-python` | Tests / Python 3.10–3.14 |
 | UI regressions | `make test-ui` | Tests / UI |
+| Required Linux sandbox | `TASKRAIL_REQUIRE_SANDBOX=1 .venv/bin/python -m unittest discover -s tests -p 'test_sandbox*.py'` | Security / Required Linux sandbox |
 | CLI permission compatibility | `taskrail init`, then `taskrail check` in disposable settings | Compatibility / opencode 1.19.3 |
 | Static security analysis | GitHub CodeQL | Security / Python and JavaScript |
 
@@ -44,6 +45,15 @@ CLI transports to check inherited permissions, configured checks, child commits,
 restart/Continue and combined integration review. Evidence tests distinguish
 attempts and session IDs and reject unsent or omitted source deliveries. These
 tests require no model provider, production project or remote execution service.
+
+Integration correction regressions use real disposable Git worktrees and scripted
+model output to verify fresh planning, independent checks/review, commit receipts,
+combined acceptance, inherited gates, bounded retries and stopped-writer barriers.
+
+The dedicated Linux sandbox job requires usable bubblewrap and fails if isolation
+cannot run. It exercises real credential masking, filesystem and network boundaries,
+custom local tool installations and the approval fallback. Other environments can
+skip these OS-specific cases; that cannot satisfy the required sandbox job.
 
 ## Scenario corpus
 

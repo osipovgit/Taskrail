@@ -126,7 +126,9 @@ class PlannedRuntimeTests(unittest.TestCase):
         review = result_validation.validate("DONE", self.context(plan))
         self.assertEqual(review["status"], "APPROVE")
         state = dict(requirements=self.requirements, status="TASKS_READY", plan_review=review)
-        parent = SimpleNamespace(config=self.config, state=state, flow=dict(plan=plan, allowed=[]))
+        parent = SimpleNamespace(
+            run=self.run, config=self.config, state=state, flow=dict(plan=plan, allowed=[])
+        )
         planned_checks.activate(parent)
         inherited = task_lineage.for_step(self.requirements, plan["steps"][0])
         specs = planned_checks.inherit(state, inherited)
@@ -143,6 +145,8 @@ class PlannedRuntimeTests(unittest.TestCase):
         child = self.base / "child"
         folder = child / "01-check"
         folder.mkdir(parents=True)
+        (child / "00-input").mkdir()
+        (child / "00-input/task.md").write_text("Verify the selected local check.\n")
         state = dict(
             roots={"project": str(self.root)}, requirements=requirements, auto_approve=True
         )

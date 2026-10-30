@@ -141,7 +141,7 @@ class EvidenceAudienceTests(unittest.TestCase):
             launch=dict(prompt=prompt),
             context=dict(session_id="expected-session"),
             environment=dict(run=self.run),
-            active=(self.folder, {}),
+            active=(self.folder, dict(role="reviewer")),
         )
         for status in ("OK", "PROCESS_ERROR", "TIMEOUT"):
             with self.subTest(status=status):

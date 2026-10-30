@@ -79,6 +79,18 @@ async function main() {
   function all(node) {
     return [node, ...node.children.flatMap(all)];
   }
+  const activityLog = all(card).find((node) => node.className === 'activity-log');
+  const closeLog = all(activityLog).find((node) => node.textContent === 'Close log');
+  activityLog.open = true;
+  let prevented = false;
+  closeLog.onclick({
+    preventDefault: () => {
+      prevented = true;
+    },
+    stopPropagation: () => {},
+  });
+  assert.equal(activityLog.open, false);
+  assert.equal(prevented, true);
   const header = all(card).find((n) => n.className === 'stage-header');
   assert.equal(header.children[0].textContent, '05 · Result review');
   assert.equal(header.children[1].className, 'stage-meta muted');
@@ -441,6 +453,11 @@ async function main() {
   // A started task opens its run inside the card; earlier attempts collapse into one line.
   picked.length = 0;
   const opened = deliverySection(delivery, actions('child-1', { id: 'child-1' }));
+  const panelHeading = all(opened).find((node) => node.className === 'graph-panel-head');
+  assert.deepEqual(
+    panelHeading.children.map((node) => node.tagName),
+    ['h4', 'button'],
+  );
   assert.deepEqual(embedded, ['child-1']);
   const attempts = all(opened).find((n) => n.className === 'attempts');
   assert.equal(attempts.children[0].textContent, '1 earlier attempt · #1 Invalid result');
@@ -472,6 +489,67 @@ async function main() {
   assert.ok(all(blockedDelivery).some((n) => n.textContent === 'Integration review'));
   assert.ok(all(blockedDelivery).some((n) => n.textContent === 'Child contract is too large'));
   assert.ok(!all(blockedDelivery).some((n) => n.textContent === 'Confirm changes'));
+  const correctedDelivery = {
+    ...delivery,
+    step: 'correcting',
+    checks: { jenkins: [], server: [] },
+    phases: { integration: { run: 'rejected-2', status: 'CHANGES_REQUESTED' } },
+    corrections: [
+      {
+        id: 'C1',
+        title: 'Integration correction 1',
+        run: 'fix-1',
+        review: 'rejected-1',
+        status: 'READY_FOR_REVIEW',
+      },
+      {
+        id: 'C2',
+        title: 'Integration correction 2',
+        run: 'fix-2',
+        review: 'rejected-2',
+        status: 'WAITING_APPROVAL',
+      },
+    ],
+    corrections_remaining: 1,
+  };
+  const correctedLayout = graph.graphLayout(correctedDelivery);
+  assert.deepEqual(
+    correctedLayout.nodes.map((node) => node.id),
+    ['S-1', 'S-2', 'review:fix-1', 'correction:fix-1', 'review:fix-2', 'correction:fix-2'],
+  );
+  assert.deepEqual(correctedLayout.edges.slice(1), [
+    ['S-2', 'review:fix-1'],
+    ['review:fix-1', 'correction:fix-1'],
+    ['correction:fix-1', 'review:fix-2'],
+    ['review:fix-2', 'correction:fix-2'],
+  ]);
+  assert.ok(
+    correctedLayout.nodes.every(
+      (node) => Number.isFinite(node.row) && Number.isFinite(node.column),
+    ),
+  );
+  const correctionPanel = deliverySection(correctedDelivery, actions('fix-2', { id: 'fix-2' }));
+  const correctionNodes = all(correctionPanel).filter((node) =>
+    node.className?.startsWith('graph-node'),
+  );
+  assert.ok(
+    correctionNodes.every((node) => !/NaN|undefined/.test(node.style.left + node.style.top)),
+  );
+  assert.ok(all(correctionPanel).some((node) => node.textContent === 'Corrections remaining: 1'));
+  const acceptedLayout = graph.graphLayout({
+    ...correctedDelivery,
+    step: 'review',
+    phases: { integration: { run: 'accepted-3', status: 'NO_CHANGES_REQUIRED' } },
+  });
+  assert.deepEqual(acceptedLayout.edges.at(-1), ['correction:fix-2', 'integration']);
+  assert.equal(acceptedLayout.nodes.filter((node) => node.id === 'integration').length, 1);
+  const failedCorrection = deliverySection(
+    { ...correctedDelivery, step: 'correction_failed' },
+    actions('fix-2'),
+  );
+  assert.ok(
+    !all(failedCorrection).some((node) => node.textContent === 'Repeat integration review'),
+  );
   console.log('Delivery graph, in-card runs and collapsed attempts passed.');
 
   // A budget-paused run exposes both continuation choices and reversible deletion.

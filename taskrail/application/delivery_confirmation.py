@@ -3,9 +3,9 @@
 import json
 from pathlib import Path
 
-from taskrail.application import reviewed_artifacts
+from taskrail.application import correction_history, reviewed_artifacts
 from taskrail.application.source_guard import SourceGuard
-from taskrail.core import delivery_record
+from taskrail.core import corrections, delivery_record
 from taskrail.core.files import digest
 from taskrail.core.schema import require
 
@@ -35,10 +35,13 @@ def guard(snapshot):
 def links(epic):
     """Server attempts may change; the accepted tasks and prior checks may not."""
     phases = epic.get("phases", {})
-    return dict(
+    accepted = dict(
         tasks=epic.get("tasks", {}),
         phases={name: phases[name] for name in ("integration", "validation") if name in phases},
     )
+    if corrections.records(epic):
+        accepted[corrections.KEY] = [entry["run"] for entry in corrections.records(epic)]
+    return accepted
 
 
 def evidence(run, roots):
@@ -58,6 +61,7 @@ def evidence(run, roots):
 
 def capture(run, reviewed, epic):
     """Freeze the reviewed checkpoint and every accepted completion used by this delivery."""
+    correction_history.completed(run)
     boundary = review_guard(reviewed)
     roots = {alias: str(root) for alias, root in boundary.roots.items()}
     return dict(
@@ -72,6 +76,7 @@ def capture(run, reviewed, epic):
 def completed_records(run, accepted, roots):
     """Include each linked successful task and prior check once."""
     names = {run.name, *accepted["tasks"].values()}
+    names.update(accepted.get(corrections.KEY, []))
     names.update(
         name for name in accepted["phases"].values() if delivery_record.RUN_NAME.fullmatch(name)
     )

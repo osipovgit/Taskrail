@@ -1,14 +1,21 @@
-"""Execute fixed phase recipes before independent interpretation, without model polling."""
+"""Preflight local checks and execute fixed remote phase recipes before model work."""
 
 from taskrail.application import (
     check_remote,
     check_results,
     check_specs,
+    local_preflight,
     reviewed_plan,
     reviewed_start,
 )
 from taskrail.application.artifacts import new_stage
 from taskrail.executor import protocol
+
+
+def prepare(workflow):
+    """Explain local capabilities before running a remote batch or starting a model."""
+    local_preflight.prepare(workflow)
+    run_configured(workflow)
 
 
 def run_configured(workflow):

@@ -101,15 +101,15 @@ class TaskBranchRuleTests(unittest.TestCase):
 
     def test_branch_rules_reach_the_writer_and_its_reviewer_only(self):
         config = {task_branch.KEY: True}
-        self.assertIn("own Git branch", mode_rules.render(config, "implementer"))
+        self.assertIn("planned files guide the work", mode_rules.render(config, "implementer"))
         self.assertIn("beyond the plan", mode_rules.render(config, "reviewer"))
-        self.assertNotIn("own Git branch", mode_rules.render({}, "implementer"))
+        self.assertNotIn("planned files guide the work", mode_rules.render({}, "implementer"))
         integration = dict(config, phase="integration")
         self.assertNotIn("beyond the plan", mode_rules.render(integration, "reviewer"))
         child = dict(config, phase="task", assigned_contract=dict(task_id="T2"))
         rule = mode_rules.render(child, "implementer")
-        self.assertIn("may already contain parts of yours", rule)
-        self.assertIn("Do not split hunks mechanically", rule)
+        self.assertIn("finish only your missing deliverable", rule)
+        self.assertIn("report the exact dependency as a gap", rule)
 
     def test_a_task_brief_names_the_later_tasks_as_not_to_do(self):
         steps = [
@@ -117,11 +117,14 @@ class TaskBranchRuleTests(unittest.TestCase):
             dict(id="T2", title="Command", files=["project/cli.py"], depends_on=["T1"]),
             dict(id="T3", title="Docs", files=["project/README.md"], depends_on=["T2"]),
         ]
+        steps[2]["done_when"] = ["README includes command usage"]
         parent = dict(run=Path("/runs/parent"), plan=dict(steps=steps), epic={})
         brief = child_brief.context(parent, steps[1])
         earlier, later = brief.split(prompt_texts.text("child.later"))
         self.assertIn("- T1: Parser", earlier)
-        self.assertEqual(later.strip(), "- T3: Docs. Files: project/README.md")
+        self.assertIn("T3: Docs", later)
+        self.assertIn("README includes command usage", later)
+        self.assertIn("project/README.md", later)
 
 
 if __name__ == "__main__":

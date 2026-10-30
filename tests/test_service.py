@@ -208,7 +208,8 @@ class ServiceTests(unittest.TestCase):
         options = json.loads(config.read_text())
         self.assertEqual(options["timeout_seconds"], 3600)
         agents = Path(options["agent_source"])
-        (agents / "planner.md").write_text("User-owned instructions")
+        custom = "Instruction contract: 1.\nUser-owned instructions"
+        (agents / "planner.md").write_text(custom)
         options["max_repairs"] = 1
         config.write_text(json.dumps(options))
         before = config.read_bytes()
@@ -227,9 +228,10 @@ class ServiceTests(unittest.TestCase):
         self.assertEqual(boot.returncode, 0, boot.stderr)
         self.assertIn("enable-linger ", (self.home / "loginctl.log").read_text())
         self.assertNotEqual(first, current.resolve())
-        self.assertTrue(first.is_dir())
+        self.assertFalse(first.is_dir())
+        self.assertEqual(len(list((current.parent / "releases").iterdir())), 2)
         self.assertEqual(config.read_bytes(), before)
-        self.assertEqual((agents / "planner.md").read_text(), "User-owned instructions")
+        self.assertEqual((agents / "planner.md").read_text(), custom)
         self.assertEqual((run / "run.json").read_text(), "{}")
         command = subprocess.run(
             [str(self.home / ".local/bin/taskrail"), "status", str(run)],
@@ -243,7 +245,7 @@ class ServiceTests(unittest.TestCase):
         self.assertEqual(
             json.loads(config.read_text())["agent_source"], str(current / "taskrail/agents")
         )
-        self.assertEqual((agents / "planner.md").read_text(), "User-owned instructions")
+        self.assertEqual((agents / "planner.md").read_text(), custom)
         self.assertIn(
             before, [path.read_bytes() for path in config.parent.glob("settings.json.backup-*")]
         )

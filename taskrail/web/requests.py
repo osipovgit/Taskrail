@@ -38,7 +38,7 @@ CONTEXT = "context"
 # The run whose confirmed change a server check run checks.
 CHANGE = "confirmed_change"
 # A split's task run, Jenkins validation and the server checks after confirmation.
-PHASES = frozenset(("", TASK, "integration", "validation", "server"))
+PHASES = frozenset(("", TASK, "integration", "validation", "server", "correction"))
 CHECK_PHASES = frozenset(("integration", "validation", "server"))
 TASK_ACTIONS = frozenset(("epic_pause", "epic_unpause"))
 RECORDED = (
@@ -52,6 +52,7 @@ RECORDED = (
             "epic_auto_off",
             "confirm",
             "integration_review",
+            "integration_correct",
         )
     )
     | TASK_ACTIONS
@@ -212,7 +213,7 @@ def check_assignment(delivery):
     """A child's claimed lineage is validated against the real parent before execution."""
     contract = delivery[ASSIGNED_CONTRACT]
     if contract is None:
-        allowed = not delivery[ASSIGNED_REQUIREMENTS] or delivery[PHASE] in CHECK_PHASES
+        allowed = not delivery[ASSIGNED_REQUIREMENTS] or delivery[PHASE] in check_parents.PHASES
         schema.require(allowed, "Assigned requirements need a parent contract")
         return
     valid = delivery[PHASE] == TASK and isinstance(contract, dict)

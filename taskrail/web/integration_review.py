@@ -4,6 +4,7 @@ import contextlib
 import json
 
 from taskrail.application import (
+    correction_checks,
     delivery_confirmation,
     outside_changes,
     run_locks,
@@ -11,7 +12,14 @@ from taskrail.application import (
 )
 from taskrail.core import delivery_record
 from taskrail.core.files import digest
-from taskrail.web import epic_tasks, history, parent_context, split_approvals, task_form
+from taskrail.web import (
+    correction_state,
+    epic_tasks,
+    history,
+    parent_context,
+    split_approvals,
+    task_form,
+)
 from taskrail.web.run_activity import BusyError
 
 NAME = "integration"
@@ -36,7 +44,10 @@ def payload(run, state):
     combined diff of all task runs against the files before the split.
     """
     draft = history.task_draft(run)
-    entries = epic_tasks.tasks(run, state)
+    entries = [
+        *epic_tasks.tasks(run, state),
+        *correction_state.entries(run, delivery_record.read(run)),
+    ]
     fields = {key: draft.get(key, "") for key in task_form.FIELDS}
     fields["title"] = "{} · Integration review".format(draft["title"])[:TITLE_LIMIT]
     return dict(
@@ -47,7 +58,7 @@ def payload(run, state):
         auto_approve=split_approvals.allows_all(run, draft),
         split_context=changes_by_task(entries),
         parent_context=parent_context.snapshot(run, entries),
-        check_specs=[spec for spec in state.get("check_specs", []) if spec["phase"] == "check"],
+        check_specs=correction_checks.selected(run, state),
         assigned_requirements=state.get("requirements", []),
         check_parent=run.name,
     )
@@ -72,7 +83,8 @@ def changes_by_task(entries):
 def invalidate(delivery, epic):
     """A changed child completion record cannot retain an earlier overall approval."""
     recorded = delivery["phases"].get(NAME)
-    current = signature(delivery.get("tasks", []))
+    entries = delivery.get("tasks", []) + delivery.get("corrections", [])
+    current = signature(entries)
     if recorded and epic.get(SEAL) != current:
         recorded.update(status="STALE", summary="Child results changed; repeat integration review.")
 

@@ -16,7 +16,7 @@ from taskrail.git import process
 from taskrail.web import epic_launch, epic_tasks, integration_review, submissions
 
 
-class IsolatedSplitTests(ReviewedFixture, unittest.TestCase):
+class IsolatedSplitFixture(ReviewedFixture):
     def repository(self):
         (self.root / ".git/HEAD").unlink()
         (self.root / ".git").rmdir()
@@ -41,6 +41,7 @@ class IsolatedSplitTests(ReviewedFixture, unittest.TestCase):
                 )
             ],
         )
+        self.settings_extra.update(getattr(self, "split_settings", {}))
         if self.provider == "fake_opencode_two.py":
             self.settings_extra["opencode_version"] = "2.x"
         fields = dict(
@@ -119,6 +120,8 @@ class IsolatedSplitTests(ReviewedFixture, unittest.TestCase):
         commits = process.checked(worktree, ["rev-list", "--count", record["base"] + "..HEAD"])
         self.assertEqual(commits.strip(), "2")
 
+
+class IsolatedSplitTests(IsolatedSplitFixture, unittest.TestCase):
     def test_one_x_children_commit_and_integration_repeats_source_mapped_checks(self):
         self.provider = "fake_live.py"
         self.bound_checks = True

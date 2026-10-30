@@ -2,12 +2,16 @@
 
 import unittest
 from types import SimpleNamespace
+from unittest.mock import patch
 
 from taskrail.application import planned_checks, transitions
 
 
 class PlannedCheckTests(unittest.TestCase):
     def setUp(self):
+        preflight = patch.object(planned_checks.local_preflight, "prepare")
+        preflight.start()
+        self.addCleanup(preflight.stop)
         command = dict(cwd="/project", argv=["python3", "--version"], timeout_seconds=5)
         self.recipe = dict(kind="local", phase="check", adapter="exit-code", request=command)
         self.requirements = [dict(id="runtime-1", kind="runtime", text="Tests pass")]
