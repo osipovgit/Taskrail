@@ -80,6 +80,31 @@ exhaustion is explicit, never silently truncated. Normal pushes are explicit, no
 non-forced remote-tracking refspecs. No server-side hooks or remote state changes
 are claimed to have been tested by local executor tests.
 
+## Automatic task commits
+
+After independent approval, an owned isolated task stages and commits through the
+same controlled executor. Ownership comes from the run's sealed worktree record
+and its current repository, path and branch identity; a `taskrail/` branch name
+alone grants nothing. Source files must still match the reviewed snapshot.
+Unrelated staged entries and pre-existing user edits are rejected before staging.
+Filters and hooks stay disabled, and a successful receipt verifies the committed
+paths, bytes, executable modes and HEAD before the run can finish successfully.
+
+Each changed repository has its own commit receipt. Automatic finalization adds
+at most one new commit per root; explicit task-requested Git operations may already
+have created commits, which are verified and reused when applicable. Finalization records a
+pending outcome before writing. A failed commit leaves the run `COMMIT_FAILED`
+and stops delivery; a successful commit in an earlier root remains recorded.
+Neither changes nor commits are rolled back. An interrupted or unverified write
+remains unknown in the Git journal and prevents a split retry from bypassing it.
+An explicit restart after a known partial failure inherits authenticated receipts:
+it verifies and reuses already committed roots and unchanged owned index entries.
+It never repeats an uncertain write. Inspect and reconcile an unknown outcome
+before starting new work. An isolated task
+with no remaining diff does not create an empty commit. Automatic commits use the
+configured Git identity, with `Taskrail <taskrail@localhost>` as the fallback when
+no email is configured; explicit model Git requests still require configuration.
+
 ## Artifacts and updates
 
 - `git-execution.json`: exact requests, effective arguments, statuses and output paths.

@@ -4,7 +4,13 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from taskrail.application import evidence, result_validation, session_budget, source_packet
+from taskrail.application import (
+    evidence,
+    evidence_delivery,
+    result_validation,
+    session_budget,
+    source_packet,
+)
 from taskrail.core.files import atomic_json
 from taskrail.interactions import transcripts
 
@@ -27,6 +33,7 @@ class DecisionContractTests(unittest.TestCase):
             roots=dict(repo=self.root),
             run=self.run,
             folder=self.folder,
+            session_id="review-session",
             changed=[str(self.path)],
             requirements=[dict(id="R-stable", kind="task", text="Return two")],
             plan=dict(steps=[dict(id="T1")], proposed_change_files=[str(self.path)]),
@@ -39,7 +46,8 @@ class DecisionContractTests(unittest.TestCase):
             input=dict(filePath=str(self.path)),
             output="1: value = 2\n",
             source_sha256=evidence.fingerprint(self.path),
-            source_event="prior/events.jsonl",
+            source_event=str(self.folder / "events.jsonl"),
+            session_id="review-session",
             event_line=1,
         )
         atomic_json(self.run / evidence.OBSERVATIONS, dict(records=[record], omitted=0))
@@ -128,6 +136,12 @@ class DecisionContractTests(unittest.TestCase):
         request = dict(cwd=str(self.root), argv=["ansible-lint", "roles/"], reason="Verify")
         outcome = dict(status="SUCCEEDED", exit_code=0, stdout="0 failure(s), 2 warning(s).")
         delivered = transcripts.local_snapshot(self.run, self.folder, request, outcome)
+        evidence_delivery.confirm(
+            self.run,
+            self.folder,
+            delivered,
+            dict(status="OK", completed=True, sessions=["review-session"]),
+        )
         snapshot = self.run / "00-input/local" / f"{self.folder.name}-0.json"
         with self.assertRaisesRegex(ValueError, "line 5"):
             self.review(f"- R1: done: {snapshot}: ansible-lint exit_code 0")

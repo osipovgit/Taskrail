@@ -677,6 +677,7 @@ class GitExecutorTests(unittest.TestCase):
             json.dumps(dict(expected=self.env["expected"], git_before=self.env["git_before"]))
         )
         launch = dict(prompt=folder / "request.md")
+        launch["prompt"].write_text("Initial task")
         requests_seen = []
         payloads = [
             self.payload(["log", "-3", "--format=fuller", "--stat"]),
@@ -693,6 +694,7 @@ class GitExecutorTests(unittest.TestCase):
             )
             return dict(
                 status="OK",
+                completed=True,
                 final_text=json.dumps(payloads[len(requests_seen) - 1]),
                 sessions=["ses_one"],
                 tokens=dict(total=10),

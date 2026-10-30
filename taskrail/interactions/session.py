@@ -1,6 +1,6 @@
 """Continue executor turns through an explicit opencode session inside one stage."""
 
-from taskrail.application import budgets, plan_write, response_format
+from taskrail.application import budgets, evidence_delivery, plan_write, response_format
 from taskrail.application.artifacts import save_run
 from taskrail.core import control
 from taskrail.core.files import atomic_json, changed
@@ -16,6 +16,7 @@ MAX_RESULT_CORRECTIONS = 3
 ROLE = "role"
 RESULT_CORRECTIONS = "result_corrections"
 VALIDATION_ERRORS = "validation_errors"
+RUN = "run"
 
 
 class StageSession:
@@ -40,7 +41,7 @@ class StageSession:
         allow = (runtime.get("env_allow", ()), runtime.get("autocompact", False))
         startup = dict(
             timeout=self.clock.remaining(),
-            check=lambda: control.check_stop(self.environment["run"]),
+            check=lambda: control.check_stop(self.environment[RUN]),
         )
         try:
             with opencode_api.stage_server(
@@ -87,7 +88,7 @@ class StageSession:
                 attachment=self.context["attachment"],
             ),
         )
-        outcome = run_agent(options)
+        outcome = received_turn(self, options)
         self.context["turns"] += 1
         totals = self.context[TOKENS]
         for key, count in outcome.get(TOKENS, {}).items():
@@ -132,7 +133,7 @@ class StageSession:
             paused_seconds=self.clock.paused,
         )
         atomic_json(folder / "stage.json", record)
-        save_run(self.environment["run"], self.state)
+        save_run(self.environment[RUN], self.state)
         return True
 
     def finished(self, outcome):
@@ -144,6 +145,19 @@ class StageSession:
         record.update(session_turns=self.context["turns"], paused_seconds=self.clock.paused)
         record[RESULT_CORRECTIONS] = self.context[RESULT_CORRECTIONS]
         return outcome
+
+
+def received_turn(session, options):
+    """Keep prepared evidence pending until its receiving session completed the turn."""
+    prompt = session.launch["prompt"].read_text()
+    outcome = run_agent(options)
+    expected = session.context[SESSION_ID]
+    unexpected = expected and outcome.get("sessions") != [expected]
+    if unexpected and outcome["status"] == "OK":
+        outcome.update(status="SESSION_ERROR", errors=["Unexpected opencode session identity"])
+    run = session.environment[RUN]
+    evidence_delivery.confirm(run, session.active[0], prompt, outcome, expected)
+    return outcome
 
 
 def result_feedback(session, outcome):

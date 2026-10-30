@@ -58,12 +58,13 @@ source checks, checkpoints and file operations:
 |---|---|
 | `workflow_engine.py` | Lock, stage loop, transitions and write effects |
 | `run_setup.py`, `run_state.py`, `task_config.py`, `task_roots.py` | Run directory, frozen inputs and validated configuration |
-| `worktree_isolation.py`, `worktree_default.py` | Linked Git worktree per root and run, by default for code changes in repositories |
+| `worktree_isolation.py`, `worktree_default.py`, `execution_context.py` | Linked Git worktrees and sealed execution context inherited by authenticated children |
 | `workflow_start.py`, `workflow_finish.py` | Fresh start or checkpoint continuation; interruption and the final report |
 | `workflow_state.py`, `source_guard.py`, `source_ignores.py` | Run state, flow, checkpoints and source/Git integrity; Git-ignored files are not source |
 | `prompts.py`, `policy_sections.py`, `mode_rules.py`, `response_format.py` | The request of a stage from frozen policy sections and catalog texts |
 | `reviewed_start.py`, `reviewed_sources.py`, `outside_changes.py`, `child_brief.py`, `previous_attempt.py` | A split task started from the reviewed plan: attempt chain, changes made outside the tasks, brief and retries |
-| `integration_changes.py`, `inherited_preimages.py` | The combined diff a split's integration review reads |
+| `integration_changes.py`, `inherited_preimages.py` | Original source identities for retried tasks and combined integration diffs |
+| `evidence_delivery.py`, `citation_review.py`, `source_packet.py` | Exact source delivery and citations bound to the receiving attempt and session |
 | `stage_attempts.py`, `attempt_*.py` | One model stage: profile, launch, validation and bounded retries |
 | `check_stage.py`, `builtin_checks.py`, `verify_*.py` | Syntax checks and settings verification commands |
 | `source_tree.py`, `git_state.py`, `planned_paths.py`, `plan_validation.py`, `changes.py` | Fingerprints, path safety, plan checks, preimages and the diff |
@@ -109,9 +110,11 @@ checkpoints keep the approved plan, and an interrupted writer inspects current f
 before it continues.
 
 Child task headers carry the parent's immutable file scope; no nested split can reach
-implementation. On a `taskrail/` branch (`task_branch.py`) the plan's files are the
+implementation. In an authenticated owned worktree (`task_branch.py`) the plan's files are the
 expected scope: changes beyond them are adopted with preimages from the branch's last
-commit and judged by review, and each approved task is committed (`task_commit.py`). The server authenticates the reviewed plan digest,
+commit and judged by review. Approved changes are finalized through the controlled
+Git executor (`task_commit.py`, `git/reviewed_commit.py`); failure cannot become a
+successful task result. The server authenticates the reviewed plan digest,
 requirement lineage and accepted prerequisite results before starting a child directly
 at implementation, and names the files changed outside the split's tasks along the
 attempt chain; a child of an unsealed parent is refused.
@@ -126,6 +129,10 @@ not-yet-created family workers, so an older child cannot retain a stale grant.
 Controlled history writes record the committed source baseline for later staging
 without changing the immutable original preimages. User-staged content and unrelated
 pre-existing source edits never become the run's staging authority.
+The frozen execution context binds source roots to effective worktrees and the
+opencode permission base. Check selection uses that mapping both when deciding
+whether to schedule verification and when executing it, so mandatory commands
+cannot disappear between a parent, child and integration review.
 
 Before the first planning request the server writes `00-input/project-map.md`
 (`application/project_map.py`): an index, every source file of each root with its line

@@ -120,9 +120,10 @@ this correction.
 ## Worktree isolation
 
 A code change runs in worktrees by default: with `"isolation": "auto"` (or no
-`isolation`) when every root is the top level of a Git repository with a commit and
-not already on a `taskrail/` branch, as a task or follow-up of an isolated run is.
-Answers, designs, delivery checks and other roots work in place. With
+`isolation`) when every root is the top level of a Git repository with a commit.
+Authenticated children and browser follow-ups reuse their parent's worktrees;
+a standalone submission does not infer ownership from a branch name. Answers,
+designs, delivery checks and other roots work in place. With
 `"isolation": "worktree"` every root must be such a top level, otherwise the run
 stops. Before planning, the run creates one linked worktree per root from its current
 `HEAD` on a new branch `taskrail/<run>`, under `worktree_base` (default: a
@@ -132,8 +133,15 @@ source checkout and its other branches may change meanwhile without stopping the
 run. Clear **Isolated Git worktree** in the browser form, or pass
 `taskrail submit --in-place`, to edit the roots themselves.
 
-These `taskrail/` branches hold only the run's own work, so a task there is a unit of
-change rather than a list of files:
+The server seals the effective roots, source-to-worktree mapping and permission
+base in `00-input/execution-context.json`. A split child inherits them only after
+the reviewed parent, assignment and source lineage pass authentication. Delivery
+checks also require the parent's exact phase link. Continue restores the run's
+own sealed context; it does not depend on the parent still being present.
+Older isolated runs without a provenance seal require a restart. A branch name
+alone never grants isolated-task permissions or automatic commits.
+
+An authenticated isolated task is a unit of change rather than a list of files:
 
 - The planned files are the expected scope, not a limit. The implementer may change
   any other file of the roots, except Git metadata and protected files, when its task
@@ -141,14 +149,19 @@ change rather than a list of files:
   branch's last commit, appears in the diff, is judged by the reviewer and is listed
   under **Changed beyond the plan** in the report. In place, the plan still limits the
   files.
-- Each approved task becomes one commit on its branch: exactly the files the run
-  changed, without hooks, with the implementer's summary as message and a
-  `Taskrail-Run:` trailer. The report lists each commit; a failed commit is reported
-  and never retried. A split's tasks therefore follow each other as commits, and the
-  next task starts from the previous one.
+- Automatic finalization creates at most one new commit per changed repository,
+  with the implementer's summary and a `Taskrail-Run:` trailer. The controlled
+  executor verifies the reviewed content and refuses unrelated staged or
+  pre-existing user edits. The report lists the verified commits. A failure ends
+  as `COMMIT_FAILED`, keeps any earlier successful root receipts and stops the
+  split; an uncertain write cannot be replayed by restarting its child. See
+  [automatic commits](git-access.md#automatic-task-commits). The next task starts
+  only after successful finalization.
 
-Changes of a run that was not approved stay uncommitted in the worktree. You review
-and merge each branch and finally `git worktree remove` it yourself. A browser
+Without approval, automatic finalization leaves changes uncommitted. Explicit
+task-requested Git operations can already have created commits before review;
+those commits are preserved, never squashed or rolled back automatically. You
+review and merge each branch and finally `git worktree remove` it yourself. A browser
 follow-up continues in the same worktrees; a standalone restart starts from the
 source checkouts in new worktrees. Restarting a reviewed split child keeps the
 parent's effective roots, including its existing worktrees.

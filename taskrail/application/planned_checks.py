@@ -1,6 +1,6 @@
 """Bind reviewed recipe selections to runtime criteria without model-authored commands."""
 
-from taskrail.application import check_specs
+from taskrail.application import check_specs, check_stage
 from taskrail.core.schema import require
 
 SPECS = "check_specs"
@@ -29,17 +29,7 @@ def activate(workflow):
         workflow.state["requirements"],
     )
     install(workflow, chosen)
-    schedule(workflow)
-
-
-def schedule(workflow):
-    """An approved no-change plan must still execute its selected local verification."""
-    specs = workflow.state.get(SPECS, [])
-    local = any(spec["phase"] == "check" for spec in specs)
-    terminal = workflow.state["status"] in {"NO_CHANGES_REQUIRED", "READY_FOR_REVIEW"}
-    if local and terminal and not workflow.flow["allowed"]:
-        workflow.state["status"] = "RUNNING"
-        workflow.flow["stage"] = "check"
+    check_stage.schedule(workflow)
 
 
 def install(workflow, chosen):

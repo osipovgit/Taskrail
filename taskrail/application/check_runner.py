@@ -1,7 +1,6 @@
 """Execute selected local checks without model turns, sandboxed or personally approved."""
 
 from taskrail.application import check_diagnostics, check_results
-from taskrail.application.check_selection import selected as selected
 from taskrail.core import protected_paths
 from taskrail.interactions import approval_policy, local_actions, local_sandbox
 

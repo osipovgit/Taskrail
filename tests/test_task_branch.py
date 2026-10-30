@@ -85,7 +85,8 @@ class TaskBranchRuleTests(unittest.TestCase):
             self.assertFalse(worktree_default.wanted(dict(config, phase="task")))
             self.assertFalse(worktree_default.wanted(dict(config, isolation=False)))
             process.checked(root, ["checkout", "-b", "taskrail/run"])
-            self.assertFalse(worktree_default.wanted(config))
+            self.assertTrue(worktree_default.wanted(config))
+            self.assertFalse(worktree_default.wanted(dict(config, phase="task", isolation=True)))
 
     def test_writable_roots_never_make_git_metadata_writable(self):
         with tempfile.TemporaryDirectory() as directory:

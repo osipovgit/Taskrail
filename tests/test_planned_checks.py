@@ -8,11 +8,16 @@ from taskrail.application import planned_checks, transitions
 
 class PlannedCheckTests(unittest.TestCase):
     def setUp(self):
-        self.recipe = dict(kind="local", phase="check", adapter="exit-code", request={})
+        command = dict(cwd="/project", argv=["python3", "--version"], timeout_seconds=5)
+        self.recipe = dict(kind="local", phase="check", adapter="exit-code", request=command)
         self.requirements = [dict(id="runtime-1", kind="runtime", text="Tests pass")]
         self.selection = dict(recipe_id="tests", criteria=["runtime-1"])
         self.workflow = SimpleNamespace(
-            config=dict(check_recipes={"tests": self.recipe}, check_specs=[]),
+            config=dict(
+                check_recipes={"tests": self.recipe},
+                check_specs=[],
+                roots={"project": "/project"},
+            ),
             state=dict(
                 requirements=self.requirements,
                 status="NO_CHANGES_REQUIRED",

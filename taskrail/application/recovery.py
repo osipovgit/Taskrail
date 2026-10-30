@@ -92,6 +92,7 @@ def evidence_record(event, event_line, key, kept):
     output = state[OUTPUT]
     return dict(
         event_line=event_line,
+        session_id=event.get("sessionID"),
         call_id=key,
         tool=part["tool"],
         input=state.get("input", {}),

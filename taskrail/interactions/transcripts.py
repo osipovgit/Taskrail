@@ -2,7 +2,7 @@
 
 import json
 
-from taskrail.application import evidence
+from taskrail.application import evidence, evidence_delivery
 from taskrail.core import prompt_texts
 from taskrail.core.files import atomic_json
 from taskrail.interactions import output_digest, output_preview
@@ -21,8 +21,7 @@ def delivered(run, folder, path, text, outputs=None):
     visible = text[: INLINE_WITH_FILES if outputs else INLINE_LIMIT]
     clipped = len(visible) < len(text)
     line_count = len(visible.splitlines())
-    index = evidence.load_index(run, evidence.OBSERVATIONS)
-    index["records"].append(
+    records = [
         dict(
             tool="executor",
             input=dict(filePath=str(path), offset=1, limit=line_count),
@@ -33,8 +32,14 @@ def delivered(run, folder, path, text, outputs=None):
             output_clipped=clipped,
             upstream_truncated=False,
         )
-    )
-    atomic_json(run / evidence.OBSERVATIONS, index)
+    ]
+    text = snapshot_text(path, visible, clipped, outputs)
+    evidence_delivery.queue(folder, text, records)
+    return text
+
+
+def snapshot_text(path, visible, clipped, outputs):
+    """The bounded snapshot and exact instructions carried by its delivery."""
     notice = "Complete output."
     if clipped:
         notice = "Output clipped; read omitted lines from the full text files: {}".format(

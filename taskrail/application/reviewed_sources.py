@@ -14,6 +14,7 @@ done there or may need to change those files too.
 
 from taskrail.application import outside_changes, reviewed_artifacts
 from taskrail.core import delivery_record, schema, task_graph
+from taskrail.git import reviewed_commit
 
 FINISHED = frozenset(("READY_FOR_REVIEW", "NO_CHANGES_REQUIRED"))
 ACTIVE = frozenset(("STARTING", "RUNNING"))
@@ -78,6 +79,7 @@ def attempt(parent, name, checkpoint, ran, outside):
     running; what changed between the chain and its start was changed outside the tasks.
     """
     child = reviewed_artifacts.run_path(parent["run"].parent, name)
+    reviewed_commit.require_settled(child)
     if not child.joinpath(CHECKPOINT).is_file():
         return checkpoint
     state = reviewed_artifacts.document(child, "run.json")

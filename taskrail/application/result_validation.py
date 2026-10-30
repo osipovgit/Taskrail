@@ -6,7 +6,7 @@ from taskrail.application import (
     check_planning,
     citation_review,
     declared_block,
-    evidence,
+    evidence_delivery,
     execution_evidence,
     plan_file,
     plan_result,
@@ -56,7 +56,7 @@ def checked(payload, context):
     """Coverage, evidence and role checks of a decoded result."""
     atomic_json(context["folder"] / "response-object.json", payload)
     run = context["run"]
-    records = [record for record in evidence.validation_records(run) if evidence.current(record)]
+    records = evidence_delivery.session_records(context)
     if context["stage"] == plan_result.PLANNER and declared_block.present(payload):
         payload = declared_block.stop_result(payload, context)
     payload = review_result.settled(payload, records, context)
@@ -115,9 +115,7 @@ def validate_role(payload, context):
         for filename in payload["files_read"] + payload["proposed_change_files"]:
             approved_path(filename, context["roots"], PLAN_FILES)
         observed = {
-            record["input"]["filePath"]
-            for record in evidence.validation_records(context["run"])
-            if evidence.current(record)
+            record["input"]["filePath"] for record in evidence_delivery.session_records(context)
         }
         schema.require(set(payload["files_read"]) <= observed, "Unobserved files_read claim")
     elif context[ROLE] == IMPLEMENTER:
@@ -130,7 +128,10 @@ def validate_review(payload, plan):
     """No-change approval needs completed static evidence, not future actions."""
     if payload["status"] == "APPROVE" and not plan["proposed_change_files"]:
         schema.require(
-            all(entry["outcome"] in {"satisfied", "deferred"} for entry in payload["coverage"]),
+            all(
+                entry["outcome"] in {"satisfied", "deferred", "not_applicable"}
+                for entry in payload["coverage"]
+            ),
             "No-change approval cannot contain future work",
         )
     observed = {claim["path"] for claim in payload[EVIDENCE]}

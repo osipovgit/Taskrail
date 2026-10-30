@@ -386,6 +386,8 @@ class InteractionTests(unittest.TestCase):
                     (self.run / "local-actions.json").unlink(missing_ok=True)
                     (self.run / "request-counts.json").unlink(missing_ok=True)
                     (folder / "events.jsonl").touch()
+                    prompt = folder / "request.md"
+                    prompt.write_text("Initial task")
                     record = dict(
                         stage=role, role=role, directory=folder.name, budget=dict(timeout=60)
                     )
@@ -407,6 +409,7 @@ class InteractionTests(unittest.TestCase):
                         text = json.dumps(self.request([sys.executable, "--version"]))
                         return dict(
                             status="OK",
+                            completed=True,
                             sessions=["same-session"],
                             tokens=dict(total=5),
                             final_text=("Now let me run ansible-lint.\n\n" + text)
@@ -439,7 +442,9 @@ class InteractionTests(unittest.TestCase):
                                 return_value=dict(status="SUCCEEDED", stdout="Python", exit_code=0),
                             )
                         )
-                        session = StageSession((folder, record), state, environment, {})
+                        session = StageSession(
+                            (folder, record), state, environment, dict(prompt=prompt)
+                        )
                         outcome = session.run()
                     self.assertEqual(outcome["status"], "OK")
                     self.assertEqual(outcome["elapsed_seconds"], 4)
@@ -460,6 +465,8 @@ class InteractionTests(unittest.TestCase):
                 folder = self.run / f"missing-{installed}"
                 folder.mkdir()
                 (folder / "events.jsonl").touch()
+                prompt = folder / "request.md"
+                prompt.write_text("Initial task")
                 record = dict(
                     stage="implementer",
                     role="implementer",
@@ -483,7 +490,9 @@ class InteractionTests(unittest.TestCase):
 
                 def invoke(_options, *, responses=responses):
                     text = responses.pop(0)
-                    return dict(status="OK", sessions=["same"], tokens={}, final_text=text)
+                    return dict(
+                        status="OK", completed=True, sessions=["same"], tokens={}, final_text=text
+                    )
 
                 def decide(
                     _run, request, *, requests=requests, flag=installed_now, value=installed
@@ -516,7 +525,8 @@ class InteractionTests(unittest.TestCase):
                             return_value=dict(status="SUCCEEDED", stdout="ok", exit_code=0),
                         )
                     )
-                    StageSession((folder, record), dict(stages=[record]), environment, {}).run()
+                    launch = dict(prompt=prompt)
+                    StageSession((folder, record), dict(stages=[record]), environment, launch).run()
                 self.assertIn("not installed on the orchestrator host", requests[0]["notice"])
                 self.assertEqual(execute.call_count, int(installed))
                 result = (folder / "tool-result.md").read_text()
@@ -526,6 +536,8 @@ class InteractionTests(unittest.TestCase):
         folder = self.run / "incomplete"
         folder.mkdir()
         (folder / "events.jsonl").touch()
+        prompt = folder / "request.md"
+        prompt.write_text("Initial task")
         record = dict(
             stage="planner", role="planner", directory=folder.name, budget=dict(timeout=60)
         )
@@ -544,7 +556,13 @@ class InteractionTests(unittest.TestCase):
         def invoke(options):
             prompt = options.get("prompt")
             prompts.append(prompt.read_text() if prompt else "initial")
-            return dict(status="OK", sessions=["same"], tokens={}, final_text=responses.pop(0))
+            return dict(
+                status="OK",
+                completed=True,
+                sessions=["same"],
+                tokens={},
+                final_text=responses.pop(0),
+            )
 
         with ExitStack() as stack:
             stack.enter_context(patch("taskrail.interactions.clock.save_run"))
@@ -553,7 +571,10 @@ class InteractionTests(unittest.TestCase):
                 patch("taskrail.interactions.session.run_agent", side_effect=invoke)
             )
             execute = stack.enter_context(patch("taskrail.interactions.local.execute"))
-            outcome = StageSession((folder, record), dict(stages=[record]), environment, {}).run()
+            launch = dict(prompt=prompt)
+            outcome = StageSession(
+                (folder, record), dict(stages=[record]), environment, launch
+            ).run()
         self.assertEqual(execute.call_count, 0)
         self.assertEqual(len(prompts), 3)
         self.assertIn('"status": "LOCAL_REQUEST"', prompts[1])

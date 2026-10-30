@@ -3,7 +3,7 @@
 import json
 from pathlib import Path
 
-from taskrail.application import evidence, source_delivery, source_windows
+from taskrail.application import evidence, evidence_delivery, source_delivery, source_windows
 from taskrail.core import protected_paths, schema, source_claims
 from taskrail.core.files import atomic_json
 
@@ -67,6 +67,18 @@ def packet_index(target):
     """Load only server-written stage-local handles."""
     packets = json.loads(target.read_text()) if target.is_file() else []
     return {entry["handle"]: entry for entry in packets}
+
+
+def queue_delivery(run, folder, stage, request):
+    """The frozen request carries this packet to a new session, including retries."""
+    target = location(run, stage)
+    entries = packet_index(target).values()
+    records = [
+        source_delivery.observation(entry, target, number)
+        for number, entry in enumerate(entries, 1)
+    ]
+    if records:
+        evidence_delivery.queue(folder, request, records)
 
 
 def contains(lines, start, end):

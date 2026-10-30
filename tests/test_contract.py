@@ -79,6 +79,7 @@ class ContractTests(unittest.TestCase):
             roots={"project": self.root},
             run=self.run,
             folder=self.stage,
+            session_id="contract-session",
             plan=None,
             changed=[],
         )
@@ -88,6 +89,7 @@ class ContractTests(unittest.TestCase):
         folder.mkdir(exist_ok=True)
         event = {
             "type": "tool_use",
+            "sessionID": "contract-session",
             "part": {
                 "tool": "read",
                 "callID": "read1",
@@ -150,11 +152,11 @@ class ContractTests(unittest.TestCase):
         for start in range(1, len(lines) + 1, 200):
             window = lines[start - 1 : start + 199]
             output = "\n".join(f"{number}: {line}" for number, line in enumerate(window, start))
-            self.observe(self.run / f"read-{start}", output, offset=start, limit=200)
+            self.observe(self.stage, output, offset=start, limit=200)
         self.validate()
         proof = json.loads((self.stage / "evidence-bindings.json").read_text())[0]
         self.assertEqual(len(proof["observations"]), 6)
-        self.assertEqual(proof["source_event"], str(self.run / "read-1001/events.jsonl"))
+        self.assertEqual(proof["source_event"], str(self.stage / "events.jsonl"))
         self.assertEqual(proof["event_line"], 1)
         ranges = [entry["line_ranges"] for entry in proof["observations"]]
         self.assertEqual(
@@ -168,7 +170,7 @@ class ContractTests(unittest.TestCase):
         self.payload["evidence"][0].update(line_start=1, line_end=len(lines))
         for start, end in ((1, 199), (201, 599)):
             output = "\n".join(f"{number}: {lines[number - 1]}" for number in range(start, end + 1))
-            self.observe(self.run / f"read-{start}", output, offset=start, limit=end - start + 1)
+            self.observe(self.stage, output, offset=start, limit=end - start + 1)
         with self.assertRaises(ValueError) as rejected:
             self.validate()
         reason = str(rejected.exception)
@@ -177,7 +179,7 @@ class ContractTests(unittest.TestCase):
         self.assertNotIn("offset=1,", reason)
         for number in (200, 600):
             self.observe(
-                self.run / f"read-{number}",
+                self.stage,
                 f"{number}: {lines[number - 1]}",
                 offset=number,
                 limit=1,

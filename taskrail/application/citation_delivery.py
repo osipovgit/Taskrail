@@ -9,22 +9,26 @@ so the same session only checks its claim against them.
 
 from pathlib import Path
 
-from taskrail.application import evidence, source_windows
+from taskrail.application import evidence, evidence_delivery, source_windows
 from taskrail.core import prompt_texts, protected_paths, source_lines
-from taskrail.core.files import atomic_json
 
 DELIVERED_LINES = 60
 DELIVERED_BYTES = 4000
 
 
 def deliver(error, context):
-    """The correction text with the missing lines, recorded as observed; or None."""
+    """Prepare bounded correction text; it is not evidence until a turn receives it."""
     path = Path(error.path)
     if not deliverable(path, error, context):
         return None
-    record(context["run"], path, error)
     lines = numbered(error.missing, sorted(error.missing))
-    return prompt_texts.text("citation.delivered", label=error.label, lines=lines)
+    text = prompt_texts.text("citation.delivered", label=error.label, lines=lines)
+    records = [
+        observation(context["run"], path, error, window)
+        for window in source_lines.windows(error.missing)
+    ]
+    evidence_delivery.queue(context["folder"], text, records)
+    return text
 
 
 def numbered(missing, numbers):
@@ -51,14 +55,6 @@ def bounded(missing):
     """Few and short enough lines; larger gaps keep the read windows and source views."""
     size = sum(len(line.encode()) for line in missing.values())
     return 0 < len(missing) <= DELIVERED_LINES and size <= DELIVERED_BYTES
-
-
-def record(run, path, error):
-    """One observation per contiguous window, in the read observation format."""
-    index = evidence.load_index(run, evidence.OBSERVATIONS)
-    for window in source_lines.windows(error.missing):
-        index[evidence.RECORDS].append(observation(run, path, error, window))
-    atomic_json(run / evidence.OBSERVATIONS, index)
 
 
 def observation(run, path, error, window):

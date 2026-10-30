@@ -68,6 +68,10 @@ class TaskLauncher:
             Path(entry["path"]).expanduser().resolve() for entry in submission.fields["roots"]
         ]
         launch = dict(text=submission.decorate(text), title=title, restart_from=submission.parent)
+        launch.update(
+            execution_parent=submission.delivery["execution_parent"],
+            submission_mode=submission.mode,
+        )
         launch["before_start"] = before_start
         launch["parent_context"] = submission.delivery["parent_context"]
         return self.launch(launch, sources)
@@ -144,6 +148,8 @@ def create_submission(base, launch):
         id=resumed.name if resumed else name,
         launch_id=name,
         restart_from=launch.get("restart_from"),
+        execution_parent=launch.get("execution_parent"),
+        submission_mode=launch.get("submission_mode"),
         resume=bool(resumed),
         title=launch["title"],
         status="STARTING",

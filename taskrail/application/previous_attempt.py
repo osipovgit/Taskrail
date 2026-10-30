@@ -1,6 +1,12 @@
 """A retry of a split task continues from the edits of its earlier attempts."""
 
-from taskrail.application import inherited_preimages, outside_changes, reviewed_artifacts
+from taskrail.application import (
+    inherited_preimages,
+    outside_changes,
+    prior_git,
+    reviewed_artifacts,
+    task_branch,
+)
 from taskrail.core import prompt_texts
 
 FAILED = frozenset(("FAIL",))
@@ -17,7 +23,10 @@ def start(workflow, earlier, outside):
 def continue_from(workflow, earlier):
     """Diff against the original bytes and tell the implementer what happened before."""
     allowed = set(workflow.state["preimages"])
+    if task_branch.detect(workflow.config["roots"], workflow.config["worktrees"]):
+        allowed = None
     inherited_preimages.inherit(workflow, earlier, allowed)
+    prior_git.inherit(workflow, earlier)
     workflow.flow["feedback"] = feedback(earlier[-1])
 
 

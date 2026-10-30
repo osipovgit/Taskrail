@@ -49,7 +49,7 @@ class ReviewedFixture:
             dict(
                 command=[
                     sys.executable,
-                    str(BASE / "tests/fake_live.py"),
+                    str(BASE / "tests" / getattr(self, "provider", "fake_live.py")),
                     "--profiles",
                     str(self.base / "profiles"),
                     "--mode",
@@ -58,6 +58,7 @@ class ReviewedFixture:
                 agent_source=str(BASE / "taskrail/agents"),
                 agent_directory=str(self.base / "profiles"),
                 timeout_seconds=1 if mode == "writer-timeout" else 10,
+                **getattr(self, "settings_extra", {}),
             ),
         )
         run, status = execute_task(task, self.settings, run_dir=self.runs / name)

@@ -59,9 +59,9 @@ boundaries; their Markdown headings cannot change authority. Only authenticated
 server context supplies workflow instructions. A reviewed child receives its sealed
 task projection, while untrusted original task and history files remain archival
 artifacts outside the model's readable inputs. Each ID needs one outcome: satisfied, planned, contradicted, gap,
-deferred or not_evaluated. `not_evaluated` is allowed only in BLOCKED results, when
+deferred, not_applicable or not_evaluated. `not_evaluated` is allowed only in BLOCKED results, when
 a shared blocker prevented validation. Only runtime requirements may be deferred.
-Required missing evidence means BLOCKED, even when the JSON is valid. A plan names
+Required missing evidence means BLOCKED, even when the result format is valid. A plan names
 checks that must run after the change in unverified, one per entry, prefixed
 `Jenkins check: <server>/<job>: <parameters and expected result>` or
 `Server check: <what to run and the expected result>`; the server starts Jenkins
@@ -100,32 +100,19 @@ them. The planner and reviewer reject only artificial companion tasks that separ
 tests or documentation from the implementation that owes them. Each task still needs
 observable acceptance criteria, an explicit file boundary and appropriate verification.
 
-The primary authored result is small:
-
-```json
-{"schema_version":2,"outcomes":[{"requirement":"R1","result":"satisfied","evidence":["S1:10-12"]}],"findings":[],"missing_inputs":[]}
-```
-
-Each outcome uses the assigned label or stable ID. `reason` is required for
-contradicted, gap, not_evaluated and deferred outcomes; routine satisfied/planned
-outcomes need no repeated explanation. Findings contain `requirement`, `evidence`
-and `problem`; the server derives their IDs and file locations. `summary` is
-optional. Models cannot override observed changes, granted scope, check records or
-aggregate status through these fields. Runtime deferrals retain the original check
-text rather than a model paraphrase.
-
-Each `evidence` string contains only a source handle or absolute path and line range;
-put explanations in `reason`, never after the range. Executor summaries need exact
-snapshot lines as well. `missing_inputs` is `[]` when nothing required is missing;
-do not put optional-source notes or statements such as "all files were present" there.
-Every nonempty entry remains a blocker; the server never guesses that prose negates it.
+Review lines use the assigned requirement labels. A failure needs its problem;
+`gap`, `n/a` and `later` need their explanations. An explained `n/a` is valid in
+no-change and integration reviews as well as reviews of edits. Models cannot
+override observed changes, granted scope, check records or the derived verdict.
+Executor claims need exact snapshot lines too; a prose summary alone is not proof.
 
 Compact evidence references use `S1:10-12` for a delivered source handle or
 `/absolute/path:10-12` for a new observed read. The server assigns canonical evidence
 IDs and resolves handles to their path, source version and exact delivered range.
-A handle from another stage or changed source is invalid. The
-server takes the cited lines from the current file, binds them to a successful read
-or delivered packet and to the current source hash, and records the excerpt in
+A handle from another stage or changed source is invalid. Absolute paths have the
+same evidence rules as handles. The server takes the cited lines from the current
+file and requires a successful read or delivered packet in the active attempt and
+its exact opencode session. It binds the current source hash and excerpt in
 `evidence-bindings.json`. Whitespace is not significant; each complete cited line
 must have reached the model. A clipped prefix cannot prove an unseen suffix.
 One citation may combine several windows of the same current source version. The
@@ -149,7 +136,11 @@ paths and approved plan citations or change paths. Entry points accept canonical
 absolute paths, root aliases or unambiguous single-root relative paths, optionally
 with `:from-to`. Prose is not guessed as a path. Missing, protected, symlinked,
 binary and oversized files are skipped; ordinary controlled reads remain available.
-Only lines actually delivered within the packet budget become observations.
+Only lines actually delivered within the packet budget become evidence for the
+receiving session. Preparing a packet or correction does not grant that authority:
+the exact payload must complete a turn in the expected session. Failed or interrupted
+turns and text omitted by truncation grant no evidence authority. A new session must receive
+the relevant source again or read it itself.
 Only current, canonical source inside declared roots is eligible. The packet shares bytes, never another role's
 conclusions, so independent semantic review remains necessary. The server keeps its
 version/handle registry separately from model-visible input. Approved plan context
@@ -158,9 +149,11 @@ prior verdicts. Empty optional context fields are omitted.
 Operator notes, interrupted-writer instructions and actionable earlier feedback
 remain available when a run continues. A split task's first request also carries
 `outside_changes`: the files changed outside the split's tasks before it started.
-`observations.json` keeps the complete validation ledger; `evidence.json` is a
-bounded recovery subset of at most 60 records that never removes observations
-needed for validation. An oversized record is skipped without dropping other useful
+`observations.json` keeps source discovery and attributed delivery records;
+validation selects only the active attempt and session. Earlier observations may
+seed a new source packet, but are not proof that its receiver read them.
+`evidence.json` is a bounded recovery subset of at most 60 records that never removes
+observations needed for validation. An oversized record is skipped without dropping other useful
 records. Changed or unseen content cannot justify approval. A
 matching citation proves provenance, not the model's interpretation, so independent
 review remains necessary. Only server records prove executed checks. The exact
@@ -178,8 +171,9 @@ A final result that fails validation first goes back to the same session, at mos
 three times per stage. Schema failures identify a stable error code and JSON pointer;
 provenance errors identify up to five failing citations. When a citation's lines never
 reached the session in full, the correction carries their current text (at most 60
-lines per citation, never from a protected file) and records it as read, so the session
-only checks its claim against it instead of reading again or restarting; otherwise it
+lines per citation, never from a protected file). Only the citations included in the
+feedback can become delivered evidence after the receiving turn completes, so the
+session checks its claim against them; otherwise the correction
 names the bounded missing windows. Repeated identical planner rejection
 after same-session correction stops automatic fresh research retries. The session
 keeps its context and tools and edits only the lines the feedback names; every problem
@@ -349,7 +343,7 @@ A turn that ends without its valid stage result or an executor
 request (for example, only announcing its next step or using tool-call markup) gets
 a reminder of the stage-specific format in the same session, within the same limit,
 before repair is tried. Every continuation also names the stage
-role and its `request.md`, and preserves the planner's Markdown or other roles' JSON
+role and its `request.md`, and preserves its Markdown file or terminal-line response
 format. When the provider rejects a
 turn because the session exceeded the model context window, the stage status is
 `CONTEXT_EXCEEDED` and a read-only stage continues in a new session from its recorded

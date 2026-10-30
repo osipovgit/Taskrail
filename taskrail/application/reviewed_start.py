@@ -11,6 +11,7 @@ from taskrail.application import (
     task_scope,
 )
 from taskrail.application.changes import capture_preimages
+from taskrail.application.execution_context import adopt as inherit_execution_context
 from taskrail.application.plan_validation import canonical_plan
 from taskrail.core import schema, task_lineage
 from taskrail.core.files import atomic_json
@@ -24,11 +25,10 @@ def begin(workflow):
     """Authenticated child contracts and integration reviews skip model planning."""
     phase = workflow.config.get("phase")
     if phase == "integration":
-        stage = "check" if workflow.config.get("check_specs") else "reviewer"
         install(
             workflow,
             reviewed_plan.empty("Review the combined result against every criterion"),
-            stage,
+            "reviewer",
         )
     elif phase == "task":
         child(workflow)
@@ -36,18 +36,21 @@ def begin(workflow):
 
 def child(workflow):
     """Recheck authority, dependency results, roots and source freshness under the run lock."""
-    assignment = workflow.config["assigned_contract"]
-    parent = reviewed_artifacts.parent(workflow.run.parent, assignment["parent_run"])
-    step = assigned_step(parent, assignment["task_id"])
+    parent = reviewed_artifacts.parent(
+        workflow.run.parent, workflow.config["assigned_contract"]["parent_run"]
+    )
+    step = assigned_step(parent, workflow.config["assigned_contract"]["task_id"])
     lineage = reviewed_sources.verify(parent, step["id"], workflow)
     verify_requirements(parent, step, workflow)
-    check_configuration.adopt(workflow, parent["run"], parent["state"])
+    parent_state = parent["state"]
+    inherit_execution_context(workflow, parent["run"], parent_state)
+    check_configuration.adopt(workflow, parent["run"], parent_state)
     reviewed_input.capture(workflow, parent, step)
     plan = reviewed_plan.single(step, workflow.state[REQUIREMENTS])
     plan = canonical_plan(plan, workflow.config["roots"])
     task_scope.check(plan, workflow.config)
     planned_checks.install(
-        workflow, planned_checks.inherit(parent["state"], workflow.state[REQUIREMENTS])
+        workflow, planned_checks.inherit(parent_state, workflow.state[REQUIREMENTS])
     )
     install(workflow, plan, "implementer")
     previous_attempt.start(workflow, *lineage)

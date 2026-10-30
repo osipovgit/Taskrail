@@ -4,7 +4,9 @@ import json
 
 from taskrail.application import (
     check_configuration,
+    check_stage,
     delivery_confirmation,
+    execution_context,
     integration_changes,
     reviewed_artifacts,
     run_state,
@@ -39,6 +41,8 @@ def adopt(workflow, resume=False):
     """Only the phase actually linked by a completed parent inherits its recipes."""
     name = reference(workflow.config)
     if name is None:
+        if workflow.config.get(PHASE) == INTEGRATION and check_stage.required(workflow):
+            workflow.flow["stage"] = "check"
         return
     if workflow.config[PHASE] == "server":
         require(
@@ -51,10 +55,13 @@ def adopt(workflow, resume=False):
     parent = reviewed_artifacts.run_path(workflow.run.parent, name)
     state = reviewed_artifacts.document(parent, "run.json")
     verify(workflow, parent, state)
+    execution_context.adopt(workflow, parent, state)
     check_configuration.adopt(workflow, parent, state)
     workflow.state[SEAL] = receipt(workflow)
     if workflow.config[PHASE] == INTEGRATION:
         integration_changes.capture(workflow, parent)
+        if check_stage.required(workflow):
+            workflow.flow["stage"] = "check"
 
 
 def restored(workflow):

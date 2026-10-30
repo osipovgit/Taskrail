@@ -17,13 +17,20 @@ def validate(claims, records, context):
         try:
             proofs.append(checked(claim, records, context))
         except citation_errors.MissingLines as error:
-            delivered = context.get("deliver_lines") and citation_delivery.deliver(error, context)
+            delivered = delivery(error, context, len(errors))
             errors.append(delivered or guidance(claim, context, str(error), views))
         except ValueError as error:
             errors.append(guidance(claim, context, str(error), views))
     if errors:
         raise ValueError(feedback(errors))
     return proofs
+
+
+def delivery(error, context, preceding):
+    """Only missing citations inside the feedback limit may prepare source delivery."""
+    if context.get("deliver_lines") and preceding < ERROR_LIMIT:
+        return citation_delivery.deliver(error, context)
+    return None
 
 
 def feedback(errors):

@@ -51,6 +51,7 @@ def session_environment(workflow, profile, files, check_result):
         allowed=workflow.flow["allowed"],
         allowed_paths=files,
         expected=guard.expected,
+        original_sources=guard.before,
         git_before=guard.git_before,
         scan=guard.scan,
         git_metadata=git_metadata,

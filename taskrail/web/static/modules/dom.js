@@ -24,6 +24,7 @@ export const statuses = {
   TOOL_ERROR: 'Tool error',
   CONTEXT_EXCEEDED: 'Context window exceeded',
   INVALID_RESULT: 'Invalid result',
+  COMMIT_FAILED: 'Commit failed',
   BLOCKED: 'Blocked',
   REQUEST_CHANGES: 'Changes requested',
   CHECK_COMPLETED: 'Checks complete',
