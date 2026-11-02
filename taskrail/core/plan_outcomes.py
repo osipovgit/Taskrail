@@ -7,6 +7,7 @@ requirement does not apply, or `gap:`.
 """
 
 import re
+from functools import partial
 from pathlib import Path
 from types import MappingProxyType
 
@@ -130,14 +131,14 @@ class Coverage:
 
 
 def cited_ranges(coverage, field):
-    """`Read:` ranges of a task as path:from-to; the plan must have read them."""
-    entries, line = field
-    cited = [entry for entry in entries if not PLACEHOLDER.match(entry)]
-    if not cited:
-        return []
-    identifiers = set(coverage.cite(", ".join(cited), line, explanation=False))
-    spans = [entry for entry in coverage.found[EVIDENCE] if entry[IDENTIFIER] in identifiers]
-    return ["{path}:{line_start}-{line_end}".format(**entry) for entry in spans]
+    """`Read:` ranges of a task as path:from-to.
+
+    They point the implementer at the lines to read first; they are not evidence, so
+    they need not have been read in this session, and an entry that does not parse is
+    skipped.
+    """
+    entries = [entry for entry in field[0] if not PLACEHOLDER.match(entry)]
+    return plan_citations.hints(entries, partial(absolute, roots=coverage.roots))
 
 
 def missing_labels(count, seen):

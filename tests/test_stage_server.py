@@ -25,6 +25,8 @@ if arguments[:2] == ["run", "--help"]:
 if arguments[:1] == ["serve"]:
     with open(os.environ["SERVE_LOG"], "w") as log:
         log.write(" ".join(arguments) + "\\n" + os.environ.get("OPENCODE_SERVER_PASSWORD", ""))
+    # A wrapper may print its own banner before the server announces itself.
+    print("Wrapper 1.0: update checks disabled", flush=True)
     print("opencode server listening on http://127.0.0.1:4321", flush=True)
     time.sleep(60)
 """
@@ -79,6 +81,7 @@ class StageServerTests(unittest.TestCase):
             server_readiness.address(json.dumps(dict(url="http://localhost:9")).encode()),
             "http://localhost:9",
         )
+        self.assertIsNone(server_readiness.address(b"Warning: telemetry is disabled"))
 
 
 class ContextBoundaryTests(unittest.TestCase):

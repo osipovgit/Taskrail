@@ -1,7 +1,6 @@
 [Unit]
 Description=Taskrail application
-Documentation=https://www.freedesktop.org/software/systemd/man/systemd.service.html
-After=network.target
+Documentation=https://github.com/osipovgit/Taskrail
 StartLimitIntervalSec=60
 StartLimitBurst=5
 

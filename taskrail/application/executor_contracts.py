@@ -25,11 +25,11 @@ def jenkins_schema():
 
 
 def for_stage(stage, run, config, catalog):
-    """Only routes available in this stage are valid response alternatives."""
+    """Only routes available in this stage are valid response alternatives, by name."""
     catalog = execution_requests.available() if catalog is None else catalog
-    alternatives = [git_schema(), local_schema()]
+    alternatives = dict(git=git_schema(), local=local_schema())
     if catalog.get("hosts") and execution_requests.remote_mode(run, config, stage) is not None:
-        alternatives.append(ssh_schema())
+        alternatives["ssh"] = ssh_schema()
     if catalog.get("jenkins"):
-        alternatives.append(jenkins_schema())
+        alternatives["jenkins"] = jenkins_schema()
     return alternatives

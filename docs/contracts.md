@@ -100,7 +100,8 @@ them. The planner and reviewer reject only artificial companion tasks that separ
 tests or documentation from the implementation that owes them. Each task still needs
 observable acceptance criteria, planned files and appropriate verification. On an
 authenticated task branch, necessary additional files within permitted roots remain
-allowed; Not ToDo records excluded outcomes and their owning task IDs. In-place runs
+allowed; Not ToDo names later work to leave alone unless the task needs a part of it,
+which the summary names. In-place runs
 retain their exact approved file boundary.
 
 Review lines use the assigned requirement labels. A failure needs its problem;
@@ -119,8 +120,8 @@ its exact opencode session. It binds the current source hash and excerpt in
 `evidence-bindings.json`. Whitespace is not significant; each complete cited line
 must have reached the model. A clipped prefix cannot prove an unseen suffix.
 One citation may combine several windows of the same current source version. The
-binding records every contributing observation and its exact line ranges, retaining
-the primary event fields for compatibility. Repeated partial reads do not erase
+binding records every contributing observation and its exact line ranges. Repeated
+partial reads do not erase
 earlier complete observations. Besides the declared roots, a citation may name source
 views, executor snapshots and the preimages under `00-input/preimages`: the original
 files a review compares, for example to show a removed line.
@@ -180,9 +181,11 @@ session checks its claim against them; otherwise the correction
 names the bounded missing windows. Repeated identical planner rejection
 after same-session correction stops automatic fresh research retries. The session
 keeps its context and tools and edits only the lines the feedback names; every problem
-of `plan.md` or `review.md` names its line. When a review has no correction left, a
-requirement whose citations it never confirmed becomes a gap that says so, instead of
-failing the stage.
+of `plan.md` or `review.md` names its line. When a review has no correction left and
+some citations never reached the session in full, missing proof is not missing operator
+input: the review gets the full attempt below, told to read exactly those lines. Only
+if that attempt still cannot confirm them does each such requirement become a gap that
+says so.
 
 A plan or review still invalid after the corrections gets one full attempt with tools
 and the validation error; its file keeps its text. Validation errors name requirements
@@ -194,8 +197,7 @@ material and keeps unresolved requirements explicit. `recovery.md` starts with a
 index: each recorded call with its target, window, size and the line range of its
 block in the file. The recovery prompt names the index lines and asks for windows of
 at most 200 lines, because the whole file can be larger than the model context.
-Index sizes are derived from the saved output; older observations need no
-`saved_chars` field. Original truncation and source provenance remain unchanged. A
+Index sizes are derived from the saved output. Original truncation and source provenance remain unchanged. A
 follow-up history over 24,000 bytes reaches the prompt the same way: the latest turn
 inline and the indexed, readable `00-input/history.md`; `task.md` stays verbatim and
 the frozen input integrity guard covers it whole. A no-change completion still
@@ -323,16 +325,19 @@ unchanged. See [access](access.md) and [Git access](git-access.md).
 
 Every request type is recognized the same way (`interactions/request_envelope.py`):
 exactly one JSON object whose `status` names a request, with prose or a Markdown fence
-around it ignored; no field or argument is changed. Only a Git request that can change
-state must be the entire response. A request with a wrong shape (an unknown or missing
-field, a wrong version, an empty reason, a wrapped Git write) runs nothing: the same
-session is told what to fix, at most twice per session, and after that the turn ends as
-an invalid result. Multiple objects, duplicate keys and malformed JSON are not requests.
-`cwd` is a declared root or an existing directory inside one. A
-response with `cwd` and `argv` but without `"status": "LOCAL_REQUEST"` or
-`schema_version` executes nothing; the same session is told what is missing, at most
-twice per stage. Planner and reviewer stages cannot request `--fix`, `--write`,
-in-place or `sed -i` options; such a request is rejected before approval.
+around it ignored. Only a Git request that can change state must be the entire
+response. A local command is taken as the model meant it (`interactions/local_intake.py`):
+a missing `status` (when `argv` is given) or `schema_version` is filled in, other fields
+are dropped, `command` or `cmd` may name the command, a command string is split, or run
+with `bash -c` when it uses shell syntax, and a missing or relative `cwd` resolves
+inside the single root or the named root alias. The command policy, the sandbox and any
+approval see the resulting argv and cwd. A request that still has a wrong shape (a wrong
+version, a non-list command, a wrong status, a wrapped Git write) runs nothing: the same
+session is told what to fix, at most three times in a row (a valid request resets the
+count), and after that the turn ends as an invalid result. Multiple objects, duplicate
+keys and malformed JSON are not requests. `cwd` must end up a declared root or an
+existing directory inside one. Planner and reviewer stages cannot request `--fix`,
+`--write`, in-place or `sed -i` options; such a request is rejected before approval.
 
 An approved command may still change files. Files Git ignores (caches, reports, build
 output) are not source and are never fingerprinted. Other changed files are adopted

@@ -3,8 +3,8 @@
 The current attempt's `access.json` is the model input manifest. It is generated
 from the same input list as the runtime profile. Read canonical absolute paths:
 project roots, listed task/history/preimages/results/recovery inputs and executor snapshots.
-Only the approved implementer paths with the implementer's `progress.md`, and the
-planner's `plan.md`, are editable by their respective roles. Source roots are declarations of
+Only the approved implementer paths with the implementer's `progress.md`, the
+planner's `plan.md` and a reviewer's `review.md` are editable by their respective roles. Source roots are declarations of
 scope, not OS privileges; Unix permissions, network routing and authentication still apply.
 
 ## Protected paths
@@ -42,9 +42,9 @@ Executor requests are JSON **assistant responses**, not function calls. End the
 turn after emitting one. Their absence from the model's tool list is normal. The
 server executes the request or waits for approval, then resumes the same opencode
 session with `--session`. The UI records these as tool calls inside one stage, not
-as additional stages. The advertised contracts include executor requests and the
-role's final result: a Markdown plan followed by `DONE` for the planner, JSON for
-other roles. Continuations and result repair retain that role's format.
+as additional stages. Final results are not JSON: the planner writes `plan.md`, a
+reviewer `review.md`, both ending with `DONE`, and the implementer ends with `DONE:` or
+`BLOCKED:` ([contracts](contracts.md)).
 
 Internal `evidence.json`, `observations.json` and `00-input/git-metadata.json` are
 not model inputs. The latter contains integrity hashes, not commit history. Reuse
@@ -97,22 +97,28 @@ approval ledger with `"rule": "sandbox"`:
   properties, Cargo credentials/configuration, Gem credentials, npm/pip authentication,
   Git credentials/configuration and provider `auth.json` files. Configured protected
   patterns add masks; they cannot remove these mandatory sandbox masks. Arbitrarily
-  named secrets in exposed runtime/cache files still need explicit protected patterns;
+  named secrets in exposed runtime/cache files still need explicit protected patterns.
+  The mask list of a tree is reused while none of its directories changes, so commands
+  start without rescanning large toolchain caches;
 - a declared project's ordinary `.config` files, including linter configuration,
   remain readable. Credential patterns still apply inside them; aliases into the
   user's `~/.config` and runtime/cache `.config` directories remain private;
 - the implementer's roots are writable; a reading stage's roots take writes that
   vanish when the command ends (bubblewrap 0.10 or later), else they are read-only;
   Git metadata is always read-only and [protected files](#protected-paths) are unreadable;
-- there is no network: a private network namespace where the host allows one, else a
+- there is no network unless the operator sets `sandbox_network: true` (then only the
+  network is kept, with the resolver configuration; every mask below stays): a private
+  network namespace where the host allows one, else a
   seccomp filter that refuses every socket but Unix and netlink ones. Abstract Unix
   sockets of the host, such as an X server's, stay reachable in that case;
   `DISPLAY`, `WAYLAND_DISPLAY`, `XAUTHORITY` and `DBUS_SESSION_BUS_ADDRESS` are unset.
 
 A command that needs the network or host files outside the sandbox adds
-`"sandbox": false` and says why in its reason. It then goes through the approval below,
-as does every command on a host without a working bubblewrap and a program that is
-not installed, so you can install it and allow the command. `taskrail check` names
+`"sandbox": false` and says why in its reason. It then runs at once on the host, as does
+every command on a host without a working bubblewrap; the approval ledger records it with
+`"rule": "host"` and the stage log highlights it like a decision. A program that is not
+installed is reported back to the agent. The setting `host_commands: "ask"` sends host
+commands through the approval below instead. `taskrail check` names
 the sandbox in use. Every run also records `local-preflight.json` before model work,
 with the sandbox/fallback explanation and executable paths for required local checks.
 The check repeats after reviewed recipe selection, before implementation. Missing
@@ -125,7 +131,9 @@ regressions; an unavailable sandbox is not a successful skipped check.
 
 ### Approval
 
-The exact working directory, argv and reason appear in the UI before execution.
+Reads outside the declared roots wait for a decision; so do host commands under
+`host_commands: "ask"`. The exact working directory, argv and reason appear in the UI
+before execution.
 Allow is single-use; Deny skips execution; Alternative sends your text back to the
 agent. Waiting has no expiry and is excluded from active stage time. Stop remains
 available. Each decision is bound to a random ticket and retained for audit.
@@ -150,7 +158,7 @@ Read-only requests are approved without asking and recorded in the same ledger w
   change confirmation, with additional explicit remote diagnostic options.
 
 Everything else is asked. **Allow all actions** ([task controls](task-controls.md))
-approves this run's local commands, read access and change limit automatically; it
+approves this run's local commands and read access automatically; it
 trusts every command the agents choose, so use it only where you would allow them
 anyway, inline shell or Python code included. Without it, the card of inline code that
 an agent requests (`bash -c`, `sh -c`, `python -c` and the like, also behind `env`,

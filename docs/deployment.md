@@ -127,6 +127,8 @@ reset directories.
 | `permission_worktree` | inferred | Base directory for relative permission names (Git worktree for 1.x, first root for 2.x). Server-owned isolation supplies it automatically; unowned/in-place 1.x roots with a `.git` file or symlink require an explicit value |
 | `tool_output_dir` | opencode location | Absolute directory (`~` allowed) where a compatible CLI keeps truncated tool output; its automatic `external_directory` allow rule is accepted only for this directory |
 | `opencode_server` | `true` | `false` runs each 1.x turn as its own process instead of on the stage's private server |
+| `sandbox_network` | `false` | `true` keeps the network for agents' sandboxed commands (package installs, collection downloads); every credential mask stays |
+| `host_commands` | `auto` | `auto` runs local commands outside the sandbox at once, highlighted in the stage log; `ask` makes each wait for your approval |
 | `stop_on_provider_limit` | `false` | `true` stops a stage at the first exhausted provider quota or billing limit instead of spending its retries ([contracts](contracts.md)) |
 | `protected_paths` | credentials list | Patterns models never read or edit, besides `.env` files; setting it replaces the defaults ([access](access.md#protected-paths)) |
 
@@ -145,7 +147,7 @@ untouched 2.x stream in `events.raw.jsonl`. Every call sets
 secret-shaped variables (`*_TOKEN`, `*_KEY`, `*_SECRET`, `*_PASSWORD`, their `*_FILE`
 locators, `SSH_AUTH_SOCK`, `GIT_ASKPASS` and similar); opencode alone keeps common
 provider keys and the names in `agent_env_allow`.
-The configured argv prefix, including an nga wrapper's profile arguments, is
+The configured argv prefix, including a wrapper's own arguments, is
 preserved for version detection, permission checks, capability probes, servers and
 clients. All these calls use the same credential allowlist. A successful help
 response without `--attach` selects separate 1.x processes; a failed or timed-out
@@ -224,8 +226,9 @@ once in a sandbox without network, host writes or hidden home files
 ([access](access.md#local-commands)). The installer reports when it is missing.
 `taskrail check` names the network isolation in use: a private network namespace, or
 a seccomp socket filter on hosts that forbid configuring one (x86-64 and ARM64).
-Without a working bubblewrap every local command waits for approval, as does a
-request for the host with `"sandbox": false`.
+Without a working bubblewrap, and for a request with `"sandbox": false`, a local
+command runs on the host at once and is highlighted in the stage log. Set
+`"host_commands": "ask"` to make these commands wait for your approval instead.
 
 ## Worktree isolation
 
@@ -289,16 +292,6 @@ check is always repaired again. Commands
 must not write inside declared roots (generated folders such as `__pycache__`,
 `node_modules` or `.pytest_cache` are ignored): any other change stops the run.
 
-## Change size limit
-
-`max_change_lines` (default 400 added or removed diff lines) and `max_change_files`
-(default 15 changed files) bound an implementation, not how work is split into tasks;
-`0` disables a limit. A larger
-change waits before checks and review: **Allow** continues (a later repair may grow
-up to the allowed size without asking again), **Deny** stops the run as
-`CHANGE_LIMIT_EXCEEDED` with the changes preserved (Continue asks again), and an
-alternative returns the work to the implementer with your note.
-
 ## Configuration changes
 
 New tasks read current settings and roles. Continue retains frozen task, role and
@@ -354,7 +347,7 @@ records all protect their declared roots. The same inventory covers cache, unit
 drop-ins, launcher and generated profile files; mixed, redirected or overlapping
 paths abort before deletion. Keep source projects and the extracted release outside
 those paths.
-Legacy `~/.local/state/taskrail/worktrees` is preserved in place, including uncommitted
+`~/.local/state/taskrail/worktrees` is never deleted, including uncommitted
 edits and its Git links. New worktrees live outside resettable application storage.
 A custom `worktree_base` overlapping a deletion target refuses the reset; move that
 storage deliberately before retrying. Worktrees are never pruned with old releases.

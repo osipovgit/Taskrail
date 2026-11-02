@@ -2,7 +2,8 @@
 
 The brief names the task and the parent run and lists the earlier tasks, which are
 already applied to the source, with their latest run's outcome and changed files, and
-the later tasks, whose work is not to be done here. It comes from authenticated run
+under Not ToDo the later tasks and the planner's notes on this task: work to leave to
+them unless this task cannot work without it. It comes from authenticated run
 records and the reviewed plan, never from a sibling's own report.
 """
 
@@ -30,9 +31,10 @@ def context(parent, step):
         lines.extend(earlier_task(parent, entry) for entry in earlier)
     else:
         lines.append(prompt_texts.text("child.none"))
-    if later:
+    notes = planner_notes(step)
+    if later or notes:
         lines.append(prompt_texts.text("child.later"))
-        lines.extend(map(later_task, later))
+        lines.extend([*map(later_task, later), *notes])
     return "\n".join(lines)
 
 
@@ -58,6 +60,11 @@ def earlier_task(parent, step):
     return "- {} ({}): {} Changed files: {}".format(
         heading(step), state["status"], summary, changed
     )
+
+
+def planner_notes(step):
+    """The planner's Not ToDo bullets for this task, one line each."""
+    return [prompt_texts.text("child.note", note=note) for note in step.get("not_todo", [])]
 
 
 def later_task(step):

@@ -2,7 +2,6 @@
 
 from taskrail.application import (
     added_lines,
-    change_limit,
     check_selection,
     transitions,
     yaml_install,
@@ -34,8 +33,6 @@ def required(workflow):
 
 def run_checks(workflow):
     """Record syntax checks and the added-line scan, then settings commands; route failures to repair."""
-    if not change_limit.approved(workflow):
-        return
     state = workflow.state
     active = new_stage(workflow.run, state, "check", dict(mode="builtin"))
     workflow.open_record(active)

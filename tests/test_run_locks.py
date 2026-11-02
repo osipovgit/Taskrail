@@ -26,6 +26,14 @@ class RunLockTests(unittest.TestCase):
         patcher.start()
         self.addCleanup(patcher.stop)
 
+    def test_a_stray_empty_git_directory_does_not_join_projects_into_one_repository(self):
+        (self.base / ".git").mkdir()
+        first, second = self.base / "a", self.base / "b"
+        with run_locks([first], self.base / "run-1") as reason:
+            self.assertIsNone(reason)
+            with run_locks([second], self.base / "run-2") as parallel:
+                self.assertIsNone(parallel)
+
     def test_projects_lock_independently_and_installation_waits_for_all(self):
         first, second = self.base / "a", self.base / "b"
         with run_locks([first], self.base / "run-1") as reason:

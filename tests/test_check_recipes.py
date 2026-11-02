@@ -14,6 +14,7 @@ from taskrail.application import (
     check_batches,
     check_configuration,
     check_diagnostics,
+    check_jenkins_recipe,
     check_parents,
     check_recipes,
     check_remote,
@@ -449,6 +450,32 @@ class CheckRecipesTest(unittest.TestCase):
         self.assertEqual(legacy["assigned_requirements"], [])
         self.assertEqual(legacy["check_specs"], [])
         self.assertEqual(legacy["check_parent"], self.run.name)
+
+    def test_a_jenkins_recipe_is_one_exact_new_build_with_text_parameters(self):
+        recipe = dict(
+            server="ci",
+            job="shop-tests",
+            operation="build",
+            build="new",
+            parameters={"REF": "main"},
+            reason="Validate the finished change",
+            timeout_seconds=600,
+        )
+        check_jenkins_recipe.validate_jenkins(recipe)
+        wrong = (
+            dict(recipe, extra=True),
+            dict(recipe, operation="status"),
+            dict(recipe, build="last"),
+            dict(recipe, parameters=["REF=main"]),
+            dict(recipe, parameters={"REF": 1}),
+            dict(recipe, parameters={"bad name": "x"}),
+            dict(recipe, job="../escape"),
+            dict(recipe, timeout_seconds=0),
+            "build",
+        )
+        for request in wrong:
+            with self.subTest(request=request), self.assertRaises(ValueError):
+                check_jenkins_recipe.validate_jenkins(request)
 
     def test_exit_status_and_stylelint_reports_are_explicit_contracts(self):
         self.assertEqual(

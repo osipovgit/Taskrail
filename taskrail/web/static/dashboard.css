@@ -694,6 +694,12 @@ label:has(> input[type='checkbox']) .hint {
   box-shadow: inset 3px 0 var(--warn);
 }
 
+.tool-event.host-command {
+  border-color: var(--warn);
+  background: var(--warn-bg);
+  box-shadow: inset 3px 0 var(--warn);
+}
+
 .approval-notice {
   font-weight: 600;
 }

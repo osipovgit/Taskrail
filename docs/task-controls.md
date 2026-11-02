@@ -51,9 +51,9 @@ Every **Develop** task goes through the same steps:
    authenticates the approved parent plan, criteria, file scope and prerequisite
    source/Git snapshots; independent result review still follows. A child is never
    planned again: it cannot split. Its brief lists the earlier tasks, which may already
-   contain parts of its work, and the later tasks' owned results under **Not ToDo**.
-   If completion requires transferring another task's deliverable, it reports the exact
-   scope decision needed. In isolated worktrees it may change necessary files beyond
+   contain parts of its work, and under **Not ToDo** the later tasks' results and the
+   planner's notes: work to leave alone unless the task cannot work without a part of
+   it, which it then does minimally and names in its summary. In isolated worktrees it may change necessary files beyond
    its plan and ends with verified commit receipts
    ([worktree isolation](task-format.md#worktree-isolation)). A contract that cannot be met
    reports the required parent replanning instead of launching nested tasks.
@@ -302,8 +302,8 @@ a different request.
 
 **Allow all actions** skips these cards for one run. Tick it in the task form to
 apply it from the start (restarts and follow-ups keep the choice), or tick **Allow all
-further actions in this run** on a card and choose Allow. Local commands, read access
-and the change limit are then approved without asking, and each automatic approval is
+further actions in this run** on a card and choose Allow. Local commands and read access
+are then approved without asking, and each automatic approval is
 recorded in the same ledger with `"automatic": true`. The run shows an **All actions
 allowed** badge and a **Stop allowing all actions** button, which takes effect before
 the next decision and also on Continue. A personal card choice is durable across worker
@@ -324,9 +324,10 @@ blindly repeats an interrupted write. See [access](access.md).
 Local commands are recorded before execution in `local-actions.json`, including exact
 argv, approval, source snapshot and an environment fingerprint. An interrupted or
 uncertain action remains `UNKNOWN`; rephrasing its reason or continuing the run cannot
-execute it again. Intermediate requests are bounded per stage: 64 total and at most
-three identical local/Git requests against unchanged sources. `NO_PROGRESS` stops
-before another request runs; continuation retains these counters.
+execute it again. Intermediate requests are bounded per stage round (its attempts after
+one entry): 100 total and at most three identical local/Git requests against unchanged
+sources. `NO_PROGRESS` stops before another request runs. A new round after review or
+check feedback, and an explicit Continue, count afresh.
 
 ## Exhausted allowances
 

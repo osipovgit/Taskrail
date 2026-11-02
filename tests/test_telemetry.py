@@ -79,6 +79,15 @@ class TelemetryTests(unittest.TestCase):
         self.assertTrue(value["timeline"][0]["output_truncated"])
         self.assertEqual(value["usage_coverage"], "unavailable")
         self.assertIsNone(value["reported_cost"])
+        self.assertFalse(value["timeline"][0]["host"])
+
+    def test_a_command_run_outside_the_sandbox_without_asking_is_marked(self):
+        t = Telemetry()
+        state = dict(status="completed", input=dict(argv=["ansible-lint"]), output="ok")
+        state["metadata"] = dict(origin="orchestrator", approval="host")
+        part = dict(id="1", tool="local_command", callID="1", state=state)
+        t.observe(json.dumps(dict(type="tool_use", timestamp=1, part=part)))
+        self.assertTrue(t.summary()["timeline"][0]["host"])
 
     def test_observed_budget_stops_run_and_keeps_usage(self):
         with tempfile.TemporaryDirectory() as directory:

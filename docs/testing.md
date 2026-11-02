@@ -26,7 +26,7 @@ The local entry point is `make check`. CI uses its component targets so the Pyth
 | Python and UI formatting | `make format-check` | Quality / Lint and formatting |
 | Python regressions | `make test-python` | Tests / Python 3.10–3.14 |
 | UI regressions | `make test-ui` | Tests / UI |
-| Required Linux sandbox | `TASKRAIL_REQUIRE_SANDBOX=1 .venv/bin/python -m unittest discover -s tests -p 'test_sandbox*.py'` | Security / Required Linux sandbox |
+| Required Linux sandbox | `TASKRAIL_REQUIRE_SANDBOX=1 .venv/bin/python -m unittest discover -b -s tests -p 'test_sandbox*.py'` | Security / Required Linux sandbox |
 | CLI permission compatibility | `taskrail init`, then `taskrail check` in disposable settings | Compatibility / opencode 1.19.3 |
 | Static security analysis | GitHub CodeQL | Security / Python and JavaScript |
 

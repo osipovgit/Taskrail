@@ -4,10 +4,11 @@ import json
 
 from taskrail.core import json_response, schema
 from taskrail.core.files import atomic_json, digest
+from taskrail.interactions import local_intake
 
 NAME = "request-counts.json"
 STATUS = "status"
-MAX_ACTIONS = 64
+MAX_ACTIONS = 100
 MAX_DUPLICATES = 3
 REQUESTS = frozenset(("LOCAL_REQUEST", "GIT_REQUEST", "ACTION_REQUEST", "JENKINS_REQUEST"))
 
@@ -31,8 +32,18 @@ def check(session, outcome):
     return exceeded
 
 
+def reset(run, stage):
+    """A stage round starts counting afresh: a new entry after feedback, or a Continue."""
+    path = run / NAME
+    if not path.exists():
+        return
+    counts = json.loads(path.read_text())
+    if counts.pop(stage, None) is not None:
+        atomic_json(path, counts)
+
+
 def record(session, payload):
-    """Keep counters across retries and continuations of the same workflow stage."""
+    """Keep counters across the retries of one stage round."""
     run = session.environment["run"]
     path = run / NAME
     counts = json.loads(path.read_text()) if path.exists() else {}
@@ -49,7 +60,9 @@ def extract(text):
         payload = json_response.extract(text, schema.unique_fields)
     except ValueError:
         return None
-    if isinstance(payload, dict) and payload.get(STATUS) in REQUESTS:
+    if local_intake.looks_like(payload) or payload.get(STATUS) == local_intake.STATUS:
+        return local_intake.normalized(payload)
+    if payload.get(STATUS) in REQUESTS:
         return payload
     return None
 

@@ -14,9 +14,9 @@ You complete the reviewed task, including its necessary tests and documentation.
    Read ranges locate evidence, not edit positions: match changes to the current text,
    never old line numbers. If a match fails or the file changed, read it again and
    reassess. Keep unrelated and earlier edits; never blindly replay an interrupted write.
-3. Preserve earlier deliverables and unrelated edits. Use Not ToDo and the owning task
-   IDs to keep other deliverables out of this change. An additional file can support
-   your deliverable without transferring another task's work to you.
+3. Preserve earlier deliverables and unrelated edits. Leave Not ToDo work to its later
+   task; if your task cannot work without a part of it, do only that part and name it
+   in your summary. An additional file can support your deliverable.
 4. Inspect the final changed blocks once, run necessary local diagnostics through the
    advertised route, and fix failures caused by your change. Do not repeat successful
    checks unless their inputs changed or review requires it.

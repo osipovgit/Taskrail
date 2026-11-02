@@ -35,6 +35,7 @@ BASE = (
 )
 # Graphical sessions stay closed even where their abstract sockets remain reachable.
 DESKTOP = ("DISPLAY", "WAYLAND_DISPLAY", "XAUTHORITY", "DBUS_SESSION_BUS_ADDRESS")
+UNSET_DESKTOP = tuple(option for name in DESKTOP for option in ("--unsetenv", name))
 
 
 def health(approved=False):
@@ -103,17 +104,28 @@ def probe(candidate, mounts=()):
 
 
 @contextlib.contextmanager
-def command(argv, cwd, roots, writable, protected=protected_paths.DEFAULT_PATTERNS):
-    """Popen arguments of the sandboxed command: its argv and inherited descriptors."""
+def command(argv, cwd, roots, writable, policy=None):
+    """Popen arguments of the sandboxed command: its argv and inherited descriptors.
+
+    policy holds the protected patterns and whether the operator's sandbox_network keeps
+    the network; every mask stays either way, and the private /run then shows the
+    resolver configuration.
+    """
+    protected = (policy or {}).get("protected", protected_paths.DEFAULT_PATTERNS)
+    network = (policy or {}).get("network") is True
     mounts = [
         *sandbox_mounts.private(),
         *sandbox_mounts.home(),
         *sandbox_mounts.installation(argv[0]),
         *sandbox_mounts.project(roots, writable, protected, overlays()),
         *sandbox_mounts.credentials(argv[0], protected),
+        *(sandbox_mounts.RESOLVER if network else ()),
+        *UNSET_DESKTOP,
+        "--chdir",
+        str(cwd),
+        "--",
+        *argv,
     ]
-    desktop = [option for name in DESKTOP for option in ("--unsetenv", name)]
-    command = [*mounts, *desktop, "--chdir", str(cwd), "--", *argv]
-    with socket_filter.isolation(mode()) as launch:
-        arguments = [*BASE, *launch["args"], *command]
+    with socket_filter.isolation(None if network else mode()) as launch:
+        arguments = [*BASE, *launch["args"], *mounts]
         yield dict(launch, args=[executable(), *arguments])

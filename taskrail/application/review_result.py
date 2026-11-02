@@ -1,9 +1,11 @@
 """A reviewer's stage result: review.md read by the server, with resolved citations.
 
 A citation names an absolute path, a project path or a delivered source handle such
-as S1:10-12. When the session has no corrections left, a requirement whose citations
-it never confirmed becomes a gap naming that instead of failing the stage. The
-accepted review.md is kept beside the attempt.
+as S1:10-12. When the session has no corrections left, citations it never confirmed
+send the review to one fresh attempt that reads those lines; only if that attempt
+still cannot confirm them does the requirement become a gap that says so. Missing
+proof is not missing operator input, so it does not block the run at the first try.
+The accepted review.md is kept beside the attempt.
 """
 
 import re
@@ -12,7 +14,7 @@ from functools import partial
 from pathlib import Path
 
 from taskrail.application import citation_review, review_file, source_packet
-from taskrail.core import prompt_texts, review_document
+from taskrail.core import prompt_texts, review_document, review_lines
 from taskrail.core.plan_outcomes import absolute
 
 SOURCE_HANDLE = re.compile(r"S\d+")
@@ -51,11 +53,14 @@ def downgraded(record, records, context):
     failing = refuted(record["evidence"], records, context)
     if not failing:
         return record
+    unproven = [row for row in record["coverage"] if failing.intersection(row["evidence_ids"])]
+    if not context.get("rebuilt"):
+        named = review_lines.labels(unproven)
+        raise ValueError(prompt_texts.text("review.unproven", labels=named))
     suffix = " ({})".format(prompt_texts.text("review.unconfirmed"))
-    for row in record["coverage"]:
-        if failing.intersection(row["evidence_ids"]):
-            row.update(outcome=GAP, evidence_ids=[])
-            row["explanation"] += suffix
+    for row in unproven:
+        row.update(outcome=GAP, evidence_ids=[])
+        row["explanation"] += suffix
     return recounted(record, failing)
 
 

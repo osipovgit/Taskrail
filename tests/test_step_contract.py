@@ -25,10 +25,13 @@ class StepContractTests(unittest.TestCase):
         self.assertEqual(step_checks.names(child), ["lint"])
         self.assertEqual(child["steps"][0]["not_todo"], first["not_todo"])
 
-    def test_exclusion_requires_another_known_owner(self):
+    def test_not_todo_is_a_free_hint_that_never_rejects_a_plan(self):
         for text in ("T1: own work", "T3: absent task", "web role fixes", "T2:"):
-            with self.subTest(text=text), self.assertRaisesRegex(ValueError, "Not ToDo"):
-                payload(PLAN.replace("Notes:", f"Not ToDo: {text}\nNotes:"), REQUIREMENTS, ROOTS)
+            with self.subTest(text=text):
+                plan = payload(
+                    PLAN.replace("Notes:", f"Not ToDo: {text}\nNotes:"), REQUIREMENTS, ROOTS
+                )
+                self.assertEqual(plan["steps"][0]["not_todo"], [text])
 
     def test_required_recipe_is_executed_without_inventing_criterion_evidence(self):
         with tempfile.TemporaryDirectory() as directory:
