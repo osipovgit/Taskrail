@@ -110,7 +110,11 @@ already approved check. A changed frozen catalog stops continuation.
 Every planner turn has `plan.md` attached, so the planner edits it without reading it
 again.
 Unknown plan sections, unparsed ownership text and mismatched scope delimiters are
-errors, with line numbers. Put `## Answer` last: its remaining Markdown is the answer.
+errors, with line numbers. Inside a task, a line that is no plan key (an invented
+`Facts:` key or prose) is kept as part of its Notes; at the top of the plan it is named
+as not a plan key. `Files:` names exact paths; a pattern, directory or sentence there
+is reported with its line and entry. A `## T<n>: After the change` heading opens the
+after-change section, and a `None` line there lists no check. Put `## Answer` last: its remaining Markdown is the answer.
 A task may list `Not ToDo:` bullets: later work its implementer might be tempted to do.
 It is a hint, never a validation rule. The child's **Not ToDo** block combines them with
 every later task's title, results and files: work to leave to those tasks unless this

@@ -8,6 +8,7 @@ import math
 import re
 from types import MappingProxyType
 
+from taskrail.core import plan_files
 from taskrail.core.plan_keys import uncode
 from taskrail.core.plan_markdown import FIELDS, LINE, TASKS
 from taskrail.core.plan_outcomes import PLACEHOLDER, absolute, cited_ranges
@@ -42,6 +43,7 @@ def steps(document, coverage):
     """Every task section as a plan step, in the plan's order."""
     planned = []
     for task in document[TASKS]:
+        coverage.problems.extend(plan_files.of_task(task[FIELDS], task[LINE]))
         try:
             planned.append(step(task, coverage))
         except ValueError as error:
@@ -66,7 +68,7 @@ def step(task, coverage):
         depends_on=dependencies(task),
         checks=listed(task, "verify"),
         done_when=done,
-        notes=task[FIELDS].get("notes", ("", 0))[0],
+        notes=plan_files.notes(task[FIELDS]),
         read=cited_ranges(coverage, task[FIELDS].get("read", ([], 0))),
         not_todo=listed(task, "not_todo"),
         required_checks=listed(task, "required_checks"),

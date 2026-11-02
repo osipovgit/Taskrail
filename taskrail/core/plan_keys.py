@@ -8,6 +8,8 @@ BACKTICK = "`"
 MARKERS = ("**", "__", BACKTICK)
 DEPENDS = "depends"
 NOTES = "notes"
+# Lines of a task that are no key, kept as more notes.
+EXTRA = "extra"
 VERIFY = "verify"
 READ = "read"
 KEYS = MappingProxyType(
