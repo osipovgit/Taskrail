@@ -73,7 +73,12 @@ class TurnWatch:
         """Poll events until exit, a budget stop, a denial or the deadline."""
         while True:
             check_stop(self.attempt.parent)
-            status = turn_status(self.telemetry, self.turn.budgets, self.read())
+            status = turn_status(
+                self.telemetry,
+                self.turn.budgets,
+                self.read(),
+                self.telemetry.steps.reason == "stop",
+            )
             if status != SUCCESS:
                 stop_group(process.pid)
                 return status, process.wait()
@@ -121,9 +126,9 @@ def announce(watch):
     watch.clock["next"] = now + PROGRESS_SECONDS
 
 
-def turn_status(telemetry, budgets, lines):
+def turn_status(telemetry, budgets, lines, completed=False):
     """Stop on measured limits, permission denials or an explicit provider overflow."""
-    status = usage_limits.exceeded(telemetry, **budgets)
+    status = usage_limits.exceeded(telemetry, **budgets, completed=completed)
     if status == SUCCESS and any(permission_denied_event(line) for line in lines):
         return "BLOCKED_PERMISSION"
     if status == SUCCESS and any(context_exceeded_event(line) for line in lines):

@@ -149,7 +149,7 @@ class WrapperLifecycleTests(unittest.TestCase):
         operations = {record["args"][0] for record in self.records()}
         self.assertLessEqual({"--version", "serve", "api", "run"}, operations)
 
-    def test_gateway_and_reported_context_failures_keep_their_original_status(self):
+    def test_gateway_failure_and_completed_context_boundary_keep_distinct_statuses(self):
         command = self.command("1.x")
         with opencode_api.stage_server(command, self.root, ("WRAPPER_TOKEN",), False) as server:
             with patch.dict(os.environ, WRAPPER_GATEWAY="1"):
@@ -157,8 +157,13 @@ class WrapperLifecycleTests(unittest.TestCase):
             self.assertEqual(failure["status"], "TOOL_ERROR")
             self.assertIn("Retries exhausted", failure["errors"][0])
             with patch.dict(os.environ, WRAPPER_INPUT="20000"):
-                failure = self.launch(command, server)
+                completed = self.launch(command, server)
+            self.assertEqual(completed["status"], "OK", completed)
+            self.assertEqual(json.loads(completed["final_text"])["status"], "GIT_REQUEST")
+            previous = self.records()
+            failure = self.launch(command, server, completed["sessions"][0])
             self.assertEqual(failure["status"], "CONTEXT_EXCEEDED")
+            self.assertEqual(self.records(), previous)
 
     def test_failed_help_probe_never_silently_disables_stage_session_support(self):
         command = self.command("1.x")

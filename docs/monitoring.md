@@ -19,6 +19,12 @@ provider-reported input with the configured reserved capacity; no byte estimate 
 cumulative spend supplies a missing observation. Cost currency/rates are not
 verified. Provider quotas, not these counters, enforce billing limits.
 
+A provider-completed answer is validated even when its last input crosses the reserved
+boundary. The reserve prevents another generation in that session; it does not discard
+an already completed plan or review. Unfinished steps still stop at the boundary.
+Provider context errors, compaction, permission denials and total token limits remain
+hard stops. A completion event alone never approves the saved artifact.
+
 ## Server settings
 
 Edit `~/.config/taskrail/settings.json` (or the explicit `--settings` file). The
