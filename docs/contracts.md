@@ -180,9 +180,11 @@ session checks its claim against them; otherwise the correction
 names the bounded missing windows. Repeated identical planner rejection
 after same-session correction stops automatic fresh research retries. The session
 keeps its context and tools and edits only the lines the feedback names; every problem
-of `plan.md` or `review.md` names its line. When a review has no correction left, a
-requirement whose citations it never confirmed becomes a gap that says so, instead of
-failing the stage.
+of `plan.md` or `review.md` names its line. When a review has no correction left and
+some citations never reached the session in full, missing proof is not missing operator
+input: the review gets the full attempt below, told to read exactly those lines. Only
+if that attempt still cannot confirm them does each such requirement become a gap that
+says so.
 
 A plan or review still invalid after the corrections gets one full attempt with tools
 and the validation error; its file keeps its text. Validation errors name requirements

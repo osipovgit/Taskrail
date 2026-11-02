@@ -56,3 +56,9 @@ def finding(requirement, path, explanation, identifiers):
     cited = ", ".join(identifiers)
     described = f"{explanation} ({cited})"
     return dict(criterion=requirement, file=path, evidence=described)
+
+
+def labels(rows):
+    """The `R<n>` labels the explanations of stored review rows start with, comma-separated."""
+    explanations = (row["explanation"] for row in rows)
+    return ", ".join(stated.partition(":")[0] for stated in explanations)

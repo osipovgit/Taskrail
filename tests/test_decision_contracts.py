@@ -87,10 +87,11 @@ class DecisionContractTests(unittest.TestCase):
             ):
                 result_validation.validate(prose, self.context)
 
-    def review(self, *lines, final=False):
+    def review(self, *lines, final=False, rebuilt=False):
         text = "# Review\nSummary: Checked.\n\n## Requirements\n" + "\n".join(lines) + "\n"
         (self.run / "review.md").write_text(text)
-        return result_validation.validate("DONE", dict(self.context, deliver_lines=not final))
+        context = dict(self.context, deliver_lines=not final, rebuilt=rebuilt)
+        return result_validation.validate("DONE", context)
 
     def test_review_lines_become_the_stored_review_record(self):
         result = self.review(f"- R1: done: {self.path}:1")
@@ -181,8 +182,10 @@ class DecisionContractTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "unknown or repeated"):
             self.review(f"- R1: done: {self.path}:1", f"- R1: done: {self.path}:1")
 
-    def test_unconfirmed_evidence_becomes_a_gap_once_no_correction_follows(self):
-        result = self.review(f"- R1: done: {self.path}:2", final=True)
+    def test_unconfirmed_evidence_gets_a_fresh_attempt_before_it_becomes_a_gap(self):
+        with self.assertRaisesRegex(ValueError, "R1: the cited lines never reached"):
+            self.review(f"- R1: done: {self.path}:2", final=True)
+        result = self.review(f"- R1: done: {self.path}:2", final=True, rebuilt=True)
         self.assertEqual(result["status"], "BLOCKED")
         self.assertEqual(result["coverage"][0]["outcome"], "gap")
         self.assertIn("evidence not confirmed", result["blocking_gaps"][0])

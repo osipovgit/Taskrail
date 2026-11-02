@@ -74,6 +74,7 @@ class StageAttempts:
         workflow = self.workflow
         workflow.guard.verify("Source/Git changed before retry; recorded evidence is stale")
         folder, record = open_record(workflow, self.retries.mode())
+        record["result_rebuild"] = bool(self.retries.repair)
         record["writable_files"] = [str(path) for path in planned_files(workflow)]
         stage_artifacts.record_access(workflow, record)
         prompt = attempt_prompt(workflow, (folder, record), self.request, self.recovery)

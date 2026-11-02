@@ -1030,14 +1030,15 @@ class LiveTests(LiveFixture, unittest.TestCase):
         self.assertIn("Evidence E1", prompt)
         self.assertIn("range outside source of 3 lines", prompt)
 
-    def test_a_citation_still_wrong_after_the_corrections_becomes_a_gap(self):
+    def test_a_citation_wrong_after_the_corrections_gets_a_fresh_review_attempt(self):
         run, status, state = self.run_mode("bad-citation-kept")
-        self.assertEqual(status, "BLOCKED", state.get("summary"))
+        self.assertEqual(status, "READY_FOR_REVIEW", state.get("summary"))
         review = [stage for stage in state["stages"] if stage["stage"] == "plan-reviewer"]
-        self.assertEqual([stage["mode"] for stage in review], ["model"])
+        self.assertEqual([stage["mode"] for stage in review], ["model", "research-recovery"])
         self.assertEqual(review[0]["session_turns"], MAX_RESULT_CORRECTIONS + 1)
-        result = json.loads((run / review[0]["directory"] / "result.json").read_text())
-        self.assertIn("evidence not confirmed", result["blocking_gaps"][0])
+        self.assertIn("never reached this session", review[0]["contract_error"])
+        prompt = (run / review[1]["directory"] / "request.md").read_text()
+        self.assertIn("never reached this session", prompt)
 
     def test_markup_request_gets_the_json_format_in_the_same_session(self):
         run, status, state = self.run_mode("markup-request")
