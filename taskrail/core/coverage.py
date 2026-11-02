@@ -7,6 +7,7 @@ OUTCOME = "outcome"
 STATUS = "status"
 IDENTIFIER = "id"
 PLANNING = frozenset(("planner", "plan-reviewer"))
+CONTRADICTED = "contradicted"
 
 
 def unique(entries, label):
@@ -23,8 +24,18 @@ def validate_coverage(payload, requirements, stage, executed_evidence=(), planne
     evidence = unique(payload["evidence"], "evidence ID")
     permitted = planned_runtime if stage in PLANNING else ()
     for entry in requirements:
-        validate_outcome(outcomes[entry[IDENTIFIER]], entry, evidence, executed_evidence, permitted)
-    validate_findings(payload.get("findings", []), outcomes)
+        if stage == "plan-reviewer" and outcomes[entry[IDENTIFIER]][OUTCOME] == CONTRADICTED:
+            source_claim(outcomes[entry[IDENTIFIER]], evidence)
+        else:
+            validate_outcome(
+                outcomes[entry[IDENTIFIER]], entry, evidence, executed_evidence, permitted
+            )
+    findings = payload.get("findings", [])
+    unique(findings, "finding ID")
+    require(
+        all(finding["criterion"] in outcomes for finding in findings),
+        "Finding references unknown criterion",
+    )
     verdicts(payload, stage)
 
 
@@ -40,15 +51,20 @@ def check_ids(covered, expected):
 
 def validate_outcome(outcome, requirement, evidence, executed_evidence=(), planned_runtime=()):
     """A reference is necessary for source claims; runtime deferrals stay explicit."""
-    require(set(outcome["evidence_ids"]) <= set(evidence), "Unknown evidence ID")
-    if outcome[OUTCOME] in {"satisfied", "contradicted"}:
-        require(bool(outcome["evidence_ids"]), "Source claim needs observed evidence")
+    source_claim(outcome, evidence)
     if requirement["kind"] == "runtime":
         runtime_outcome(outcome, requirement, executed_evidence, planned_runtime)
     elif outcome[OUTCOME] == "deferred":
         raise ValueError(
             prompt_texts.diagnostic("validation.task_deferred", requirement=requirement[IDENTIFIER])
         )
+
+
+def source_claim(outcome, evidence):
+    """Plan defects need observed citations too, without pretending a proposed check ran."""
+    require(set(outcome["evidence_ids"]) <= set(evidence), "Unknown evidence ID")
+    if outcome[OUTCOME] in {"satisfied", CONTRADICTED}:
+        require(bool(outcome["evidence_ids"]), "Source claim needs observed evidence")
 
 
 def runtime_outcome(outcome, requirement, executed_evidence, planned_runtime):
@@ -83,20 +99,13 @@ def verdicts(payload, stage):
         require(bool(payload["unverified"]), "Deferred verification needs concrete instructions")
     if payload[STATUS] == "IMPLEMENTED":
         require(
-            not outcomes.intersection({"planned", "contradicted", "gap"}),
+            not outcomes.intersection({"planned", CONTRADICTED, "gap"}),
             "Implementation has unresolved criteria",
         )
     if payload[STATUS] == "APPROVE":
         require(not payload["findings"], "Approval cannot contain defects")
-        require("contradicted" not in outcomes, "Approval contradicts requirements")
+        require(CONTRADICTED not in outcomes, "Approval contradicts requirements")
         if stage == "reviewer":
             require("planned" not in outcomes, "Final review cannot approve future work")
     if payload[STATUS] == "REQUEST_CHANGES":
         require(bool(payload["findings"]), "Changes requested without findings")
-
-
-def validate_findings(findings, outcomes):
-    """Every defect belongs to a known criterion; IDs must be unique."""
-    unique(findings, "finding ID")
-    for finding in findings:
-        require(finding["criterion"] in outcomes, "Finding references unknown criterion")

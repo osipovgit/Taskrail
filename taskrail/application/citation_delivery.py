@@ -9,7 +9,13 @@ so the same session only checks its claim against them.
 
 from pathlib import Path
 
-from taskrail.application import evidence, evidence_delivery, evidence_scope, source_windows
+from taskrail.application import (
+    evidence,
+    evidence_delivery,
+    evidence_scope,
+    plan_review_evidence,
+    source_windows,
+)
 from taskrail.core import prompt_texts, protected_paths, source_lines
 
 DELIVERED_LINES = 60
@@ -49,6 +55,7 @@ def permitted(path, context):
     protected = protected_paths.patterns(context.get("check_config") or {})
     paths = map(Path, roots.values())
     inside = any(root in path.parents for root in paths)
+    inside = inside or path in plan_review_evidence.sources(context)
     return inside and source_windows.permitted(path, protected)
 
 

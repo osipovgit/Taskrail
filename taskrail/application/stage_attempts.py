@@ -27,6 +27,7 @@ from taskrail.application.attempt_session import (
     token_allowance,
     validated,
 )
+from taskrail.application.plan_review_evidence import paths as review_paths
 from taskrail.application.result_context import git_directory
 from taskrail.application.task_branch import KEY as TASK_BRANCH
 from taskrail.application.task_branch import extend as extend_beyond_plan
@@ -35,6 +36,7 @@ from taskrail.interactions.session import run_stage
 
 STATUS = "status"
 RUNNING = "RUNNING"
+STAGE = "stage"
 EXECUTION_KEYS = ("stage", "plan", "allowed", "feedback")
 
 
@@ -44,7 +46,7 @@ class StageAttempts:
     def __init__(self, workflow):
         """Build the stage request; consume evidence restored by a continuation."""
         self.workflow = workflow
-        request_limits.reset(workflow.run, workflow.flow["stage"])
+        request_limits.reset(workflow.run, workflow.flow[STAGE])
         self.request = first_request(workflow)
         self.recovery = workflow.runtime["recovery"]
         workflow.runtime["recovery"] = None
@@ -153,7 +155,7 @@ def previous_corrections(workflow):
     """A continuation repeats the access corrections of the interrupted stage."""
     if not workflow.runtime["resumed"]:
         return ""
-    stage = workflow.flow["stage"]
+    stage = workflow.flow[STAGE]
     return access_recovery.previous_correction(workflow.state, stage, workflow.config["roots"])
 
 
@@ -161,13 +163,16 @@ def evidence_roots(workflow):
     """Sources, executor output snapshots and original files that reads may cite."""
     run = workflow.run
     inputs = run / "00-input"
+    reference = workflow.state["results"].get("plan")
     return [
         *workflow.config["roots"].values(),
         git_directory(run),
         inputs / "ssh",
         inputs / "local",
+        inputs / "checks",
         inputs / "source-views",
         inputs / "preimages",
+        *review_paths(run, workflow.flow[STAGE], reference),
     ]
 
 

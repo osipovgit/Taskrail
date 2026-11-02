@@ -11,19 +11,27 @@ from taskrail.core import prompt_texts
 
 SPAN = r"(\d+)(?:\s*-\s*(\d+))?"
 CITATION = re.compile(rf"(?:`([^`\n]+):{SPAN}`|([^`\s,;()]+):{SPAN})")
-RANGE = re.compile(rf"{SPAN}(?=\s*(?:[,;()]|$))")
+RANGE = re.compile(rf"{SPAN}(?=\s*(?:[,;().]|$))")
 SEPARATOR = re.compile(r"\s*([,;])\s*")
 
 
 def parse(text, explanation=True):
     """Consume a citation list; reject malformed suffixes instead of dropping claims."""
+    return parts(text, explanation)[0]
+
+
+def parts(text, explanation=True):
+    """Return explicit citations and their trailing explanation, with sentence punctuation."""
     found, remaining = citation(text.strip())
     while remaining.strip():
         if explanation and explained(remaining):
-            return found
+            detail = remaining.strip().removesuffix(".")
+            return found, detail[1:-1].strip()
+        if explanation and remaining.strip() == ".":
+            return found, ""
         entries, remaining = following(remaining, found[-1][0])
         found.extend(entries)
-    return found
+    return found, ""
 
 
 def explained(text):
@@ -37,7 +45,7 @@ def explained(text):
     for position, character in enumerate(text):
         depth += (character == "(") - (character == ")")
         if depth == 0:
-            return position == len(text) - 1
+            return text[position + 1 :] in {"", "."}
     return False
 
 
@@ -45,7 +53,7 @@ def following(text, previous):
     """A separator introduces a complete path citation or another range of that path."""
     separator = SEPARATOR.match(text)
     if separator is None:
-        raise invalid()
+        raise ValueError(prompt_texts.diagnostic("validation.plan_citations"))
     remaining = text[separator.end() :]
     shorthand = RANGE.match(remaining) if separator[1] == "," else None
     if shorthand:
@@ -58,15 +66,10 @@ def citation(text):
     """Read one complete citation, including paths with spaces when backtick-quoted."""
     match = CITATION.match(text)
     if match is None:
-        raise invalid()
+        raise ValueError(prompt_texts.diagnostic("validation.plan_citations"))
     groups = match.groups()
     span = groups[:3] if groups[0] else groups[3:]
     return [span], text[match.end() :]
-
-
-def invalid():
-    """Validation diagnostics follow the parser version, independently of frozen prompts."""
-    return ValueError(prompt_texts.diagnostic("validation.plan_citations"))
 
 
 def hints(entries, resolve):

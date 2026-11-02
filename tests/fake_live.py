@@ -12,6 +12,7 @@ from fake_contract import attempt, earlier_invalid, enrich, plan_text, review_te
 from fake_file_writes import event as file_event
 from fake_file_writes import implement
 from fake_report_repair import executor_result, report_result
+from fake_review_proposal import proposal
 
 args = sys.argv[1:]
 if "--version" in args:
@@ -550,6 +551,8 @@ if role == "planner" and header["permission"]["edit"].get(str(plan)) == "allow":
             outcome = "all tasks (ongoing obligation)" if continued else f"done: {request_file}:1"
             plan.write_text(plan.read_text().replace("- R1 → T1", f"- R1 → {outcome}"))
     response = "DONE"
+if mode == "plan-review-citations":
+    response = proposal(context, role, run, print) or response
 writer_prose = mode in {"writer-prose-always", "writer-extra-prose-always"} or (
     mode == "writer-prose" and not continued
 )

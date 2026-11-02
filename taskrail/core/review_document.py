@@ -82,11 +82,11 @@ class Review:
         if not cited:
             return [], detail
         try:
-            spans = plan_citations.parse(detail)
+            spans, explanation = plan_citations.parts(detail)
         except ValueError as error:
             self.problems.append("line {}: {}".format(entry["line"], error))
-            return [], review_lines.parenthesized(detail)
-        return [self.evidence(*span) for span in spans], review_lines.parenthesized(detail)
+            return [], ""
+        return [self.evidence(*span) for span in spans], explanation
 
     def evidence(self, name, start, end):
         """One cited range as an evidence entry; returns its ID."""
