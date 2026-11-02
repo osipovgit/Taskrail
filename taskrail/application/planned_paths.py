@@ -29,7 +29,7 @@ def safe_file(name, roots, protected=()):
 def planned_parts(name, roots, protected=()):
     """Split a normalized alias/relative/file name."""
     if not isinstance(name, str) or not name or WILDCARDS.intersection(name):
-        raise ValueError("Invalid planned file")
+        raise ValueError(f"Invalid planned file (an exact path without wildcards): {name!r}")
     if not normalized(name, roots):
         raise ValueError(f"Use normalized alias/relative/file: {name}")
     parts = Path(name).parts
