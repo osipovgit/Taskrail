@@ -48,16 +48,24 @@ def announcement(process, received):
     received.extend(chunk)
     if len(received) > MAX_BYTES:
         raise ValueError("opencode server readiness announcement is too large")
-    if b"\n" in received:
-        return address(received.split(b"\n", 1)[0])
+    for line in received.split(b"\n")[:-1]:
+        url = address(line)
+        if url is not None:
+            return url
     return None
 
 
 def address(announcement):
-    """A structured announcement or a `listening on <url>` line, nothing else."""
+    """The URL of a structured announcement or a `listening on <url>` line.
+
+    Other text, such as a wrapper's banner or a warning, is None; a JSON line must be a
+    valid announcement.
+    """
     found = LISTENING.search(announcement)
     if found:
         return local_url(found.group(1).decode())
+    if not announcement.lstrip().startswith((b"{", b"[")):
+        return None
     ready = json.loads(announcement)
     url = ready.get("url") if isinstance(ready, dict) else None
     if not isinstance(url, str):

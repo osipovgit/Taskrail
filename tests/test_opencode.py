@@ -670,7 +670,12 @@ class ServerStartupTests(unittest.TestCase):
         return opencode_server.Server([sys.executable, str(script)], str(root))
 
     def test_silence_and_partial_lines_have_a_deadline_and_release_the_child(self):
-        for code in ("time.sleep(10)", "sys.stdout.write('{'); sys.stdout.flush(); time.sleep(10)"):
+        codes = (
+            "time.sleep(10)",
+            "sys.stdout.write('{'); sys.stdout.flush(); time.sleep(10)",
+            "print('a warning, not an announcement', flush=True); time.sleep(10)",
+        )
+        for code in codes:
             with self.subTest(code=code), tempfile.TemporaryDirectory() as directory:
                 server = self.server(code, Path(directory))
                 server.startup["timeout"] = 0.1
@@ -682,7 +687,7 @@ class ServerStartupTests(unittest.TestCase):
                 self.assertTrue(server.process.stdout.closed)
 
     def test_malformed_missing_remote_or_empty_announcements_release_the_child(self):
-        announcements = ("broken", "[]", "{}", '{"url":"https://example.org"}', "x" * 9000)
+        announcements = ("{broken", "[]", "{}", '{"url":"https://example.org"}', "x" * 9000)
         codes = [f"print({line!r}, flush=True); time.sleep(10)" for line in announcements]
         codes.append("sys.exit(0)")
         for code in codes:
