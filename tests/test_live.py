@@ -743,6 +743,24 @@ class LiveTests(LiveFixture, unittest.TestCase):
         self.assertEqual(header["permission"]["edit"][str(run / "plan.md")], "allow")
         self.assertEqual(header["permission"]["edit"]["*"], "deny")
 
+    def test_instruction_citation_repairs_to_owned_work_without_a_new_session(self):
+        self.task.write_text(self.task.read_text() + "\n\nKeep unrelated files.\n")
+        run, status, state = self.run_mode("plan-instruction-citation")
+        self.assertEqual(status, "READY_FOR_REVIEW", state.get("summary"))
+        planner = state["stages"][0]
+        self.assertEqual((planner["status"], planner["session_turns"]), ("RESULT_VALID", 2))
+        self.assertEqual(sum(entry["stage"] == "planner" for entry in state["attempts"]), 1)
+        feedback = (run / "01-plan/tool-result.md").read_text()
+        self.assertIn("R1: Path outside", feedback)
+        self.assertIn("Changing the attempt number", feedback)
+        self.assertIn("all tasks", feedback)
+        plan = json.loads((run / "01-plan/result.json").read_text())
+        self.assertEqual(plan["coverage"][0]["outcome"], "planned")
+        self.assertEqual(plan["evidence"], [])
+        self.assertEqual(
+            set(plan["steps"][0]["criteria"]), {entry["id"] for entry in state["requirements"]}
+        )
+
     def test_structured_steps_are_validated_without_model_retry(self):
         run, status, state = self.run_mode("structured-steps")
         self.assertEqual(status, "READY_FOR_REVIEW")

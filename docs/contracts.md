@@ -211,11 +211,18 @@ to the only declared root; basenames are never searched for or guessed. Every
 explicit range still needs matching observed current lines. A diff alone does not
 establish that an unrun check passed.
 
+Run instructions and result artifacts (`request.md`, `plan.md`, `review.md`,
+`recovery.md`) never prove completion, even if observed. Path feedback names the
+affected requirements; changing the attempt path or inventing a source handle does
+not fix it. Assign ongoing obligations to tasks; cite current source or executor
+snapshots for completed work, or declare a blocking evidence gap.
+
 `runtime` may be followed by `: <check>`; without it the requirement text is the check.
-`all tasks` makes the requirement an obligation of every task (it needs at least one
-task). `Read:` lists `path:from-to` ranges the planner read; they are validated like any
-citation and delivered as source to the task's implementer, so a split task, which is
-implemented directly from the reviewed plan, starts with the planner's findings.
+`all tasks` (optionally followed by a parenthesized reason) makes the requirement an
+obligation of every task; it needs at least one task and is not a completed claim.
+`Read:` lists `path:from-to` hints for the implementer's first reads; these hints are
+not evidence that the planner observed the source. A split task starts from the
+reviewed plan and its independently validated citations.
 
 Plan syntax, dependency parsing, scopes and field diagnostics are specified in
 [task format](task-format.md). Invalid plans receive all line-specific errors before

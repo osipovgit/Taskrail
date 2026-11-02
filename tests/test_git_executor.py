@@ -9,7 +9,7 @@ from unittest.mock import patch
 
 from run_fixture import current_run
 
-from taskrail.application import result_validation
+from taskrail.application import result_paths, result_validation
 from taskrail.application.git_state import git_metadata
 from taskrail.application.plan_validation import validate_plan
 from taskrail.application.source_tree import snapshot
@@ -607,7 +607,7 @@ class GitExecutorTests(unittest.TestCase):
             result_validation.approved_path(str(transcript), self.roots)
         with self.assertRaisesRegex(ValueError, "not run artifacts such as changes.diff"):
             result_validation.approved_path(
-                str(self.run / "changes.diff"), self.roots, result_validation.EVIDENCE_FILES
+                str(self.run / "changes.diff"), self.roots, result_paths.EVIDENCE_FILES
             )
         with self.assertRaisesRegex(ValueError, "cite executor snapshots only in evidence"):
             result_validation.approved_path(

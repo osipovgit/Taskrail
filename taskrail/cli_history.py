@@ -51,10 +51,3 @@ def main(argv=None):
     args = parser.parse_args(argv)
     archived = archive_old(run_storage(args.settings, args.runs_dir))
     sys.stdout.write(f"{json.dumps(dict(archived=archived))}\n")
-
-
-def command(argv):
-    """Dispatch through the common CLI error handler."""
-    from taskrail.cli import guarded
-
-    return guarded(lambda: main(argv[1:]))
