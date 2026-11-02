@@ -2,9 +2,8 @@
 
 from pathlib import Path
 
-from taskrail.application import citation_review
+from taskrail.application import citation_review, evidence_scope
 from taskrail.core import prompt_texts, schema
-from taskrail.git.requests import output_directory
 
 EVIDENCE_FILES = "declared roots, verified source views, preimages or executor snapshots (not run artifacts such as changes.diff or recovery.md)"
 
@@ -35,20 +34,11 @@ def path_feedback(payload, claim, error, stage):
 
 def allowed_roots(claim, context):
     """Run artifacts remain excluded even if a broad project root contains the run."""
-    if context["run"] in Path(claim["path"]).parents:
-        return snapshots(context["run"])
-    return context["roots"]
-
-
-def snapshots(run):
-    """The run-owned directories that may contain independently recorded evidence."""
+    if context["run"] not in Path(claim["path"]).parents:
+        return context["roots"]
     return dict(
-        git_evidence=output_directory(run),
-        ssh_evidence=run / "00-input/ssh",
-        local_evidence=run / "00-input/local",
-        check_evidence=run / "00-input/checks",
-        source_views=run / "00-input/source-views",
-        preimages=run / "00-input/preimages",
+        evidence_scope.roots(context["run"], Path(claim["path"]), context["roots"]),
+        source_views=context["run"] / "00-input/source-views",
     )
 
 

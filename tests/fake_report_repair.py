@@ -71,3 +71,46 @@ def observed(path, offset, limit, emit, clip=False):
     identity = f"{path.name}-{offset}"
     part = dict(id=identity, callID=identity, tool="read", state=state)
     emit(json.dumps(dict(type="tool_use", part=part)), flush=True)
+
+
+def executor_result(context, prompt, emit):
+    """Run one real local read, cite its clipped JSON, then repair to the exact sidecar."""
+    root = Path(context["roots"]["project"])
+    run = Path(context["task_file"]).parent.parent
+    snapshot = run / "00-input/local/01-plan-0.json"
+    stream = snapshot.with_suffix(".stdout.txt")
+    if not snapshot.exists():
+        response = json.dumps(
+            dict(
+                schema_version=1,
+                status="LOCAL_REQUEST",
+                cwd=str(root),
+                argv=["cat", "versions.txt"],
+                reason="Read recorded version output",
+            )
+        )
+    elif context["stage"] == "planner":
+        repaired = "instead of the JSON string" in prompt
+        if repaired:
+            source, line = stream, 1
+        else:
+            source = snapshot
+            line = next(
+                i for i, text in enumerate(source.read_text().splitlines(), 1) if '"stdout"' in text
+            )
+        observed(source, line, 1, emit, clip=not repaired)
+        observed(run / "plan.md", 1, 200, emit)
+        (run / "plan.md").write_text(
+            f"Decision: no change\nSummary: Tool versions recorded\n## Requirements\n- R1 → done: {source}:{line}\n"
+        )
+        response = "Version report complete.\nDONE0"
+    else:
+        observed(stream, 1, 1, emit)
+        (run / "review.md").write_text(f"Summary: Versions verified\nR1: done: {stream}:1\n")
+        response = "DONE"
+    for kind, part in (
+        ("text", dict(text=response)),
+        ("step_finish", dict(reason="stop", tokens=dict(input=100, output=10))),
+    ):
+        part.update(id=kind, messageID="final")
+        emit(json.dumps(dict(type=kind, part=part, sessionID="ses1")), flush=True)

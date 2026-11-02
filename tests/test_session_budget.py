@@ -137,6 +137,15 @@ class SessionBudgetTests(unittest.TestCase):
         self.assertIsNone(telemetry.summary()["last_input"])
         self.assertEqual(usage_limits.exceeded(telemetry, None, 1000), "OK")
 
+    def test_completion_exempts_only_context_reserve_not_total_budget(self):
+        telemetry = Telemetry()
+        telemetry.observe(json.dumps(usage("last", 1000, total=2000)))
+        self.assertEqual(usage_limits.exceeded(telemetry, None, 1000, completed=True), "OK")
+        self.assertEqual(
+            usage_limits.exceeded(telemetry, 2000, 1000, completed=True), "TOKEN_BUDGET_EXCEEDED"
+        )
+        self.assertEqual(usage_limits.exceeded(telemetry, None, 1000), "CONTEXT_EXCEEDED")
+
     def test_compaction_markers_stop_even_without_provider_usage(self):
         for event in (
             dict(type="session.compacted"),

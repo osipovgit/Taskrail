@@ -9,7 +9,7 @@ so the same session only checks its claim against them.
 
 from pathlib import Path
 
-from taskrail.application import evidence, evidence_delivery, source_windows
+from taskrail.application import evidence, evidence_delivery, evidence_scope, source_windows
 from taskrail.core import prompt_texts, protected_paths, source_lines
 
 DELIVERED_LINES = 60
@@ -37,17 +37,18 @@ def numbered(missing, numbers):
 
 
 def deliverable(path, error, context):
-    """A bounded, current, permitted window inside the declared roots."""
+    """A bounded, current window of permitted source or executor evidence."""
     if not permitted(path, context) or not bounded(error.missing):
         return False
     return evidence.fingerprint(path) == error.source_sha256
 
 
 def permitted(path, context):
-    """Inside a declared root and not a protected path."""
-    roots = [Path(root) for root in context["roots"].values()]
+    """Inside source or executor evidence roots and not a protected path."""
+    roots = evidence_scope.roots(context["run"], path, context["roots"])
     protected = protected_paths.patterns(context.get("check_config") or {})
-    inside = any(root in path.parents for root in roots)
+    paths = map(Path, roots.values())
+    inside = any(root in path.parents for root in paths)
     return inside and source_windows.permitted(path, protected)
 
 

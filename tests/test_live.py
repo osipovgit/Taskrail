@@ -20,6 +20,33 @@ from taskrail.interactions.session import MAX_RESULT_CORRECTIONS
 
 
 class LiveTests(LiveFixture, unittest.TestCase):
+    def test_clipped_executor_json_repairs_in_same_session_without_reexecuting_command(self):
+        self.task.write_text(
+            self.task.read_text().replace("Return 2", "Report recorded tool versions")
+        )
+        (self.root / "versions.txt").write_text("ansible-lint 26.9.0\n" + "details\n" * 1000)
+        run, status, state = self.run_mode("executor-repair")
+        self.assertEqual(status, "NO_CHANGES_REQUIRED", state.get("summary"))
+        planners = [entry for entry in state["stages"] if entry["stage"] == "planner"]
+        self.assertEqual(len(planners), 1)
+        self.assertEqual(planners[0]["session_turns"], 3)
+        self.assertEqual(planners[0]["result_corrections"], 1)
+        self.assertEqual(len(json.loads((run / "local-execution.json").read_text())), 1)
+        proof = json.loads((run / "01-plan/evidence-bindings.json").read_text())[0]
+        self.assertEqual(proof["excerpt"], "ansible-lint 26.9.0")
+        self.assertIn("DONE0", (run / "01-plan/response.raw.txt").read_text())
+
+    def test_finished_planner_at_context_boundary_is_validated_without_research_restart(self):
+        run, status, state = self.run_mode(
+            "complete-at-boundary", model_context_tokens=15000, context_reserve_tokens=5000
+        )
+        self.assertEqual(status, "READY_FOR_REVIEW", state.get("summary"))
+        plans = [entry for entry in state["stages"] if entry["stage"] == "planner"]
+        self.assertEqual(len(plans), 1)
+        self.assertEqual(plans[0]["status"], "RESULT_VALID")
+        self.assertEqual(plans[0]["session_turns"], 1)
+        self.assertIn("DONE0", (run / "01-plan/response.raw.txt").read_text())
+
     def test_large_reports_repair_together_without_a_new_planner_session(self):
         text = self.root / "issues.txt"
         text.write_text("".join(f"Finding {number}\n" for number in range(1, 1046)))
