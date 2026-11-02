@@ -8,7 +8,7 @@ and custom installations, so later binds cannot expose a masked configuration ag
 import os
 from pathlib import Path
 
-from taskrail.infrastructure import sandbox_paths, sandbox_secrets
+from taskrail.infrastructure import sandbox_cache, sandbox_paths
 
 GIT = ".git"
 NULL = "/dev/null"
@@ -54,7 +54,7 @@ def project(roots, writable, protected, overlays):
         metadata = str(root / GIT)
         if os.path.exists(metadata):
             options.extend((READ_ONLY, metadata, metadata))
-    options.extend(sandbox_secrets.masks(roots.values(), protected, project=True))
+    options.extend(sandbox_cache.masks(roots.values(), protected, project=True))
     return options
 
 
@@ -65,6 +65,6 @@ def discarded(directory):
 
 def credentials(program, protected):
     """Mask credentials exposed by runtime mounts after all project binds."""
-    return sandbox_secrets.masks(
+    return sandbox_cache.masks(
         (*sandbox_paths.home(), *sandbox_paths.installation(program)), protected
     )

@@ -97,7 +97,9 @@ approval ledger with `"rule": "sandbox"`:
   properties, Cargo credentials/configuration, Gem credentials, npm/pip authentication,
   Git credentials/configuration and provider `auth.json` files. Configured protected
   patterns add masks; they cannot remove these mandatory sandbox masks. Arbitrarily
-  named secrets in exposed runtime/cache files still need explicit protected patterns;
+  named secrets in exposed runtime/cache files still need explicit protected patterns.
+  The mask list of a tree is reused while none of its directories changes, so commands
+  start without rescanning large toolchain caches;
 - a declared project's ordinary `.config` files, including linter configuration,
   remain readable. Credential patterns still apply inside them; aliases into the
   user's `~/.config` and runtime/cache `.config` directories remain private;
