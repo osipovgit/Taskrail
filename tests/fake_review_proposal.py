@@ -12,7 +12,7 @@ def proposal(context, role, run, emit):
             plan.write_text(
                 plan.read_text().replace("- Static review", "- Skip required verification")
             )
-        return
+        return None
     if role == "plan-reviewer":
         if not (run / "local-execution.json").exists():
             return json.dumps(
@@ -48,3 +48,4 @@ def proposal(context, role, run, emit):
             )
             + "\n"
         )
+    return None

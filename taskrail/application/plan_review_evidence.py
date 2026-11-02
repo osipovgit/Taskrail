@@ -12,12 +12,12 @@ STAGE = "plan-reviewer"
 def paths(run, stage, reference):
     """Exact files of the current accepted planner result, not its whole attempt directory."""
     if stage != STAGE or not reference:
-        return ()
+        return []
     snapshot = run / reference
     canonical = snapshot.resolve() == snapshot and snapshot.parent.parent == run
     if not canonical or snapshot.name != "result.json":
-        return ()
-    return run / "plan.md", snapshot.parent / "plan.md", snapshot
+        return []
+    return [run / "plan.md", snapshot.parent / "plan.md", snapshot]
 
 
 def sources(context):
