@@ -22,6 +22,7 @@ def parse(outcome, record, state, environment):
             folder=environment["run"] / record["directory"],
             session_id=unique_session(outcome),
             plan=environment["plan"],
+            plan_reference=state.get("results", {}).get("plan"),
             changed=tool_paths(state["changed_files"], environment[ROOTS]),
             check_config=environment.get("check_config", {}),
             deliver_lines=environment.get("deliver_lines", False),

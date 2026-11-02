@@ -103,6 +103,18 @@ no-change and integration reviews as well as reviews of edits. Models cannot
 override observed changes, granted scope, check records or the derived verdict.
 Executor claims need exact snapshot lines too; a prose summary alone is not proof.
 
+Single lines (`:41` or `:41-41`), multiple citations separated by commas or semicolons,
+and a final period after a citation or parenthesized explanation are valid. Prose in
+parentheses does not add citations; text or extra citations after that explanation
+remain invalid. Quoted paths may contain spaces and parentheses.
+
+During plan review only, `planned` and `fails` may cite the current `plan.md`, its
+accepted planner copy or that planner's `result.json`. Both plan copies must match,
+and the result must match the proposal the workflow is reviewing. These lines still
+need observation in the active session. A plan defect in a runtime check requests
+replanning without claiming that the check ran. Plan artifacts never prove `done`,
+and final, integration and delivery reviews still require source or executor evidence.
+
 Compact evidence references use `S1:10-12` for a delivered source handle or
 `/absolute/path:10-12` for a new observed read. The server assigns canonical evidence
 IDs and resolves handles to their path, source version and exact delivered range.
@@ -130,7 +142,7 @@ The same repair applies to canonical executor snapshots and preimages. Small mis
 windows may be delivered in correction feedback. If a JSON output string is too long,
 feedback points to its existing plain-text stream only after matching it to the exact
 snapshot value. Read the relevant stream lines and cite them; pointers alone grant no
-evidence, and the command need not run again. Internal run artifacts and symlinks remain
+evidence, and the command need not run again. Other internal run artifacts and symlinks remain
 excluded, including when a broad project root contains the run directory.
 
 Stage prompts can carry a source packet of at most 4,000 serialized UTF-8 bytes,
