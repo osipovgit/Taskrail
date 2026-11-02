@@ -35,7 +35,7 @@ def measure(environment):
     status = 0
     for name, arguments in suites.items():
         with (OUTPUT / f"{name}.log").open("w") as output:
-            arguments = ["run", "-m", "unittest", "discover", *arguments]
+            arguments = ["run", "-m", "unittest", "discover", "-b", *arguments]
             status = max(status, coverage(arguments, environment, output))
     return status
 

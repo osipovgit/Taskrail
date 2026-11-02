@@ -25,13 +25,13 @@ format-check: tool-versions
 test: test-python test-ui
 test-python: tool-versions
 	@# A private HOME keeps the real workflow lock and installed settings out of the tests.
-	taskrail_test_home=$$(mktemp -d) && HOME=$$taskrail_test_home $(PYTHON) -m unittest discover -s tests; \
+	taskrail_test_home=$$(mktemp -d) && HOME=$$taskrail_test_home $(PYTHON) -m unittest discover -b -s tests; \
 		status=$$?; rm -rf "$$taskrail_test_home"; exit $$status
 test-ui:
 	npm test
 # Explicit operator request only; neither target is a dependency of check or CI.
 test-acceptance: tool-versions
-	taskrail_test_home=$$(mktemp -d) && HOME=$$taskrail_test_home PYTHONPATH=.:tests $(PYTHON) -m unittest discover -s tests/acceptance -p 'scenario_*.py' -v; \
+	taskrail_test_home=$$(mktemp -d) && HOME=$$taskrail_test_home PYTHONPATH=.:tests $(PYTHON) -m unittest discover -b -s tests/acceptance -p 'scenario_*.py' -v; \
 		status=$$?; rm -rf "$$taskrail_test_home"; exit $$status
 test-coverage: tool-versions
 	$(PYTHON) tools/test_coverage.py
