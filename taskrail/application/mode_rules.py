@@ -48,8 +48,10 @@ def mode_rule(config, stage):
     if config.get("phase") == "task":
         return task_rule(config, stage)
     key = mode_key(config, stage)
-    if key in PLANNING_RULES:
+    if key in PLANNING_RULES and stage == PLANNER:
         return planning_rule(key)
+    if key in PLANNING_RULES:
+        return "\n".join((text("mode.planner_rules"), planning_rule(key)))
     return text(key) if key else ""
 
 
