@@ -51,9 +51,9 @@ Every **Develop** task goes through the same steps:
    authenticates the approved parent plan, criteria, file scope and prerequisite
    source/Git snapshots; independent result review still follows. A child is never
    planned again: it cannot split. Its brief lists the earlier tasks, which may already
-   contain parts of its work, and the later tasks' owned results under **Not ToDo**.
-   If completion requires transferring another task's deliverable, it reports the exact
-   scope decision needed. In isolated worktrees it may change necessary files beyond
+   contain parts of its work, and under **Not ToDo** the later tasks' results and the
+   planner's notes: work to leave alone unless the task cannot work without a part of
+   it, which it then does minimally and names in its summary. In isolated worktrees it may change necessary files beyond
    its plan and ends with verified commit receipts
    ([worktree isolation](task-format.md#worktree-isolation)). A contract that cannot be met
    reports the required parent replanning instead of launching nested tasks.

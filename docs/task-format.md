@@ -111,10 +111,11 @@ Every planner turn has `plan.md` attached, so the planner edits it without readi
 again.
 Unknown plan sections, unparsed ownership text and mismatched scope delimiters are
 errors, with line numbers. Put `## Answer` last: its remaining Markdown is the answer.
-Each task can declare `Not ToDo: T2: <excluded result>` to name another task's
-behavioral ownership, even when both tasks edit the same file. The child also receives
-later tasks' observable results. A necessary additional file is allowed on an owned
-task branch; taking over another task's deliverable requires an explicit scope decision.
+A task may list `Not ToDo:` bullets: later work its implementer might be tempted to do.
+It is a hint, never a validation rule. The child's **Not ToDo** block combines them with
+every later task's title, results and files: work to leave to those tasks unless this
+task cannot work without it, in which case the implementer does only the minimum and
+names it in its summary. A necessary additional file is allowed on an owned task branch.
 `Required checks:` lists exact local recipe IDs, one per bullet, or `none`. Selected
 gates run before that task can finish and again on the combined integration result.
 Unknown recipes, remote recipes and model-authored commands are rejected. `Verify`

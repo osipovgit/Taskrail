@@ -100,7 +100,8 @@ them. The planner and reviewer reject only artificial companion tasks that separ
 tests or documentation from the implementation that owes them. Each task still needs
 observable acceptance criteria, planned files and appropriate verification. On an
 authenticated task branch, necessary additional files within permitted roots remain
-allowed; Not ToDo records excluded outcomes and their owning task IDs. In-place runs
+allowed; Not ToDo names later work to leave alone unless the task needs a part of it,
+which the summary names. In-place runs
 retain their exact approved file boundary.
 
 Review lines use the assigned requirement labels. A failure needs its problem;

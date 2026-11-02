@@ -69,7 +69,6 @@ def current_contract(task):
         action=task["goal"],
         checks=checks,
         required="\n".join(task.get("required_checks", [])),
-        excluded="\n".join(task.get("not_todo", [])),
         notes=notes,
     )
     if len(text) > CONTRACT_BUDGET:
