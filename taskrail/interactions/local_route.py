@@ -92,7 +92,7 @@ def executed(actions, payload, decision):
         context[local_sandbox.WRITES] = writes(actions)
     context["timeout"] = actions.session.clock.remaining()
     answer = local_actions.execute(actions.run, actions.folder, payload, context, decision)
-    response = actions.local_result(payload, answer)
+    response = actions.local_result(payload, answer) + local_sandbox.offline_note(answer, context)
     effects = command_effects.adopt(actions.session, answer.get("action_id"))
     return f"{response}\n{effects}" if effects else response
 

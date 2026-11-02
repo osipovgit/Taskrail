@@ -373,6 +373,19 @@ class SandboxRouteTests(unittest.TestCase):
             ledger = [json.loads(path.read_text()) for path in run.glob("approval-*.json")]
             self.assertEqual([entry["response"]["rule"] for entry in ledger], ["host"])
 
+    def test_a_command_that_failed_for_lack_of_network_gets_an_offline_hint(self):
+        failed = dict(status="FAILED", stderr="ERROR: Temporary failure in name resolution")
+        sandboxed = {local_sandbox.WRITES: False, "config": {}}
+        self.assertIn("--offline", local_sandbox.offline_note(failed, sandboxed))
+        self.assertIn('"sandbox": false', local_sandbox.offline_note(failed, sandboxed))
+        for answer, context in (
+            (dict(failed, status="SUCCEEDED"), sandboxed),
+            (dict(failed, stderr="E501 line too long"), sandboxed),
+            (failed, {"config": {}}),
+            (failed, dict(sandboxed, config=dict(sandbox_network=True))),
+        ):
+            self.assertEqual(local_sandbox.offline_note(answer, context), "")
+
     def test_a_request_may_ask_for_the_host_and_is_then_another_action(self):
         on_host = local.extract(json.dumps(request(sandbox=False)))
         with patch.object(sandbox, "mode", return_value=sandbox.NAMESPACE):

@@ -228,5 +228,6 @@
   "recovery.invalid_tool": "The tool request was rejected before execution: $error. Use only the tools in your current tool list or the documented typed executor requests. Continue the current stage and finish in its required format.",
   "example.git": "Example GIT_REQUEST: {\"schema_version\":1,\"status\":\"GIT_REQUEST\",\"root\":\"/absolute/root\",\"argv\":[\"log\",\"--oneline\",\"-5\",\"--\",\"path/file.py\"],\"reason\":\"Find the commit that changed the parser\"}",
   "example.local": "Example LOCAL_REQUEST: {\"schema_version\":1,\"status\":\"LOCAL_REQUEST\",\"cwd\":\"/absolute/root\",\"argv\":[\"python3\",\"-m\",\"pytest\",\"-q\",\"tests/test_parser.py\"],\"reason\":\"Run the changed tests\"}. Add \"sandbox\": false only when the command needs the network or host files outside the sandbox.",
-  "review.unproven": "$labels: the cited lines never reached this session in full, so the claims are not proven. Read exactly those lines with the read tool, then keep each claim that they support and correct the others."
+  "review.unproven": "$labels: the cited lines never reached this session in full, so the claims are not proven. Read exactly those lines with the read tool, then keep each claim that they support and correct the others.",
+  "feedback.offline": "The command failed because the sandbox has no network. Run it again with an offline option (for example ansible-lint --offline, pip --no-index) or, if it really needs the network, with \"sandbox\": false and a reason; that runs it on the host."
 }
