@@ -120,8 +120,8 @@ its exact opencode session. It binds the current source hash and excerpt in
 `evidence-bindings.json`. Whitespace is not significant; each complete cited line
 must have reached the model. A clipped prefix cannot prove an unseen suffix.
 One citation may combine several windows of the same current source version. The
-binding records every contributing observation and its exact line ranges, retaining
-the primary event fields for compatibility. Repeated partial reads do not erase
+binding records every contributing observation and its exact line ranges. Repeated
+partial reads do not erase
 earlier complete observations. Besides the declared roots, a citation may name source
 views, executor snapshots and the preimages under `00-input/preimages`: the original
 files a review compares, for example to show a removed line.
@@ -197,8 +197,7 @@ material and keeps unresolved requirements explicit. `recovery.md` starts with a
 index: each recorded call with its target, window, size and the line range of its
 block in the file. The recovery prompt names the index lines and asks for windows of
 at most 200 lines, because the whole file can be larger than the model context.
-Index sizes are derived from the saved output; older observations need no
-`saved_chars` field. Original truncation and source provenance remain unchanged. A
+Index sizes are derived from the saved output. Original truncation and source provenance remain unchanged. A
 follow-up history over 24,000 bytes reaches the prompt the same way: the latest turn
 inline and the indexed, readable `00-input/history.md`; `task.md` stays verbatim and
 the frozen input integrity guard covers it whole. A no-change completion still
