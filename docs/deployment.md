@@ -354,7 +354,7 @@ records all protect their declared roots. The same inventory covers cache, unit
 drop-ins, launcher and generated profile files; mixed, redirected or overlapping
 paths abort before deletion. Keep source projects and the extracted release outside
 those paths.
-Legacy `~/.local/state/taskrail/worktrees` is preserved in place, including uncommitted
+`~/.local/state/taskrail/worktrees` is never deleted, including uncommitted
 edits and its Git links. New worktrees live outside resettable application storage.
 A custom `worktree_base` overlapping a deletion target refuses the reset; move that
 storage deliberately before retrying. Worktrees are never pruned with old releases.

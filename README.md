@@ -114,6 +114,3 @@ first. [Access routes](docs/access.md) describe what agents may read, edit and r
 
 Taskrail is licensed under the [Apache License 2.0](LICENSE). Report vulnerabilities
 privately as described in [SECURITY.md](SECURITY.md); see [CONTRIBUTING.md](CONTRIBUTING.md) to contribute.
-Every repository task ends with an open pull request targeting `master` and a link
-to it. Merging requires passing pipelines and the repository owner's personal
-review. Direct commits and pushes to `master` are prohibited.

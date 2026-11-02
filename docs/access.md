@@ -3,8 +3,8 @@
 The current attempt's `access.json` is the model input manifest. It is generated
 from the same input list as the runtime profile. Read canonical absolute paths:
 project roots, listed task/history/preimages/results/recovery inputs and executor snapshots.
-Only the approved implementer paths with the implementer's `progress.md`, and the
-planner's `plan.md`, are editable by their respective roles. Source roots are declarations of
+Only the approved implementer paths with the implementer's `progress.md`, the
+planner's `plan.md` and a reviewer's `review.md` are editable by their respective roles. Source roots are declarations of
 scope, not OS privileges; Unix permissions, network routing and authentication still apply.
 
 ## Protected paths
@@ -42,9 +42,9 @@ Executor requests are JSON **assistant responses**, not function calls. End the
 turn after emitting one. Their absence from the model's tool list is normal. The
 server executes the request or waits for approval, then resumes the same opencode
 session with `--session`. The UI records these as tool calls inside one stage, not
-as additional stages. The advertised contracts include executor requests and the
-role's final result: a Markdown plan followed by `DONE` for the planner, JSON for
-other roles. Continuations and result repair retain that role's format.
+as additional stages. Final results are not JSON: the planner writes `plan.md`, a
+reviewer `review.md`, both ending with `DONE`, and the implementer ends with `DONE:` or
+`BLOCKED:` ([contracts](contracts.md)).
 
 Internal `evidence.json`, `observations.json` and `00-input/git-metadata.json` are
 not model inputs. The latter contains integrity hashes, not commit history. Reuse
