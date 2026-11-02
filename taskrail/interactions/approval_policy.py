@@ -3,7 +3,7 @@
 The initial setting lives in trusted task input. Personal card grants are durable
 outside project roots and inherited only through authenticated family links. The
 operator can revoke them; ancestor denials override copied flags. It covers local
-commands and the change limit; SSH actions
+commands and reads; SSH actions
 and Jenkins builds keep their separate root-only approval. A command that runs in
 the sandbox needs no decision; its automatic approval is recorded the same way.
 """
@@ -27,7 +27,7 @@ def decision(run, request, state, scope=None, personal=False):
     """Approve read-only requests and, when allowed for this run, all others on record.
 
     The scope holds the declared roots and protected patterns of the read-only route;
-    without one (the change limit) only the run's setting can approve automatically.
+    without one only the run's setting can approve automatically.
     A personal request, such as a push to a remote or a manual installation step,
     always waits for the operator.
     """

@@ -18,8 +18,6 @@ BUNDLED_AGENTS = Path(__file__).resolve().parents[1] / "agents"
 VERIFICATION = "verification"
 DESIGN = "design"
 PHASES = frozenset(("task", "integration", "validation", "server", "correction"))
-CHANGE_LINES = 400
-CHANGE_FILES = 15
 CHECK_LIST = "verification must list runtime acceptance checks as strings"
 PHASE = "phase"
 
@@ -125,6 +123,4 @@ def limits(options):
         max_repairs=max(0, min(5, int(options.get("max_repairs", 3)))),
         read_retries=max(0, min(3, int(options.get("read_retries", 3)))),
         stop_on_provider_limit=options.get("stop_on_provider_limit") is True,
-        max_change_lines=max(0, int(options.get("max_change_lines", CHANGE_LINES))),
-        max_change_files=max(0, int(options.get("max_change_files", CHANGE_FILES))),
     )

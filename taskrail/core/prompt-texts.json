@@ -62,9 +62,9 @@
     "## After the change",
     ""
   ],
-  "format.plan_routing": "Reply DONE for a complete plan. For an executor, send one request object as your entire message and end the turn (a message, not a tool). Schemas:",
+  "format.plan_routing": "Reply DONE for a complete plan. For an executor, send one request object as your entire message and end the turn (a message, not a tool). Formats:",
   "format.done": "FINISH: when the task is complete and its checks pass, reply DONE: followed by one or two sentences on what changed; they become the commit message. If you cannot finish without the operator, reply BLOCKED: followed by exactly what you need. Report no per-requirement results: the independent review checks every requirement.",
-  "format.request_routing": "For an executor, send one request object as your entire message and end the turn (a message, not a tool). Schemas:",
+  "format.request_routing": "For an executor, send one request object as your entire message and end the turn (a message, not a tool). Formats:",
   "review.format": "REVIEW FILE: write your review in $path; its current text is attached to every turn, so edit it without reading it again. One line per requirement: `R1: done: /absolute/path:10-20` (lines that prove it), `R1: fails: /absolute/path:40-42 (what is wrong)`, `R1: gap: what required input or evidence is missing`, `R1: n/a: why the requirement does not apply`, `R1: later: the runtime check after delivery`. Cite only lines you read in full in this session, as /absolute/path:from-to or a delivered handle such as S1:10-12. Add `Summary:` with one or two sentences. A gap blocks the run, a failure asks for changes. When every requirement has its line, reply DONE.",
   "review.plan-reviewer": "`R1: planned` marks a requirement an approved task delivers; runtime work needs an owning task and a selected or configured local check recipe. A plan defect is a fails line of its requirement.",
   "review.reviewer": "Never use planned. A runtime requirement is done only with a matching current check result, else later.",

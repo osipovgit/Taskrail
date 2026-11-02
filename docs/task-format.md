@@ -79,7 +79,7 @@ the agents' input.
 | `phase` | Server-generated for delivery runs (`task`, `integration`, `correction`, `validation`, `server`); do not set it by hand |
 | `task_scope` | Required for server-generated `task` phases: exact reviewed file paths; child planning cannot widen them or create another split |
 | `design` | `true` for a design discussion (the browser's **Design discussion**); implies `read_only` |
-| `auto_approve` | `true` approves local commands, read access and the change limit of this run without asking (the browser's **Allow all actions**); SSH keeps its root-only approval |
+| `auto_approve` | `true` approves local commands and read access of this run without asking (the browser's **Allow all actions**); SSH keeps its root-only approval |
 | `isolation` | `auto` (default) isolates a code change whose roots are all Git repository top levels with a commit; `worktree` always edits new linked Git worktrees and commits each approved task there; `in_place` edits the roots (the browser's cleared **Isolated Git worktree**, `taskrail submit --in-place`), see below |
 | `task_spec` | Generated typed input: version 1, literal named fields, a display integrity reference and optional child context/requirement lineage; do not edit only its Markdown display |
 | `assigned_contract` | Generated child reference (`parent_run`, `task_id`); the workflow authenticates it against the sealed reviewed parent before skipping child planning |

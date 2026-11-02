@@ -302,8 +302,8 @@ a different request.
 
 **Allow all actions** skips these cards for one run. Tick it in the task form to
 apply it from the start (restarts and follow-ups keep the choice), or tick **Allow all
-further actions in this run** on a card and choose Allow. Local commands, read access
-and the change limit are then approved without asking, and each automatic approval is
+further actions in this run** on a card and choose Allow. Local commands and read access
+are then approved without asking, and each automatic approval is
 recorded in the same ledger with `"automatic": true`. The run shows an **All actions
 allowed** badge and a **Stop allowing all actions** button, which takes effect before
 the next decision and also on Continue. A personal card choice is durable across worker

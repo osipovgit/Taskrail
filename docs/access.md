@@ -150,7 +150,7 @@ Read-only requests are approved without asking and recorded in the same ledger w
   change confirmation, with additional explicit remote diagnostic options.
 
 Everything else is asked. **Allow all actions** ([task controls](task-controls.md))
-approves this run's local commands, read access and change limit automatically; it
+approves this run's local commands and read access automatically; it
 trusts every command the agents choose, so use it only where you would allow them
 anyway, inline shell or Python code included. Without it, the card of inline code that
 an agent requests (`bash -c`, `sh -c`, `python -c` and the like, also behind `env`,

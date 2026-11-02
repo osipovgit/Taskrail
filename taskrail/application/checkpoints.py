@@ -24,7 +24,6 @@ RESUMABLE = frozenset(
         "INVALID_RESULT",
         "TOOL_ERROR",
         "CONTEXT_EXCEEDED",
-        "CHANGE_LIMIT_EXCEEDED",
         "NO_PROGRESS",
     )
 )

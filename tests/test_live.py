@@ -305,19 +305,18 @@ class LiveTests(LiveFixture, unittest.TestCase):
         run, _status, _state = self.run_mode()
         prompt = (run / "02-plan-review/request.md").read_text()
         self.assertIn(f"REVIEW FILE: write your review in {run / 'review.md'}", prompt)
-        schemas = prompt.split("Schemas:\n", 1)[1].split("\nContext:", 1)[0]
-        schema = json.loads(schemas.splitlines()[0])
-        self.assertNotIn("ACTION_REQUEST", schemas)
-        self.assertEqual(schema["properties"]["status"], {"const": "GIT_REQUEST"})
-        self.assertNotIn("findings", schemas)
+        formats = prompt.split("Formats:\n", 1)[1].split("\nContext:", 1)[0]
+        self.assertNotIn("ACTION_REQUEST", formats)
+        self.assertNotIn("findings", formats)
         planning = (run / "01-plan/request.md").read_text()
         self.assertIn(f"PLAN FILE: edit the Markdown file {run / 'plan.md'}", planning)
         self.assertIn("[R1]\nReturn 2", planning)
         self.assertEqual(planning.count("Return 2"), 1)
-        requests = planning.split("Schemas:\n", 1)[1].split("\nContext:")[0]
+        requests = planning.split("Formats:\n", 1)[1].split("\nContext:")[0]
+        examples = [line.partition(": ")[2] for line in requests.splitlines()]
+        decoded = [json.JSONDecoder().raw_decode(example)[0] for example in examples]
         self.assertEqual(
-            [json.loads(line)["properties"]["status"]["const"] for line in requests.splitlines()],
-            ["GIT_REQUEST", "LOCAL_REQUEST"],
+            [request["status"] for request in decoded], ["GIT_REQUEST", "LOCAL_REQUEST"]
         )
         self.assertIn("Decision: single", (run / "01-plan/plan.md").read_text())
         self.assertNotIn("NEEDS_INFO", (run / "00-input/agents/planner.md").read_text())
@@ -1068,47 +1067,6 @@ class LiveTests(LiveFixture, unittest.TestCase):
         self.assertIn(note, request)
         self.assertIn("Do not blindly replay edits", request)
 
-    def test_large_change_waits_for_the_operator(self):
-        run, status, state = self.run_mode("ok", max_change_lines=1)
-        self.assertEqual(status, "CHANGE_LIMIT_EXCEEDED", state.get("summary"))
-        self.assertIn("return 2", (self.root / "hello.py").read_text())
-        self.assertNotIn("checks", state["results"])
-        decisions = [
-            dict(decision="alternative", alternative="Keep the edit to one line"),
-            dict(decision="allow", alternative=""),
-        ]
-        requests = []
-
-        def decide(_run, request):
-            requests.append(request)
-            return decisions.pop(0)
-
-        (self.root / "hello.py").write_text("# user comment\ndef hello():\n    return 1\n")
-        with patch("taskrail.interactions.approvals.wait", side_effect=decide):
-            run, status = execute_task(self.task, self.settings, run_dir=self.base / "second")
-        state = json.loads((run / "run.json").read_text())
-        self.assertEqual(status, "READY_FOR_REVIEW", state.get("summary"))
-        self.assertEqual(requests[0]["status"], "CHANGE_LIMIT")
-        self.assertEqual(requests[0]["lines"], 2)
-        self.assertEqual(state["approved_change"], dict(lines=2, files=1))
-        stages = [stage["stage"] for stage in state["stages"]]
-        self.assertEqual(stages.count("implementer"), 2)
-        second = [stage for stage in state["stages"] if stage["stage"] == "implementer"][1]
-        self.assertIn(
-            "Keep the edit to one line", (run / second["directory"] / "request.md").read_text()
-        )
-
-    def test_allow_all_actions_approves_the_change_limit_with_a_ledger(self):
-        header = {"roots": {"project": str(self.root)}, "auto_approve": True}
-        self.task.write_text(f"```taskrail-task\n{json.dumps(header)}\n```\nReturn 2")
-        run, status, state = self.run_mode("ok", max_change_lines=1)
-        self.assertEqual(status, "READY_FOR_REVIEW", state.get("summary"))
-        self.assertEqual(state["approved_change"], dict(lines=2, files=1))
-        self.assertTrue(state["auto_approve"])
-        ledger = [json.loads(path.read_text()) for path in run.glob("approval-*.json")]
-        self.assertEqual(ledger[0]["request"]["request"]["status"], "CHANGE_LIMIT")
-        self.assertTrue(ledger[0]["response"]["automatic"])
-
     def test_split_into_tasks_stops_after_the_reviewed_plan(self):
         header = {"roots": {"project": str(self.root)}, "decompose": True}
         self.task.write_text(f"```taskrail-task\n{json.dumps(header)}\n```\nReturn 2")
@@ -1142,7 +1100,7 @@ class LiveTests(LiveFixture, unittest.TestCase):
         self.assertEqual((run / "design.md").read_text(), "Current source already returns 2\n")
         self.assertIn("[Design document](design.md)", (run / "report.md").read_text())
         frozen = json.loads((run / "00-input/settings.json").read_text())
-        self.assertIn("max_change_lines", frozen)
+        self.assertIn("max_repairs", frozen)
 
     def test_question_report_and_index_carry_the_reviewed_answer(self):
         header = {"roots": {"project": str(self.root)}, "read_only": True}
