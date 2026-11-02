@@ -24,7 +24,9 @@ class CheckLocationTests(unittest.TestCase):
 
     def test_descendant_check_maps_to_its_worktree_and_keeps_original_request(self):
         command = dict(cwd=str(self.source / "package"), argv=["python3", "--version"])
-        mapped = check_selection.mapped_check(check_selection.legacy(command), self.locations)
+        mapped = check_selection.mapped_check(
+            check_selection.configured_command(command), self.locations
+        )
         self.assertEqual(mapped["recipe"]["request"]["cwd"], str(self.effective / "package"))
         self.assertEqual(command["cwd"], str(self.source / "package"))
 
@@ -41,7 +43,9 @@ class CheckLocationTests(unittest.TestCase):
             check_selection.mapped_directory(str(self.source / "package"), self.locations)
 
     def test_unrelated_legacy_check_is_skipped_but_a_bound_check_is_rejected(self):
-        check = check_selection.legacy(dict(cwd=str(self.outside), argv=["python3", "--version"]))
+        check = check_selection.configured_command(
+            dict(cwd=str(self.outside), argv=["python3", "--version"])
+        )
         self.assertIsNone(check_selection.mapped_check(check, self.locations))
         check["spec"]["criteria"] = ["R-health"]
         with self.assertRaisesRegex(ValueError, "outside the declared roots"):

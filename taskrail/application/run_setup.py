@@ -11,6 +11,7 @@ from taskrail.application import (
     execution_context,
     inherited_settings,
     run_state,
+    run_store,
 )
 from taskrail.application.artifacts import save_run
 from taskrail.application.checkpoints import RESUMABLE, budget_paused
@@ -55,6 +56,7 @@ def configure(request):
     checks = None
     if request["resume"]:
         restored = stored_index(request[RUN_DIRECTORY])
+        run_store.continuing(restored)
         run = Path(request[RUN_DIRECTORY]).expanduser().resolve()
         checks = inherited_settings.continued(run, restored)
         restored = restored[ROOTS]
@@ -91,7 +93,7 @@ def open_state(config, run, request, ready):
 def stored_index(location):
     """The run index of an existing run directory."""
     index = Path(location).expanduser().resolve() / RUN_INDEX
-    return json.loads(index.read_text())
+    return run_store.validate(json.loads(index.read_text()))
 
 
 def run_directory(location, config):
@@ -111,7 +113,8 @@ def resumed_state(run, config, request):
     """Only interrupted or budget-paused runs over the same roots can continue."""
     if request["plan_response"]:
         raise ValueError("Cannot combine resume with plan import")
-    state = json.loads(run.joinpath(RUN_INDEX).read_text())
+    state = run_store.read(run)
+    run_store.continuing(state)
     if state[STATUS] not in RESUMABLE and not budget_paused(state):
         raise ValueError("This run is not interrupted; use Restart instead")
     if state[ROOTS] != run_state.stored_roots(config[ROOTS]):

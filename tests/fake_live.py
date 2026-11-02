@@ -543,6 +543,9 @@ if role == "planner" and header["permission"]["edit"].get(str(plan)) == "allow":
             assert "in THIS session" in prompt
             plan.read_text()
         plan.write_text(plan_text(value, context))
+        if mode == "plan-instruction-citation":
+            outcome = "all tasks (ongoing obligation)" if continued else f"done: {request_file}:1"
+            plan.write_text(plan.read_text().replace("- R1 → T1", f"- R1 → {outcome}"))
     response = "DONE"
 writer_prose = mode in {"writer-prose-always", "writer-extra-prose-always"} or (
     mode == "writer-prose" and not continued

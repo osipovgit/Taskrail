@@ -11,10 +11,7 @@ STATUS = "status"
 def budget(run):
     """Use the original run's frozen repair budget, never newly edited settings."""
     reference = "00-input/settings.json"
-    try:
-        settings = read_json(owned_paths.child(run, reference))
-    except FileNotFoundError:
-        settings = {}
+    settings = read_json(owned_paths.child(run, reference))
     return corrections.limit(settings)
 
 

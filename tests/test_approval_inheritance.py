@@ -8,6 +8,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from live_fixture import LiveFixture
+from run_fixture import current_run
 
 from taskrail.application.live import execute_task
 from taskrail.core import approval_family, approval_marks
@@ -37,7 +38,7 @@ class ApprovalInheritanceTests(unittest.TestCase):
         (run / "00-input/task.md").write_text(
             f"```taskrail-task\n{json.dumps(metadata)}\n```\nLint"
         )
-        atomic_json(run / "run.json", dict(roots={"p": "/p"}, auto_approve=False))
+        atomic_json(run / "run.json", current_run(dict(roots={"p": "/p"}, auto_approve=False)))
         return run
 
     def grant(self, run):
@@ -189,7 +190,7 @@ class ApprovalContinueTests(LiveFixture, unittest.TestCase):
             )
         self.assertEqual(status, "TIMEOUT")
         state["auto_approve"] = True
-        atomic_json(run / "run.json", state)
+        atomic_json(run / "run.json", current_run(state))
         settings = json.loads(self.settings.read_text())
         settings["command"][-1] = "ok"
         settings["timeout_seconds"] = 5

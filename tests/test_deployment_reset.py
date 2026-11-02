@@ -150,7 +150,7 @@ class DeploymentResetTests(unittest.TestCase):
         self.assertFalse(self.history.exists())
         self.assertFalse(self.config.exists())
 
-    def test_fresh_preserves_legacy_worktrees_even_when_history_names_them(self):
+    def test_fresh_removes_retired_state_worktrees(self):
         worktree = self.state / "worktrees/run/project"
         worktree.mkdir(parents=True)
         (worktree / ".git").write_text("gitdir: /existing/repository/worktrees/project\n")
@@ -161,8 +161,8 @@ class DeploymentResetTests(unittest.TestCase):
         state["worktrees"] = dict(project=dict(source=str(self.project)))
         record.write_text(json.dumps(state))
         erase(prepare(self.home, [BASE]))
-        self.assertEqual(edits.read_text(), "User work must survive a fresh install\n")
-        self.assertTrue((worktree / ".git").is_file())
+        self.assertFalse(worktree.exists())
+        self.assertTrue(self.project.is_dir())
 
     def test_custom_worktree_base_inside_deleted_storage_blocks_fresh(self):
         options = json.loads((self.config / "settings.json").read_text())

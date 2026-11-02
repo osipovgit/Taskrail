@@ -63,7 +63,6 @@ def observation(entry, target, position):
         event_line=position,
         call_id=f"source-packet-{position}",
         original_chars=len(output),
-        saved_chars=len(output),
         output_clipped=False,
         upstream_truncated=False,
     )

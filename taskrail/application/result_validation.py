@@ -1,7 +1,5 @@
 """Join strict output shape, criterion coverage and attributed source evidence."""
 
-from pathlib import Path
-
 from taskrail.application import (
     check_planning,
     citation_review,
@@ -13,15 +11,15 @@ from taskrail.application import (
     review_result,
 )
 from taskrail.application.implementer_result import stage_result as implementation
+from taskrail.application.result_paths import approved_path as approved_path
+from taskrail.application.result_paths import validate_paths
 from taskrail.core import (
     coverage,
     plan_contract,
     schema,
 )
 from taskrail.core.files import atomic_json
-from taskrail.git.requests import output_directory
 
-EVIDENCE_FILES = "declared roots, verified source views, preimages or executor snapshots (not run artifacts such as changes.diff or recovery.md)"
 PLAN_FILES = "declared roots (files_read and proposed_change_files name project files; cite executor snapshots only in evidence)"
 EVIDENCE = "evidence"
 IMPLEMENTER = "implementer"
@@ -55,7 +53,6 @@ def decoded(response, context):
 def checked(payload, context):
     """Coverage, evidence and role checks of a decoded result."""
     atomic_json(context["folder"] / "response-object.json", payload)
-    run = context["run"]
     records = evidence_delivery.session_records(context)
     if context["stage"] == plan_result.PLANNER and declared_block.present(payload):
         payload = declared_block.stop_result(payload, context)
@@ -68,44 +65,11 @@ def checked(payload, context):
             execution_evidence.claim_ids(context["run"], payload[EVIDENCE]),
             check_planning.criteria(payload, context),
         )
-    for claim in payload[EVIDENCE]:
-        approved_path(
-            claim["path"],
-            dict(
-                context["roots"],
-                git_evidence=output_directory(run),
-                ssh_evidence=run / "00-input/ssh",
-                local_evidence=run / "00-input/local",
-                check_evidence=run / "00-input/checks",
-                source_views=run / "00-input/source-views",
-                preimages=run / "00-input/preimages",
-            ),
-            EVIDENCE_FILES,
-        )
+    validate_paths(payload, context)
     proofs = citation_review.validate(payload[EVIDENCE], records, context)
     validate_role(payload, context)
     atomic_json(context["folder"] / "evidence-bindings.json", proofs)
     return payload
-
-
-def approved_path(filename, roots, scope="declared roots or executor snapshots"):
-    """Do not resolve guessed aliases or allow symlinks to expand source access."""
-    path = Path(filename)
-    canonical = path.is_absolute() and path.resolve() == path
-    schema.require(canonical, f"Use canonical absolute paths, not {filename}{example(path, roots)}")
-    inside = any(root in path.parents for root in roots.values())
-    schema.require(inside, f"Path outside {scope}: {path}")
-
-
-def example(path, roots):
-    """The absolute form of a relative path that exists in a declared root."""
-    if path.is_absolute():
-        return ""
-    for root in roots.values():
-        candidate = root / path
-        if candidate.exists():
-            return f" (for example {candidate})"
-    return ""
 
 
 def validate_role(payload, context):

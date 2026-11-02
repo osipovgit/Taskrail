@@ -49,7 +49,8 @@ class RecoveryPathTests(unittest.TestCase):
                 run_files.contained(self.base, name)
 
     def test_correction_budget_uses_only_local_frozen_settings(self):
-        self.assertEqual(correction_state.budget(self.run), 0)
+        with self.assertRaises(FileNotFoundError):
+            correction_state.budget(self.run)
         inputs = self.run / "00-input"
         inputs.mkdir()
         settings = inputs / "settings.json"

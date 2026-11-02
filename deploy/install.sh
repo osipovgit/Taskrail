@@ -82,6 +82,12 @@ esac
 # Workers must not inherit the installer's workflow lock.
 flock -u 9
 exec 9>&-
+if [[ -t 0 && "$fresh" != yes ]]; then
+    read -r -p "Archive unsupported task histories to trash? [y/N] " archive_old
+    if [[ "$archive_old" == y || "$archive_old" == Y ]]; then
+        run_module taskrail.cli_history archive-old --settings "$config_dir/settings.json"
+    fi
+fi
 systemctl --user restart "$service"
 systemctl --user is-active --quiet "$service"
 "$release/venv/bin/python" -I -c \

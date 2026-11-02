@@ -16,6 +16,7 @@ from unittest.mock import patch
 from urllib.request import ProxyHandler, Request, build_opener
 
 from deployment_fixture import DeploymentFixture
+from run_fixture import current_run
 
 from taskrail.application.task_config import configuration
 from taskrail.core.runtime import run_storage, settings_path
@@ -286,7 +287,9 @@ class ServiceTests(unittest.TestCase):
         history = self.home / "old-runs"
         run = history / "run-1"
         run.mkdir(parents=True)
-        (run / "run.json").write_text(json.dumps({"roots": {"project": str(self.repo)}}))
+        (run / "run.json").write_text(
+            json.dumps(current_run({"roots": {"project": str(self.repo)}}))
+        )
         options = json.loads(config.read_text())
         options.update(run_base=str(history), timeout_seconds=9)
         config.write_text(json.dumps(options))

@@ -2,6 +2,7 @@
 
 from collections import Counter
 
+from taskrail.application import run_store
 from taskrail.web import rejections
 from taskrail.web.run_files import contained, read_json
 
@@ -42,7 +43,7 @@ def run_state(path):
         state = read_json(contained(path, "run.json"))
     except (OSError, ValueError):
         return None
-    return state if isinstance(state, dict) else None
+    return state if run_store.supported(state) else None
 
 
 def run_totals(states):

@@ -1,15 +1,13 @@
 """Explicit retries retain the reviewed assignment and the parent's attempt chain."""
 
-import json
-
-from taskrail.application import check_parents, reviewed_artifacts
+from taskrail.application import check_parents, reviewed_artifacts, run_store
 from taskrail.core.schema import require
 from taskrail.web import delivery_launch, epic_launch, history, run_family
 
 
 def restart(launcher, run):
     """Offer standalone drafts; a split task or delivery phase restarts under its parent."""
-    state = json.loads(history.read_artifact(run, "run.json"))
+    state = run_store.read(run)
     phase = state.get(check_parents.PHASE)
     if phase in check_parents.PHASES:
         return restart_phase(launcher, run, phase)

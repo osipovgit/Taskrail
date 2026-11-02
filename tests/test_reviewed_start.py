@@ -6,8 +6,11 @@ import unittest
 from pathlib import Path
 from types import SimpleNamespace
 
+from run_fixture import current_run
+
 from taskrail.application import (
     check_configuration,
+    execution_context,
     reviewed_artifacts,
     reviewed_input,
     reviewed_start,
@@ -60,14 +63,17 @@ class ReviewedStartTests(unittest.TestCase):
         )
         frozen = dict(check_recipes={}, verify_commands=[])
         check_configuration.capture(frozen, self.parent_state)
-        atomic_json(self.parent / "run.json", self.parent_state)
+        execution_context.capture(
+            self.parent, dict(roots={"project": self.root}, worktrees={}), self.parent_state
+        )
+        atomic_json(self.parent / "run.json", current_run(self.parent_state))
         atomic_json(self.parent / "00-input/settings.json", frozen)
         atomic_json(self.child / "00-input/settings.json", frozen)
         guard = SourceGuard({"project": self.root})
         guard.capture()
         atomic_json(
             self.parent / "checkpoint.json",
-            dict(expected=guard.expected, git_before=guard.git_before),
+            current_run(dict(expected=guard.expected, git_before=guard.git_before)),
         )
         state = dict(
             requirements=task_lineage.for_step(requirements, plan["steps"][0]),
@@ -102,10 +108,10 @@ class ReviewedStartTests(unittest.TestCase):
         untyped = json.loads(json.dumps(self.parent_state))
         untyped["requirements"][0].pop("source")
         for state in (unsealed, untyped):
-            atomic_json(self.parent / "run.json", state)
+            atomic_json(self.parent / "run.json", current_run(state))
             with (
                 self.subTest(state=sorted(state)),
-                self.assertRaisesRegex(ValueError, "older release; restart the parent task"),
+                self.assertRaisesRegex(ValueError, "seal or requirement provenance is missing"),
             ):
                 reviewed_start.begin(self.workflow)
             self.assertEqual(self.workflow.flow["stage"], "planner")

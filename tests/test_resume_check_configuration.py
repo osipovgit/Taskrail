@@ -7,7 +7,9 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from taskrail.application import check_configuration, check_recipes, run_setup
+from run_fixture import current_run
+
+from taskrail.application import check_configuration, check_recipes, execution_context, run_setup
 from taskrail.core.files import atomic_json
 from taskrail.core.requirements import requirement
 
@@ -42,7 +44,8 @@ class ResumeCheckConfigurationTests(unittest.TestCase):
         )
         state = dict(roots={"project": str(self.root)}, status="TIMEOUT", check_specs=[self.spec])
         check_configuration.capture(self.frozen, state)
-        atomic_json(self.run / "run.json", state)
+        execution_context.capture(self.run, dict(roots={"project": self.root}, worktrees={}), state)
+        atomic_json(self.run / "run.json", current_run(state))
         atomic_json(self.run / "00-input/settings.json", self.frozen)
         header = dict(
             roots=state["roots"], verification=["Health check passes"], check_specs=[self.spec]

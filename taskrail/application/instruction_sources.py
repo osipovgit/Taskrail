@@ -61,8 +61,7 @@ def freeze_contract(run, policy, state):
         raise ValueError("Saved instruction policy changed; restart required")
     state["contract_sha256"] = signature
     saved = json.loads(path.read_text())
-    compatible = prompt_texts.compatible(saved.get(TEXTS))
-    if saved["schemas"] != SCHEMAS or not compatible:
+    if saved["schemas"] != SCHEMAS or saved[TEXTS] != prompt_texts.release():
         raise ValueError("Saved contract differs from this release; restart for fresh validation")
     prompt_texts.ACTIVE.adopt(saved[TEXTS])
     return saved
@@ -72,7 +71,7 @@ def adopt_texts(run):
     """Use the run's frozen texts, or this release's texts before the contract exists."""
     path = run / CONTRACT
     saved = json.loads(path.read_text()) if path.is_file() else {}
-    if saved and not prompt_texts.compatible(saved.get(TEXTS)):
+    if saved and saved[TEXTS] != prompt_texts.release():
         raise ValueError("Saved contract differs from this release; restart for fresh validation")
     prompt_texts.ACTIVE.adopt(saved.get(TEXTS) or prompt_texts.release())
 

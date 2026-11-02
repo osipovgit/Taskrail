@@ -20,7 +20,7 @@ def applicable(workflow):
     covered = {protocol.fingerprint(check["recipe"]["request"]) for check in checks}
     for command in workflow.config.get("verify_commands", []):
         if protocol.fingerprint(command) not in covered:
-            checks.append(legacy(command))
+            checks.append(configured_command(command))
     return mapped_checks(checks, command_roots(workflow.config))
 
 
@@ -44,7 +44,7 @@ def assigned(config, requirements):
     ]
 
 
-def legacy(command):
+def configured_command(command):
     """An old exact verification setting has no invented criterion association."""
     spec = dict(id=check_recipes.verification_id(command), criteria=[])
     recipe = dict(kind="local", request=command, adapter="exit-code")
@@ -52,7 +52,7 @@ def legacy(command):
 
 
 def mapped_checks(checks, locations):
-    """Only legacy settings may silently target another project."""
+    """Only configured_command settings may silently target another project."""
     selected = []
     for check in checks:
         mapped = mapped_check(check, locations)

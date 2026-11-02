@@ -3,7 +3,7 @@
 import json
 import re
 
-from taskrail.application import worktree_isolation
+from taskrail.application import run_store, worktree_isolation
 from taskrail.core import task_markdown, task_spec
 from taskrail.core.input_header import HEADER
 from taskrail.interactions import approval_policy
@@ -40,36 +40,24 @@ class TaskDraft:
     def __init__(self, original):
         header = HEADER.search(original)
         self.metadata = json.loads(header[1]) if header else {}
-        self.body = original[header.end() :] if header else original
         self.typed = self.read(original)
 
     def read(self, original):
-        """The resolved typed input, or None for an older Markdown file with other sections."""
-        try:
-            return task_spec.resolve(original, task_markdown.typed_input(original, self.metadata))
-        except ValueError:
-            if task_spec.TASK_SPEC in self.metadata:
-                raise
-            return None
+        """Resolve current structured task fields."""
+        return task_spec.resolve(original, task_markdown.typed_input(original, self.metadata))
 
     def fields(self):
-        """The typed fields; a file the task reader rejects is offered whole as the Goal."""
-        if self.typed is not None:
-            return {field["name"]: field["text"] for field in self.typed["fields"]}
-        return dict(dict.fromkeys(task_spec.FIELDS, ""), goal=self.body.strip())
+        """The complete typed task fields."""
+        return {field["name"]: field["text"] for field in self.typed["fields"]}
 
     def title(self, fallback):
-        """The title field, or the first `# ` line of a file the task reader rejects."""
-        if self.typed is not None:
-            return self.fields().get("title") or fallback
-        for line in self.body.splitlines():
-            if line.startswith("# "):
-                return line[2:].strip()
-        return fallback
+        """The explicit task title, or the run name."""
+        return self.fields().get("title") or fallback
 
 
 def task_draft(run):
-    """Reconstruct editable fields and preserve unmapped free-form task text."""
+    """Reconstruct editable fields from the current task format."""
+    run_store.read(run)
     parsed = TaskDraft(read_artifact(run, TASK_FILE).split(HISTORY, 1)[0])
     draft = parsed.fields()
     draft["title"] = parsed.title(run.name)

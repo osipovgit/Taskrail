@@ -344,8 +344,8 @@ records all protect their declared roots. The same inventory covers cache, unit
 drop-ins, launcher and generated profile files; mixed, redirected or overlapping
 paths abort before deletion. Keep source projects and the extracted release outside
 those paths.
-`~/.local/state/taskrail/worktrees` is never deleted, including uncommitted
-edits and its Git links. New worktrees live outside resettable application storage.
+A full reset removes the retired `~/.local/state/taskrail/worktrees` directory.
+Current worktrees live outside resettable application storage.
 A custom `worktree_base` overlapping a deletion target refuses the reset; move that
 storage deliberately before retrying. Worktrees are never pruned with old releases.
 Locked files retain their inodes during installation to prevent concurrent writers.
@@ -362,3 +362,17 @@ configure its inventory and verified host keys again before starting it. Dedicat
 system account/group identities are retained. Application source edits are never
 reverted. `--autostart=keep` retains the previous user-service enablement choice.
 Without `--fresh`, installation remains a history/config-preserving update.
+
+## Run storage updates
+
+Current runs use `run_format: 2`; unsupported histories are excluded from the working
+UI and cannot Continue, Restart or supply parent context. Run
+`taskrail history archive-old` to move them into the existing history trash. The
+installer offers this on interactive updates; noninteractive updates leave artifacts
+untouched. Source roots are not moved. There is no automatic purge.
+
+Continue requires identical application code and instruction files. A same-format
+run from another release may Restart; an unsupported format requires a new task.
+The installer removes retired `max_change_lines` and `max_change_files` settings from
+its staged configuration and keeps an exact private `settings.json.backup-*` copy.
+Custom command settings and extension keys remain unchanged.

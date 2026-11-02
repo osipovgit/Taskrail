@@ -6,7 +6,13 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from taskrail.application import evidence, instruction_sources, prompts, result_validation
+from taskrail.application import (
+    evidence,
+    instruction_sources,
+    prompts,
+    result_paths,
+    result_validation,
+)
 from taskrail.core import (
     control,
     coverage,
@@ -114,6 +120,48 @@ class ContractTests(unittest.TestCase):
         self.assertEqual(bindings[0]["excerpt"], "    return 2")
         self.assertEqual(bindings[0]["source_event"], str(self.stage / "events.jsonl"))
         self.assertEqual(bindings[0]["source_sha256"], evidence.fingerprint(self.source))
+
+    def test_run_instructions_cannot_prove_completion_even_under_a_declared_root(self):
+        self.context["roots"]["broad"] = self.base
+        for name in (
+            "01-plan/request.md",
+            "02-plan/request.md",
+            "plan.md",
+            "review.md",
+            "recovery.md",
+        ):
+            with self.subTest(name=name):
+                self.payload["evidence"][0]["path"] = str(self.run / name)
+                with self.assertRaises(ValueError) as rejected:
+                    self.validate()
+                message = str(rejected.exception)
+                self.assertIn("R1: Path outside", message)
+                self.assertIn("Changing the attempt number", message)
+                self.assertIn("all tasks", message)
+                self.assertFalse((self.stage / "evidence-bindings.json").exists())
+
+    def test_invalid_paths_report_all_requirement_owners_together(self):
+        self.payload["evidence"][0]["path"] = str(self.run / "01-plan/request.md")
+        second = dict(self.payload["evidence"][0], id="E2", path=str(self.run / "recovery.md"))
+        self.payload["evidence"].append(second)
+        self.payload["coverage"][0]["evidence_ids"].append("E2")
+        with self.assertRaises(ValueError) as rejected:
+            self.validate()
+        message = str(rejected.exception)
+        self.assertIn("01-plan/request.md", message)
+        self.assertIn("recovery.md", message)
+        self.assertEqual(message.count("R1: Path outside"), 2)
+
+    def test_reviewer_path_feedback_cannot_offer_planner_only_outcomes(self):
+        self.payload["evidence"][0]["path"] = str(self.run / "review.md")
+        for stage in ("plan-reviewer", "reviewer"):
+            with self.subTest(stage=stage), self.assertRaises(ValueError) as rejected:
+                result_paths.validate_paths(self.payload, dict(self.context, stage=stage))
+            message = str(rejected.exception)
+            self.assertIn("R1: Path outside", message)
+            self.assertIn("blocking gap", message)
+            self.assertNotIn("all tasks", message)
+            self.assertNotIn("Decision:", message)
 
     def test_citation_outside_captured_range_cannot_pass(self):
         (self.run / "evidence.json").unlink()

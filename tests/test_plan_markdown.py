@@ -49,6 +49,37 @@ Verify: ansible-lint roles/web
 
 
 class PlanDocumentTests(unittest.TestCase):
+    def test_annotated_shared_obligations_remain_owned_by_every_task(self):
+        for outcome in ("all tasks", "all tasks (constraint)", "ALL (keep names (and values))"):
+            with self.subTest(outcome=outcome):
+                plan = payload(
+                    PLAN.replace("done: project/README.md:12-18, roles/x.yml:3", outcome),
+                    REQUIREMENTS,
+                    ROOTS,
+                )
+                self.assertEqual(plan["coverage"][1]["outcome"], "planned")
+                self.assertFalse(plan["evidence"])
+                for step in plan["steps"]:
+                    self.assertIn("R-bbb", step["criteria"])
+
+    def test_self_attestation_and_unparsed_shared_outcomes_get_actionable_feedback(self):
+        for outcome in (
+            "done",
+            "done (this plan)",
+            "all tasks (constraint) T9",
+            "all tasks (unclosed",
+        ):
+            with self.subTest(outcome=outcome), self.assertRaises(ValueError) as rejected:
+                payload(
+                    PLAN.replace("done: project/README.md:12-18, roles/x.yml:3", outcome),
+                    REQUIREMENTS,
+                    ROOTS,
+                )
+            message = str(rejected.exception)
+            self.assertIn("R2 needs", message)
+            self.assertIn("all tasks", message)
+            self.assertIn("do not mark them done by citing instructions", message)
+
     def test_explicit_ranges_are_evidence_but_parenthetical_prose_is_not(self):
         detail = (
             "/runs/task/00-input/git/01-plan-2.txt:7-42,43-156,157-169; "

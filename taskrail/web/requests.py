@@ -4,7 +4,7 @@ import json
 import re
 from types import MappingProxyType
 
-from taskrail.application import check_parents, child_inputs, worktree_isolation
+from taskrail.application import check_parents, child_inputs, run_store, worktree_isolation
 from taskrail.core import control, delivery_record, prompt_texts, schema, task_spec
 from taskrail.web import history, restarts, task_form
 
@@ -91,7 +91,7 @@ class Submission:
         self.delivery["execution_parent"] = None
         self.previous = history.checked_run(base, self.parent) if self.parent else None
         if self.previous:
-            self.inherit_worktrees(json.loads(history.read_artifact(self.previous, "run.json")))
+            self.inherit_worktrees(run_store.read(self.previous))
 
     @property
     def worktree(self):
