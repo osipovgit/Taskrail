@@ -108,8 +108,8 @@ and a final period after a citation or parenthesized explanation are valid. Pros
 parentheses does not add citations; text or extra citations after that explanation
 remain invalid. Quoted paths may contain spaces and parentheses.
 
-During plan review only, `planned` and `fails` may cite the current `plan.md`, its
-accepted planner copy or that planner's `result.json`. Both plan copies must match,
+During plan review only, `planned` and `fails` may cite the current `plan.md` or the
+accepted planner's `result.json`. The current and archived plan copies must match,
 and the result must match the proposal the workflow is reviewing. These lines still
 need observation in the active session. A plan defect in a runtime check requests
 replanning without claiming that the check ran. Plan artifacts never prove `done`,

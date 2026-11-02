@@ -17,7 +17,7 @@ def paths(run, stage, reference):
     canonical = snapshot.resolve() == snapshot and snapshot.parent.parent == run
     if not canonical or snapshot.name != "result.json":
         return []
-    return [run / "plan.md", snapshot.parent / "plan.md", snapshot]
+    return [run / "plan.md", snapshot]
 
 
 def sources(context):
@@ -46,12 +46,17 @@ def verify(context):
         all(map(regular, files)), prompt_texts.diagnostic("validation.plan_review_changed")
     )
     recorded = reviewed_artifacts.document(context["run"], context["plan_reference"])
-    unchanged = files[0].read_bytes() == files[1].read_bytes()
     expected = tool_paths(context["plan"], context["roots"])
-    matching = recorded == expected and unchanged
+    matching = recorded == expected and markdown_matches(files)
     schema.require(matching, prompt_texts.diagnostic("validation.plan_review_changed"))
 
 
 def regular(path):
     """No symlink or missing file may substitute for the proposal."""
     return path.resolve() == path and path.is_file()
+
+
+def markdown_matches(files):
+    """The archived copy stays server-only; the reviewer cites the readable current plan."""
+    saved = files[1].with_name("plan.md")
+    return regular(saved) and files[0].read_bytes() == saved.read_bytes()

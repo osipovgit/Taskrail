@@ -9,6 +9,7 @@ from types import SimpleNamespace
 from taskrail.application import evidence, evidence_delivery, result_validation
 from taskrail.application.stage_attempts import evidence_roots
 from taskrail.core.files import atomic_json
+from taskrail.infrastructure import artifact_access
 
 
 class PlanReviewEvidenceTests(unittest.TestCase):
@@ -77,13 +78,13 @@ class PlanReviewEvidenceTests(unittest.TestCase):
         bindings = json.loads((self.folder / "evidence-bindings.json").read_text())
         self.assertEqual(bindings[0]["excerpt"], "Verify: skip required check")
 
-    def test_current_result_and_plan_copies_can_prove_planned_work_only_in_plan_review(self):
+    def test_readable_current_proposal_can_prove_planned_work_only_in_plan_review(self):
         for path in (
             self.plan_file,
-            self.run / "01-plan/plan.md",
             self.run / "01-plan/result.json",
         ):
             with self.subTest(path=path):
+                self.assertIn(path, artifact_access.model_inputs(self.run, self.folder))
                 self.observe(path)
                 self.assertEqual(self.review(f"planned: {path}:1.")["status"], "APPROVE")
                 with self.assertRaisesRegex(ValueError, "only planned work or a plan defect"):
@@ -114,7 +115,12 @@ class PlanReviewEvidenceTests(unittest.TestCase):
         self.plan_file.write_text("Verify: something else\n")
         with self.assertRaisesRegex(ValueError, "plan under review changed"):
             self.review(f"fails: {self.plan_file}:1 (wrong proposal).")
-        for relative in ("old-plan/result.json", "02-plan-review/request.md", "review.md"):
+        for relative in (
+            "old-plan/result.json",
+            "01-plan/plan.md",
+            "02-plan-review/request.md",
+            "review.md",
+        ):
             path = self.run / relative
             path.parent.mkdir(exist_ok=True)
             path.write_text("untrusted note\n")
