@@ -143,7 +143,8 @@ class LiveTests(LiveFixture, unittest.TestCase):
         self.assertEqual(stages[-1]["stage"], "reviewer")
         self.assertEqual(stages[-1]["status"], "RESULT_VALID")
         self.assertIn(
-            "Recovered by a later read and successful write", (run / "report.md").read_text()
+            "Recovered by a native read and subsequent successful write",
+            (run / "report.md").read_text(),
         )
 
     def test_source_overwrite_recovery_never_hides_stops_or_replays_writes(self):
@@ -605,8 +606,20 @@ class LiveTests(LiveFixture, unittest.TestCase):
         self.assertTrue(proof["read"]["call_id"].endswith("plan-read"))
         self.assertTrue(proof["call_id"].endswith("plan-write"))
         self.assertIn(
-            "Recovered by a later read and successful write", (run / "report.md").read_text()
+            "Recovered by a native read and subsequent successful write",
+            (run / "report.md").read_text(),
         )
+
+    def test_plan_mismatches_recover_without_research_or_format_retry(self):
+        _run, status, state = self.run_mode("plan-mismatches")
+        self.assertEqual(status, "READY_FOR_REVIEW", state.get("summary"))
+        planner = state["stages"][0]
+        self.assertEqual(planner["session_turns"], 1)
+        self.assertEqual(planner["status"], "RESULT_VALID")
+        self.assertEqual(planner["errors"], [])
+        self.assertEqual(len(planner["warnings"]), 3)
+        self.assertEqual(state["stages"][1]["stage"], "plan-reviewer")
+        self.assertEqual(state["stages"][-1]["stage"], "reviewer")
 
     def test_permission_denied_retains_tool_input_after_operator_declines(self):
         run, status, _state = self.run_mode("denied", read_retries=0, timeout_seconds=1)

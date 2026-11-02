@@ -130,7 +130,18 @@ not model-authored commands. A write-before-read rejection for this exact plan f
 gets bounded same-session feedback to read it; source writers are never retried by
 this correction.
 
+A native exact-match edit failure changes nothing. For the same approved file and
+session, an actual read remains usable across repeated no-match edits until a
+successful write. A later successful write before the final response resolves those
+failures as warnings; missing writes, unknown errors and permission denials still
+block. A completed mutation invalidates the earlier read for any later failure.
+
 ## Worktree isolation
+
+Source evidence uses the current effective roots, including isolated worktrees.
+Repository documentation inside those roots is eligible after an observed read;
+the original checkout, an adjacent worktree or a README above a nested root is not
+implicitly authorized. An out-of-scope citation reports the exact effective roots.
 
 A code change runs in worktrees by default: with `"isolation": "auto"` (or no
 `isolation`) when every root is the top level of a Git repository with a commit.
