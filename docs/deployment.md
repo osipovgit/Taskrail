@@ -145,7 +145,7 @@ untouched 2.x stream in `events.raw.jsonl`. Every call sets
 secret-shaped variables (`*_TOKEN`, `*_KEY`, `*_SECRET`, `*_PASSWORD`, their `*_FILE`
 locators, `SSH_AUTH_SOCK`, `GIT_ASKPASS` and similar); opencode alone keeps common
 provider keys and the names in `agent_env_allow`.
-The configured argv prefix, including an nga wrapper's profile arguments, is
+The configured argv prefix, including a wrapper's own arguments, is
 preserved for version detection, permission checks, capability probes, servers and
 clients. All these calls use the same credential allowlist. A successful help
 response without `--attach` selects separate 1.x processes; a failed or timed-out

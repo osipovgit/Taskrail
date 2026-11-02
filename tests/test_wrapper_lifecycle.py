@@ -25,7 +25,7 @@ record = dict(args=args, cwd=os.getcwd(), compact=os.environ.get('OPENCODE_DISAB
 with Path(os.environ['FAKE_STATE']).joinpath('wrapper.jsonl').open('a') as stream:
     stream.write(json.dumps(record) + '\\n')
 if args == ['--version']:
-    print('nga ' + ('1.19.3' if sys.argv[3] == '1.x' else '2.0.30'))
+    print('wrapper ' + ('1.19.3' if sys.argv[3] == '1.x' else '2.0.30'))
     sys.exit(0)
 os.execv(sys.executable, [sys.executable, sys.argv[4], *args])
 """
@@ -63,7 +63,7 @@ class WrapperLifecycleTests(unittest.TestCase):
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
         self.root = Path(temporary.name)
-        self.wrapper = self.root / "nga.py"
+        self.wrapper = self.root / "wrapper.py"
         self.wrapper.write_text(WRAPPER)
         self.prompt = self.root / "request.md"
         self.prompt.write_text("Inspect the task")
