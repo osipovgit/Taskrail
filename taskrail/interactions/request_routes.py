@@ -6,7 +6,8 @@ from taskrail.core import prompt_texts
 from taskrail.git.deadline import Deadline
 from taskrail.interactions import events, jenkins, local_route, remote, request_envelope
 
-MAX_CORRECTIONS = 2
+# Corrections in a row; a valid request resets the count.
+MAX_CORRECTIONS = 3
 CORRECTIONS = "corrections"
 RESPONSE = "final_text"
 
@@ -21,6 +22,7 @@ def route(actions, outcome):
         payload = request_envelope.parsed(kind, text)
     except ValueError as error:
         return rejected_request(actions, outcome, kind, error)
+    actions.session.context[CORRECTIONS] = 0
     return ROUTES[kind](actions, outcome, payload)
 
 
@@ -58,9 +60,10 @@ def run_jenkins(actions, outcome, payload):
 
 
 def rejected_request(actions, outcome, kind, error):
-    """A request with a wrong shape runs nothing; the session may correct it twice.
+    """A request with a wrong shape runs nothing; the session may correct it in a row.
 
-    After that the turn ends as an invalid result, like any other unusable response.
+    After MAX_CORRECTIONS in a row the turn ends as an invalid result, like any other
+    unusable response.
     """
     context = actions.session.context
     if context[CORRECTIONS] >= MAX_CORRECTIONS:

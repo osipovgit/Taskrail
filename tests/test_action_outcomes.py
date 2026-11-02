@@ -102,6 +102,12 @@ class RequestLimitTests(unittest.TestCase):
         self.assertTrue(request_limits.check(self.session, outcome))
         self.assertEqual(outcome["status"], "NO_PROGRESS")
 
+    def test_a_new_stage_round_or_continue_counts_afresh(self):
+        for number in range(request_limits.MAX_DUPLICATES):
+            request_limits.check(self.session, self.request(number))
+        request_limits.reset(self.run, "planner")
+        self.assertFalse(request_limits.check(self.session, self.request(99)))
+
     def test_changed_source_allows_a_new_check(self):
         for _ in range(request_limits.MAX_DUPLICATES):
             request_limits.check(self.session, self.request())

@@ -50,6 +50,28 @@ class RequestEnvelopeTests(unittest.TestCase):
 
 
 class InspectingStageTests(unittest.TestCase):
+    def test_corrections_are_counted_in_a_row_and_a_valid_request_resets_them(self):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        folder = Path(temporary.name)
+        router = SimpleNamespace(
+            session=SimpleNamespace(context=dict(corrections=0)), folder=folder
+        )
+        bad = dict(status="OK", final_text='{"schema_version":1,"status":"GIT_REQUEST"}')
+        valid = dict(
+            schema_version=1, status="GIT_REQUEST", root="/r", argv=["status"], reason="Inspect"
+        )
+        good = dict(status="OK", final_text=json.dumps(valid))
+        with patch.object(request_routes, "ROUTES", {request_envelope.GIT: lambda *_: "ran"}):
+            for _ in range(request_routes.MAX_CORRECTIONS):
+                self.assertIn("rejected before anything ran", request_routes.route(router, bad))
+            self.assertEqual(request_routes.route(router, good), "ran")
+            self.assertIn("rejected before anything ran", request_routes.route(router, bad))
+            for _ in range(request_routes.MAX_CORRECTIONS - 1):
+                request_routes.route(router, bad)
+            self.assertIsNone(request_routes.route(router, bad))
+        self.assertEqual(bad["status"], "INVALID_RESULT")
+
     def test_fix_and_in_place_options_are_refused_before_approval(self):
         for argv in (["ruff", "check", "--fix", "."], ["prettier", "--write=true", "x"]):
             with self.assertRaisesRegex(ValueError, "rewrites files"):

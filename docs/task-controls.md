@@ -324,9 +324,10 @@ blindly repeats an interrupted write. See [access](access.md).
 Local commands are recorded before execution in `local-actions.json`, including exact
 argv, approval, source snapshot and an environment fingerprint. An interrupted or
 uncertain action remains `UNKNOWN`; rephrasing its reason or continuing the run cannot
-execute it again. Intermediate requests are bounded per stage: 64 total and at most
-three identical local/Git requests against unchanged sources. `NO_PROGRESS` stops
-before another request runs; continuation retains these counters.
+execute it again. Intermediate requests are bounded per stage round (its attempts after
+one entry): 100 total and at most three identical local/Git requests against unchanged
+sources. `NO_PROGRESS` stops before another request runs. A new round after review or
+check feedback, and an explicit Continue, count afresh.
 
 ## Exhausted allowances
 

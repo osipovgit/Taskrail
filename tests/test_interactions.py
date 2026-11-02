@@ -25,6 +25,7 @@ from taskrail.interactions import (
     local_request,
     local_route,
     read_only,
+    request_routes,
     transcripts,
 )
 from taskrail.interactions.clock import StageClock
@@ -550,7 +551,8 @@ class InteractionTests(unittest.TestCase):
             git_metadata=lambda roots: {},
         )
         near_miss = dict(cwd=str(self.root), argv=["ansible-lint", "."], reason="Lint")
-        responses = [f"LOCAL_REQUEST\n{json.dumps(near_miss)}"] * 3 + ["{}"]
+        attempts = request_routes.MAX_CORRECTIONS + 1
+        responses = [f"LOCAL_REQUEST\n{json.dumps(near_miss)}"] * attempts + ["{}"]
         prompts = []
 
         def invoke(options):
@@ -576,7 +578,7 @@ class InteractionTests(unittest.TestCase):
                 (folder, record), dict(stages=[record]), environment, launch
             ).run()
         self.assertEqual(execute.call_count, 0)
-        self.assertEqual(len(prompts), 3)
+        self.assertEqual(len(prompts), attempts)
         self.assertIn('"status": "LOCAL_REQUEST"', prompts[1])
         self.assertIn("nothing was executed", prompts[2])
         self.assertIn("ansible-lint", outcome["final_text"])

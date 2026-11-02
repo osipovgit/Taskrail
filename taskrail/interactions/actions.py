@@ -92,7 +92,7 @@ class Actions:
 
 
 def incomplete_request(actions, text):
-    """Return a near-miss request or bare narration to the same session, twice per stage.
+    """Return a near-miss request or bare narration to the same session, a few times in a row.
 
     A turn that only describes its next step, or writes a request as XML or tool-call
     markup, would otherwise fail validation and end the session. Every role answers in

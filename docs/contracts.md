@@ -326,12 +326,12 @@ exactly one JSON object whose `status` names a request, with prose or a Markdown
 around it ignored; no field or argument is changed. Only a Git request that can change
 state must be the entire response. A request with a wrong shape (an unknown or missing
 field, a wrong version, an empty reason, a wrapped Git write) runs nothing: the same
-session is told what to fix, at most twice per session, and after that the turn ends as
-an invalid result. Multiple objects, duplicate keys and malformed JSON are not requests.
+session is told what to fix, at most three times in a row (a valid request resets the
+count), and after that the turn ends as an invalid result. Multiple objects, duplicate keys and malformed JSON are not requests.
 `cwd` is a declared root or an existing directory inside one. A
 response with `cwd` and `argv` but without `"status": "LOCAL_REQUEST"` or
-`schema_version` executes nothing; the same session is told what is missing, at most
-twice per stage. Planner and reviewer stages cannot request `--fix`, `--write`,
+`schema_version` executes nothing; the same session is told what is missing, with the
+same limit. Planner and reviewer stages cannot request `--fix`, `--write`,
 in-place or `sed -i` options; such a request is rejected before approval.
 
 An approved command may still change files. Files Git ignores (caches, reports, build
