@@ -75,7 +75,7 @@ jobs:
       - name: Require real network, filesystem and approval isolation
         env:
           TASKRAIL_REQUIRE_SANDBOX: "1"
-        run: python -m unittest discover -s tests -p 'test_sandbox*.py' -v
+        run: python -m unittest discover -b -s tests -p 'test_sandbox*.py' -v
 
   ui:
     name: Tests / UI

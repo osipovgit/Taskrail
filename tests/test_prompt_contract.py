@@ -256,6 +256,13 @@ class RequestBudgetTests(LiveFixture, unittest.TestCase):
             self.assertNotIn("{'", request)
             requests[stage] = request
         self.assertIn("Your only writable file is the plan file", requests["01-plan"])
+        self.assertIn("The planner was given these rules", requests["02-plan-review"])
+        self.assertNotIn("The planner was given these rules", requests["01-plan"])
+        self.assertNotIn("Cite current lines", requests["03-implement"])
+        self.assertIn("Your task from the approved plan:", requests["03-implement"])
+        self.assertIn("Done when:\n- ", requests["03-implement"])
+        self.assertNotIn("Your task from the approved plan", requests["05-review"])
+        self.assertIn("Cite current lines", requests["05-review"])
         self.assertNotIn("Your only writable file", requests["03-implement"])
         self.assertIn("Edit only the allowed files", requests["03-implement"])
         self.assertNotIn("Edit only the allowed files", requests["05-review"])

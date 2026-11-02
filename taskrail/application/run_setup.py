@@ -43,9 +43,9 @@ SETTINGS_SNAPSHOT = (
     "check_recipes",
     "check_specs",
     "isolation",
-    "max_change_lines",
-    "max_change_files",
     "protected_paths",
+    "host_commands",
+    "sandbox_network",
 )
 
 

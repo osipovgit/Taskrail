@@ -12,7 +12,7 @@ const COLUMNS = [
   ['attempts', 'Attempts'],
   ['first_try', 'First try', firstTry],
   ['failed', 'Failed'],
-  ['format_repairs', 'Format repairs'],
+  ['rejections', 'Rejections'],
   ['recoveries', 'Recoveries'],
   ['tokens', 'Tokens'],
   ['elapsed_seconds', 'Seconds'],
@@ -36,6 +36,14 @@ function table(title, groups) {
     grid.append(row);
   }
   section.append(grid);
+  // The rules models break most often, worth fixing first in prompts or parsers.
+  for (const [name, totals] of Object.entries(groups)) {
+    if (!totals.reasons?.length) continue;
+    section.append(el('h4', `Most frequent rejections: ${name}`));
+    const list = el('ul');
+    for (const entry of totals.reasons) list.append(el('li', `${entry.count}× ${entry.reason}`));
+    section.append(list);
+  }
   return section;
 }
 

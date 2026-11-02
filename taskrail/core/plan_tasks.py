@@ -8,7 +8,6 @@ import math
 import re
 from types import MappingProxyType
 
-from taskrail.core import plan_exclusions
 from taskrail.core.plan_keys import uncode
 from taskrail.core.plan_markdown import FIELDS, LINE, TASKS
 from taskrail.core.plan_outcomes import PLACEHOLDER, absolute, cited_ranges
@@ -111,7 +110,6 @@ def check(decision, planned, coverage):
     problems.extend(incomplete(planned))
     problems.extend(ownership_problems(coverage.owners, coverage.requirements))
     problems.extend(decision_problems(decision, planned))
-    problems.extend(plan_exclusions.problems(planned, known))
 
 
 def incomplete(planned):

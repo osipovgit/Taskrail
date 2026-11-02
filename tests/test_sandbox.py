@@ -2,6 +2,7 @@
 
 import json
 import os
+import socket
 import sys
 import tempfile
 import unittest
@@ -169,6 +170,25 @@ class SandboxExecutionTests(unittest.TestCase):
         self.assertTrue(seen["metadata"].startswith("refused"))
         self.assertFalse((self.root / "made.txt").exists())
 
+    def test_the_operators_network_opt_in_keeps_the_network_and_every_mask(self):
+        code = "import os, socket; print(len(socket.if_nameindex()) > 1, os.path.exists('.env'))"
+        payload = request(cwd=str(self.root), argv=[sys.executable, "-c", code])
+        seen = []
+        for network in (False, True):
+            context = dict(roots={"p": self.root}, run=self.root, timeout=30)
+            context.update(config=dict(sandbox_network=network), **{local_sandbox.WRITES: False})
+            outcome = local.execute(payload, context)
+            self.assertEqual(outcome["exit_code"], 0, outcome["stderr"])
+            seen.append(outcome["stdout"].split())
+        self.assertEqual(seen[0], ["False", "True"])
+        if len(socket.if_nameindex()) > 1:
+            self.assertEqual(seen[1], ["True", "True"])
+        secret = [sys.executable, "-c", "open('.env').read()"]
+        context = dict(roots={"p": self.root}, run=self.root, timeout=30)
+        context.update(config=dict(sandbox_network=True), **{local_sandbox.WRITES: False})
+        denied = local.execute(request(cwd=str(self.root), argv=secret), context)
+        self.assertNotEqual(denied["exit_code"], 0)
+
     def test_the_implementer_writes_its_roots_but_not_git_metadata(self):
         seen = self.probe(writes=True)
         self.assertEqual(seen["write"], "ok")
@@ -333,6 +353,38 @@ class SandboxRouteTests(unittest.TestCase):
             ):
                 self.assertEqual(local_route.without_decision(actions, payload), "completed")
             self.assertEqual(executed.call_args.args[2]["rule"], approval_policy.SANDBOX)
+
+    def test_a_host_command_runs_without_asking_unless_settings_ask(self):
+        with tempfile.TemporaryDirectory() as directory:
+            run = Path(directory)
+            on_host = dict(request(sandbox=False), stage="03-implement")
+            with patch.object(approval_policy.approvals, "wait") as wait:
+                answer = approval_policy.decision(run, on_host, dict(host_commands="auto"))
+                wait.assert_not_called()
+                self.assertEqual((answer["decision"], answer["rule"]), ("allow", "host"))
+                read = dict(status="ACCESS_REQUEST", calls=[], stage="01-plan")
+                for asked in (
+                    (on_host, dict(host_commands="ask"), False),
+                    (read, dict(host_commands="auto"), False),
+                    (on_host, dict(host_commands="auto"), True),
+                ):
+                    approval_policy.decision(run, asked[0], asked[1], personal=asked[2])
+                self.assertEqual(wait.call_count, 3)
+            ledger = [json.loads(path.read_text()) for path in run.glob("approval-*.json")]
+            self.assertEqual([entry["response"]["rule"] for entry in ledger], ["host"])
+
+    def test_a_command_that_failed_for_lack_of_network_gets_an_offline_hint(self):
+        failed = dict(status="FAILED", stderr="ERROR: Temporary failure in name resolution")
+        sandboxed = {local_sandbox.WRITES: False, "config": {}}
+        self.assertIn("--offline", local_sandbox.offline_note(failed, sandboxed))
+        self.assertIn('"sandbox": false', local_sandbox.offline_note(failed, sandboxed))
+        for answer, context in (
+            (dict(failed, status="SUCCEEDED"), sandboxed),
+            (dict(failed, stderr="E501 line too long"), sandboxed),
+            (failed, {"config": {}}),
+            (failed, dict(sandboxed, config=dict(sandbox_network=True))),
+        ):
+            self.assertEqual(local_sandbox.offline_note(answer, context), "")
 
     def test_a_request_may_ask_for_the_host_and_is_then_another_action(self):
         on_host = local.extract(json.dumps(request(sandbox=False)))

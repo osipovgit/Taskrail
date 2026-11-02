@@ -3,7 +3,7 @@
 The initial setting lives in trusted task input. Personal card grants are durable
 outside project roots and inherited only through authenticated family links. The
 operator can revoke them; ancestor denials override copied flags. It covers local
-commands and the change limit; SSH actions
+commands and reads; SSH actions
 and Jenkins builds keep their separate root-only approval. A command that runs in
 the sandbox needs no decision; its automatic approval is recorded the same way.
 """
@@ -20,6 +20,9 @@ ALLOW = "allow"
 ALLOW_ALL = "allow_all"
 READ_ONLY = "read_only"
 SANDBOX = "sandbox"
+# A command outside the sandbox that runs without asking; the log highlights it.
+HOST = "host"
+HOST_COMMANDS = "host_commands"
 OFF = approval_marks.OFF
 
 
@@ -27,18 +30,30 @@ def decision(run, request, state, scope=None, personal=False):
     """Approve read-only requests and, when allowed for this run, all others on record.
 
     The scope holds the declared roots and protected patterns of the read-only route;
-    without one (the change limit) only the run's setting can approve automatically.
+    without one only the run's setting can approve automatically.
     A personal request, such as a push to a remote or a manual installation step,
     always waits for the operator.
     """
     if not personal and scope is not None and read_only.request(request, *scope):
         return automatic(run, request, READ_ONLY)
+    if not personal and host_automatic(state, request):
+        return automatic(run, request, HOST)
     if not personal and enabled(run, state):
         return automatic(run, request, ALLOW_ALL)
     answer = approvals.wait(run, request)
     if answer.get("allow_all") and answer["decision"] == ALLOW:
         state[AUTO_APPROVE] = not approval_marks.revoked(run)
     return answer
+
+
+def host_automatic(state, request):
+    """Whether a local command outside the sandbox runs without a decision.
+
+    Every run records its host_commands setting (default auto) when it starts; a state
+    without it asks.
+    """
+    automatic_mode = state.get(HOST_COMMANDS) == "auto"
+    return automatic_mode and request.get("status") == "LOCAL_REQUEST"
 
 
 def enabled(run, state):

@@ -31,6 +31,8 @@ class Actions:
         self.session = session
         self.run = session.environment["run"]
         self.folder = session.active[0]
+        # The approval rule of the last local command, for its log entry.
+        self.rule = None
 
     def route(self, outcome):
         """An executor request, an access decision or a near-miss request; else None."""
@@ -92,7 +94,7 @@ class Actions:
 
 
 def incomplete_request(actions, text):
-    """Return a near-miss request or bare narration to the same session, twice per stage.
+    """Return a near-miss request or bare narration to the same session, a few times in a row.
 
     A turn that only describes its next step, or writes a request as XML or tool-call
     markup, would otherwise fail validation and end the session. Every role answers in
@@ -108,7 +110,7 @@ def incomplete_request(actions, text):
     else:
         return None
     context[CORRECTIONS] += 1
-    events.append(actions.folder, "correction", dict(response=text), feedback)
+    events.correction(actions.session, "request", text, feedback)
     return feedback
 
 

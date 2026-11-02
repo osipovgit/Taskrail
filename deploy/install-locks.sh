@@ -12,7 +12,9 @@ flock -n 8 || {
 if [[ ! /proc/self/fd/9 -ef "$state_dir/live.lock" ]]; then
     exec 9>"$state_dir/live.lock"
 fi
-echo "Waiting up to $wait_seconds seconds for the active workflow to finish..."
+if [[ "$wait_seconds" -gt 0 ]]; then
+    echo "Waiting up to $wait_seconds seconds for the active workflow to finish..."
+fi
 flock -w "$wait_seconds" 9 || {
     echo 'Stop the active task in the UI and wait before updating' >&2
     exit 1

@@ -74,6 +74,7 @@ class PermissionTests(unittest.TestCase):
             root = base / "qa"
             root.mkdir()
             (root / ".git").mkdir()
+            (root / ".git/HEAD").write_text("ref: refs/heads/main\n")
             source = base / "source.md"
             source.write_text("role")
             one, two = root / "build.sh", base / "jenkins" / "pipeline.groovy"
@@ -93,6 +94,11 @@ class PermissionTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
             self.assertEqual(permission_worktree(root), Path("/"))
+            (root / ".git").mkdir()
+            nested = root / "project"
+            nested.mkdir()
+            self.assertEqual(permission_worktree(nested), Path("/"), "an empty .git is not Git")
+            (root / ".git").rmdir()
             (root / ".git").write_text("gitdir: elsewhere")
             with self.assertRaises(ValueError):
                 permission_worktree(root)

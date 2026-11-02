@@ -1,10 +1,11 @@
 """How a stage answers: the plan file for the planner, DONE or BLOCKED for the
-implementer, else one JSON object.
+implementer, review.md for reviewers, and executor requests in between.
 
-Every alternative is the validated contract, printed as compact JSON on one line, so
-the request stays small and no line is cut when the model reads it; a schema too long
-for one line gets one field per line. SSH and Jenkins requests are listed only when
-the executor is installed. The texts live in core/prompt-texts.json.
+Git and local requests are shown as one filled-in example each, which weak models
+copy more reliably than a schema. SSH and Jenkins requests, listed only when the
+executor is installed, keep their validated contract as compact JSON on one line,
+because it carries the available targets and jobs; a schema too long for one line gets
+one field per line. The texts live in core/prompt-texts.json.
 """
 
 import json
@@ -17,6 +18,7 @@ from taskrail.core.prompt_texts import text
 PLANNER = "planner"
 IMPLEMENTER = "implementer"
 LINE_LIMIT = 1800
+EXAMPLES = MappingProxyType({"git": "example.git", "local": "example.local"})
 
 
 FINISHES = MappingProxyType(
@@ -59,7 +61,14 @@ def section(stage, state, run, config, catalog=None):
     else:
         rules = review_file.instructions(run, stage)
         routing = text("format.request_routing")
-    return "\n".join([rules, routing, *map(schema_line, alternatives)])
+    return "\n".join([rules, routing, *request_lines(alternatives)])
+
+
+def request_lines(alternatives):
+    """An example for each Git and local request, then the schema of every other one."""
+    examples = [text(EXAMPLES[name]) for name in alternatives if name in EXAMPLES]
+    others = (contract for name, contract in alternatives.items() if name not in EXAMPLES)
+    return [*examples, *map(schema_line, others)]
 
 
 def schema_line(contract):

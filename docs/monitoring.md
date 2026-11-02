@@ -55,7 +55,8 @@ Cumulative usage has no warning threshold. Counters are for comparison, not cont
 run store: outcomes and success rate, recorded model time, reported tokens and
 continuations, and per model and per stage the attempts, the first-try share (model
 attempts the server accepted without a same-session correction, of those that recorded
-their corrections), failed attempts, format repairs, recoveries, tokens and time. Runs in the trash are not counted. Missing
+their corrections), failed attempts, rejections (corrections sent back to the session,
+with the most frequent reasons, paths and numbers blanked), recoveries, tokens and time. Runs in the trash are not counted. Missing
 usage is reported as zero tokens, so compare models only on runs with telemetry.
 
 ## Artifacts

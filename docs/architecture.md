@@ -141,8 +141,8 @@ TypeScript, Java, Go and Groovy; Jenkins stages; Dockerfile `FROM`/`ENTRYPOINT`/
 Terraform blocks; Jinja2 blocks and macros; Markdown headings), and for every
 requirement the first lines that name its distinctive words. Long command output also
 comes with a digest of its severities, most mentioned files and rules
-(`interactions/output_digest.py`). Response schemas are compact JSON, one alternative
-per line. SSH and Jenkins schemas use the same available targets/jobs and stage
+(`interactions/output_digest.py`). Git and local requests are shown as one filled-in
+example each; SSH and Jenkins requests keep compact JSON schemas, one per line. Those schemas use the same available targets/jobs and stage
 permissions as their instructions (`application/response_format.py`); an absent,
 unreachable or empty executor advertises neither capability. All roles run with automatic compaction disabled.
 Request, role and attachment byte counts are diagnostics, not admission

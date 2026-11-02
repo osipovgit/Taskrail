@@ -62,7 +62,13 @@ def program():
 
 @contextlib.contextmanager
 def isolation(kind):
-    """bubblewrap options of this kind; the seccomp program is read from an inherited file."""
+    """bubblewrap options of this kind; the seccomp program is read from an inherited file.
+
+    None keeps the network, for the operator's opt-in sandbox_network.
+    """
+    if kind is None:
+        yield dict(args=[], pass_fds=())
+        return
     if kind == NAMESPACE:
         yield dict(args=["--unshare-net"], pass_fds=())
         return

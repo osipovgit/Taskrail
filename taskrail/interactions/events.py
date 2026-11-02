@@ -5,6 +5,9 @@ import time
 import uuid
 
 MILLISECONDS = 1000
+REJECTIONS = "rejections"
+MAX_REJECTIONS = 20
+REASON = 200
 
 
 def write(folder, event):
@@ -51,3 +54,16 @@ def append(folder, name, arguments, output):
     """Publish an immediately available executor result."""
     event = begin(folder, name, arguments)
     finish(folder, event, output)
+
+
+def correction(session, kind, response, feedback):
+    """Publish a correction turn and remember why, for the stage record and analytics.
+
+    kind names what was rejected: a final result, a request, an unavailable tool or an
+    unread plan file; the reason is the first line of the feedback.
+    """
+    append(session.active[0], "correction", dict(response=response), feedback)
+    reasons = session.context.setdefault(REJECTIONS, [])
+    first = feedback.strip().partition("\n")[0]
+    if len(reasons) < MAX_REJECTIONS:
+        reasons.append(dict(kind=kind, reason=first[:REASON]))

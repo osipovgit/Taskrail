@@ -2,6 +2,7 @@
 
 from collections import Counter
 
+from taskrail.web import rejections
 from taskrail.web.run_files import contained, read_json
 
 SUCCESS = frozenset(("READY_FOR_REVIEW", "NO_CHANGES_REQUIRED", "TASKS_READY"))
@@ -65,10 +66,12 @@ def grouped(states, key):
     totals = {}
     for state in states:
         for record in state.get("stages", []):
-            empty = dict(attempts=0, failed=0, format_repairs=0, recoveries=0, tokens=0)
-            empty.update(first_try=0, first_try_measured=0)
+            empty = dict(attempts=0, failed=0, rejections=0, recoveries=0, tokens=0)
+            empty.update(first_try=0, first_try_measured=0, reasons=Counter())
             entry = totals.setdefault(key(record), dict(empty, elapsed_seconds=0))
             add(entry, record)
+    for entry in totals.values():
+        entry["reasons"] = rejections.top(entry["reasons"])
     return totals
 
 
@@ -85,7 +88,9 @@ def add(entry, record):
     entry["failed"] += not accepted
     entry["first_try_measured"] += measured
     entry["first_try"] += measured and accepted and not record[CORRECTIONS]
-    entry["format_repairs"] += mode == "format-repair"
+    reasons = rejections.counted(record)
+    entry[rejections.REJECTIONS] += sum(reasons.values())
+    entry["reasons"].update(reasons)
     entry["recoveries"] += mode in RECOVERY_MODES
     entry[TOKENS] += total_tokens(record.get(TOKENS))
     elapsed = entry[ELAPSED] + record.get(ELAPSED, 0)

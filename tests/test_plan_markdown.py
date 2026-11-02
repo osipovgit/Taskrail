@@ -108,12 +108,12 @@ class PlanDocumentTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "offset=4, limit=2"):
                 source_claims.validate_claim(plan["evidence"][1], records)
 
-    def test_read_ranges_keep_quoted_paths_and_reject_prose(self):
+    def test_read_ranges_keep_quoted_paths_and_skip_prose(self):
         text = PLAN.replace("Done when:", "Read: `project/a file.yml:1-2`,3-4\nDone when:", 1)
         plan = payload(text, REQUIREMENTS, ROOTS)
         self.assertEqual(plan["steps"][0]["read"], ["/repo/a file.yml:1-2", "/repo/a file.yml:3-4"])
-        with self.assertRaisesRegex(ValueError, "cite the lines"):
-            payload(text.replace("`,3-4", "` (project/b:99)"), REQUIREMENTS, ROOTS)
+        prose = payload(text.replace("`,3-4", "` (project/b:99)"), REQUIREMENTS, ROOTS)
+        self.assertEqual(prose["steps"][0]["read"], [])
 
     def test_a_forgiving_plan_becomes_the_stored_result(self):
         plan = payload(PLAN, REQUIREMENTS, ROOTS)
@@ -201,7 +201,7 @@ class PlanDocumentTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "no change cannot have tasks"):
             payload(answer.replace("## Answer", "## T1: x\n## Answer"), REQUIREMENTS, ROOTS)
 
-    def test_constraints_belong_to_every_task_and_read_ranges_become_evidence(self):
+    def test_constraints_belong_to_every_task_and_read_ranges_are_hints_not_evidence(self):
         constraint = dict(id="R-ddd", text="Keep handlers", kind="task")
         constraint["source"] = dict(field="constraints", start=0, end=13)
         requirements = [*REQUIREMENTS[:2], constraint, REQUIREMENTS[2]]
@@ -220,8 +220,7 @@ class PlanDocumentTests(unittest.TestCase):
         self.assertEqual(second["criteria"], ["R-aaa", "R-bbb", "R-ddd"])
         self.assertEqual(first["read"], ["/repo/ntp.yml:1-20", "/repo/defaults.yml:4-4"])
         self.assertEqual(second["read"], [])
-        cited = [(entry["path"], entry["line_start"]) for entry in plan["evidence"]]
-        self.assertEqual(cited, [("/repo/ntp.yml", 1), ("/repo/defaults.yml", 4)])
+        self.assertEqual(plan["evidence"], [], "Read ranges need not have been read")
         self.assertEqual(plan["unverified"], ["Playbook check passes"])
         no_change = "Decision: no change\nSummary: done\n## Requirements\n" + (
             "- R1 → done: project/a.py:1\n- R2 → done: project/a.py:1\n"

@@ -11,7 +11,7 @@ from types import MappingProxyType
 from taskrail.application import execution_requests, jenkins_requests
 from taskrail.core import json_response, prompt_texts, schema
 from taskrail.git import requests as git_requests
-from taskrail.interactions import local
+from taskrail.interactions import local, local_intake
 
 GIT = git_requests.STATUS
 LOCAL = "LOCAL_REQUEST"
@@ -25,6 +25,8 @@ def status(text):
         payload = json_response.extract(text, schema.unique_fields)
     except ValueError:
         return None
+    if local_intake.looks_like(payload):
+        return LOCAL
     named = payload.get("status")
     return named if named in PARSERS else None
 

@@ -7,7 +7,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from taskrail.core import protected_paths
-from taskrail.infrastructure import sandbox_mounts, sandbox_paths, sandbox_secrets
+from taskrail.infrastructure import sandbox_cache, sandbox_mounts, sandbox_paths, sandbox_secrets
 
 SECRETS = (
     ".m2/settings.xml",
@@ -110,6 +110,20 @@ class SandboxMountTests(unittest.TestCase):
         secret = runtime / "auth.json"
         secret.write_text("DUMMY_ONLY")
         self.assertIn(str(secret), sandbox_secrets.masks((runtime,), ()))
+
+    def test_cached_masks_are_reused_until_a_directory_changes(self):
+        runtime = self.home / "runtime"
+        nested = runtime / "lib" / "site"
+        nested.mkdir(parents=True)
+        (nested / "module.py").touch()
+        with patch.object(sandbox_secrets, "masks", wraps=sandbox_secrets.masks) as scans:
+            self.assertEqual(sandbox_cache.masks((runtime,), ()), [])
+            self.assertEqual(sandbox_cache.masks((runtime,), ()), [])
+            self.assertEqual(scans.call_count, 1)
+            secret = nested / "credentials"
+            secret.write_text("DUMMY_ONLY")
+            self.assertIn(str(secret), sandbox_cache.masks((runtime,), ()))
+            self.assertEqual(scans.call_count, 2)
 
     def test_ordinary_alias_to_a_credential_file_is_masked_after_resolution(self):
         runtime = self.home / "runtime"

@@ -25,6 +25,7 @@ from taskrail.interactions import (
     local_request,
     local_route,
     read_only,
+    request_routes,
     transcripts,
 )
 from taskrail.interactions.clock import StageClock
@@ -549,8 +550,11 @@ class InteractionTests(unittest.TestCase):
             scan=lambda: {},
             git_metadata=lambda roots: {},
         )
-        near_miss = dict(cwd=str(self.root), argv=["ansible-lint", "."], reason="Lint")
-        responses = [f"LOCAL_REQUEST\n{json.dumps(near_miss)}"] * 3 + ["{}"]
+        near_miss = dict(
+            status="LOCAL", cwd=str(self.root), argv=["ansible-lint", "."], reason="Lint"
+        )
+        attempts = request_routes.MAX_CORRECTIONS + 1
+        responses = [f"LOCAL_REQUEST\n{json.dumps(near_miss)}"] * attempts + ["{}"]
         prompts = []
 
         def invoke(options):
@@ -576,7 +580,7 @@ class InteractionTests(unittest.TestCase):
                 (folder, record), dict(stages=[record]), environment, launch
             ).run()
         self.assertEqual(execute.call_count, 0)
-        self.assertEqual(len(prompts), 3)
+        self.assertEqual(len(prompts), attempts)
         self.assertIn('"status": "LOCAL_REQUEST"', prompts[1])
         self.assertIn("nothing was executed", prompts[2])
         self.assertIn("ansible-lint", outcome["final_text"])
@@ -615,5 +619,6 @@ class InteractionTests(unittest.TestCase):
             encoded.replace('"status":', '"status": "LOCAL_REQUEST", "status":'),
         ):
             self.assertIsNone(local.extract(text))
+        self.assertEqual(local.extract(json.dumps(dict(payload, steps=[]))), payload)
         with self.assertRaisesRegex(ValueError, "Invalid local request"):
-            local.extract(json.dumps(dict(payload, steps=[])))
+            local.extract(json.dumps(dict(payload, argv={"program": "ls"})))

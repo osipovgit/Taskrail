@@ -41,3 +41,29 @@ A safe version needs the executor itself, not the application, to enforce it:
 - a per-host opt-in in `hosts.json`, so root decides which servers allow it.
 
 Until then every SSH action, including inspection, waits for root approval.
+
+## Commands inside the turn
+
+Each LOCAL_REQUEST or GIT_REQUEST ends the model's turn and starts another, and the
+request has to be written as an exact JSON object. A server-owned tool would remove
+both: a stdlib MCP server (`run_local`, `git_read`) registered in the managed profile,
+whose sandboxed calls return inside the same turn. It is deferred until a spike
+confirms, on opencode 1.x and 2.x, that MCP tools are available,
+that a long call is not cut off by a client timeout, how their permissions are named
+and that their events are recorded for evidence. Approval-bound calls would still end
+the turn.
+
+## Sandbox on restricted hosts
+
+Where bubblewrap cannot start (for example user namespaces limited by AppArmor), local
+commands lose the sandbox. `taskrail check` names bubblewrap's error for each kind of
+sandbox; decide from real hosts whether another isolation (such as Landlock with a
+seccomp filter) is worth adding.
+
+## Experience of earlier sessions
+
+A fresh session after an interrupted or overflowing one gets `progress.md` and the
+changed paths. Rereading all earlier context or edits would fill the new window and
+end it again, while too little repeats finished work. Design a compact, verified
+handoff (what was tried, what failed and why, which checks passed on which content)
+before writers continue automatically after interruptions other than a full context.

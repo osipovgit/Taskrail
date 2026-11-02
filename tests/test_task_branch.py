@@ -109,7 +109,8 @@ class TaskBranchRuleTests(unittest.TestCase):
         child = dict(config, phase="task", assigned_contract=dict(task_id="T2"))
         rule = mode_rules.render(child, "implementer")
         self.assertIn("finish only your missing deliverable", rule)
-        self.assertIn("report the exact dependency as a gap", rule)
+        self.assertIn("Not ToDo lists what later tasks will do", rule)
+        self.assertNotIn("gap", rule)
 
     def test_a_task_brief_names_the_later_tasks_as_not_to_do(self):
         steps = [
@@ -118,13 +119,16 @@ class TaskBranchRuleTests(unittest.TestCase):
             dict(id="T3", title="Docs", files=["project/README.md"], depends_on=["T2"]),
         ]
         steps[2]["done_when"] = ["README includes command usage"]
+        steps[1]["not_todo"] = ["Shell completion"]
         parent = dict(run=Path("/runs/parent"), plan=dict(steps=steps), epic={})
         brief = child_brief.context(parent, steps[1])
         earlier, later = brief.split(prompt_texts.text("child.later"))
         self.assertIn("- T1: Parser", earlier)
-        self.assertIn("T3: Docs", later)
+        self.assertIn("T3: Docs (later)", later)
         self.assertIn("README includes command usage", later)
         self.assertIn("project/README.md", later)
+        self.assertIn("- Shell completion", later)
+        self.assertIn("do only the minimum it needs", prompt_texts.text("child.later"))
 
 
 if __name__ == "__main__":

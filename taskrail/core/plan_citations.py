@@ -4,6 +4,7 @@ Only the leading list declares evidence. A comma can introduce another range of
 the same path; prose never creates implicit source paths or line claims.
 """
 
+import contextlib
 import re
 
 from taskrail.core import prompt_texts
@@ -66,3 +67,21 @@ def citation(text):
 def invalid():
     """Validation diagnostics follow the parser version, independently of frozen prompts."""
     return ValueError(prompt_texts.diagnostic("validation.plan_citations"))
+
+
+def hints(entries, resolve):
+    """path:from-to of each range in the entries, with resolve(path); unparsed ones skipped."""
+    found = []
+    for entry in entries:
+        with contextlib.suppress(ValueError):
+            found.extend(spans(parse(entry, False), resolve))
+    return found
+
+
+def spans(matches, resolve):
+    """Each (path, from, to) match as resolve(path):from-to; a single line repeats from."""
+    texts = []
+    for name, start, end in matches:
+        lines = "-".join((start, end or start))
+        texts.append(":".join((str(resolve(name)), lines)))
+    return texts

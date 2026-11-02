@@ -79,7 +79,7 @@ the agents' input.
 | `phase` | Server-generated for delivery runs (`task`, `integration`, `correction`, `validation`, `server`); do not set it by hand |
 | `task_scope` | Required for server-generated `task` phases: exact reviewed file paths; child planning cannot widen them or create another split |
 | `design` | `true` for a design discussion (the browser's **Design discussion**); implies `read_only` |
-| `auto_approve` | `true` approves local commands, read access and the change limit of this run without asking (the browser's **Allow all actions**); SSH keeps its root-only approval |
+| `auto_approve` | `true` approves local commands and read access of this run without asking (the browser's **Allow all actions**); SSH keeps its root-only approval |
 | `isolation` | `auto` (default) isolates a code change whose roots are all Git repository top levels with a commit; `worktree` always edits new linked Git worktrees and commits each approved task there; `in_place` edits the roots (the browser's cleared **Isolated Git worktree**, `taskrail submit --in-place`), see below |
 | `task_spec` | Generated typed input: version 1, literal named fields, a display integrity reference and optional child context/requirement lineage; do not edit only its Markdown display |
 | `assigned_contract` | Generated child reference (`parent_run`, `task_id`); the workflow authenticates it against the sealed reviewed parent before skipping child planning |
@@ -111,10 +111,11 @@ Every planner turn has `plan.md` attached, so the planner edits it without readi
 again.
 Unknown plan sections, unparsed ownership text and mismatched scope delimiters are
 errors, with line numbers. Put `## Answer` last: its remaining Markdown is the answer.
-Each task can declare `Not ToDo: T2: <excluded result>` to name another task's
-behavioral ownership, even when both tasks edit the same file. The child also receives
-later tasks' observable results. A necessary additional file is allowed on an owned
-task branch; taking over another task's deliverable requires an explicit scope decision.
+A task may list `Not ToDo:` bullets: later work its implementer might be tempted to do.
+It is a hint, never a validation rule. The child's **Not ToDo** block combines them with
+every later task's title, results and files: work to leave to those tasks unless this
+task cannot work without it, in which case the implementer does only the minimum and
+names it in its summary. A necessary additional file is allowed on an owned task branch.
 `Required checks:` lists exact local recipe IDs, one per bullet, or `none`. Selected
 gates run before that task can finish and again on the combined integration result.
 Unknown recipes, remote recipes and model-authored commands are rejected. `Verify`

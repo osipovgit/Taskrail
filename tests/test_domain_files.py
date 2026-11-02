@@ -163,6 +163,16 @@ class YamlInstallTests(unittest.TestCase):
             self.assertEqual(self.resolve()["status"], "SKIPPED")
         self.assertEqual(asked.call_count, 1)
 
+    def test_without_an_installer_yaml_stays_unchecked_instead_of_asking(self):
+        self.workflow.state["host_commands"] = "auto"
+        with (
+            patch.object(yaml_install, "installer", return_value=None),
+            patch.object(yaml_install.approval_policy, "decision") as asked,
+        ):
+            check = self.resolve()
+        self.assertEqual((check["status"], check["detail"]), ("SKIPPED", yaml_install.UNAVAILABLE))
+        asked.assert_not_called()
+
     def test_an_allowed_install_checks_the_file_at_once(self):
         def installed(*_arguments):
             self.available.append(sys.executable)

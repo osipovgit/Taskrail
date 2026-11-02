@@ -1,10 +1,11 @@
 """Offer to install PyYAML when no Python here can check the changed YAML files.
 
-The check stage asks once per run. With pip or uv the request installs PyYAML into
-Taskrail's own package directory, so this and every later run can check YAML; Allow
-all actions covers it like any local command. Without an installer the operator
-installs it by hand and then allows a recheck, which is always a personal decision.
-After Allow the files are checked at once; after Deny they stay unchecked.
+With pip or uv the check stage installs PyYAML into Taskrail's own package directory,
+so this and every later run can check YAML; it is a host command, so it runs at once
+unless host_commands is "ask". Without an installer the YAML files stay unchecked with
+an install hint; under "ask" the operator may install it by hand and allow a recheck, a
+personal decision. After Allow the files are checked at once; after Deny they stay
+unchecked.
 """
 
 import shutil
@@ -28,6 +29,7 @@ REASON = "Install PyYAML so the check stage can syntax-check YAML files"
 OFFER = "PyYAML is missing, so changed YAML files can't be syntax-checked. Allow installs it into {0} for this and later runs; Deny leaves them unchecked."
 MANUAL = "PyYAML is missing, so changed YAML files can't be syntax-checked, and neither pip nor uv is available. Install it on this host (for example: sudo apt install python3-yaml), then Allow to check them; Deny leaves them unchecked."
 DECLINED = "YAML not checked: the PyYAML install was declined"
+UNAVAILABLE = "YAML not checked: PyYAML is missing and neither pip nor uv is available (for example: sudo apt install python3-yaml)"
 STILL_MISSING = "YAML not checked: PyYAML is still missing after the install"
 
 
@@ -54,6 +56,8 @@ def recheck(check, roots, outcome):
 def install(workflow, folder):
     """ALLOWED when PyYAML is importable after the decision, else why YAML stays unchecked."""
     command = installer()
+    if command is None and workflow.state.get(approval_policy.HOST_COMMANDS) == "auto":
+        return UNAVAILABLE
     payload, shown = request(workflow, command)
     decision = approval_policy.decision(workflow.run, shown, workflow.state, personal=not command)
     if decision["decision"] != "allow":

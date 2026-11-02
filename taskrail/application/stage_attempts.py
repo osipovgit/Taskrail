@@ -30,6 +30,7 @@ from taskrail.application.attempt_session import (
 from taskrail.application.result_context import git_directory
 from taskrail.application.task_branch import KEY as TASK_BRANCH
 from taskrail.application.task_branch import extend as extend_beyond_plan
+from taskrail.interactions import request_limits
 from taskrail.interactions.session import run_stage
 
 STATUS = "status"
@@ -43,6 +44,7 @@ class StageAttempts:
     def __init__(self, workflow):
         """Build the stage request; consume evidence restored by a continuation."""
         self.workflow = workflow
+        request_limits.reset(workflow.run, workflow.flow["stage"])
         self.request = first_request(workflow)
         self.recovery = workflow.runtime["recovery"]
         workflow.runtime["recovery"] = None
@@ -72,6 +74,7 @@ class StageAttempts:
         workflow = self.workflow
         workflow.guard.verify("Source/Git changed before retry; recorded evidence is stale")
         folder, record = open_record(workflow, self.retries.mode())
+        record["result_rebuild"] = bool(self.retries.repair)
         record["writable_files"] = [str(path) for path in planned_files(workflow)]
         stage_artifacts.record_access(workflow, record)
         prompt = attempt_prompt(workflow, (folder, record), self.request, self.recovery)

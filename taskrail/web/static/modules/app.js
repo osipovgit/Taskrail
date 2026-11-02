@@ -250,7 +250,7 @@ const ACTION_TITLES = {
   done: 'Move this run to Done. Nothing in the project changes.',
   reopen: 'Return this run to its computed group.',
   revoke_auto_approve:
-    'Ask before local commands and the change limit again; applies before the next decision and on Continue.',
+    'Ask before local commands and reads again; applies before the next decision and on Continue.',
   delete: 'Move run history to local trash. Project files are preserved.',
 };
 
