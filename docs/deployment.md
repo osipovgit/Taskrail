@@ -127,6 +127,7 @@ reset directories.
 | `permission_worktree` | inferred | Base directory for relative permission names (Git worktree for 1.x, first root for 2.x). Server-owned isolation supplies it automatically; unowned/in-place 1.x roots with a `.git` file or symlink require an explicit value |
 | `tool_output_dir` | opencode location | Absolute directory (`~` allowed) where a compatible CLI keeps truncated tool output; its automatic `external_directory` allow rule is accepted only for this directory |
 | `opencode_server` | `true` | `false` runs each 1.x turn as its own process instead of on the stage's private server |
+| `sandbox_network` | `false` | `true` keeps the network for agents' sandboxed commands (package installs, collection downloads); every credential mask stays |
 | `host_commands` | `auto` | `auto` runs local commands outside the sandbox at once, highlighted in the stage log; `ask` makes each wait for your approval |
 | `stop_on_provider_limit` | `false` | `true` stops a stage at the first exhausted provider quota or billing limit instead of spending its retries ([contracts](contracts.md)) |
 | `protected_paths` | credentials list | Patterns models never read or edit, besides `.env` files; setting it replaces the defaults ([access](access.md#protected-paths)) |

@@ -45,6 +45,7 @@ SETTINGS_SNAPSHOT = (
     "isolation",
     "protected_paths",
     "host_commands",
+    "sandbox_network",
 )
 
 

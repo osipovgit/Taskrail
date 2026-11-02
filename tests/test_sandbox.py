@@ -2,6 +2,7 @@
 
 import json
 import os
+import socket
 import sys
 import tempfile
 import unittest
@@ -168,6 +169,25 @@ class SandboxExecutionTests(unittest.TestCase):
         self.assertTrue(seen["secret"].startswith("refused"))
         self.assertTrue(seen["metadata"].startswith("refused"))
         self.assertFalse((self.root / "made.txt").exists())
+
+    def test_the_operators_network_opt_in_keeps_the_network_and_every_mask(self):
+        code = "import os, socket; print(len(socket.if_nameindex()) > 1, os.path.exists('.env'))"
+        payload = request(cwd=str(self.root), argv=[sys.executable, "-c", code])
+        seen = []
+        for network in (False, True):
+            context = dict(roots={"p": self.root}, run=self.root, timeout=30)
+            context.update(config=dict(sandbox_network=network), **{local_sandbox.WRITES: False})
+            outcome = local.execute(payload, context)
+            self.assertEqual(outcome["exit_code"], 0, outcome["stderr"])
+            seen.append(outcome["stdout"].split())
+        self.assertEqual(seen[0], ["False", "True"])
+        if len(socket.if_nameindex()) > 1:
+            self.assertEqual(seen[1], ["True", "True"])
+        secret = [sys.executable, "-c", "open('.env').read()"]
+        context = dict(roots={"p": self.root}, run=self.root, timeout=30)
+        context.update(config=dict(sandbox_network=True), **{local_sandbox.WRITES: False})
+        denied = local.execute(request(cwd=str(self.root), argv=secret), context)
+        self.assertNotEqual(denied["exit_code"], 0)
 
     def test_the_implementer_writes_its_roots_but_not_git_metadata(self):
         seen = self.probe(writes=True)

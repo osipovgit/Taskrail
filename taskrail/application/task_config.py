@@ -133,4 +133,5 @@ def limits(options):
         read_retries=max(0, min(3, int(options.get("read_retries", 3)))),
         stop_on_provider_limit=options.get("stop_on_provider_limit") is True,
         host_commands=host,
+        sandbox_network=options.get("sandbox_network") is True,
     )

@@ -17,6 +17,10 @@ TEMPORARY = "--tmpfs"
 PRIVATE = ("/tmp", "/var/tmp", "/run")
 
 
+# Where systemd-resolved keeps the file /etc/resolv.conf links to; /run is private.
+RESOLVER = ("--ro-bind-try", "/run/systemd/resolve", "/run/systemd/resolve")
+
+
 def private():
     """Fresh temporary and runtime directories."""
     existing = filter(os.path.isdir, PRIVATE)

@@ -21,5 +21,8 @@ def launch(argv, payload, context):
     writes = context.get(WRITES)
     if writes is None:
         return contextlib.nullcontext(dict(args=argv, pass_fds=()))
-    protected = protected_paths.patterns(context.get("config", {}))
-    return sandbox.command(argv, payload["cwd"], context["roots"], writes, protected)
+    config = context.get("config", {})
+    policy = dict(
+        protected=protected_paths.patterns(config), network=config.get("sandbox_network") is True
+    )
+    return sandbox.command(argv, payload["cwd"], context["roots"], writes, policy)

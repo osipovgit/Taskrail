@@ -104,7 +104,9 @@ approval ledger with `"rule": "sandbox"`:
 - the implementer's roots are writable; a reading stage's roots take writes that
   vanish when the command ends (bubblewrap 0.10 or later), else they are read-only;
   Git metadata is always read-only and [protected files](#protected-paths) are unreadable;
-- there is no network: a private network namespace where the host allows one, else a
+- there is no network unless the operator sets `sandbox_network: true` (then only the
+  network is kept, with the resolver configuration; every mask below stays): a private
+  network namespace where the host allows one, else a
   seccomp filter that refuses every socket but Unix and netlink ones. Abstract Unix
   sockets of the host, such as an X server's, stay reachable in that case;
   `DISPLAY`, `WAYLAND_DISPLAY`, `XAUTHORITY` and `DBUS_SESSION_BUS_ADDRESS` are unset.
