@@ -231,5 +231,6 @@
   "review.unproven": "$labels: the cited lines never reached this session in full, so the claims are not proven. Read exactly those lines with the read tool, then keep each claim that they support and correct the others.",
   "feedback.offline": "The command failed because the sandbox has no network. Run it again with an offline option (for example ansible-lint --offline, pip --no-index) or, if it really needs the network, with \"sandbox\": false and a reason; that runs it on the host.",
   "child.note": "- $note",
-  "mode.planner_rules": "The planner was given these rules; reject a plan that breaks them:"
+  "mode.planner_rules": "The planner was given these rules; reject a plan that breaks them:",
+  "implementer.task": "Your task from the approved plan: $title\nFiles:\n$files\nDone when:\n$done\nVerify:\n$checks\nRequired checks:\n$required\nNotes: $notes"
 }

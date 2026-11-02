@@ -16,6 +16,7 @@ from taskrail.application import (
     mode_rules,
     policy_sections,
     response_format,
+    task_block,
 )
 from taskrail.application.context_projection import request_context, task_text
 from taskrail.core import prompt_texts
@@ -56,6 +57,7 @@ def make_request(config, execution, state, run):
     parts = (
         policy_sections.for_stage(frozen["policy"], stage),
         prompt_texts.text(f"stage.{stage}"),
+        task_block.render(config, execution),
         mode_rules.render(config, stage),
         instruction_modules.render(run, execution, state),
         execution_requests.instructions(config, stage, run, catalog),
