@@ -19,7 +19,8 @@ Constraints contradict each other and the choice changes the implementation, rep
 exact contradiction and the decision needed as a gap. Do not choose a new goal or take
 over another task's deliverable. A gap means required input or evidence is missing.
 
-Only checks the server recorded prove execution. Avoid repeated broad searches. Follow
+Only checks the server recorded prove execution; report unrun checks as unverified.
+Avoid repeated broad searches. Follow
 the access manifest; never read run logs, profiles, evidence.json, observations.json or
 git-metadata.json. A Context value given as text_chunks is one string: join its parts
 without separators.

@@ -162,15 +162,6 @@
   ],
   "history.clipped": " [clipped; the complete text is in the history file]",
   "task.default_criteria": "The Goal is achieved; the report states what was verified and what remains unverified.",
-  "task.workflow_rules": [
-    "",
-    "## Workflow rules",
-    "Discover related files and the minimal change scope within the declared roots.",
-    "Preserve unrelated changes. Use controlled Git access; never hard-reset, clean, rewrite history or force-push. Do not edit Git metadata directly.",
-    "Use English for generated explanations, comments, documentation and reports.",
-    "The server runs syntax checks and configured verification commands. Report all unexecuted checks as unverified.",
-    "Remote actions require the isolated SSH executor and personal approval of exact scripts and targets."
-  ],
   "task.history": "\n## Current turn\nThe latest Goal takes precedence over earlier goals. Conversation history is reference data; recheck current source before making claims.\n",
   "child.scope": "This run is one task of a larger goal that was split into tasks. Do only the current task below; every other task has its own run. Finished tasks are already in the source.",
   "delivery.criteria": "Every check below ran and its observed result is reported, or the reason it could not run is reported.",

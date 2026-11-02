@@ -156,7 +156,6 @@ class FrozenTextTests(unittest.TestCase):
         self.addCleanup(prompt_texts.ACTIVE.adopt, prompt_texts.release())
         entries = prompt_texts.release()
         entries["task.default_criteria"] = "Old task default"
-        entries["task.workflow_rules"] = "Old task rules"
         prompt_texts.ACTIVE.adopt(entries)
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory) / "source"

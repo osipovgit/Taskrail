@@ -241,7 +241,7 @@ class TaskControlTests(unittest.TestCase):
         fields = {key: edited[key] for key in task_form.FIELDS}
         text, _ = build_task(dict(fields, roots=edited["roots"]), self.runs)
         self.assertEqual(TaskDraft(text).fields()["constraints"], edited["constraints"])
-        self.assertEqual(sum(line == "## Workflow rules" for line in text.splitlines()), 1)
+        self.assertNotIn("## Workflow rules", text.splitlines())
         self.assertIn("## Additional constraints\nKeep X\n", text)
 
     def make_epic(self):
