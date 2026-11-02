@@ -6,6 +6,8 @@ from pathlib import Path
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
+from run_fixture import current_run
+
 from taskrail.web.run_messages import public_messages
 from taskrail.web.server import make_server
 
@@ -20,15 +22,15 @@ class DashboardTests(unittest.TestCase):
         (self.run / "01-plan").mkdir()
         (self.run / "00-input/task.md").write_text("# Example task\nKeep existing work")
         self.index = self.run / "run.json"
-        self.index.write_text(
-            json.dumps(
-                dict(
-                    status="RUNNING",
-                    stages=[dict(number=1, stage="planner", directory="01-plan", status="RUNNING")],
-                    roots={},
-                )
+        state = current_run(
+            dict(
+                status="RUNNING",
+                stages=[dict(number=1, stage="planner", directory="01-plan", status="RUNNING")],
+                roots={},
             )
         )
+        self.index.write_text(json.dumps(state))
+        (self.run / "00-input/settings.json").write_text(json.dumps(dict(max_repairs=0)))
         self.events = self.run / "01-plan/events.jsonl"
         self.events.write_text(
             json.dumps(dict(type="text", part=dict(id="one", text="Reading files"))) + '\n{"type":'
