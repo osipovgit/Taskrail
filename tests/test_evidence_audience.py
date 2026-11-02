@@ -41,6 +41,8 @@ class EvidenceAudienceTests(unittest.TestCase):
             requirements=[dict(id="R-stable", kind="task", text="Return the intended value")],
             plan=dict(steps=[dict(id="T1")], proposed_change_files=[str(self.path)]),
             deliver_lines=False,
+            # The review's fresh attempt: unconfirmed lines become gaps instead of a retry.
+            rebuilt=True,
         )
         self.outcome = dict(status="OK", completed=True, sessions=["current-session"])
 
