@@ -37,14 +37,6 @@ def classify(text, stage):
     return kind, detail.strip()
 
 
-def parenthesized(detail):
-    """The explanation in parentheses after a citation list, or empty."""
-    opened = detail.find("(")
-    if opened < 0:
-        return ""
-    return detail[opened + 1 : detail.rfind(")")].strip()
-
-
 def numbered(findings):
     """Findings with their F<n> identities."""
     numbered_findings = enumerate(findings, 1)

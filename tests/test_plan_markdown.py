@@ -109,6 +109,8 @@ class PlanDocumentTests(unittest.TestCase):
             "project/a:1 junk project/b:2",
             "project/a:1 (unclosed",
             "project/a:1 (note), project/b:2 (hidden)",
+            "project/a:1 (note). project/b:2",
+            "project/a:1. project/b:2",
         ):
             with self.subTest(detail=detail), self.assertRaisesRegex(ValueError, "cite the lines"):
                 payload(
@@ -116,6 +118,24 @@ class PlanDocumentTests(unittest.TestCase):
                     REQUIREMENTS,
                     ROOTS,
                 )
+
+    def test_sentence_period_and_single_line_ranges_preserve_exact_citations(self):
+        for detail in (
+            "project/a:41.",
+            "project/a:41-41 (a sentence).",
+            "project/a:41-41,43.",
+            "project/a:41-41; project/b:5-15 (nested (reason); mention c:99).",
+        ):
+            with self.subTest(detail=detail):
+                plan = payload(
+                    PLAN.replace("project/README.md:12-18, roles/x.yml:3", detail),
+                    REQUIREMENTS,
+                    ROOTS,
+                )
+                self.assertEqual(plan["evidence"][0]["line_start"], 41)
+                self.assertEqual(plan["evidence"][0]["line_end"], 41)
+                multiple = "; project/b" in detail or ",43" in detail
+                self.assertEqual(len(plan["evidence"]), 2 if multiple else 1)
 
     def test_shorthand_ranges_still_need_observed_reads(self):
         with tempfile.TemporaryDirectory() as directory:

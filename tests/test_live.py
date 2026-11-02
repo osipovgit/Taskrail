@@ -20,6 +20,33 @@ from taskrail.interactions.session import MAX_RESULT_CORRECTIONS
 
 
 class LiveTests(LiveFixture, unittest.TestCase):
+    def test_plan_defect_citations_replan_then_reach_independent_result_review(self):
+        run, status, state = self.run_mode("plan-review-citations")
+        self.assertEqual(status, "READY_FOR_REVIEW", state.get("summary"))
+        self.assertEqual(
+            [stage["stage"] for stage in state["stages"]],
+            [
+                "planner",
+                "plan-reviewer",
+                "planner",
+                "plan-reviewer",
+                "implementer",
+                "check",
+                "reviewer",
+            ],
+        )
+        for stage in state["stages"]:
+            if stage["stage"] != "check":
+                self.assertEqual(stage["session_turns"], 2 if stage["number"] == 2 else 1)
+                self.assertEqual(stage["status"], "RESULT_VALID")
+        self.assertIn(
+            "You are the plan-reviewer stage", (run / "02-plan-review/tool-result.md").read_text()
+        )
+        rejected = json.loads((run / "02-plan-review/result.json").read_text())
+        self.assertEqual(rejected["status"], "REQUEST_CHANGES")
+        self.assertEqual(rejected["findings"][0]["file"], str(run / "plan.md"))
+        self.assertIn("return 2", (self.root / "hello.py").read_text())
+
     def test_clipped_executor_json_repairs_in_same_session_without_reexecuting_command(self):
         self.task.write_text(
             self.task.read_text().replace("Return 2", "Report recorded tool versions")

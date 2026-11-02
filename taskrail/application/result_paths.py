@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from taskrail.application import citation_review, evidence_scope
+from taskrail.application import citation_review, evidence_scope, plan_review_evidence
 from taskrail.core import prompt_texts, schema
 
 EVIDENCE_FILES = "declared roots, verified source views, preimages or executor snapshots (not run artifacts such as changes.diff or recovery.md)"
@@ -14,7 +14,8 @@ def validate_paths(payload, context):
     for claim in payload["evidence"]:
         roots = allowed_roots(claim, context)
         try:
-            approved_path(claim["path"], roots, EVIDENCE_FILES)
+            if not plan_review_evidence.accepts(claim, payload, context):
+                approved_path(claim["path"], roots, EVIDENCE_FILES)
         except ValueError as error:
             errors.append(path_feedback(payload, claim, error, context["stage"]))
     if errors:
@@ -26,6 +27,8 @@ def path_feedback(payload, claim, error, stage):
     owners = ", ".join(
         entry["id"] for entry in payload["coverage"] if claim["id"] in entry["evidence_ids"]
     )
+    if stage == "plan-reviewer":
+        return f"{owners}: {error}. {prompt_texts.diagnostic('validation.plan_review_path')}"
     message = prompt_texts.diagnostic("validation.evidence_path", owners=owners, error=error)
     if stage == "planner":
         message = f"{message} {prompt_texts.diagnostic('validation.plan_evidence_path')}"

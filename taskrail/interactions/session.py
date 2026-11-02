@@ -128,7 +128,7 @@ class StageSession:
         folder, record = self.active
         prompt = folder / "tool-result.md"
         prompt.write_text(
-            response + response_format.continuation(record[ROLE], folder / "request.md")
+            response + response_format.continuation(record["stage"], folder / "request.md")
         )
         self.launch["prompt"] = prompt
         record.update(

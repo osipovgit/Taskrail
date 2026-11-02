@@ -4,6 +4,7 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 
 from taskrail.application import execution_wait, prompts, response_format
 from taskrail.core import prompt_texts, task_markdown, task_spec
@@ -11,6 +12,7 @@ from taskrail.core.files import atomic_json
 from taskrail.core.plan_document import payload
 from taskrail.infrastructure import artifact_access
 from taskrail.interactions import transcripts
+from taskrail.interactions.session import StageSession
 
 PLAN = """**Decision:** split
 Summary: Keep __name__ and `shell` literal.
@@ -40,6 +42,31 @@ class ContextContractTests(unittest.TestCase):
         self.stage = self.run / "01-plan"
         self.stage.mkdir()
         (self.stage / "events.jsonl").touch()
+
+    def test_executor_continuation_preserves_each_exact_stage_and_its_contract(self):
+        for stage in ("planner", "plan-reviewer", "implementer", "reviewer"):
+            with self.subTest(stage=stage):
+                role = "reviewer" if stage == "plan-reviewer" else stage
+                session = SimpleNamespace(
+                    active=(self.stage, dict(stage=stage, role=role)),
+                    context=dict(session_id=None, turns=1),
+                    launch={},
+                    clock=SimpleNamespace(elapsed=lambda: 0, paused=0),
+                    environment=dict(run=self.run),
+                    state=dict(attempts=[]),
+                )
+                self.assertTrue(
+                    StageSession.continue_context(
+                        session, dict(sessions=["same"]), "Executor output\n"
+                    )
+                )
+                text = (self.stage / "tool-result.md").read_text()
+                self.assertIn(f"You are the {stage} stage", text)
+                self.assertIn(response_format.finish(stage), text)
+                self.assertFalse(
+                    StageSession.continue_context(session, dict(sessions=["other"]), "Rejected")
+                )
+                self.assertEqual((self.stage / "tool-result.md").read_text(), text)
 
     def test_plan_values_are_lossless_and_dependencies_are_complete(self):
         requirements = [dict(id="R-a", kind="task", text="Implement both parts")]

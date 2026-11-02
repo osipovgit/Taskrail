@@ -54,6 +54,23 @@ Stage transitions live in `application/transitions.py`: pure decisions select th
 next stage and requested write effects. The engine keeps the project locks,
 source checks, checkpoints and file operations:
 
+| Completed stage | Next boundary |
+|---|---|
+| Planning | Independent plan review, including no-change proposals |
+| Plan review: changes requested | Planning again within the plan-repair budget; otherwise `PLAN_REJECTED` |
+| Plan review: approved | Implementation with captured preimages; a split becomes `TASKS_READY`; a no-change proposal finishes or runs applicable checks and result review |
+| Implementation | Built-in/configured checks, then independent result review |
+| Checks: failed | Authorized implementation repair within budget; otherwise `CHECK_FAILED`; unchanged repeated failures stop |
+| Result review: changes requested | Authorized implementation repair within budget; read-only phases or an exhausted budget become `CHANGES_REQUESTED` |
+| Result review: approved | Final status and, on a task branch, a controlled commit of reviewed changes |
+| Any model stage: blocked | Stop without advancing or granting writes |
+
+Executor requests and result corrections stay in the same stage and session, including
+the distinction between plan review and result review. An authenticated split child
+starts at implementation; integration starts at checks when required, then read-only
+review. Delivery phases keep their inherited checks and personal-confirmation gates.
+Recovery preserves the current stage; an interrupted writer is never blindly retried.
+
 | Module (`application/`) | Responsibility |
 |---|---|
 | `workflow_engine.py` | Lock, stage loop, transitions and write effects |

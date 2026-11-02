@@ -46,6 +46,12 @@ restart/Continue and combined integration review. Evidence tests distinguish
 attempts and session IDs and reject unsent or omitted source deliveries. These
 tests require no model provider, production project or remote execution service.
 
+`test_workflow_transitions.py` covers every model-stage verdict and check boundary,
+including repair limits and read-only phases. A subprocess review regression rejects
+a cited plan defect, replans, obtains approval, implements, checks and reviews the
+result. Executor continuations retain the exact stage; proposal evidence cannot become
+completion evidence or cross into final review.
+
 Integration correction regressions use real disposable Git worktrees and scripted
 model output to verify fresh planning, independent checks/review, commit receipts,
 combined acceptance, inherited gates, bounded retries and stopped-writer barriers.
