@@ -11,6 +11,7 @@ from pathlib import Path
 from types import MappingProxyType
 
 from taskrail.core import protected_paths
+from taskrail.core.git_marker import control
 
 ALLOW = "allow"
 DENY = "deny"
@@ -101,10 +102,11 @@ def permission_worktree(directory):
     directory = Path(directory).resolve()
     for parent in (directory, *directory.parents):
         marker = parent / ".git"
+        if not control(marker):
+            continue
         if marker.is_symlink() or marker.is_file():
             raise ValueError(
                 "Gitfile/symlink worktree requires settings.permission_worktree from opencode logs"
             )
-        if marker.is_dir():
-            return parent
+        return parent
     return Path(directory.anchor)

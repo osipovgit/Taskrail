@@ -5,6 +5,7 @@ from pathlib import Path
 
 from taskrail.application import task_scope
 from taskrail.core import protected_paths
+from taskrail.core.git_marker import control
 
 ROOTS = "roots"
 ALIAS = re.compile("[A-Za-z0-9_-]+")
@@ -39,9 +40,9 @@ def declared_roots(meta, task):
 
 
 def repository(task):
-    """The nearest parent folder with a `.git` entry."""
+    """The nearest parent folder with Git's own `.git` entry."""
     for parent in task.parents:
-        if parent.joinpath(".git").exists():
+        if control(parent / ".git"):
             return parent
     raise ValueError("Task outside a repository needs taskrail-task JSON with roots")
 
