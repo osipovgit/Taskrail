@@ -15,13 +15,15 @@ class ContextEventTests(unittest.TestCase):
         self.addCleanup(temporary.cleanup)
         self.root = Path(temporary.name)
 
-    def run_events(self, events, pause=False):
+    def run_events(self, events, pause=False, delay=0, trailing_newline=True):
         script = self.root / "provider.py"
         lines = "".join(json.dumps(event) + "\n" for event in events)
+        if not trailing_newline:
+            lines = lines.rstrip("\n")
         script.write_text(
             "import sys, time\n"
             f"sys.stdout.write({lines!r})\n"
-            "sys.stdout.flush()\n" + ("time.sleep(30)\n" if pause else "")
+            "sys.stdout.flush()\n" + f"time.sleep({30 if pause else delay})\n"
         )
         prompt = self.root / "prompt.md"
         prompt.write_text("Test")
@@ -69,6 +71,30 @@ class ContextEventTests(unittest.TestCase):
         )
         self.assertEqual(result["status"], "TOOL_ERROR", result)
         self.assertFalse(result["provider_context_exceeded"])
+
+    def test_completed_answer_survives_reserve_crossing_before_exit_and_during_drain(self):
+        for delay, trailing in ((0.4, True), (0, False)):
+            with self.subTest(delay=delay, trailing=trailing):
+                events = finished()
+                events[-1]["part"]["tokens"] = dict(input=88040, output=2)
+                result = self.run_events(events, delay=delay, trailing_newline=trailing)
+                self.assertEqual(result["status"], "OK", result)
+                self.assertEqual(result["final_text"], "DONE")
+                self.assertEqual(result["errors"], [])
+                self.assertTrue(result["completed"])
+
+    def test_completed_answer_does_not_hide_errors_compaction_or_another_step(self):
+        for error in (
+            dict(type="error", error="context_length_exceeded"),
+            dict(type="error", error="PermissionDeniedError"),
+            dict(type="session.compacted"),
+            dict(type="step_start", part=dict(type="step-start")),
+        ):
+            with self.subTest(error=error):
+                events = finished()
+                events[-1]["part"]["tokens"] = dict(input=88040, output=2)
+                result = self.run_events([*events, error])
+                self.assertNotEqual(result["status"], "OK", result)
 
 
 def finished():

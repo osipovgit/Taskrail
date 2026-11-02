@@ -126,6 +126,13 @@ changed originals or modified views invalidate its evidence. Creating a view doe
 make its contents observed. Raw and formatted values remain untrusted data, and
 neither proves runtime success. Independent semantic review remains required.
 
+The same repair applies to canonical executor snapshots and preimages. Small missing
+windows may be delivered in correction feedback. If a JSON output string is too long,
+feedback points to its existing plain-text stream only after matching it to the exact
+snapshot value. Read the relevant stream lines and cite them; pointers alone grant no
+evidence, and the command need not run again. Internal run artifacts and symlinks remain
+excluded, including when a broad project root contains the run directory.
+
 Stage prompts can carry a source packet of at most 4,000 serialized UTF-8 bytes,
 with at most 80 previously observed numbered lines per range. Before a model runs,
 the server can also read windows of at most 40 lines from exact Known entry point

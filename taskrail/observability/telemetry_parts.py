@@ -71,9 +71,11 @@ class Steps:
         self.counts = dict(steps=0, usage_steps=0, cost_steps=0)
         self.inputs = dict(last=None, peak=None)
         self.cost = 0
+        self.reason = None
 
     def observe(self, part):
         """Add one finished step."""
+        self.reason = part.get("reason")
         self.counts["steps"] += 1
         usage = part.get("tokens") or {}
         if number(usage.get("total")) is not None:

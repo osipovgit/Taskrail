@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from taskrail.application import citation_delivery, source_views
+from taskrail.application import citation_delivery, executor_streams, source_views
 from taskrail.core import citation_errors, prompt_texts, source_claims
 
 ERROR_LIMIT = 5
@@ -59,5 +59,6 @@ def guidance(claim, context, error, views):
         views[path] = source_views.prepare(context["run"], path, context["roots"])
     view = views[path]
     if view is None:
-        return error
+        streams = executor_streams.guidance(context["run"], path)
+        return f"{error}\n{streams}" if streams else error
     return prompt_texts.text("citation.source_view", error=error, **view)

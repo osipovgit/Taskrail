@@ -2,7 +2,13 @@
 
 from pathlib import Path
 
-from taskrail.application import evidence, source_view_json, source_view_storage, source_windows
+from taskrail.application import (
+    evidence,
+    evidence_scope,
+    source_view_json,
+    source_view_storage,
+    source_windows,
+)
 from taskrail.core.files import atomic_json
 from taskrail.core.schema import require
 from taskrail.infrastructure.agent_sync import atomic_write
@@ -21,7 +27,7 @@ def directory(run):
 def prepare(run, path, roots):
     """Create a bounded view or return None; preparation never counts as an observation."""
     path = Path(path)
-    if not approved_source(path, roots) or not source_view_storage.safe_storage(run):
+    if not approved_source(run, path, roots) or not source_view_storage.safe_storage(run):
         return None
     try:
         return create(run, path)
@@ -29,10 +35,11 @@ def prepare(run, path, roots):
         return None
 
 
-def approved_source(path, roots):
+def approved_source(run, path, roots):
     """Use only canonical regular sources within approved roots, excluding protected files."""
     regular = path.is_absolute() and path.is_file()
-    return regular and source_windows.source_path(path, roots) == path
+    permitted = evidence_scope.roots(run, path, roots)
+    return regular and source_windows.source_path(path, permitted) == path
 
 
 def create(run, path):
@@ -70,7 +77,7 @@ def validate(run, path, roots):
     require(approved and source_view_storage.canonical(path), "Invalid source view path")
     entry = source_view_storage.recorded(run, path)
     original = Path(entry["source_path"])
-    require(approved_source(original, roots), "Source view source is outside approved roots")
+    require(approved_source(run, original, roots), "Source view source is outside approved roots")
     require(
         evidence.fingerprint(original) == entry["source_sha256"],
         f"Source view is stale; its source changed: {original}",

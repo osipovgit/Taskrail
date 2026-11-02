@@ -50,7 +50,9 @@ def summarize(watch, process, options):
     watch.drain()
     turn = watch.turn
     if status == SUCCESS:
-        status = usage_limits.exceeded(watch.telemetry, **turn.budgets)
+        status = usage_limits.exceeded(
+            watch.telemetry, **turn.budgets, completed=watch.telemetry.steps.reason == "stop"
+        )
     outcome = parse_events(
         turn.path,
         len(turn.previous.splitlines()),
@@ -58,7 +60,8 @@ def summarize(watch, process, options):
         writable_files=(options[RUNTIME] or {}).get("writable_files", ()),
         notes=(options[RUNTIME] or {}).get(ATTACHED, ()),
     )
-    usage_limits.explain(outcome, watch.telemetry, turn.budgets["context_budget"])
+    if status == context_overflow.STATUS:
+        usage_limits.explain(outcome, watch.telemetry, turn.budgets["context_budget"])
     stderr = turn.error_text()
     status = final_status(status, code, outcome, stderr)
     outcome.update(

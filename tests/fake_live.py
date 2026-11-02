@@ -11,7 +11,7 @@ from pathlib import Path
 from fake_contract import attempt, earlier_invalid, enrich, plan_text, review_text
 from fake_file_writes import event as file_event
 from fake_file_writes import implement
-from fake_report_repair import report_result
+from fake_report_repair import executor_result, report_result
 
 args = sys.argv[1:]
 if "--version" in args:
@@ -100,6 +100,9 @@ root = Path(context["roots"]["project"])
 target = root / ("Jenkinsfile" if mode == "jenkins" else "hello.py")
 if mode == "report-repair":
     report_result(context, prompt, header, print)
+    sys.exit(0)
+if mode == "executor-repair":
+    executor_result(context, prompt, print)
     sys.exit(0)
 if mode in {"git-actions", "git-denied"}:
     journal = Path(context["task_file"]).parent.parent / "git-execution.json"
@@ -627,9 +630,15 @@ if mode.startswith("invalid-tool-") and role == "reviewer":
         (run / "review.md").write_text("Summary: Done\n")
     else:
         response = "Every requirement was checked against current source.\nDONE"
+completed_at_boundary = mode == "complete-at-boundary" and role == "planner"
+if completed_at_boundary:
+    response = "Plan complete.\nDONE0"
 for event, part in [
     ("text", dict(text=response)),
-    ("step_finish", dict(reason="stop", tokens={"input": 10, "output": 2})),
+    (
+        "step_finish",
+        dict(reason="stop", tokens={"input": 10001 if completed_at_boundary else 10, "output": 2}),
+    ),
 ]:
     part.update(messageID="msg1", id=event)
     print(json.dumps(dict(type=event, part=part, sessionID="ses1")))

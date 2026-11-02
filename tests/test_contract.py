@@ -121,6 +121,12 @@ class ContractTests(unittest.TestCase):
         self.assertEqual(bindings[0]["source_event"], str(self.stage / "events.jsonl"))
         self.assertEqual(bindings[0]["source_sha256"], evidence.fingerprint(self.source))
 
+    def test_source_view_directory_does_not_shadow_a_declared_root_alias(self):
+        self.context["roots"] = dict(source_views=self.root)
+        self.validate()
+        bindings = json.loads((self.stage / "evidence-bindings.json").read_text())
+        self.assertEqual(bindings[0]["excerpt"], "    return 2")
+
     def test_run_instructions_cannot_prove_completion_even_under_a_declared_root(self):
         self.context["roots"]["broad"] = self.base
         for name in (

@@ -64,6 +64,8 @@ class Telemetry:
 
     def entry(self, kind, part, stamp):
         """Record the event and return its public timeline entry, if any."""
+        if kind == "step_start":
+            self.steps.reason = None
         if kind == "step_finish":
             self.steps.observe(part)
         if kind in {"session.compacted", COMPACTION} or part.get("type") == COMPACTION:
