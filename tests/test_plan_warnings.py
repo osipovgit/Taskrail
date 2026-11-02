@@ -104,7 +104,7 @@ class PlanWarningTests(unittest.TestCase):
             self.assertEqual(result["errors"], [])
             self.assertEqual(result["warnings"][0]["error"], message)
             self.assertEqual(result["warnings"][0]["recovered_by"]["read"]["event_line"], 2)
-            for selected in ([0, 3, 4], [0, 1, 3, 4], [0, 2, 3, 4], [1, 0, 2, 3, 4]):
+            for selected in ([0, 3, 4], [0, 1, 3, 4], [0, 2, 3, 4]):
                 with self.subTest(prefix=prefix, selected=selected):
                     incomplete = [events[index] for index in selected]
                     self.assertEqual(self.parse(incomplete, None, (PLAN,))["errors"], [message])
@@ -118,6 +118,36 @@ class PlanWarningTests(unittest.TestCase):
             self.assertTrue(self.parse(unknown, None, (PLAN,))["errors"])
             events[0]["part"]["tool"] = "write"
             self.assertEqual(self.parse(events, None, (PLAN,))["errors"], [message])
+
+    def test_repeated_mismatches_preserve_the_current_read_until_success(self):
+        events = self.events()
+        failure = events[0]
+        failure["part"]["tool"] = "edit"
+        failure["part"]["state"]["error"] = EDIT_MISMATCH
+        repeated = copy.deepcopy(failure)
+        repeated["part"].update(id="repeat", callID="repeat")
+        for operations in (
+            [events[1], failure, repeated, events[2]],
+            [failure, events[1], repeated, events[2]],
+        ):
+            with self.subTest(operations=operations):
+                result = self.parse([*operations, *events[3:]])
+                self.assertEqual(result["errors"], [])
+                self.assertEqual(len(result["warnings"]), 2)
+                self.assertTrue(all(warning["recovered_by"] for warning in result["warnings"]))
+                unresolved = self.parse([*operations[:-1], *events[3:]])
+                self.assertEqual(unresolved["errors"], [EDIT_MISMATCH, EDIT_MISMATCH])
+
+    def test_completed_write_invalidates_earlier_read_for_later_mismatch(self):
+        events = self.events()
+        failure = events[0]
+        failure["part"]["tool"] = "edit"
+        failure["part"]["state"]["error"] = EDIT_MISMATCH
+        previous = copy.deepcopy(events[2])
+        previous["part"].update(id="previous", callID="previous")
+        result = self.parse([events[1], previous, failure, events[2], *events[3:]])
+        self.assertEqual(result["errors"], [EDIT_MISMATCH])
+        self.assertEqual(result["warnings"], [])
 
     def test_missing_or_different_approved_plan_path_never_recovers_writes(self):
         for target in (None, "/run/other/plan.md", "/run/task/source.py"):

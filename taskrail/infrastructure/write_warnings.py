@@ -6,10 +6,12 @@ them, it is a warning: such a file is a note, never evidence. Project files keep
 proof.
 """
 
+from itertools import pairwise
+
 REJECTION = "You must read file {0} before overwriting it. Use the Read tool first"
 EDIT_MISMATCH = "Could not find oldString in the file. It must match exactly, including whitespace, indentation, and line endings."
 NOTE_RESOLUTION = "A rejected overwrite of an orchestrator run file is not a failure: the file is a note, never evidence. Result validation and independent review still apply."
-RESOLUTION = "The rejected file change was followed by an actual read and successful write of the same approved file in the same session. Result validation and independent review still apply."
+RESOLUTION = "An actual read and a later successful write of the same approved file in the same session resolved the rejected change. Failed exact-match edits do not invalidate that read. Result validation and independent review still apply."
 WRITERS = frozenset(("write", "edit"))
 TOOLS = WRITERS | {"read"}
 PROVENANCE = ("event_line", "call_id", "part_id")
@@ -93,22 +95,20 @@ class FileWrites:
         return self.proof(failure, session_id, final_line)
 
     def proof(self, failure, session_id, final_line):
-        """The ordered read and mutation must precede the final response in one session."""
+        """A no-match edit preserves a prior read until the next successful mutation."""
         observed = [
             call
             for call in self.calls
             if call["session_id"] == session_id
             and call["target"] == failure[INPUT][FILE_PATH]
-            and failure[EVENT_LINE] < call[EVENT_LINE] < final_line
+            and call[EVENT_LINE] < final_line
         ]
-        read = next((call for call in observed if call[TOOL] == "read"), None)
-        if read is None:
-            return None
-        later = [call for call in observed if call[EVENT_LINE] > read[EVENT_LINE]]
-        write = next((call for call in later if call[TOOL] in WRITERS), None)
-        if write is None:
-            return None
-        return dict(provenance(write), read=provenance(read))
+        for read, write in pairwise(observed):
+            current = read[EVENT_LINE] > failure[EVENT_LINE] or edit_mismatch(failure)
+            ordered = read[TOOL] == "read" and write[TOOL] in WRITERS
+            if current and ordered and write[EVENT_LINE] > failure[EVENT_LINE]:
+                return dict(provenance(write), read=provenance(read))
+        return None
 
 
 def call_identity(event, part):

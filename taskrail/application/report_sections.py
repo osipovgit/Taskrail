@@ -39,8 +39,12 @@ def tool_error(error):
     if error.get("recovered_by"):
         proof = error["recovered_by"]
         event = proof["event_line"]
-        recovery = "read and successful write" if proof.get("read") else "full read"
-        lines.append(f"  Recovered by a later {recovery}; event: {event}")
+        recovery = (
+            "a native read and subsequent successful write"
+            if proof.get("read")
+            else "a later full read"
+        )
+        lines.append(f"  Recovered by {recovery}; event: {event}")
     return lines
 
 

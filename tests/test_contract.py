@@ -146,6 +146,32 @@ class ContractTests(unittest.TestCase):
                 self.assertIn("all tasks", message)
                 self.assertFalse((self.stage / "evidence-bindings.json").exists())
 
+    def test_worktree_readme_is_evidence_only_within_current_effective_roots(self):
+        worktree = self.base / "taskrail-worktrees" / "current" / "admin"
+        worktree.mkdir(parents=True)
+        self.context["roots"] = dict(admin=worktree)
+        self.source = worktree / "README.md"
+        self.source.write_text("Project documentation\n")
+        self.observe(self.stage, "1: Project documentation\n")
+        self.payload["files_read"] = [str(self.source)]
+        self.payload["evidence"][0].update(path=str(self.source), line_start=1, line_end=1)
+        self.validate()
+        for outside in (self.root / "README.md", worktree.parent / "README.md"):
+            with self.subTest(outside=outside):
+                self.payload["evidence"][0]["path"] = str(outside)
+                with self.assertRaises(ValueError) as rejected:
+                    self.validate()
+                self.assertIn(f"Effective roots for this path: {worktree}", str(rejected.exception))
+
+    def test_parent_readme_is_not_granted_by_a_nested_project_root(self):
+        nested = self.root / "ansible-playbooks"
+        nested.mkdir()
+        self.context["roots"] = dict(playbooks=nested)
+        self.payload["evidence"][0]["path"] = str(self.root / "README.md")
+        with self.assertRaises(ValueError) as rejected:
+            self.validate()
+        self.assertIn(f"Effective roots for this path: {nested}", str(rejected.exception))
+
     def test_invalid_paths_report_all_requirement_owners_together(self):
         self.payload["evidence"][0]["path"] = str(self.run / "01-plan/request.md")
         second = dict(self.payload["evidence"][0], id="E2", path=str(self.run / "recovery.md"))
