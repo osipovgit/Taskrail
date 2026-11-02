@@ -6,7 +6,13 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from taskrail.application import evidence, instruction_sources, prompts, result_validation
+from taskrail.application import (
+    evidence,
+    instruction_sources,
+    prompts,
+    result_paths,
+    result_validation,
+)
 from taskrail.core import (
     control,
     coverage,
@@ -145,6 +151,17 @@ class ContractTests(unittest.TestCase):
         self.assertIn("01-plan/request.md", message)
         self.assertIn("recovery.md", message)
         self.assertEqual(message.count("R1: Path outside"), 2)
+
+    def test_reviewer_path_feedback_cannot_offer_planner_only_outcomes(self):
+        self.payload["evidence"][0]["path"] = str(self.run / "review.md")
+        for stage in ("plan-reviewer", "reviewer"):
+            with self.subTest(stage=stage), self.assertRaises(ValueError) as rejected:
+                result_paths.validate_paths(self.payload, dict(self.context, stage=stage))
+            message = str(rejected.exception)
+            self.assertIn("R1: Path outside", message)
+            self.assertIn("blocking gap", message)
+            self.assertNotIn("all tasks", message)
+            self.assertNotIn("Decision:", message)
 
     def test_citation_outside_captured_range_cannot_pass(self):
         (self.run / "evidence.json").unlink()

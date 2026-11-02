@@ -17,14 +17,20 @@ def validate_paths(payload, context):
         try:
             approved_path(claim["path"], roots, EVIDENCE_FILES)
         except ValueError as error:
-            owners = ", ".join(
-                entry["id"] for entry in payload["coverage"] if claim["id"] in entry["evidence_ids"]
-            )
-            errors.append(
-                prompt_texts.diagnostic("validation.evidence_path", owners=owners, error=error)
-            )
+            errors.append(path_feedback(payload, claim, error, context["stage"]))
     if errors:
         raise ValueError(citation_review.feedback(errors))
+
+
+def path_feedback(payload, claim, error, stage):
+    """Reviewers must not be told to use planner-only outcomes or fields."""
+    owners = ", ".join(
+        entry["id"] for entry in payload["coverage"] if claim["id"] in entry["evidence_ids"]
+    )
+    message = prompt_texts.diagnostic("validation.evidence_path", owners=owners, error=error)
+    if stage == "planner":
+        message = f"{message} {prompt_texts.diagnostic('validation.plan_evidence_path')}"
+    return message
 
 
 def allowed_roots(claim, context):
