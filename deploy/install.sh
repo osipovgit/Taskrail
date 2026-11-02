@@ -12,7 +12,18 @@ service=taskrail.service
 # shellcheck source=deploy/options.sh
 source "$source_dir/deploy/options.sh"
 systemctl --user show-environment >/dev/null
-"$python_bin" -c 'import sys; assert sys.version_info >= (3, 10), "Python 3.10+ is required"'
+"$python_bin" -c 'import sys; sys.exit(sys.version_info < (3, 10))' || {
+    echo 'Python 3.10+ is required' >&2
+    exit 2
+}
+# Run main() of a module of the incoming release, with isolated imports.
+run_module() {
+    local module=$1
+    shift
+    "$python_bin" -I -c \
+        'import importlib, sys; sys.path.insert(0, sys.argv.pop(1)); importlib.import_module(sys.argv.pop(1)).main()' \
+        "$source_dir" "$module" "$@"
+}
 # Serialize installers. Never switch releases underneath an active workflow.
 # shellcheck source=deploy/install-locks.sh
 source "$source_dir/deploy/install-locks.sh"
@@ -20,9 +31,7 @@ mkdir -p "$app_dir/releases" "$config_dir" "$state_dir/runs" "$unit_dir" "$HOME/
 # An invalid import must not destroy an existing installation during --fresh.
 preflight=(--check)
 [[ "$fresh" == yes ]] && preflight+=(--fresh)
-"$python_bin" -I -c \
-    'import sys; sys.path.insert(0, sys.argv.pop(1)); from taskrail.deployment.settings_init import main; main()' \
-    "$source_dir" "$source_dir" "$config_dir" "$initial_settings" "$app_dir" "$agent_mode" "${preflight[@]}"
+run_module taskrail.deployment.settings_init "$source_dir" "$config_dir" "$initial_settings" "$app_dir" "$agent_mode" "${preflight[@]}"
 version=$("$python_bin" -I -c 'import sys; sys.path.insert(0, sys.argv[1]); from taskrail.core.version import VERSION; print(VERSION)' "$source_dir")
 # A fresh reset removes app_dir, so preparation lives beside it, on the same filesystem.
 staging=$(mktemp -d "$HOME/.local/share/.taskrail-stage-XXXXXXXX")
@@ -46,9 +55,7 @@ tar -C "$source_dir" --exclude='__pycache__' --exclude='*.pyc' -cf - \
 # Configuration, copied roles and the environment are prepared before any reset.
 prepare_options=()
 [[ "$fresh" == yes ]] && prepare_options+=(--fresh)
-"$python_bin" -I -c \
-    'import sys; sys.path.insert(0, sys.argv.pop(1)); from taskrail.deployment.settings_stage import main; main()' \
-    "$source_dir" "$source_dir" "$config_dir" "$initial_settings" "$app_dir" "$agent_mode" "${prepare_options[@]}" "$staging/config"
+run_module taskrail.deployment.settings_stage "$source_dir" "$config_dir" "$initial_settings" "$app_dir" "$agent_mode" "${prepare_options[@]}" "$staging/config"
 # shellcheck source=deploy/fresh.sh
 source "$source_dir/deploy/fresh.sh"
 # Stop the UI only after validating the new release and obtaining the execution lock.
