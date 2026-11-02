@@ -323,16 +323,19 @@ unchanged. See [access](access.md) and [Git access](git-access.md).
 
 Every request type is recognized the same way (`interactions/request_envelope.py`):
 exactly one JSON object whose `status` names a request, with prose or a Markdown fence
-around it ignored; no field or argument is changed. Only a Git request that can change
-state must be the entire response. A request with a wrong shape (an unknown or missing
-field, a wrong version, an empty reason, a wrapped Git write) runs nothing: the same
+around it ignored. Only a Git request that can change state must be the entire
+response. A local command is taken as the model meant it (`interactions/local_intake.py`):
+a missing `status` (when `argv` is given) or `schema_version` is filled in, other fields
+are dropped, `command` or `cmd` may name the command, a command string is split, or run
+with `bash -c` when it uses shell syntax, and a missing or relative `cwd` resolves
+inside the single root or the named root alias. The command policy, the sandbox and any
+approval see the resulting argv and cwd. A request that still has a wrong shape (a wrong
+version, a non-list command, a wrong status, a wrapped Git write) runs nothing: the same
 session is told what to fix, at most three times in a row (a valid request resets the
-count), and after that the turn ends as an invalid result. Multiple objects, duplicate keys and malformed JSON are not requests.
-`cwd` is a declared root or an existing directory inside one. A
-response with `cwd` and `argv` but without `"status": "LOCAL_REQUEST"` or
-`schema_version` executes nothing; the same session is told what is missing, with the
-same limit. Planner and reviewer stages cannot request `--fix`, `--write`,
-in-place or `sed -i` options; such a request is rejected before approval.
+count), and after that the turn ends as an invalid result. Multiple objects, duplicate
+keys and malformed JSON are not requests. `cwd` must end up a declared root or an
+existing directory inside one. Planner and reviewer stages cannot request `--fix`,
+`--write`, in-place or `sed -i` options; such a request is rejected before approval.
 
 An approved command may still change files. Files Git ignores (caches, reports, build
 output) are not source and are never fingerprinted. Other changed files are adopted

@@ -550,7 +550,9 @@ class InteractionTests(unittest.TestCase):
             scan=lambda: {},
             git_metadata=lambda roots: {},
         )
-        near_miss = dict(cwd=str(self.root), argv=["ansible-lint", "."], reason="Lint")
+        near_miss = dict(
+            status="LOCAL", cwd=str(self.root), argv=["ansible-lint", "."], reason="Lint"
+        )
         attempts = request_routes.MAX_CORRECTIONS + 1
         responses = [f"LOCAL_REQUEST\n{json.dumps(near_miss)}"] * attempts + ["{}"]
         prompts = []
@@ -617,5 +619,6 @@ class InteractionTests(unittest.TestCase):
             encoded.replace('"status":', '"status": "LOCAL_REQUEST", "status":'),
         ):
             self.assertIsNone(local.extract(text))
+        self.assertEqual(local.extract(json.dumps(dict(payload, steps=[]))), payload)
         with self.assertRaisesRegex(ValueError, "Invalid local request"):
-            local.extract(json.dumps(dict(payload, steps=[])))
+            local.extract(json.dumps(dict(payload, argv={"program": "ls"})))

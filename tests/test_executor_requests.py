@@ -15,6 +15,7 @@ from taskrail.core import prompt_texts
 from taskrail.interactions import (
     actions,
     approval_policy,
+    local_intake,
     local_policy,
     request_envelope,
     request_routes,
@@ -38,10 +39,9 @@ class RequestEnvelopeTests(unittest.TestCase):
         self.assertIsNone(request_envelope.status("I will now read the file."))
 
     def test_a_wrong_shape_or_a_wrapped_git_write_is_rejected_with_a_reason(self):
-        extra = dict(schema_version=1, status="LOCAL_REQUEST", cwd="/r", argv=["ls"])
-        extra.update(reason="x", steps=[])
+        wrong = dict(schema_version=1, status="LOCAL_REQUEST", cwd="/r", argv=7, reason="x")
         with self.assertRaisesRegex(ValueError, "Invalid local request"):
-            request_envelope.parsed("LOCAL_REQUEST", json.dumps(extra))
+            request_envelope.parsed("LOCAL_REQUEST", json.dumps(wrong))
         write = dict(schema_version=1, status="GIT_REQUEST", root="/r", argv=["commit", "-m", "x"])
         write["reason"] = "Commit"
         with self.assertRaisesRegex(ValueError, "entire message"):
@@ -71,6 +71,33 @@ class InspectingStageTests(unittest.TestCase):
                 request_routes.route(router, bad)
             self.assertIsNone(request_routes.route(router, bad))
         self.assertEqual(bad["status"], "INVALID_RESULT")
+
+    def test_a_local_command_is_taken_as_the_model_meant_it(self):
+        exact = dict(schema_version=1, status="LOCAL_REQUEST", cwd="/r", argv=["ls", "-l"])
+        exact["reason"] = "List"
+        meant = (
+            dict(cwd="/r", argv=["ls", "-l"], reason="List"),
+            dict(status="LOCAL_REQUEST", cwd="/r", command="ls -l", reason="List", note="x"),
+            dict(schema_version=1, cwd="/r", cmd=["ls", "-l"], reason="List"),
+        )
+        for payload in meant:
+            with self.subTest(payload=payload):
+                self.assertEqual(request_envelope.status(json.dumps(payload)), "LOCAL_REQUEST")
+                self.assertEqual(
+                    request_envelope.parsed("LOCAL_REQUEST", json.dumps(payload)), exact
+                )
+        piped = dict(cwd="/r", command="ruff check . | tail -5")
+        self.assertEqual(
+            request_envelope.parsed("LOCAL_REQUEST", json.dumps(piped))["argv"],
+            ["bash", "-c", "ruff check . | tail -5"],
+        )
+        self.assertIsNone(request_envelope.status(json.dumps(dict(command="ls", summary="x"))))
+        roots = {"shop": Path("/srv/shop")}
+        self.assertEqual(local_intake.located({}, roots)["cwd"], "/srv/shop")
+        self.assertEqual(local_intake.located(dict(cwd="tests"), roots)["cwd"], "/srv/shop/tests")
+        both = dict(roots, api=Path("/srv/api"))
+        self.assertEqual(local_intake.located(dict(cwd="api/src"), both)["cwd"], "/srv/api/src")
+        self.assertEqual(local_intake.located(dict(cwd="src"), both), dict(cwd="src"))
 
     def test_fix_and_in_place_options_are_refused_before_approval(self):
         for argv in (["ruff", "check", "--fix", "."], ["prettier", "--write=true", "x"]):

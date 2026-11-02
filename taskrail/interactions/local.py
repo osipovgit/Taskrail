@@ -11,28 +11,31 @@ from taskrail.git import transport
 from taskrail.infrastructure import environment as host_environment
 from taskrail.infrastructure import sandbox
 from taskrail.infrastructure.process_group import stop_group
-from taskrail.interactions import local_request, local_sandbox, read_only
+from taskrail.interactions import local_intake, local_request, local_sandbox, read_only
 
 MAX_TIMEOUT = 3600
 POLL_SECONDS = 0.1
-REQUIRED = frozenset(("schema_version", "status", "cwd", "argv", "reason"))
 
 
 def extract(text):
-    """Accept one unchanged request object; the sandbox or an approval gates execution."""
+    """The request a model meant (see local_intake); the sandbox or an approval gates it."""
     try:
         payload = json_response.extract(text, schema.unique_fields)
     except ValueError:
         return None
-    if not isinstance(payload, dict) or payload.get("status") != "LOCAL_REQUEST":
+    if not isinstance(payload, dict):
         return None
-    fields = set(payload)
-    optional = {local_sandbox.FIELD}
-    schema.require(REQUIRED <= fields <= REQUIRED | optional, "Invalid local request")
-    requested = payload.get(local_sandbox.FIELD, True)
+    if payload.get("status") != local_intake.STATUS and not local_intake.looks_like(payload):
+        return None
+    request = local_intake.normalized(payload)
+    argv = request["argv"]
+    schema.require(
+        isinstance(argv, list) and bool(argv), "Invalid local request: argv must be a list"
+    )
+    requested = request.get(local_sandbox.FIELD, True)
     schema.require(isinstance(requested, bool), "sandbox must be a boolean")
-    schema.contract_version(payload["schema_version"])
-    return payload
+    schema.contract_version(request["schema_version"])
+    return request
 
 
 def validate(payload, roots, automatic=False, protected=protected_paths.DEFAULT_PATTERNS):

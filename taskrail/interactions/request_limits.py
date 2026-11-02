@@ -4,6 +4,7 @@ import json
 
 from taskrail.core import json_response, schema
 from taskrail.core.files import atomic_json, digest
+from taskrail.interactions import local_intake
 
 NAME = "request-counts.json"
 STATUS = "status"
@@ -59,7 +60,9 @@ def extract(text):
         payload = json_response.extract(text, schema.unique_fields)
     except ValueError:
         return None
-    if isinstance(payload, dict) and payload.get(STATUS) in REQUESTS:
+    if local_intake.looks_like(payload) or payload.get(STATUS) == local_intake.STATUS:
+        return local_intake.normalized(payload)
+    if payload.get(STATUS) in REQUESTS:
         return payload
     return None
 

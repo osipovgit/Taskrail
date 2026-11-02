@@ -5,6 +5,7 @@ from taskrail.interactions import (
     command_effects,
     events,
     local_actions,
+    local_intake,
     local_policy,
     local_request,
     local_sandbox,
@@ -19,6 +20,7 @@ ARGV = "argv"
 
 def run_local(actions, outcome, payload):
     """Keep a visible running call even during approval or process execution."""
+    payload = local_intake.located(payload, actions.session.environment["roots"])
     event = events.begin(actions.folder, "local_command", payload)
     try:
         response = local_action(actions, payload)
