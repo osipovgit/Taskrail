@@ -8,6 +8,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from live_fixture import BASE, LiveFixture
+from run_fixture import current_run
 
 from taskrail.application.live import execute_task
 from taskrail.application.plan_validation import canonical_plan, validate_plan
@@ -527,7 +528,7 @@ class LiveTests(LiveFixture, unittest.TestCase):
             [a["stage"] for a in state["attempts"]],
             ["planner", "plan-reviewer", "implementer", "reviewer"],
         )
-        self.assertEqual(state["contract_version"], 1)
+        self.assertEqual(state["run_format"], 2)
         self.assertIn("imported_draft", (run / "01-plan/request.md").read_text())
 
     def test_plan_read_before_write_rejection_stays_in_the_same_session(self):
@@ -1206,16 +1207,15 @@ class LiveTests(LiveFixture, unittest.TestCase):
         config = configuration(task, self.settings)
         self.assertEqual(config["roots"], {"project": self.root})
 
-    def test_unknown_contract_cannot_continue(self):
+    def test_unknown_run_format_cannot_continue(self):
         run, status, state = self.run_mode("review-timeout", read_retries=0)
         self.assertEqual(status, "TIMEOUT")
-        state["contract_version"] = 2
-        (run / "run.json").write_text(json.dumps(state))
-        _, status = self.continue_with_ok_model(run)
-        self.assertEqual(status, "BLOCKED")
-        self.assertIn(
-            "Unsupported contract version", json.loads((run / "run.json").read_text())["summary"]
-        )
+        state["run_format"] = 1
+        (run / "run.json").write_text(json.dumps(current_run(state)))
+        original = (run / "run.json").read_bytes()
+        with self.assertRaisesRegex(ValueError, "Unsupported run format"):
+            self.continue_with_ok_model(run)
+        self.assertEqual((run / "run.json").read_bytes(), original)
         self.assertIn("return 2", (self.root / "hello.py").read_text())
 
     def test_blocked_plan_stops_without_repair_or_writes(self):

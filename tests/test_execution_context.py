@@ -57,13 +57,14 @@ class ExecutionContextTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "Worktree provenance changed"):
             execution_context.restore(self.parent, dict(self.config), self.state)
 
-    def test_legacy_worktree_state_without_provenance_requires_restart(self):
+    def test_worktree_state_without_provenance_requires_restart(self):
         state = dict(self.state)
         state.pop(execution_context.SIGNATURE)
-        with self.assertRaisesRegex(ValueError, "provenance is missing"):
+        with self.assertRaisesRegex(ValueError, "seal is missing"):
             execution_context.frozen(self.parent, state)
         state["worktrees"] = {}
-        self.assertEqual(execution_context.frozen(self.parent, state)["worktrees"], {})
+        with self.assertRaisesRegex(ValueError, "seal is missing"):
+            execution_context.frozen(self.parent, state)
 
     def test_a_parent_cannot_replace_the_childs_declared_roots(self):
         workflow = SimpleNamespace(

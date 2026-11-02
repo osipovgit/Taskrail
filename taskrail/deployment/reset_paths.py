@@ -6,7 +6,7 @@ from pathlib import Path
 from taskrail.infrastructure.opencode_cli import agent_directory
 
 MAIN = (".local/share/taskrail", ".config/taskrail", ".local/state/taskrail")
-PRESERVED_STATE = frozenset(("live.lock", "worktrees"))
+PRESERVED_STATE = frozenset(("live.lock",))
 EXTRA = (
     ".config/systemd/user/taskrail.service",
     ".config/systemd/user/taskrail.service.d",
@@ -75,8 +75,7 @@ class ResetPaths:
         forbidden = (self.home, Path("/"))
         if self.main[2].resolve() != self.main[2]:
             raise ValueError("Unsafe reset state directory; no files deleted")
-        worktrees = self.main[2] / "worktrees"
-        preserved = [worktrees]
+        preserved = []
         if self.options.get("worktree_base"):
             preserved.append(Path(self.options["worktree_base"]).expanduser().resolve())
         for target in self.targets():

@@ -9,7 +9,7 @@ between the two steps can never start the same task twice.
 import contextlib
 import fcntl
 
-from taskrail.application import run_locks
+from taskrail.application import run_locks, run_store
 from taskrail.core.files import atomic_json
 from taskrail.web import epic_tasks, run_family
 
@@ -21,6 +21,7 @@ def changing(run):
     """Yield the record to edit; it is written when the block ends without an error."""
     with run_locks.lock_file(run_locks.lock_path("epic", run)) as stream:
         fcntl.flock(stream, fcntl.LOCK_EX)
+        run_store.read(run)
         epic = epic_tasks.record(run)
         yield epic
         save(run, epic)

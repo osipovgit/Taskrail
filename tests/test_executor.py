@@ -14,6 +14,8 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
+from run_fixture import current_run
+
 from taskrail.application import delivery_confirmation, execution_requests, execution_wait
 from taskrail.application.source_guard import SourceGuard
 from taskrail.core import prompt_texts
@@ -288,9 +290,12 @@ class ExecutorTest(unittest.TestCase):
         (source / "source.txt").write_text("Reviewed source\n")
         guard = SourceGuard({"project": source})
         guard.capture()
-        atomic_json(change / "run.json", dict(roots={"project": str(source)}, results={}))
         atomic_json(
-            change / "checkpoint.json", dict(expected=guard.expected, git_before=guard.git_before)
+            change / "run.json", current_run(dict(roots={"project": str(source)}, results={}))
+        )
+        atomic_json(
+            change / "checkpoint.json",
+            current_run(dict(expected=guard.expected, git_before=guard.git_before)),
         )
         record = dict(confirmed=1.0, phases=dict(server=run.name))
         record[delivery_confirmation.INPUTS] = delivery_confirmation.capture(change, change, record)

@@ -73,7 +73,7 @@ class RecoveryTests(unittest.TestCase):
     def test_truncation_limits_and_omission_are_explicit(self):
         self.write([self.event(str(i), "abcdefghij") for i in range(3)])
         result = collect_evidence(self.events, [self.root], per_output=5, total_output=7)
-        self.assertEqual([v["saved_chars"] for v in result["records"]], [5, 2])
+        self.assertEqual([len(v["output"]) for v in result["records"]], [5, 2])
         self.assertTrue(all(v["output_clipped"] for v in result["records"]))
         self.assertEqual(result["omitted"], 1)
 
@@ -82,24 +82,6 @@ class RecoveryTests(unittest.TestCase):
         output = self.root / "recovery.md"
         write_evidence(output, collect_evidence(self.events, [self.root]))
         self.assertIn("Research is still required", output.read_text())
-
-    def test_legacy_size_metadata_is_optional_and_never_overrides_saved_output(self):
-        self.write([self.event("old", "1: exact source\n")])
-        evidence = collect_evidence(self.events, [self.root])
-        record = evidence["records"][0]
-        record.pop("saved_chars")
-        record.pop("original_chars")
-        record["upstream_truncated"] = True
-        for size in (None, 999999):
-            with self.subTest(size=size):
-                if size is not None:
-                    record["saved_chars"] = size
-                output = self.root / "recovery.md"
-                end = write_evidence(output, evidence)
-                lines = output.read_text().splitlines()
-                self.assertIn("16 characters", lines[end - 1])
-                self.assertIn('"upstream_truncated": true', output.read_text())
-                self.assertIn("1: exact source", output.read_text())
 
     def test_upstream_truncation_is_preserved(self):
         event = self.event("one")

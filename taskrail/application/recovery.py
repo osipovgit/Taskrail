@@ -98,7 +98,6 @@ def evidence_record(event, event_line, key, kept):
         input=state.get("input", {}),
         output=kept,
         original_chars=len(output),
-        saved_chars=len(kept),
         output_clipped=len(kept) < len(output),
         upstream_truncated=(state.get("metadata") or {}).get("truncated"),
         timestamp=event.get("timestamp"),

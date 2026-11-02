@@ -98,9 +98,8 @@ submitted file remain stored verbatim. Requirements retain stable content IDs an
 source character ranges. A scoped child requirement retains its parent ID and exact
 text; global constraints apply unchanged to every child. Task prompts contain user
 fields once, without the JSON transport or copied server policy. Standalone restart drafts use
-the typed fields directly; a task file of an older release that the Markdown reader
-rejects is offered whole as the Goal. A split whose parent requirements lack typed
-field provenance or a sealed reviewed plan cannot start children; restart the parent.
+the typed fields directly. Parent requirements and reviewed plans must have valid
+provenance and seals before a split can start children.
 Authenticated typed children use a sealed `00-input/reviewed-task-spec.json` projection on first launch and
 Continue; the original submission remains unchanged in `00-input/task.md`.
 Continue resolves check IDs against the run's sealed recipe catalog, so removing
@@ -151,8 +150,8 @@ base in `00-input/execution-context.json`. A split child inherits them only afte
 the reviewed parent, assignment and source lineage pass authentication. Delivery
 checks also require the parent's exact phase link. Continue restores the run's
 own sealed context; it does not depend on the parent still being present.
-Older isolated runs without a provenance seal require a restart. A branch name
-alone never grants isolated-task permissions or automatic commits.
+A missing provenance seal is invalid. A branch name alone never grants isolated-task
+permissions or automatic commits.
 
 An authenticated isolated task is a unit of change rather than a list of files:
 

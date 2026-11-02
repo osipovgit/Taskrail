@@ -6,6 +6,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from run_fixture import current_run
+
 from taskrail.application import child_inputs, plan_validation, task_config, task_scope
 from taskrail.core import plan_contract, plan_document
 from taskrail.web import epic_launch, epic_tasks, parent_context, requests, task_brief, task_form
@@ -31,7 +33,9 @@ class ChildContractTests(unittest.TestCase):
         )
         self.original, _ = task_form.build_task(self.fields, self.runs)
         (self.parent / "00-input/task.md").write_text(self.original)
-        (self.parent / "run.json").write_text(json.dumps(dict(roots={"project": str(self.root)})))
+        (self.parent / "run.json").write_text(
+            json.dumps(current_run(dict(roots={"project": str(self.root)})))
+        )
         self.settings = self.base / "settings.json"
         self.settings.write_text(json.dumps(dict(opencode_version="1.x")))
 

@@ -5,7 +5,7 @@ import functools
 import sys
 from pathlib import Path
 
-from taskrail import cli_api, cli_service
+from taskrail import cli_api, cli_history, cli_service
 
 ERROR_PREFIX = "Error: "
 SETTINGS_OPTION = "--settings"
@@ -20,6 +20,7 @@ def main():
     """Dispatch a subcommand; a task file alone runs the task."""
     argv = sys.argv[1:] or ["serve"]
     commands = dict(
+        history=cli_history.command,
         web=cli_service.serve_command,
         serve=cli_service.serve_command,
         status=cli_api.status_command,

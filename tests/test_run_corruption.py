@@ -7,6 +7,8 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
+from run_fixture import current_run
+
 from taskrail.web import delivery_launch, run_errors, run_list, run_view
 
 
@@ -46,7 +48,8 @@ class CorruptRunTests(unittest.TestCase):
                 run = self.make_run(base, name)
                 (run / "run.json").write_text(malformed)
             delivery_launch.advance(SimpleNamespace(base=base))
-            self.assertEqual(len(run_list.list_runs(base)), 2)
+            self.assertEqual(len(run_list.list_runs(base)), 1)
+            self.assertEqual(run_list.list_runs(base)[0]["id"], "json")
             for entry in run_list.list_runs(base):
                 self.assertEqual(entry["status"], "RECOVERY_REQUIRED")
                 self.assertEqual(
@@ -84,5 +87,8 @@ class CorruptRunTests(unittest.TestCase):
         run = base / name
         (run / "00-input").mkdir(parents=True)
         (run / "00-input/task.md").write_text("# Example\n\nRepair source")
-        (run / "run.json").write_text(json.dumps(dict(status="BLOCKED", roots={}, results={})))
+        (run / "run.json").write_text(
+            json.dumps(current_run(dict(status="BLOCKED", roots={}, results={})))
+        )
+        (run / "00-input/settings.json").write_text(json.dumps(dict(max_repairs=0)))
         return run

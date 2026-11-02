@@ -8,6 +8,8 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
+from run_fixture import current_run
+
 from taskrail.application import (
     inherited_preimages,
     prior_git,
@@ -69,7 +71,7 @@ class TaskFinalizationTests(unittest.TestCase):
         return SimpleNamespace(
             run=self.run,
             config=dict(task_branch=True, roots=self.roots, worktrees=self.records, phase="task"),
-            state=state,
+            state=current_run(state),
             guard=guard,
             checkpoint=lambda: None,
         )
@@ -161,7 +163,7 @@ class TaskFinalizationTests(unittest.TestCase):
 
     def test_inherited_original_modes_and_bytes_are_sealed_for_continuation(self):
         workflow = self.workflow()
-        atomic_json(self.run / "run.json", workflow.state)
+        atomic_json(self.run / "run.json", current_run(workflow.state))
         previous = self.run
         self.run = self.base / "restarted"
         (self.run / "00-input").mkdir(parents=True)

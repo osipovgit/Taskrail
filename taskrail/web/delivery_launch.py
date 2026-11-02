@@ -10,7 +10,7 @@ from functools import partial
 from pathlib import Path
 from types import MappingProxyType
 
-from taskrail.application import delivery_confirmation
+from taskrail.application import delivery_confirmation, run_store
 from taskrail.executor import client, protocol
 from taskrail.web import (
     delivery_payload,
@@ -61,6 +61,8 @@ def proceed_quietly(launcher, run):
 def proceed(launcher, run):
     """Start the next task of a split, a pending validation or confirmed server checks."""
     state = json.loads(history.read_artifact(run, INDEX))
+    if not run_store.supported(state):
+        return None
     delivery = delivery_state.view(run, state)
     if delivery is None:
         return None
@@ -77,6 +79,7 @@ def proceed(launcher, run):
 
 def start_phase(launcher, run, name):
     """Start one phase run, linked before its worker starts, or record why it cannot run."""
+    run_store.read(run)
     if name == INTEGRATION:
         return integration_launch.start(launcher, run)
     offers = executor_offers()
@@ -119,6 +122,7 @@ def confirm(launcher, run):
     """The operator accepts the finished change; server checks may run after this."""
     with epic_record.changing(run) as epic:
         state = json.loads(history.read_artifact(run, INDEX))
+        run_store.validate(state)
         delivery = delivery_state.view(run, state)
         if delivery is None or delivery[STEP] != "confirm":
             raise ValueError("Only a finished change that waits for confirmation can be confirmed")

@@ -8,6 +8,8 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+from run_fixture import current_run
+
 from taskrail import cli
 from taskrail.application import run_locks
 from taskrail.core.files import atomic_json
@@ -65,7 +67,7 @@ class CliApiTests(unittest.TestCase):
         self.assertIn("Expected --root ALIAS=PATH", error)
 
     def test_decide_answers_the_pending_ticket_and_status_shows_it(self):
-        atomic_json(self.run / "run.json", dict(status="RUNNING", summary="Planning"))
+        atomic_json(self.run / "run.json", current_run(dict(status="RUNNING", summary="Planning")))
         request = dict(status="LOCAL_REQUEST", argv=["pytest"], cwd=str(self.repo))
         atomic_json(self.run / "pending-approval.json", dict(ticket="t-1", request=request))
         code, status = self.call("status", self.run.name)
@@ -82,14 +84,14 @@ class CliApiTests(unittest.TestCase):
 
     def test_status_of_a_finished_question_carries_the_answer(self):
         state = dict(status="NO_CHANGES_REQUIRED", summary="Approved", answer="It returns 'ab'.")
-        atomic_json(self.run / "run.json", state)
+        atomic_json(self.run / "run.json", current_run(state))
         code, status = self.call("status", self.run.name)
         self.assertEqual(code, 0, status)
         self.assertEqual((status["summary"], status["answer"]), ("Approved", "It returns 'ab'."))
         self.assertNotIn("approval", status)
 
     def test_status_tells_whether_a_worker_still_holds_the_run(self):
-        atomic_json(self.run / "run.json", dict(status="RUNNING"))
+        atomic_json(self.run / "run.json", current_run(dict(status="RUNNING")))
         code, status = self.call("status", self.run.name)
         self.assertEqual((code, status["status"], status["active"]), (0, "RUNNING", False))
         with run_locks.lock_file(run_locks.lock_path(run_locks.RUN, self.run)) as stream:
@@ -98,7 +100,7 @@ class CliApiTests(unittest.TestCase):
         self.assertEqual((code, status["active"]), (0, True))
 
     def test_action_controls_a_run_like_the_browser(self):
-        atomic_json(self.run / "run.json", dict(status="RUNNING"))
+        atomic_json(self.run / "run.json", current_run(dict(status="RUNNING")))
         code, answer = self.call("action", self.run.name, "stop")
         self.assertEqual((code, answer["status"]), (0, "STOP_REQUESTED"))
         self.assertTrue((self.run / "stop.request").is_file())

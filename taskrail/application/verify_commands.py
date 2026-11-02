@@ -37,7 +37,7 @@ def run_command(workflow, log, check):
 
 
 def outcome_record(command, outcome, recorded, log):
-    """Readable legacy logs accompany the canonical immutable check evidence."""
+    """Readable command logs accompany the canonical immutable check evidence."""
     output = {name: outcome.get(name, "") for name in ("stdout", "stderr")}
     log.write_text("{stdout}\n--- stderr ---\n{stderr}".format(**output), encoding="utf-8")
     detail = "exit {}; evidence {}".format(outcome.get("exit_code", "unknown"), recorded["path"])

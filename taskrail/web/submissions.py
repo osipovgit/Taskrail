@@ -51,6 +51,7 @@ class TaskLauncher:
         if path == "/api/decision":
             lifecycle.approvals.validate_decision(payload)
             run = history.checked_run(self.base, payload["id"])
+            history.run_store.read(run)
             return split_approvals.decide(run, payload)
         if path == "/api/tasks":
             return self.submit(payload)
@@ -81,6 +82,8 @@ class TaskLauncher:
         requests.validate_action(payload)
         run = history.checked_run(self.base, payload[ID])
         action = payload["action"]
+        if action != "delete":
+            history.run_store.read(run)
         if action == "restart":
             return restarts.restart(self, run)
         if action == "stop":

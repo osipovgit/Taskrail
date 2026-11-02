@@ -118,7 +118,7 @@ class ContextContractTests(unittest.TestCase):
         root = self.run / "source"
         root.mkdir()
         state = dict(
-            contract_version=1,
+            run_format=2,
             requirements=entries,
             roots={"project": str(root)},
             checks=[],
@@ -187,21 +187,6 @@ class ContextContractTests(unittest.TestCase):
         output.write_text("changed")
         with self.assertRaisesRegex(ValueError, "snapshot changed"):
             execution_wait.resume(self.run, {"attempts": []})
-
-    def test_legacy_remote_snapshot_is_not_rewritten(self):
-        entries = [
-            dict(id="old", status="SUCCEEDED", results=[dict(console="older output")]),
-            dict(id="latest", status="SUCCEEDED", results=[dict(console="latest output")]),
-        ]
-        atomic_json(self.run / "execution.json", entries)
-        snapshot = self.run / "00-input/ssh/latest.json"
-        snapshot.parent.mkdir()
-        atomic_json(snapshot, entries)
-        saved = snapshot.read_bytes()
-        response = execution_wait.resume(self.run, {"attempts": []})
-        self.assertEqual(snapshot.read_bytes(), saved)
-        self.assertNotIn("older output", response)
-        self.assertIn("latest output", response)
 
     def test_many_remote_targets_have_a_bounded_preview(self):
         entries = [

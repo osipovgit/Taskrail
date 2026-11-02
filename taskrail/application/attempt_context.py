@@ -25,7 +25,7 @@ def prepare(run, record, config, state):
     role_directory = state["agent_source_directory"]
     record.update(
         budget=allowance,
-        contract_version=state["contract_version"],
+        contract_version=1,
         agent_source=f"{role_directory}/{role}.md",
         contract_sha256=hashlib.sha256((run / "00-input/contract.json").read_bytes()).hexdigest(),
         agent_sha256=state["agent_sources"][role],

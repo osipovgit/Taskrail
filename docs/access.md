@@ -1,11 +1,9 @@
 # Access and executor routes
 
-The current attempt's `access.json` is the model input manifest. It is generated
-from the same input list as the runtime profile. Read canonical absolute paths:
-project roots, listed task/history/preimages/results/recovery inputs and executor snapshots.
-Only the approved implementer paths with the implementer's `progress.md`, the
-planner's `plan.md` and a reviewer's `review.md` are editable by their respective roles. Source roots are declarations of
-scope, not OS privileges; Unix permissions, network routing and authentication still apply.
+`access.json` and the runtime profile share one input manifest: canonical project,
+task, source, recovery and executor paths. Each role writes only its designated
+artifact; approved implementers may also edit source. Declared roots grant scope,
+not OS privileges or authentication.
 
 ## Protected paths
 
@@ -19,13 +17,10 @@ protected. The `protected_paths` setting lists the other patterns; its default i
  "*vault-password*", ".npmrc", ".pypirc", ".netrc"]
 ```
 
-An entry matches that path at a root and below any directory. `*` and `?` are the
-only wildcards, and `*` also matches `/`, as in opencode rules. Setting the key
-replaces the default list, so copy the entries you want to keep. The effective list
-is frozen in `00-input/settings.json`; Continue keeps it and adds entries configured
-since. The same patterns apply to planned edits. Plans also never edit `.git`,
-`.hg`, `.svn`, `.opencode`, `.ssh`, `.kube`, `.env*` or generated dependency
-folders.
+Patterns apply at every depth; `*` and `?` are wildcards and `*` matches `/`.
+A configured list replaces defaults. Continue retains frozen protection and adds new
+patterns. Planned edits also exclude VCS metadata, tool state, credentials and
+generated dependencies; [deployment](deployment.md) owns configuration details.
 
 | Operation | Route | Boundary |
 |---|---|---|
@@ -35,45 +30,22 @@ folders.
 | Git mutation | `GIT_REQUEST` final response | Implementer, approved scope, bounded command grammar |
 | Remote inspection/change | `ACTION_REQUEST` final response | Configured SSH targets; exact script root-approved; inspection only before you confirm a change, server checks after it; never the implementer |
 | Jenkins | `JENKINS_REQUEST` final response | Configured jobs; reads automatically approved, builds root-approved unless root configured the job with `approval: none` |
-| Local checks | Built-in syntax checks (`.py`, `.json`, `.sh`; `.yml`/`.yaml` with PyYAML from the service's Python, a system `python3` or Taskrail's own package directory, safe composer only; `taskrail check` names which); `LOCAL_REQUEST` for tests, linters or explicit Bash | [Sandbox](#local-commands) without a decision; on the host only after approval |
+| Local checks | Built-in syntax checks; `LOCAL_REQUEST` for tests, linters or Bash. [Deployment](deployment.md) documents available parsers | [Sandbox](#local-commands) without a decision; on the host only after approval |
 | HTTP/API/database tools | No direct connector | Approved SSH scripts may use installed remote clients |
 
-Executor requests are JSON **assistant responses**, not function calls. End the
-turn after emitting one. Their absence from the model's tool list is normal. The
-server executes the request or waits for approval, then resumes the same opencode
-session with `--session`. The UI records these as tool calls inside one stage, not
-as additional stages. Final results are not JSON: the planner writes `plan.md`, a
-reviewer `review.md`, both ending with `DONE`, and the implementer ends with `DONE:` or
-`BLOCKED:` ([contracts](contracts.md)).
+Executor JSON responses and turn rules are defined in [contracts](contracts.md#executor-requests).
+Requests are not execution proof. Internal indexes are not model inputs; use supplied
+source/recovery files and executor snapshots.
 
-Internal `evidence.json`, `observations.json` and `00-input/git-metadata.json` are
-not model inputs. The latter contains integrity hashes, not commit history. Reuse
-the supplied recovery input instead of opening indexes/logs. Git outputs are in
-`00-input/git/`; SSH ticket snapshots are in `00-input/ssh/`. Read a snapshot before
-citing its lines. A request is not execution proof; UNKNOWN cannot be retried blindly.
+The permission profile is not an OS sandbox. Search permissions are pattern-based,
+and Git reads can inspect the underlying repository when a root is a subdirectory.
+Agents must not use either route to bypass scope or protected-file rules. Hostile
+project content and untrusted local users require stronger isolation.
 
-An exploratory missing file or invalid line offset is a warning, not proof of a
-source fact. Correct the path/range. Final evidence validation still rejects invented
-or unobserved quotations. Required unresolved evidence remains BLOCKED. Permission
-denials open a decision card. Allow grants only read/search access inside declared
-roots; Deny or Alternative returns feedback in the same session. Protected scopes
-and edit grants are never broadened automatically.
-
-The permission profile is not an OS sandbox; only local commands run in one. Search tools have pattern permissions,
-not a per-file content filter; do not use them to access protected files. Git read
-commands currently operate on the underlying repository, including when a declared
-root is a subdirectory. Do not use Git to bypass source scope or protected-file
-rules. These instruction constraints are not equivalent to a filesystem/network
-sandbox. Do not treat it as safe for hostile project content or untrusted local users.
-Mechanically identical content restrictions across these routes would require one
-broker for all source, search and Git operations.
-
-The SSH executor requires its separate installation, socket access, configured
-inventory, password or key authentication and verified host keys. It does not inherit SSH
-agents/config or grant remote sudo. Stop pauses observation; it does not prove the
-remote process stopped. Git network operations use their separate noninteractive
-transport and do not use the SSH ticket approval flow. Only request them when the
-task explicitly authorizes them. See Git and SSH documentation for supported syntax.
+SSH needs separate installation, verified hosts and root approval; it inherits no
+SSH agent/config or remote sudo. Stop ends observation, not necessarily remote work.
+Git network operations use their separately authorized noninteractive transport.
+See [SSH executor](ssh-executor.md) and [Git access](git-access.md).
 
 ## Local commands
 
@@ -83,51 +55,32 @@ request runs at once in a sandbox, without a decision, and is recorded in the
 approval ledger with `"rule": "sandbox"`:
 
 - the host system is read-only; `/tmp`, `/var/tmp` and `/run` are private and empty;
-- home is an empty scratch directory. Only explicit runtime and cache components
-  are mounted read-only: virtual environments, installed interpreters, tool binaries,
-  version-manager shim code and selectors (`~/.pyenv/version`, `~/.rbenv/version`,
-  `~/.tool-versions` and Rust's selected-toolchain settings),
-  Maven's `repository`, Gradle's `caches` and wrapper distributions, Cargo's binaries
-  and registries, and Ansible collections and roles. Unrelated visible home entries
-  and package-manager configuration are hidden. A custom tool receives only its
-  executable or conventional `bin`, `lib`, `lib64`, `share` and `pyvenv.cfg` components;
-- credential directories and known credential/configuration names are masked after
-  all mounts, including declared roots, custom tool prefixes and symlink aliases.
-  These mandatory masks include SSH/cloud credentials, Maven settings, Gradle
-  properties, Cargo credentials/configuration, Gem credentials, npm/pip authentication,
-  Git credentials/configuration and provider `auth.json` files. Configured protected
-  patterns add masks; they cannot remove these mandatory sandbox masks. Arbitrarily
-  named secrets in exposed runtime/cache files still need explicit protected patterns.
-  The mask list of a tree is reused while none of its directories changes, so commands
-  start without rescanning large toolchain caches;
+- home is scratch space; only required runtime components and supported tool caches
+  are mounted read-only, including language managers, Maven/Gradle/Cargo caches and
+  Ansible collections. Package-manager configuration and unrelated home files stay hidden;
+- mandatory credential masks apply after all mounts, including roots, tool prefixes
+  and aliases. They cover SSH/cloud/provider credentials and package/Git authentication.
+  Protected patterns add masks but cannot remove them. Arbitrarily named secrets need
+  explicit patterns. Directory identities cache mask discovery between commands;
 - a declared project's ordinary `.config` files, including linter configuration,
   remain readable. Credential patterns still apply inside them; aliases into the
   user's `~/.config` and runtime/cache `.config` directories remain private;
 - the implementer's roots are writable; a reading stage's roots take writes that
   vanish when the command ends (bubblewrap 0.10 or later), else they are read-only;
   Git metadata is always read-only and [protected files](#protected-paths) are unreadable;
-- there is no network unless the operator sets `sandbox_network: true` (then only the
-  network is kept, with the resolver configuration; every mask below stays): a private
-  network namespace where the host allows one, else a
-  seccomp filter that refuses every socket but Unix and netlink ones. Abstract Unix
-  sockets of the host, such as an X server's, stay reachable in that case;
-  `DISPLAY`, `WAYLAND_DISPLAY`, `XAUTHORITY` and `DBUS_SESSION_BUS_ADDRESS` are unset.
+- network isolation uses namespaces or a seccomp fallback; `sandbox_network: true`
+  explicitly keeps the network. Credentials stay masked. The fallback permits Unix
+  sockets, including host abstract sockets; graphical-session variables are unset.
+  [Deployment](deployment.md#local-command-sandbox) describes these limits.
 
-A command that needs the network or host files outside the sandbox adds
-`"sandbox": false` and says why in its reason. It then runs at once on the host, as does
-every command on a host without a working bubblewrap; the approval ledger records it with
-`"rule": "host"` and the stage log highlights it like a decision. A program that is not
-installed is reported back to the agent. The setting `host_commands: "ask"` sends host
-commands through the approval below instead. `taskrail check` names
-the sandbox in use. Every run also records `local-preflight.json` before model work,
-with the sandbox/fallback explanation and executable paths for required local checks.
-The check repeats after reviewed recipe selection, before implementation. Missing
-required tools stop early with installation guidance and execute no command. Install
-them and Continue, or correct the check and Restart. Configured checks run in the same
-sandbox with writable roots; the source guard still stops a check that changes source.
-An installed `ansible-lint` uses this route without asking in a working sandbox.
-The required Linux CI sandbox job fails if bubblewrap cannot execute the real isolation
-regressions; an unavailable sandbox is not a successful skipped check.
+
+`"sandbox": false` requests host execution. Without working bubblewrap, commands also
+use the host route (`rule: host`); `host_commands: "ask"` requires approval there.
+`taskrail check` and `local-preflight.json` report the effective boundary and tool paths.
+Required tools are checked before model work and again after recipe selection;
+missing tools stop before execution. Install and Continue, or fix the check and Restart.
+Configured checks share the sandbox and may not change source. Required Linux CI
+exercises real isolation and cannot pass by skipping an unavailable sandbox.
 
 ### Approval
 
@@ -138,32 +91,18 @@ Allow is single-use; Deny skips execution; Alternative sends your text back to t
 agent. Waiting has no expiry and is excluded from active stage time. Stop remains
 available. Each decision is bound to a random ticket and retained for audit.
 
-Read-only requests are approved without asking and recorded in the same ledger with
-`"rule": "read_only"`:
+Read-only source requests, Jenkins reads and bounded built-in listings are recorded
+without asking. Host listings allow `ls`, `find`, `du`, `stat`, `wc`, `cat`, `head`,
+`tail` and `grep` only with the explicit read grammar, canonical in-root operands and
+fixed system executables. Options precede operands; `--color=value` is explicit.
+Unknown flags, link following, recursive or continuous content reads require approval.
+`find` permits only name/path/type/depth tests and printing. The executor rechecks
+scope immediately before execution. Remote inspection uses its own bounded grammar.
 
-- reads and searches of canonical paths inside the declared roots, except
-  [protected files](#protected-paths);
-- Jenkins status, console and test reads;
-- `ls`, `find`, `du`, `stat`, `wc`, `cat`, `head`, `tail` and `grep` when the program is
-  named without a path, its working directory and path operands resolve inside a
-  declared root and are not protected files, and every option belongs to its explicit
-  read grammar. Pattern and option values are parsed separately from paths. Unknown
-  flags, link following, recursive content reads and continuous reads require approval.
-  Local options must precede operands, so environment-dependent option permutation
-  cannot hide a path. Optional `--color` values use the `--color=value` form.
-  Automatically approved listings resolve executables from the fixed system search
-  path and recheck the read scope immediately before execution.
-  `find` accepts only name/path/type/depth tests and printing; `--` does not bypass
-  predicate validation. The same bounded grammar protects remote inspection before
-  change confirmation, with additional explicit remote diagnostic options.
-
-Everything else is asked. **Allow all actions** ([task controls](task-controls.md))
-approves this run's local commands and read access automatically; it
-trusts every command the agents choose, so use it only where you would allow them
-anyway, inline shell or Python code included. Without it, the card of inline code that
-an agent requests (`bash -c`, `sh -c`, `python -c` and the like, also behind `env`,
-`timeout` or `xargs`, with unknown interpreter options or `env --split-string`) says so:
-its code is not checked by the command routes above, so read the whole script.
+**Allow all actions** approves local commands and read access, including inline code.
+Inline-code cards identify scripts and interpreter wrappers whose effects cannot be
+inferred from argv. This grant never authorizes Git pushes or changes root-only remote
+approval. The task badge and Stop allowing all actions button expose the durable grant.
 
 Personal **Allow all actions** card grants survive Continue and appear in Restart
 drafts. A linked split/delivery child refreshes the family grant before each decision,
@@ -172,11 +111,9 @@ must match the server's recorded task or phase attempt; a claimed parent in task
 alone grants nothing. Revoking a parent overrides copied child flags. Previously
 revoked workers stay revoked until a fresh personal decision restores them.
 
-Commands run on the host use exec without implicit shell expansion and a host
-environment without secret-shaped variables, provider keys included. Explicit Bash
-and project code are trusted code there, not sandboxed: they can have effects beyond
-their argv text. Review scripts before allowing them. Source and Git integrity checks
-detect unexpected changes but cannot undo side effects.
+Host commands use exec and a filtered environment, without implicit shell expansion.
+Explicit scripts remain trusted host code. Integrity checks detect unexpected changes
+but cannot undo side effects.
 
 ### Every local command
 
@@ -188,5 +125,4 @@ fingerprinted. Other files a command changes are adopted into the run's source s
 recorded with the action, reported under **Changed by approved commands** and named to
 the session; Git metadata changed by a command still stops the run.
 
-SSH approval remains the separate root-only command; the web Allow button does not
-authorize SSH tickets. Remote execution has its own timeout.
+Remote execution retains its separate timeout and root-only approval.

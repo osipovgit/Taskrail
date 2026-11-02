@@ -5,6 +5,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from run_fixture import current_run
+
 from taskrail.web.analytics import analytics
 
 
@@ -50,9 +52,13 @@ class AnalyticsTests(unittest.TestCase):
             }
             for name, state in runs.items():
                 (base / name).mkdir()
-                (base / name / "run.json").write_text(json.dumps(state))
+                (base / name / "run.json").write_text(json.dumps(current_run(state)))
             (base / ".trash/old").mkdir(parents=True)
-            (base / ".trash/old/run.json").write_text(json.dumps(dict(status="READY_FOR_REVIEW")))
+            (base / "unsupported").mkdir()
+            (base / "unsupported/run.json").write_text(json.dumps(dict(status="READY_FOR_REVIEW")))
+            (base / ".trash/old/run.json").write_text(
+                json.dumps(current_run(dict(status="READY_FOR_REVIEW")))
+            )
             (base / "broken").mkdir()
             (base / "broken/run.json").write_text("{")
             totals = analytics(base)

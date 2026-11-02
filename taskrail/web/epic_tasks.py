@@ -33,17 +33,14 @@ STEP_FIELDS = MappingProxyType(
         "requirements": "criteria",
     }
 )
-# Fields of plans written as plan.md; older plans lack them.
+# Optional fields of current plan steps.
 PLAN_FIELDS = MappingProxyType(
     dict(done_when=(), notes="", scopes=(), not_todo=(), required_checks=())
 )
 
 
 def record(run):
-    """Task links, phases and choices; before the first change, auto-continue follows the run.
-
-    Runs started since automatic splitting continue on their own; older splits do not.
-    """
+    """Task links, phases and choices; initially auto-continue follows the run."""
     path = run / EPIC
     if path.is_file() and not path.is_symlink():
         return json.loads(path.read_text())

@@ -4,10 +4,12 @@ import contextlib
 from operator import itemgetter
 from types import MappingProxyType
 
+from taskrail.application import run_store
 from taskrail.web import delivery_state, history, lifecycle, run_errors, run_family, run_groups
 from taskrail.web.run_files import contained, read_json
 
 SUMMARY_LIMIT = 500
+RUN_INDEX = "run.json"
 TITLE_PREFIX = "# "
 REQUIRED_LAUNCH_FIELDS = frozenset(("title", "status"))
 # Header flags in precedence order: a design discussion is also read-only.
@@ -32,14 +34,17 @@ def run_entry(path):
     try:
         return run_summary(path)
     except run_errors.ERRORS as error:
-        return run_errors.summary(path, error) if path.joinpath("run.json").is_file() else None
+        return run_errors.summary(path, error) if path.joinpath(RUN_INDEX).is_file() else None
 
 
 def run_summary(path):
     """ID, title, display status and a bounded summary."""
+    state = read_json(contained(path, RUN_INDEX))
+    if not run_store.supported(state):
+        return None
     if run_family.shown_inside(path.parent, path):
         return None
-    state = read_json(contained(path, "run.json"))
+    state = read_json(contained(path, RUN_INDEX))
     task = history.read_artifact(path, history.TASK_FILE)
     request = task.split(history.HISTORY, 1)[0]
     status = lifecycle.display_status(path, state)
@@ -78,7 +83,11 @@ def pending_entries(base, known):
     submissions = base / ".submissions"
     if not submissions.is_dir() or submissions.is_symlink():
         return []
-    folders = [folder for folder in submissions.iterdir() if folder.name not in known]
+    folders = [
+        folder
+        for folder in submissions.iterdir()
+        if folder.name not in known and not (base / folder.name / RUN_INDEX).exists()
+    ]
     return [entry for entry in map(pending_entry, folders) if entry]
 
 

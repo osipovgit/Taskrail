@@ -22,7 +22,7 @@ def fingerprint(path):
 
 
 def load_index(run, filename="evidence.json"):
-    """Load reusable observations; missing indexes are valid for older runs."""
+    """Load reusable observations; missing indexes are normal before the first observation."""
     index = run / filename
     if index.is_file():
         return json.loads(index.read_text())

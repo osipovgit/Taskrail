@@ -69,9 +69,6 @@ class FrozenTextTests(unittest.TestCase):
                 "feedback.remote_unknown": "Frozen uncertainty: inspect before another action",
             }
         )
-        updated = dict(frozen)
-        for key in ("feedback.remote_declined", "feedback.remote_unknown"):
-            updated[key] = "New release instructions"
         with tempfile.TemporaryDirectory() as directory:
             run = Path(directory)
             (run / "00-input").mkdir()
@@ -79,7 +76,7 @@ class FrozenTextTests(unittest.TestCase):
                 instruction_sources.freeze_contract(run, prompts.POLICY, {})
             contract = (run / "00-input/contract.json").read_bytes()
             with (
-                mock.patch.object(prompt_texts, "release", return_value=updated),
+                mock.patch.object(prompt_texts, "release", return_value=frozen),
                 mock.patch.object(
                     execution_wait.client, "request", side_effect=AssertionError("No replay")
                 ),
@@ -125,7 +122,7 @@ class FrozenTextTests(unittest.TestCase):
                 )
             self.assertEqual(feedback, f"Frozen view guidance: {view['path']} (8)")
 
-    def test_a_continued_run_keeps_the_texts_it_started_with(self):
+    def test_changed_saved_catalog_cannot_be_adopted(self):
         self.addCleanup(prompt_texts.ACTIVE.adopt, prompt_texts.release())
         with tempfile.TemporaryDirectory() as directory:
             run = Path(directory)
@@ -135,11 +132,11 @@ class FrozenTextTests(unittest.TestCase):
             saved = json.loads(contract.read_text())
             saved["texts"]["stage.planner"] = "Stage: planning (frozen)."
             contract.write_text(json.dumps(saved))
-            instruction_sources.freeze_contract(run, prompts.POLICY, {})
-            self.assertEqual(prompt_texts.text("stage.planner"), "Stage: planning (frozen).")
+            with self.assertRaisesRegex(ValueError, "differs from this release"):
+                instruction_sources.freeze_contract(run, prompts.POLICY, {})
             del saved["texts"]
             contract.write_text(json.dumps(saved))
-            with self.assertRaisesRegex(ValueError, "differs from this release"):
+            with self.assertRaises(KeyError):
                 instruction_sources.freeze_contract(run, prompts.POLICY, {})
 
     def test_missing_catalog_keys_require_restart_on_both_resume_paths(self):

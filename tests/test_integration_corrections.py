@@ -7,6 +7,7 @@ import unittest
 from pathlib import Path
 from types import SimpleNamespace
 
+from run_fixture import current_run
 from test_isolated_split import IsolatedSplitFixture
 
 from taskrail.application.live import execute_task
@@ -124,10 +125,10 @@ class IntegrationCorrectionTests(IsolatedSplitFixture, unittest.TestCase):
             integration_launch.repeat(launcher, parent)
         atomic_json(correction / "git-execution.json", journal)
         incomplete = dict(fixed, commits=[])
-        atomic_json(correction / "run.json", incomplete)
+        atomic_json(correction / "run.json", current_run(incomplete))
         with self.assertRaisesRegex(ValueError, "no verified commit"):
             integration_launch.repeat(launcher, parent)
-        atomic_json(correction / "run.json", fixed)
+        atomic_json(correction / "run.json", current_run(fixed))
 
     def test_pause_budget_and_failed_writer_never_start_another_correction(self):
         parent, state, _, launcher = self.rejected()

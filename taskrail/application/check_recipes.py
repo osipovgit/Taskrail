@@ -39,11 +39,11 @@ def parse_catalog(options):
             not name.startswith("verify-"), "verify- recipe IDs are reserved for verify_commands"
         )
         recipes[name] = validate(recipe)
-    recipes.update(legacy(options.get("verify_commands", [])))
+    recipes.update(configured_command(options.get("verify_commands", [])))
     return recipes
 
 
-def legacy(commands):
+def configured_command(commands):
     """Existing verification settings are exact local recipes with stable identities."""
     recipes = {}
     for command in commands:

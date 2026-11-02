@@ -28,8 +28,8 @@ def records(epic):
 
 
 def limit(settings):
-    """Legacy runs without a frozen limit never gain an automatic writer budget."""
-    count = settings.get("max_repairs", 0)
+    """Validate the frozen automatic writer budget."""
+    count = settings["max_repairs"]
     valid = isinstance(count, int) and not isinstance(count, bool)
     require(valid and 0 <= count <= 5, "Invalid correction budget")
     return count
