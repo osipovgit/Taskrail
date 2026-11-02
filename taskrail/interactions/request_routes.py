@@ -71,7 +71,7 @@ def rejected_request(actions, outcome, kind, error):
         return None
     context[CORRECTIONS] += 1
     feedback = prompt_texts.text("feedback.rejected_request", status=kind, error=error)
-    events.append(actions.folder, "correction", dict(response=outcome[RESPONSE]), feedback)
+    events.correction(actions.session, "request", outcome[RESPONSE], feedback)
     return feedback
 
 

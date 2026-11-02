@@ -110,7 +110,7 @@ def incomplete_request(actions, text):
     else:
         return None
     context[CORRECTIONS] += 1
-    events.append(actions.folder, "correction", dict(response=text), feedback)
+    events.correction(actions.session, "request", text, feedback)
     return feedback
 
 

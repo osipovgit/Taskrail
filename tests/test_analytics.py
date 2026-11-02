@@ -23,7 +23,16 @@ class AnalyticsTests(unittest.TestCase):
                     continuations=[{}],
                     stages=[
                         stage("planner", "INVALID_RESULT", model="p/m", tokens=dict(total=40)),
-                        stage("planner", "RESULT_VALID", model="p/m", mode="format-repair"),
+                        stage(
+                            "planner",
+                            "RESULT_VALID",
+                            model="p/m",
+                            rejections=[
+                                dict(kind="result", reason="line 12: R3 needs one outcome"),
+                                dict(kind="result", reason="line 40: R3 needs one outcome"),
+                                dict(kind="request", reason="Your LOCAL_REQUEST was rejected"),
+                            ],
+                        ),
                         stage(
                             "implementer",
                             "RESULT_VALID",
@@ -53,7 +62,10 @@ class AnalyticsTests(unittest.TestCase):
         self.assertEqual(totals["runs"]["tokens"], 100)
         self.assertEqual(totals["runs"]["continuations"], 1)
         model = totals["models"]["p/m"]
-        self.assertEqual((model["attempts"], model["failed"], model["format_repairs"]), (2, 1, 1))
+        self.assertEqual((model["attempts"], model["failed"], model["rejections"]), (2, 1, 3))
+        self.assertEqual(
+            model["reasons"][0], dict(reason="result: line …: R… needs one outcome", count=2)
+        )
         self.assertEqual(model["tokens"], 40)
         self.assertEqual(totals["models"]["opencode default"]["attempts"], 4)
         implementer = totals["stages"]["implementer"]

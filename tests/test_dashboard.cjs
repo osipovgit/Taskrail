@@ -1042,7 +1042,8 @@ async function main() {
         'p/m': {
           attempts: 2,
           failed: 1,
-          format_repairs: 1,
+          rejections: 2,
+          reasons: [{ reason: 'result: line …: R… needs one outcome', count: 2 }],
           recoveries: 0,
           first_try: 1,
           first_try_measured: 4,
@@ -1058,6 +1059,9 @@ async function main() {
   assert.ok(all(nodes.chat).some((n) => n.textContent === 'Timed out: 1'));
   assert.ok(all(nodes.chat).some((n) => n.textContent === 'p/m'));
   assert.ok(all(nodes.chat).some((n) => n.textContent === '25% of 4'));
+  assert.ok(
+    all(nodes.chat).some((n) => n.textContent === '2× result: line …: R… needs one outcome'),
+  );
   console.log('Analytics view passed.');
 }
 

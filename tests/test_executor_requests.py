@@ -54,9 +54,8 @@ class InspectingStageTests(unittest.TestCase):
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
         folder = Path(temporary.name)
-        router = SimpleNamespace(
-            session=SimpleNamespace(context=dict(corrections=0)), folder=folder
-        )
+        session = SimpleNamespace(context=dict(corrections=0), active=(folder, {}))
+        router = SimpleNamespace(session=session, folder=folder)
         bad = dict(status="OK", final_text='{"schema_version":1,"status":"GIT_REQUEST"}')
         valid = dict(
             schema_version=1, status="GIT_REQUEST", root="/r", argv=["status"], reason="Inspect"
@@ -71,6 +70,10 @@ class InspectingStageTests(unittest.TestCase):
                 request_routes.route(router, bad)
             self.assertIsNone(request_routes.route(router, bad))
         self.assertEqual(bad["status"], "INVALID_RESULT")
+        reasons = session.context["rejections"]
+        self.assertEqual(len(reasons), 2 * request_routes.MAX_CORRECTIONS)
+        self.assertEqual(reasons[0]["kind"], "request")
+        self.assertIn("rejected before anything ran", reasons[0]["reason"])
 
     def test_a_local_command_is_taken_as_the_model_meant_it(self):
         exact = dict(schema_version=1, status="LOCAL_REQUEST", cwd="/r", argv=["ls", "-l"])

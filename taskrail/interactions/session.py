@@ -149,6 +149,7 @@ class StageSession:
         record = self.active[1]
         record.update(session_turns=self.context["turns"], paused_seconds=self.clock.paused)
         record[RESULT_CORRECTIONS] = self.context[RESULT_CORRECTIONS]
+        record[events.REJECTIONS] = self.context.get(events.REJECTIONS, [])
         return outcome
 
 
@@ -185,7 +186,7 @@ def result_feedback(session, outcome):
     context[RESULT_CORRECTIONS] += 1
     context[VALIDATION_ERRORS].append(error)
     feedback = response_format.correction(session.active[1][ROLE], error)
-    events.append(session.active[0], "correction", dict(response="final result"), feedback)
+    events.correction(session, "result", "final result", feedback)
     return feedback
 
 
@@ -196,7 +197,7 @@ def unavailable_tool_feedback(session, outcome):
         return None
     session.context[RESULT_CORRECTIONS] += 1
     feedback = prompt_texts.text("recovery.invalid_tool", error="; ".join(errors))
-    events.append(session.active[0], "correction", dict(response="unavailable tool"), feedback)
+    events.correction(session, "tool", "unavailable tool", feedback)
     return feedback
 
 
@@ -209,7 +210,7 @@ def plan_feedback(session, outcome):
     feedback = plan_write.read_before_write(outcome, session.environment["run"])
     if feedback is not None:
         context[RESULT_CORRECTIONS] += 1
-        events.append(session.active[0], "correction", dict(response="unread plan"), feedback)
+        events.correction(session, "plan file", "unread plan", feedback)
     return feedback
 
 
