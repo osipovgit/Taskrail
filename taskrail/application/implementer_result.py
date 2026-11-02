@@ -10,8 +10,13 @@ import re
 
 from taskrail.core import prompt_texts
 
-FINAL = re.compile(r"^[\s>*_`#-]*(DONE|BLOCKED)\b[\s*_`]*:?[\s*_`]*(.*)$", re.IGNORECASE)
+# A quote or heading marker and emphasis may precede the word; a list bullet may not.
+FINAL = re.compile(
+    r"^\s*(?:[>#]+\s*)?[*_`]*(DONE|BLOCKED)(?=[\s:*_`]|$)[*_`]*(:?)[\s*_`]*(.*)$", re.I
+)
 BLOCKED = "BLOCKED"
+# "Blocked: none" in a closing summary reports the absence of a blocker.
+NOT_BLOCKED = frozenset(("none", "nothing", "n/a", "no", "-"))
 
 
 def stage_result(response, context):
@@ -42,9 +47,27 @@ def final_word(response):
     """The last DONE or BLOCKED line and the text after it; ValueError without one."""
     lines = response.strip().splitlines()
     for index in range(len(lines) - 1, -1, -1):
-        found = FINAL.match(lines[index])
+        found = final_line(lines[index])
         if found:
             following = lines[index + 1 :]
-            text = " ".join([found.group(2), *following])
-            return found.group(1).upper(), " ".join(text.split())
+            text = " ".join([found[1], *following])
+            return found[0], " ".join(text.split())
     raise ValueError(prompt_texts.text("implementer.missing"))
+
+
+def final_line(line):
+    """(word, text) of a closing line, or None.
+
+    The word counts in capitals, or in any case when a colon follows it, so prose such as
+    "Done when: ..." is not mistaken for the final word.
+    """
+    found = FINAL.match(line)
+    if found is None:
+        return None
+    word, colon, text = found.groups()
+    if not (word.isupper() or colon):
+        return None
+    word = word.upper()
+    if word == BLOCKED and text.strip(" .*_`").casefold() in NOT_BLOCKED:
+        return None
+    return word, text

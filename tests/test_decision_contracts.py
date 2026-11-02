@@ -68,6 +68,25 @@ class DecisionContractTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "End your final message with DONE"):
             result_validation.validate('{"schema_version": 2}', self.context)
 
+    def test_closing_summaries_of_weak_models_keep_their_final_word(self):
+        self.context.update(role="implementer", stage="implementer")
+        endings = {
+            "DONE: fixed hello()\n\nBlocked: none": "IMPLEMENTED",
+            "DONE: fixed hello()\n- blocked requests were retried later": "IMPLEMENTED",
+            "> **BLOCKED** the inventory is missing": "BLOCKED",
+            "Blocked: the inventory is missing": "BLOCKED",
+        }
+        for ending, status in endings.items():
+            with self.subTest(ending=ending):
+                result = result_validation.validate(ending, self.context)
+                self.assertEqual(result["status"], status)
+        for prose in ("Edited hello.py.\nDone when: tests pass", "I am done with the task."):
+            with (
+                self.subTest(prose=prose),
+                self.assertRaisesRegex(ValueError, "End your final message with DONE"),
+            ):
+                result_validation.validate(prose, self.context)
+
     def review(self, *lines, final=False):
         text = "# Review\nSummary: Checked.\n\n## Requirements\n" + "\n".join(lines) + "\n"
         (self.run / "review.md").write_text(text)
