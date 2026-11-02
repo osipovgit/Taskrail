@@ -4,7 +4,7 @@ import shutil
 import sys
 from pathlib import Path
 
-from taskrail.deployment import settings_init
+from taskrail.deployment import settings_cleanup, settings_init
 
 
 def main():
@@ -25,6 +25,7 @@ def main():
         settings_init.write_private(installation.target, options)
     if arguments.agents == "bundled":
         installation.use_bundled_agents()
+    settings_cleanup.clean(installation.target)
     settings_init.service_environment(prepared)
 
 

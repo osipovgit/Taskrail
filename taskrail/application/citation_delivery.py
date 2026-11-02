@@ -71,7 +71,6 @@ def observation(run, path, error, window):
         event_line=start,
         call_id=f"citation-{start}-{end}",
         original_chars=len(output),
-        saved_chars=len(output),
         output_clipped=False,
         upstream_truncated=False,
     )

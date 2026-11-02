@@ -5,6 +5,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from run_fixture import current_run
+
 from taskrail.application import check_configuration, check_specs, correction_checks, planned_checks
 from taskrail.application.reviewed_artifacts import SEAL
 from taskrail.core.files import atomic_json, digest
@@ -52,7 +54,7 @@ class CorrectionCheckTests(unittest.TestCase):
     def save_plan(self):
         atomic_json(self.child / "plan.json", self.plan)
         self.corrected[SEAL] = digest((self.child / "plan.json").read_bytes())
-        atomic_json(self.child / "run.json", self.corrected)
+        atomic_json(self.child / "run.json", current_run(self.corrected))
 
     def test_fresh_integration_and_next_correction_keep_sealed_runtime_additions(self):
         expected = ["health", "audit"]
@@ -85,15 +87,10 @@ class CorrectionCheckTests(unittest.TestCase):
         changed = json.loads(json.dumps(self.settings))
         changed["check_recipes"]["audit"]["request"]["argv"] = ["other-command"]
         check_configuration.capture(changed, self.corrected)
-        atomic_json(self.child / "run.json", self.corrected)
+        atomic_json(self.child / "run.json", current_run(self.corrected))
         atomic_json(self.child / "00-input/settings.json", changed)
         with self.assertRaisesRegex(ValueError, "catalog changed"):
             correction_checks.selected(self.parent, self.state)
-
-    def test_legacy_delivery_without_corrections_needs_no_new_frozen_artifacts(self):
-        parent = self.base / "legacy"
-        parent.mkdir()
-        self.assertEqual(correction_checks.selected(parent, self.state), self.original)
 
     def test_new_correction_plan_cannot_add_or_replace_remote_bindings(self):
         catalog = dict(self.settings["check_recipes"])

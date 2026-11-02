@@ -38,6 +38,19 @@ class InputContractTests(unittest.TestCase):
         self.assertTrue(any("Reject invalid input." in entry["text"] for entry in requirements))
         self.assertEqual(spec["fields"][1]["text"], goal)
 
+    def test_generated_policy_never_becomes_a_requirement_on_markdown_reimport(self):
+        text, meta = self.form(criteria="Reject invalid input.", constraints="Keep the API.")
+        original = task_spec.resolve(text, meta)
+        self.assertNotIn("## Workflow rules", text)
+        self.assertNotIn("personal approval of exact scripts", text)
+        self.assertEqual(
+            [entry["text"] for entry in original["requirements"]],
+            ["Fix the input.", "Reject invalid input.", "Keep the API."],
+        )
+        imported = task_spec.resolve(text, task_markdown.typed_input(text, {}))
+        self.assertEqual(imported["requirements"], original["requirements"])
+        self.assertEqual(TaskDraft(text).fields()["goal"], "Fix the input.")
+
     def test_markdown_sections_become_the_typed_fields_of_the_form(self):
         text = (
             "```taskrail-task\n{}\n```\n# Fix input\n\n## Goal\nFix it.\n\n"
@@ -85,10 +98,8 @@ class InputContractTests(unittest.TestCase):
         plain_text = "# Fix\n\nReturn 2\n"
         plain = task_spec.resolve(plain_text, task_markdown.typed_input(plain_text, {}))
         self.assertEqual([entry["text"] for entry in plain["requirements"]], ["Return 2"])
-        older = TaskDraft("# Old\n\nIntro\n\n## Notes\nKeep X\n")
-        self.assertIsNone(older.typed)
-        self.assertEqual(older.fields()["goal"], "# Old\n\nIntro\n\n## Notes\nKeep X")
-        self.assertEqual(older.title("run"), "Old")
+        with self.assertRaisesRegex(ValueError, "unknown section"):
+            TaskDraft("# Old\n\nIntro\n\n## Notes\nKeep X\n")
 
     def test_requirement_spans_preserve_fences_newlines_and_indentation(self):
         criterion = "Keep this exact layout:\r\n\r\n```text\r\n## Goal\r\n\r\n  value\r\n```"

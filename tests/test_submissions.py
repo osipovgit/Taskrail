@@ -9,6 +9,8 @@ from unittest.mock import patch
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
+from run_fixture import current_run
+
 from taskrail.web.server import make_server
 from taskrail.web.submissions import BusyError, TaskLauncher
 from taskrail.web.task_form import build_task
@@ -190,15 +192,17 @@ class SubmissionTests(unittest.TestCase):
         (run / "00-input/task.md").write_text(text)
         (run / "run.json").write_text(
             json.dumps(
-                dict(
-                    status="TIMEOUT",
-                    contract_version=1,
-                    roots={"project": str(self.repo)},
-                    stages=[],
+                current_run(
+                    dict(
+                        status="TIMEOUT",
+                        run_format=2,
+                        roots={"project": str(self.repo)},
+                        stages=[],
+                    )
                 )
             )
         )
-        (run / "checkpoint.json").write_text("{}")
+        (run / "checkpoint.json").write_text(json.dumps(dict(run_format=2)))
         url, headers = self.start_server()
         with patch("taskrail.web.submissions.subprocess.Popen") as popen:
             popen.return_value.poll.return_value = 0
@@ -246,9 +250,12 @@ class ApprovalHttpTests(unittest.TestCase):
     def test_decision_endpoint_requires_auth_and_exact_ticket(self):
         run = self.runs / "approval"
         run.mkdir(parents=True)
-        (run / "run.json").write_text(json.dumps(dict(status="RUNNING", stages=[], roots={})))
+        (run / "run.json").write_text(
+            json.dumps(current_run(dict(status="RUNNING", stages=[], roots={})))
+        )
         (run / "00-input").mkdir()
         (run / "00-input/task.md").write_text("# Approval task\nInspect Python version")
+        (run / "00-input/settings.json").write_text(json.dumps(dict(max_repairs=0)))
         pending = dict(ticket="exact-ticket", request=dict(argv=["python3", "--version"]))
         (run / "pending-approval.json").write_text(json.dumps(pending))
         url, headers = self.start_server()

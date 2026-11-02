@@ -11,6 +11,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
+from run_fixture import current_run
 from test_prompt_contract import CAPABILITIES, assert_request_budget
 
 from taskrail import cli
@@ -68,13 +69,14 @@ class DeliveryApprovalTests(unittest.TestCase):
             requirements=[],
             auto_approve=True,
         )
-        atomic_json(run / "run.json", state)
+        atomic_json(run / "00-input/settings.json", dict(max_repairs=0))
+        atomic_json(run / "run.json", current_run(state))
         atomic_json(run / "plan.json", dict(unverified=["Server check: inspect the service"]))
         boundary = SourceGuard({"project": self.repo})
         boundary.capture()
         atomic_json(
             run / "checkpoint.json",
-            dict(expected=boundary.expected, git_before=boundary.git_before),
+            current_run(dict(expected=boundary.expected, git_before=boundary.git_before)),
         )
         return run
 
@@ -207,7 +209,7 @@ class DeliveryApprovalTests(unittest.TestCase):
             checks=[],
             preimages={},
             requirements=config["task_spec"]["requirements"],
-            contract_version=1,
+            run_format=2,
         )
         for stage in ("planner", "reviewer"):
             with (
@@ -266,7 +268,7 @@ class DeliveryApprovalTests(unittest.TestCase):
                 execution_requests.remote_mode(run, config, "reviewer")
             path.write_text(original)
 
-    def test_legacy_confirmation_without_fingerprints_cannot_authorize_server_actions(self):
+    def test_confirmation_without_fingerprints_cannot_authorize_server_actions(self):
         atomic_json(self.parent / "epic.json", dict(confirmed=1, phases=dict(server="server")))
         with self.assertRaisesRegex(ValueError, "review and confirmation"):
             execution_requests.remote_mode(

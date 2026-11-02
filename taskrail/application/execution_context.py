@@ -31,11 +31,9 @@ def capture(run, config, state):
 
 
 def frozen(run, state):
-    """Legacy runs without owned worktrees retain only their declared roots."""
+    """Authenticate the sealed execution context of every current run."""
     expected = state.get(SIGNATURE)
-    if expected is None:
-        require(not state.get(WORKTREES), "Worktree provenance is missing; restart required")
-        return dict(roots=state[ROOTS], worktrees={}, permission_worktree=None)
+    require(expected is not None, "Execution context seal is missing")
     encoded = reviewed_artifacts.read(run, REFERENCE)
     require(digest(encoded) == expected, "Frozen execution context changed")
     payload = json.loads(encoded)

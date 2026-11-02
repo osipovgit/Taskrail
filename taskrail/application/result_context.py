@@ -1,8 +1,7 @@
 """Validate one attempt without coupling versioned contracts to state transitions."""
 
-from taskrail.application import execution_wait, result_validation
+from taskrail.application import execution_wait, result_validation, run_store
 from taskrail.application.git_reference import git_reference as git_reference
-from taskrail.core import schema
 from taskrail.core.paths import tool_paths
 from taskrail.git import requests
 
@@ -11,7 +10,7 @@ ROOTS = "roots"
 
 def parse(outcome, record, state, environment):
     """Validate only the supported contract; do not normalize old result shapes."""
-    schema.contract_version(state.get("contract_version"))
+    run_store.validate(state)
     return result_validation.validate(
         outcome["final_text"],
         dict(

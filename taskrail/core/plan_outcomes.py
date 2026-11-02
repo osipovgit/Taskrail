@@ -11,7 +11,7 @@ from functools import partial
 from pathlib import Path
 from types import MappingProxyType
 
-from taskrail.core import plan_citations
+from taskrail.core import plan_citations, prompt_texts
 
 TASK_REFERENCE = re.compile(r"(T\d+)\s*(?:\[([^\]]*)\]|\(([^)]*)\))?\s*", re.IGNORECASE)
 TASK_SEPARATOR = re.compile(r"\s*[,;]\s*")
@@ -39,9 +39,6 @@ CITED = frozenset((SATISFIED, "contradicted"))
 EVERY_TASK = frozenset(("all tasks", "all"))
 IDENTIFIER = "id"
 TEXT = "text"
-TASKS_ONLY = (
-    "line {line}: {label} needs only task IDs with optional [scope], or done:, runtime:, gap:"
-)
 
 
 class Coverage:
@@ -80,6 +77,9 @@ class Coverage:
         if kind is None:
             self.problems.append("line {line}: {label} has no outcome".format(**entry))
             return
+        if kind in CITED and not detail:
+            self.problems.append(prompt_texts.diagnostic("validation.plan_outcome", **entry))
+            return
         if kind == PLANNED:
             self.assign(requirement, entry)
         if kind == DEFERRED:
@@ -96,13 +96,13 @@ class Coverage:
 
     def assign(self, requirement, entry):
         """`T1, T2 [scope]` or `all tasks`: the tasks that deliver the requirement."""
-        if entry[TEXT].strip().casefold() in EVERY_TASK:
+        if classify(entry[TEXT])[1] == "all tasks":
             marker = dict(id=requirement[IDENTIFIER], line=entry[LINE])
             self.everyone.append(dict(marker, label=entry[LABEL]))
             return
         references = task_references(entry[TEXT])
         if not references:
-            self.problems.append(TASKS_ONLY.format(**entry))
+            self.problems.append(prompt_texts.diagnostic("validation.plan_outcome", **entry))
         for task, scope in references:
             owned = self.owners.setdefault(task.upper(), [])
             owned.append(dict(id=requirement[IDENTIFIER], scope=scope.strip()))
@@ -176,8 +176,12 @@ def classify(text):
     """(outcome, detail); planned keeps the whole text, None means no outcome."""
     if not text or PLACEHOLDER.match(text):
         return None, ""
-    if text.strip().casefold() in EVERY_TASK:
-        return PLANNED, text.strip()
+    normalized = text.strip().casefold()
+    if normalized in EVERY_TASK or any(
+        normalized.startswith(prefix) and plan_citations.explained(normalized[len(prefix) :])
+        for prefix in EVERY_TASK
+    ):
+        return PLANNED, "all tasks"
     prefix, _, rest = text.partition(":")
     kind = PREFIXES.get(prefix.strip().casefold())
     return (kind, rest.strip()) if kind else (PLANNED, text)

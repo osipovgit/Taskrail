@@ -6,6 +6,8 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+from run_fixture import current_run
+
 from taskrail.application import (
     budget_extensions,
     budgets,
@@ -53,11 +55,9 @@ class StageBoundaryTests(unittest.TestCase):
         self.assertEqual(other["timeout"], 10)
 
     def test_budget_blocked_has_continue_and_delete_but_busy_run_does_not(self):
-        state = dict(
-            contract_version=1, status="STAGE_BUDGET_EXCEEDED", stages=[dict(mode="model")]
-        )
-        (self.run / "run.json").write_text(json.dumps(state))
-        (self.run / "checkpoint.json").write_text(json.dumps(dict(stage="planner")))
+        state = current_run(dict(status="STAGE_BUDGET_EXCEEDED", stages=[dict(mode="model")]))
+        (self.run / "run.json").write_text(json.dumps(current_run(state)))
+        (self.run / "checkpoint.json").write_text(json.dumps(current_run(dict(stage="planner"))))
         controls = actions(self.run, state, IDLE)
         self.assertTrue(controls["resume_budget"])
         self.assertTrue(controls["delete"])
@@ -66,7 +66,9 @@ class StageBoundaryTests(unittest.TestCase):
         self.assertFalse(actions(self.run, state, HELD)["delete"])
         state["status"] = "BLOCKED"
         self.assertTrue(actions(self.run, state, IDLE)["resume"])
-        (self.run / "checkpoint.json").write_text(json.dumps(dict(stage="implementer")))
+        (self.run / "checkpoint.json").write_text(
+            json.dumps(current_run(dict(stage="implementer")))
+        )
         self.assertTrue(actions(self.run, state, IDLE)["resume"])
         state["status"] = "BLOCKED_PERMISSION"
         self.assertFalse(actions(self.run, state, IDLE)["resume"])
@@ -76,9 +78,9 @@ class StageBoundaryTests(unittest.TestCase):
         self.assertTrue(actions(self.run, state, IDLE)["delete"])
 
     def test_a_run_on_the_same_project_holds_back_only_starting_a_worker(self):
-        state = dict(contract_version=1, status="BLOCKED", stages=[dict(mode="model")])
-        (self.run / "run.json").write_text(json.dumps(state))
-        (self.run / "checkpoint.json").write_text(json.dumps(dict(stage="planner")))
+        state = current_run(dict(status="BLOCKED", stages=[dict(mode="model")]))
+        (self.run / "run.json").write_text(json.dumps(current_run(state)))
+        (self.run / "checkpoint.json").write_text(json.dumps(current_run(dict(stage="planner"))))
         controls = actions(self.run, state, WAITING)
         self.assertFalse(controls["resume"] or controls["resume_budget"] or controls["followup"])
         self.assertEqual(controls["waiting_for"], "Another task is running on /project")

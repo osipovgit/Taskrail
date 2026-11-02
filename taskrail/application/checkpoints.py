@@ -2,7 +2,7 @@
 
 import json
 
-from taskrail.core.schema import contract_version
+from taskrail.application import run_store
 
 STATUS = "status"
 # A denied write cannot be granted by a note; any other block may continue with one.
@@ -30,10 +30,11 @@ RESUMABLE = frozenset(
 
 
 def load_checkpoint(run, state):
-    contract_version(state.get("contract_version"))
+    run_store.continuing(state)
     path = run / "checkpoint.json"
     if path.is_file():
         checkpoint = json.loads(path.read_text())
+        run_store.validate(checkpoint)
         denied = state.get(STATUS) == "BLOCKED_PERMISSION"
         if denied and checkpoint.get("stage") not in READ_ONLY_STAGES:
             raise ValueError("Permission-denied writes cannot be automatically continued")

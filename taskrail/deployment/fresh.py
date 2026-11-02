@@ -18,10 +18,16 @@ def prepare(home, protected):
     inventory.validate(protected)
     histories = {inventory.main[2] / "runs", inventory.history}
     for history in histories:
-        for source in history_roots(history):
+        for source in project_roots(history, inventory):
             if any(overlaps(source, target) for target in inventory.targets()):
                 raise ValueError("Reset paths overlap a declared project; no files deleted")
     return inventory
+
+
+def project_roots(history, inventory):
+    """Retired owned worktrees may be erased; original project roots stay protected."""
+    retired = inventory.main[2] / "worktrees"
+    return (source for source in history_roots(history) if not source.is_relative_to(retired))
 
 
 def remove(path):

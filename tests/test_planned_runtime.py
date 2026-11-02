@@ -8,6 +8,8 @@ import unittest
 from pathlib import Path
 from types import SimpleNamespace
 
+from run_fixture import current_run
+
 from taskrail.application import (
     check_planning,
     check_results,
@@ -96,7 +98,7 @@ class PlannedRuntimeTests(unittest.TestCase):
 
     def parsed(self, text=PLAN):
         (self.run / "plan.md").write_text(text)
-        state = dict(contract_version=1, requirements=self.requirements, changed_files=[])
+        state = dict(run_format=2, requirements=self.requirements, changed_files=[])
         record = dict(role="planner", stage="planner", directory="01-plan")
         environment = dict(roots=self.roots, run=self.run, plan=None, check_config=self.config)
         outcome = dict(final_text="DONE", sessions=["planner-session"])
@@ -150,7 +152,7 @@ class PlannedRuntimeTests(unittest.TestCase):
         state = dict(
             roots={"project": str(self.root)}, requirements=requirements, auto_approve=True
         )
-        atomic_json(child / "run.json", state)
+        atomic_json(child / "run.json", current_run(state))
         guard = SourceGuard(self.roots)
         guard.capture()
         workflow = SimpleNamespace(

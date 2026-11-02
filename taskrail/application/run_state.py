@@ -1,6 +1,6 @@
 """The run index written before preflight."""
 
-from taskrail.application import check_specs
+from taskrail.application import check_specs, run_store
 from taskrail.core.runtime import SOFTWARE_VERSION
 from taskrail.observability.progress import clock
 
@@ -13,9 +13,9 @@ def initial_state(config):
     checks = config["verification"]
     obligations = config["task_spec"]["requirements"]
     return dict(
-        version=4,
+        run_format=run_store.FORMAT,
+        release_identity=run_store.release_identity(),
         software_version=SOFTWARE_VERSION,
-        contract_version=1,
         requirements=obligations,
         check_specs=check_specs.configured(config, obligations),
         task_spec=config["task_spec"],

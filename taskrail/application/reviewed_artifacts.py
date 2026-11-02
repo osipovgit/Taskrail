@@ -2,6 +2,7 @@
 
 import json
 
+from taskrail.application import run_store
 from taskrail.core import delivery_record, schema, task_spec
 from taskrail.core.files import digest
 
@@ -32,7 +33,10 @@ def read(run, reference):
 
 def document(run, reference):
     """Decode one server-owned JSON artifact."""
-    return json.loads(read(run, reference))
+    payload = json.loads(read(run, reference))
+    if reference in {"run.json", "checkpoint.json"}:
+        run_store.validate(payload)
+    return payload
 
 
 def seal(workflow):
@@ -51,7 +55,7 @@ def parent(base, name):
     schema.require(state[STATUS] == "TASKS_READY", "Parent task is not an approved split")
     schema.require(
         SEAL in state and typed_requirements(state),
-        "Parent split was planned by an older release; restart the parent task",
+        "Parent split seal or requirement provenance is missing",
     )
     encoded = read(run, state["results"]["plan"])
     schema.require(digest(encoded) == state[SEAL], "Reviewed parent plan changed; replan required")

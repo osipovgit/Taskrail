@@ -85,7 +85,7 @@ def completed_records(run, accepted, roots):
 
 
 def verify(run, epic=None):
-    """A missing legacy snapshot fails closed; every server action rechecks this boundary."""
+    """Every server action rechecks the confirmed source and evidence boundary."""
     record = delivery_record.read(run) if epic is None else epic
     snapshot = record.get(INPUTS)
     require(bool(record.get("confirmed")), ERROR)

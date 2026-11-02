@@ -136,7 +136,7 @@ class SourcePacketTests(unittest.TestCase):
             )
         )
         state = dict(
-            contract_version=1,
+            run_format=2,
             roots=dict(repo=str(self.root)),
             requirements=[],
             checks=[],
@@ -188,7 +188,7 @@ class SourcePacketTests(unittest.TestCase):
             decision="single", steps=[], proposed_change_files=[], check_selections=[selection]
         )
         state = dict(
-            contract_version=1,
+            run_format=2,
             roots=dict(repo=str(self.root)),
             requirements=[],
             checks=[],
@@ -239,7 +239,7 @@ class SourcePacketTests(unittest.TestCase):
             context_projection.task_text(self.config, self.run), "## Goal\nReviewed goal"
         )
         state = dict(
-            contract_version=1,
+            run_format=2,
             roots=dict(repo=str(self.root)),
             requirements=[],
             checks=[],

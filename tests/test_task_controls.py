@@ -9,7 +9,9 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from taskrail.application import delivery_confirmation, mode_rules
+from run_fixture import current_run
+
+from taskrail.application import delivery_confirmation, execution_context, mode_rules
 from taskrail.application.live import execute_task
 from taskrail.application.source_guard import SourceGuard
 from taskrail.core.files import atomic_json
@@ -47,12 +49,14 @@ class TaskControlTests(unittest.TestCase):
         (self.run / "00-input/task.md").write_text(text)
         (self.run / "run.json").write_text(
             json.dumps(
-                dict(
-                    status="READY_FOR_REVIEW",
-                    roots={"project": str(self.repo)},
-                    summary="Previous conclusion",
-                    results={"plan": "plan.json"},
-                    stages=[],
+                current_run(
+                    dict(
+                        status="READY_FOR_REVIEW",
+                        roots={"project": str(self.repo)},
+                        summary="Previous conclusion",
+                        results={"plan": "plan.json"},
+                        stages=[],
+                    )
                 )
             )
         )
@@ -63,9 +67,11 @@ class TaskControlTests(unittest.TestCase):
         guard = SourceGuard({"project": self.repo})
         guard.capture()
         atomic_json(
-            self.run / "checkpoint.json", dict(expected=guard.expected, git_before=guard.git_before)
+            self.run / "checkpoint.json",
+            current_run(dict(expected=guard.expected, git_before=guard.git_before)),
         )
         self.settings = self.base / "settings.json"
+        atomic_json(self.run / "00-input/settings.json", dict(max_repairs=0))
         self.configure("ok")
         self.launcher = TaskLauncher(self.runs, self.settings)
 
@@ -175,7 +181,7 @@ class TaskControlTests(unittest.TestCase):
         source = index["roots"]["project"]
         index["roots"]["project"] = "/worktrees/isolated/project"
         index["worktrees"] = {"project": {"source": source}}
-        (child / "run.json").write_text(json.dumps(index))
+        (child / "run.json").write_text(json.dumps(current_run(index)))
         draft = task_draft(child)
         self.assertTrue(draft["worktree"])
         self.assertEqual(draft["roots"], [{"alias": "project", "path": source}])
@@ -235,7 +241,7 @@ class TaskControlTests(unittest.TestCase):
         fields = {key: edited[key] for key in task_form.FIELDS}
         text, _ = build_task(dict(fields, roots=edited["roots"]), self.runs)
         self.assertEqual(TaskDraft(text).fields()["constraints"], edited["constraints"])
-        self.assertEqual(sum(line == "## Workflow rules" for line in text.splitlines()), 1)
+        self.assertNotIn("## Workflow rules", text.splitlines())
         self.assertIn("## Additional constraints\nKeep X\n", text)
 
     def make_epic(self):
@@ -270,8 +276,9 @@ class TaskControlTests(unittest.TestCase):
             stages=[],
             requirements=[],
         )
-        (epic / "run.json").write_text(json.dumps(index))
-        (epic / "00-input/settings.json").write_text("{}")
+        execution_context.capture(epic, dict(roots={"project": self.repo}, worktrees={}), index)
+        (epic / "run.json").write_text(json.dumps(current_run(index)))
+        (epic / "00-input/settings.json").write_text(json.dumps(dict(max_repairs=0)))
         return epic
 
     def launching(self, name):
@@ -287,14 +294,15 @@ class TaskControlTests(unittest.TestCase):
     def finish(self, name, status):
         child = self.runs / name
         (child / "00-input").mkdir(parents=True, exist_ok=True)
-        (child / "00-input/task.md").write_text("# child\n")
+        (child / "00-input/task.md").write_text("# child\nInspect the assigned task.\n")
         state = dict(
             status=status,
             summary=f"{name} summary",
             changed_files=["/repo/hello.py"],
             roots={"project": str(self.repo)},
         )
-        (child / "run.json").write_text(json.dumps(state))
+        (child / "00-input/settings.json").write_text(json.dumps(dict(max_repairs=0)))
+        (child / "run.json").write_text(json.dumps(current_run(state)))
 
     def test_task_split_starts_tasks_in_order_with_a_brief(self):
         epic = self.make_epic()
@@ -400,7 +408,8 @@ class TaskControlTests(unittest.TestCase):
         (child / "00-input").mkdir(parents=True)
         (child / "00-input/task.md").write_text(first)
         state = dict(status="RUNNING", summary="", roots={"project": str(self.repo)}, stages=[])
-        (child / "run.json").write_text(json.dumps(state))
+        (child / "00-input/settings.json").write_text(json.dumps(dict(max_repairs=0)))
+        (child / "run.json").write_text(json.dumps(current_run(state)))
         request = dict(status="LOCAL_REQUEST", argv=["make"], cwd=str(self.repo))
         atomic_json(child / "pending-approval.json", dict(ticket="t1", request=request))
         decision = dict(id="child-1", ticket="t1", decision="allow", alternative="", allow_all=True)
@@ -584,9 +593,11 @@ class TaskControlTests(unittest.TestCase):
         )
         (self.run / "run.json").write_text(
             json.dumps(
-                dict(
-                    json.loads((self.run / "run.json").read_text()),
-                    changed_files=["/repo/hello.py"],
+                current_run(
+                    dict(
+                        json.loads((self.run / "run.json").read_text()),
+                        changed_files=["/repo/hello.py"],
+                    )
                 )
             )
         )
@@ -633,7 +644,7 @@ class TaskControlTests(unittest.TestCase):
         self.finish("server-1", "RUNNING")
         waiting = json.loads((self.runs / "server-1/run.json").read_text())
         waiting["execution_jobs"] = [dict(status="PENDING_APPROVAL")]
-        (self.runs / "server-1/run.json").write_text(json.dumps(waiting))
+        (self.runs / "server-1/run.json").write_text(json.dumps(current_run(waiting)))
         self.assertEqual(delivery()["step"], "approval")
         entry = next(run for run in list_runs(self.runs) if run["id"] == "original")
         self.assertEqual(entry["group"], "attention")
@@ -645,11 +656,12 @@ class TaskControlTests(unittest.TestCase):
         header = dict(phase=phase, check_parent="original", roots={"project": str(self.repo)})
         child = self.runs / name
         (child / "00-input").mkdir(parents=True, exist_ok=True)
-        task = f"```taskrail-task\n{json.dumps(header)}\n```\n# {phase}\n"
+        task = f"```taskrail-task\n{json.dumps(header)}\n```\n# {phase}\nInspect the phase.\n"
         (child / "00-input/task.md").write_text(task)
         state = dict(status=status, summary=f"{name} failed\ndetails", phase=phase, stages=[])
         state["roots"] = header["roots"]
-        (child / "run.json").write_text(json.dumps(state))
+        (child / "00-input/settings.json").write_text(json.dumps(dict(max_repairs=0)))
+        (child / "run.json").write_text(json.dumps(current_run(state)))
 
     def test_a_restarted_phase_stays_in_its_delivery_with_earlier_attempts(self):
         (self.run / "plan.json").write_text(
@@ -788,7 +800,7 @@ class TaskControlTests(unittest.TestCase):
     def test_delete_rejects_running_runs_traversal_and_symlinks(self):
         state = json.loads((self.run / "run.json").read_text())
         state["status"] = "RUNNING"
-        (self.run / "run.json").write_text(json.dumps(state))
+        (self.run / "run.json").write_text(json.dumps(current_run(state)))
         (self.runs / "alias").symlink_to(self.repo)
         for name in ("original", "..", "alias"):
             with self.subTest(name=name), self.assertRaises(ValueError):

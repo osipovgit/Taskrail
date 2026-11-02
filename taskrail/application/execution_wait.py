@@ -103,7 +103,7 @@ def save_snapshot(run, pending):
     destination.parent.mkdir(parents=True, exist_ok=True)
     if destination.exists():
         snapshot = json.loads(destination.read_text())
-        if destination.is_symlink() or not snapshot or snapshot[-1] != pending:
+        if destination.is_symlink() or snapshot != [pending]:
             raise ValueError("Executor evidence snapshot changed")
     else:
         atomic_json(destination, [pending])

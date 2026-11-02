@@ -1,5 +1,6 @@
 """Run-wide state shared by the stage loop and its attempts."""
 
+from taskrail.application import run_store
 from taskrail.application.artifacts import finish_stage
 from taskrail.application.source_guard import SourceGuard
 from taskrail.core import control
@@ -40,6 +41,7 @@ class Workflow:
             self.run / "checkpoint.json",
             dict(
                 {key: self.flow[key] for key in FLOW_KEYS},
+                run_format=run_store.FORMAT,
                 expected=fingerprints,
                 git_before=self.guard.git_before,
                 task_hash=digest(self.config["task_text"].encode()),

@@ -8,6 +8,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
+from run_fixture import current_run
 from sandbox_fixture import without_sandbox
 
 from taskrail.application import (
@@ -20,6 +21,7 @@ from taskrail.application import (
     check_remote,
     check_results,
     check_specs,
+    execution_context,
     execution_evidence,
     execution_wait,
     step_checks,
@@ -58,7 +60,7 @@ class CheckRecipesTest(unittest.TestCase):
         self.guard = SourceGuard(self.roots)
         self.guard.capture()
         self.state = dict(roots={"project": str(self.root)}, requirements=[self.requirement])
-        atomic_json(self.run / "run.json", self.state)
+        atomic_json(self.run / "run.json", current_run(self.state))
 
     def workflow(self, commands=()):
         config = dict(
@@ -378,7 +380,10 @@ class CheckRecipesTest(unittest.TestCase):
         original = {name: workflow.config[name] for name in ("check_recipes", "verify_commands")}
         check_configuration.capture(original, parent_state)
         atomic_json(parent / "00-input/settings.json", original)
-        atomic_json(parent / "run.json", parent_state)
+        execution_context.capture(
+            parent, dict(roots=workflow.config["roots"], worktrees={}), parent_state
+        )
+        atomic_json(parent / "run.json", current_run(parent_state))
         atomic_json(parent / "epic.json", dict(phases=dict(integration=self.run.name)))
         changed = dict(self.recipe, request=dict(self.command, argv=["changed-command"]))
         workflow.config["check_recipes"] = {"health": changed}

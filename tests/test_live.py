@@ -8,6 +8,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from live_fixture import BASE, LiveFixture
+from run_fixture import current_run
 
 from taskrail.application.live import execute_task
 from taskrail.application.plan_validation import canonical_plan, validate_plan
@@ -527,7 +528,7 @@ class LiveTests(LiveFixture, unittest.TestCase):
             [a["stage"] for a in state["attempts"]],
             ["planner", "plan-reviewer", "implementer", "reviewer"],
         )
-        self.assertEqual(state["contract_version"], 1)
+        self.assertEqual(state["run_format"], 2)
         self.assertIn("imported_draft", (run / "01-plan/request.md").read_text())
 
     def test_plan_read_before_write_rejection_stays_in_the_same_session(self):
@@ -741,6 +742,24 @@ class LiveTests(LiveFixture, unittest.TestCase):
         header = json.loads((run / "01-plan/agent.md").read_text().split("---")[1])
         self.assertEqual(header["permission"]["edit"][str(run / "plan.md")], "allow")
         self.assertEqual(header["permission"]["edit"]["*"], "deny")
+
+    def test_instruction_citation_repairs_to_owned_work_without_a_new_session(self):
+        self.task.write_text(self.task.read_text() + "\n\nKeep unrelated files.\n")
+        run, status, state = self.run_mode("plan-instruction-citation")
+        self.assertEqual(status, "READY_FOR_REVIEW", state.get("summary"))
+        planner = state["stages"][0]
+        self.assertEqual((planner["status"], planner["session_turns"]), ("RESULT_VALID", 2))
+        self.assertEqual(sum(entry["stage"] == "planner" for entry in state["attempts"]), 1)
+        feedback = (run / "01-plan/tool-result.md").read_text()
+        self.assertIn("R1: Path outside", feedback)
+        self.assertIn("Changing the attempt number", feedback)
+        self.assertIn("all tasks", feedback)
+        plan = json.loads((run / "01-plan/result.json").read_text())
+        self.assertEqual(plan["coverage"][0]["outcome"], "planned")
+        self.assertEqual(plan["evidence"], [])
+        self.assertEqual(
+            set(plan["steps"][0]["criteria"]), {entry["id"] for entry in state["requirements"]}
+        )
 
     def test_structured_steps_are_validated_without_model_retry(self):
         run, status, state = self.run_mode("structured-steps")
@@ -1206,16 +1225,15 @@ class LiveTests(LiveFixture, unittest.TestCase):
         config = configuration(task, self.settings)
         self.assertEqual(config["roots"], {"project": self.root})
 
-    def test_unknown_contract_cannot_continue(self):
+    def test_unknown_run_format_cannot_continue(self):
         run, status, state = self.run_mode("review-timeout", read_retries=0)
         self.assertEqual(status, "TIMEOUT")
-        state["contract_version"] = 2
-        (run / "run.json").write_text(json.dumps(state))
-        _, status = self.continue_with_ok_model(run)
-        self.assertEqual(status, "BLOCKED")
-        self.assertIn(
-            "Unsupported contract version", json.loads((run / "run.json").read_text())["summary"]
-        )
+        state["run_format"] = 1
+        (run / "run.json").write_text(json.dumps(current_run(state)))
+        original = (run / "run.json").read_bytes()
+        with self.assertRaisesRegex(ValueError, "Unsupported run format"):
+            self.continue_with_ok_model(run)
+        self.assertEqual((run / "run.json").read_bytes(), original)
         self.assertIn("return 2", (self.root / "hello.py").read_text())
 
     def test_blocked_plan_stops_without_repair_or_writes(self):

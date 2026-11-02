@@ -76,8 +76,9 @@ Python 3.10+ for both the runtime and development tools, and Node 24.19+ for UI 
 Models write no JSON results: the server reads `plan.md`, `review.md` and the
 implementer's final `DONE` or `BLOCKED` and stores canonical version 1 records
 (`core/plan_document.py`, `core/review_document.py`). `core/result-schemas.json` holds
-the planner's stored shape and the executor request contracts. A run
-frozen with other schemas stays viewable, but Continue refuses it; use Restart.
+the planner's stored shape and executor request contracts. Run storage uses a separate
+`run_format: 2` gate. Unsupported runs require a new task; Continue requires identical
+application code and instructions. Same-format runs from another release may Restart.
 Application helpers compose prompts, bind source evidence, freeze instructions and
 account for durable budgets. The engine owns requirement IDs and the actual
 changed-file and check records; a model cannot claim successful execution by

@@ -95,9 +95,9 @@ def field_text(payload, key):
 
 
 def task_markdown(form, header):
-    """The taskrail-task header, the form sections and fixed workflow rules."""
+    """Render task inputs only; stage requests own the workflow instructions."""
     sections = ["```taskrail-task", header, "```", "", f"# {form[TITLE]}"]
     for field, heading in SECTIONS.items():
         if form[field]:
             sections.extend(["", f"## {heading}", form[field]])
-    return "{}\n".format("\n".join([*sections, prompt_texts.current("task.workflow_rules")]))
+    return "{}\n".format("\n".join(sections))

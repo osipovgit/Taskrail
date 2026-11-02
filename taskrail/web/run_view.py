@@ -3,6 +3,7 @@
 import re
 from pathlib import Path
 
+from taskrail.application import run_store
 from taskrail.core.paths import tool_paths
 from taskrail.observability.progress import clock
 from taskrail.web import delivery_state, history, lifecycle, run_errors, run_family, split_approvals
@@ -41,6 +42,8 @@ def readable_view(base, name, run):
     submission = find_submission(Path(base), name)
     launch = launch_record(submission)
     state = run_state(run, launch)
+    if (run / "run.json").exists():
+        run_store.validate(state)
     stages = stage_views(run, state)
     return dict(
         id=name,

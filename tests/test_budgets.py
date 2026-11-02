@@ -90,7 +90,7 @@ class BudgetTests(unittest.TestCase):
         record = dict(self.record(1), role="planner")
         state = {
             "agent_sources": {"planner": "saved-hash"},
-            "contract_version": 1,
+            "run_format": 2,
             "agent_source_directory": str(inputs / "agents"),
         }
         config = dict(timeout=60, stage_seconds=100, stage_attempts=3)
