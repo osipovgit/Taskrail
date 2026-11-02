@@ -232,5 +232,6 @@
   "citation.executor_streams": "This snapshot stores encoded output on long JSON lines. Read relevant windows from these exact matching text streams and cite their paths/line numbers instead of the JSON string. Do not repeat the command or the truncated JSON read. These pointers alone are not observed evidence:\n$files",
   "validation.plan_review_evidence": "The current proposal proves only planned work or a plan defect: use planned or fails for these citations. A done claim needs observed project source or a matching executor check, not the plan.",
   "validation.plan_review_changed": "The plan under review changed or its accepted snapshot is unavailable; do not approve a different proposal.",
-  "validation.plan_review_path": "Only the current plan.md and accepted planner result may support planned or fails during plan review. Other run artifacts are not evidence. For done, cite observed project source or executor checks. If required evidence is unavailable, report a blocking gap."
+  "validation.plan_review_path": "Only the current plan.md and accepted planner result may support planned or fails during plan review. Other run artifacts are not evidence. For done, cite observed project source or executor checks. If required evidence is unavailable, report a blocking gap.",
+  "validation.path_scope": "Path outside $scope: $path. Effective roots for this path: $roots. Use the exact source actually read in this run; another checkout or a parent directory is not implicitly authorized. Do not substitute a path without observing that source."
 }

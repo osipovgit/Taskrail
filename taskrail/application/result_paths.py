@@ -51,7 +51,15 @@ def approved_path(filename, roots, scope="declared roots or executor snapshots")
     canonical = path.is_absolute() and path.resolve() == path
     schema.require(canonical, f"Use canonical absolute paths, not {filename}{example(path, roots)}")
     inside = any(root in path.parents for root in roots.values())
-    schema.require(inside, f"Path outside {scope}: {path}")
+    schema.require(
+        inside,
+        prompt_texts.diagnostic(
+            "validation.path_scope",
+            scope=scope,
+            path=path,
+            roots=", ".join(map(str, roots.values())),
+        ),
+    )
 
 
 def example(path, roots):

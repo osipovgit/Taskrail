@@ -3,6 +3,20 @@
 import json
 import time
 
+EDIT_MISMATCH = "Error: Could not find oldString in the file. It must match exactly, including whitespace, indentation, and line endings."
+
+
+def plan_mismatches(target, content, emit):
+    """One actual read survives repeated no-op edits before the completed plan write."""
+    event(emit, target, "read", "completed", target.read_text())
+    for number in range(3):
+        state = dict(status="error", input=dict(filePath=str(target)), error=EDIT_MISMATCH)
+        identity = f"plan-mismatch-{number}"
+        part = dict(id=identity, callID=identity, tool="edit", state=state)
+        emit(json.dumps(dict(type="tool_use", part=part)))
+    target.write_text(content)
+    event(emit, target, "write", "completed", "File written successfully")
+
 
 def implement(target, mode, emit):
     """A rejected write changes nothing; recovery reads and matches the current text.
@@ -15,10 +29,7 @@ def implement(target, mode, emit):
     tool = "write"
     if mode.startswith("write-mismatch"):
         tool = "edit"
-        error = (
-            "Error: Could not find oldString in the file. It must match exactly, "
-            "including whitespace, indentation, and line endings."
-        )
+        error = EDIT_MISMATCH
     event(emit, target, tool, "error", error)
     if mode in {"write-unresolved", "write-mismatch-unresolved"}:
         return
