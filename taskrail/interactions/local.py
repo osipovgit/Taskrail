@@ -103,9 +103,11 @@ def monitor(process, streams, context):
     schema.require(not transport.oversized(streams), "Local command output limit exceeded")
 
 
-def instructions(stage):
-    """Diagnostics run in the sandbox, or as the service user after personal approval."""
-    route = "routes.local.sandbox" if sandbox.mode() else "routes.local"
+def instructions(stage, host_commands="auto"):
+    """Diagnostics run in the sandbox, else on the host at once or after personal approval."""
+    route = "routes.local.sandbox"
+    if not sandbox.mode():
+        route = "routes.local.host" if host_commands == "auto" else "routes.local"
     advertised = [prompt_texts.text(route)]
     if stage != "implementer":
         advertised.append(prompt_texts.text("routes.local.read_only"))

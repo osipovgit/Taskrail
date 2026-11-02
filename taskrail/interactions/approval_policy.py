@@ -20,6 +20,9 @@ ALLOW = "allow"
 ALLOW_ALL = "allow_all"
 READ_ONLY = "read_only"
 SANDBOX = "sandbox"
+# A command outside the sandbox that runs without asking; the log highlights it.
+HOST = "host"
+HOST_COMMANDS = "host_commands"
 OFF = approval_marks.OFF
 
 
@@ -33,12 +36,24 @@ def decision(run, request, state, scope=None, personal=False):
     """
     if not personal and scope is not None and read_only.request(request, *scope):
         return automatic(run, request, READ_ONLY)
+    if not personal and host_automatic(state, request):
+        return automatic(run, request, HOST)
     if not personal and enabled(run, state):
         return automatic(run, request, ALLOW_ALL)
     answer = approvals.wait(run, request)
     if answer.get("allow_all") and answer["decision"] == ALLOW:
         state[AUTO_APPROVE] = not approval_marks.revoked(run)
     return answer
+
+
+def host_automatic(state, request):
+    """Whether a local command outside the sandbox runs without a decision.
+
+    Every run records its host_commands setting (default auto) when it starts; a state
+    without it asks.
+    """
+    automatic_mode = state.get(HOST_COMMANDS) == "auto"
+    return automatic_mode and request.get("status") == "LOCAL_REQUEST"
 
 
 def enabled(run, state):

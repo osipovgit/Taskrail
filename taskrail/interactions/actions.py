@@ -31,6 +31,8 @@ class Actions:
         self.session = session
         self.run = session.environment["run"]
         self.folder = session.active[0]
+        # The approval rule of the last local command, for its log entry.
+        self.rule = None
 
     def route(self, outcome):
         """An executor request, an access decision or a near-miss request; else None."""

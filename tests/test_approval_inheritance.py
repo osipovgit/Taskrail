@@ -185,6 +185,7 @@ class ApprovalContinueTests(LiveFixture, unittest.TestCase):
                 "writer-timeout",
                 verify_commands=[check],
                 worktree_base=str(self.base / "worktrees"),
+                host_commands="ask",
             )
         self.assertEqual(status, "TIMEOUT")
         state["auto_approve"] = True

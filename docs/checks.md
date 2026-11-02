@@ -49,8 +49,7 @@ application maps that directory to the same relative location in its authenticat
 worktree. Source or Git changes during verification stop the run.
 Local recipes and `verify_commands` run without a decision in the
 [local command sandbox](access.md#local-commands), with writable roots; on a host
-without one they require personal approval of the exact command, or the operator's
-Allow all actions. `verify_commands` remain mandatory gates and
+without one they run on the host, or wait for approval under `host_commands: "ask"`. `verify_commands` remain mandatory gates and
 appear in the recipe catalog
 as `verify-<digest>`; this ID prefix is reserved.
 

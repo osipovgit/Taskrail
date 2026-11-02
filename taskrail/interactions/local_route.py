@@ -22,11 +22,15 @@ def run_local(actions, outcome, payload):
     """Keep a visible running call even during approval or process execution."""
     payload = local_intake.located(payload, actions.session.environment["roots"])
     event = events.begin(actions.folder, "local_command", payload)
+    actions.rule = None
     try:
         response = local_action(actions, payload)
     except BaseException:
         events.finish(actions.folder, event, "Interrupted; inspect local effects before retrying.")
         raise
+    if actions.rule == approval_policy.HOST:
+        # Ran outside the sandbox without asking: the log shows it like a permission request.
+        event["part"]["state"]["metadata"]["approval"] = approval_policy.HOST
     events.finish(actions.folder, event, response)
     return response
 
@@ -78,7 +82,8 @@ def writes(actions):
 
 def executed(actions, payload, decision):
     """Run an approved command and adopt what it changed in the roots."""
-    automatic = decision.get("rule") == approval_policy.READ_ONLY
+    actions.rule = decision.get("rule")
+    automatic = actions.rule == approval_policy.READ_ONLY
     if local_request.missing_executable(payload[ARGV], automatic):
         return actions.local_result(payload, dict(status=REJECTED, reason=STILL_MISSING))
     actions.session.check_sources()

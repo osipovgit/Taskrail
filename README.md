@@ -65,8 +65,9 @@ parallel; one project runs one task at a time.
 A finished change waits as **Ready for your review** until you confirm it; **No
 changes required** ends a run that needed no edits. Agents run project tests and
 linters at once in an offline [sandbox](docs/access.md#local-commands) where the host
-has bubblewrap; commands that need more, Docker, CI and deployment wait for your
-approval, one by one or once per run. The optional
+has bubblewrap; commands that need the network or host files run at once on the host and
+are highlighted in the stage log (`host_commands: "ask"` makes them wait for you). Reads
+outside the declared roots and pushes wait for your decision. The optional
 [isolated SSH executor](docs/ssh-executor.md) runs exact remote scripts and Jenkins builds after personal
 root approval, with results returned to the same task. Deferred runtime checks
 remain visible. The planner and the reviewers write Markdown files and finish with `DONE`;

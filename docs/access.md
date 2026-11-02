@@ -110,9 +110,11 @@ approval ledger with `"rule": "sandbox"`:
   `DISPLAY`, `WAYLAND_DISPLAY`, `XAUTHORITY` and `DBUS_SESSION_BUS_ADDRESS` are unset.
 
 A command that needs the network or host files outside the sandbox adds
-`"sandbox": false` and says why in its reason. It then goes through the approval below,
-as does every command on a host without a working bubblewrap and a program that is
-not installed, so you can install it and allow the command. `taskrail check` names
+`"sandbox": false` and says why in its reason. It then runs at once on the host, as does
+every command on a host without a working bubblewrap; the approval ledger records it with
+`"rule": "host"` and the stage log highlights it like a decision. A program that is not
+installed is reported back to the agent. The setting `host_commands: "ask"` sends host
+commands through the approval below instead. `taskrail check` names
 the sandbox in use. Every run also records `local-preflight.json` before model work,
 with the sandbox/fallback explanation and executable paths for required local checks.
 The check repeats after reviewed recipe selection, before implementation. Missing
@@ -125,7 +127,9 @@ regressions; an unavailable sandbox is not a successful skipped check.
 
 ### Approval
 
-The exact working directory, argv and reason appear in the UI before execution.
+Reads outside the declared roots wait for a decision; so do host commands under
+`host_commands: "ask"`. The exact working directory, argv and reason appear in the UI
+before execution.
 Allow is single-use; Deny skips execution; Alternative sends your text back to the
 agent. Waiting has no expiry and is excluded from active stage time. Stop remains
 available. Each decision is bound to a random ticket and retained for audit.

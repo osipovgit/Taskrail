@@ -14,6 +14,8 @@ from taskrail.infrastructure.agent_sync import launch_settings
 
 HEADER = input_header.HEADER
 ROLES = ("planner", "implementer", "reviewer")
+HOST_AUTO = "auto"
+HOST_MODES = frozenset((HOST_AUTO, "ask"))
 BUNDLED_AGENTS = Path(__file__).resolve().parents[1] / "agents"
 VERIFICATION = "verification"
 DESIGN = "design"
@@ -113,7 +115,14 @@ def permission_worktree(options):
 
 
 def limits(options):
-    """Clamp numeric settings to their supported ranges; read the retry policy."""
+    """Clamp numeric settings to their supported ranges; read the retry and host policy.
+
+    host_commands `auto` runs local commands outside the sandbox at once; `ask` waits for
+    the operator.
+    """
+    host = options.get("host_commands", HOST_AUTO)
+    if host not in HOST_MODES:
+        raise ValueError("host_commands must be auto or ask")
     return dict(
         **context_windows.settings(options),
         stage_seconds=max(1, int(options.get("stage_timeout_seconds", DEFAULT_TIMEOUT * 4))),
@@ -123,4 +132,5 @@ def limits(options):
         max_repairs=max(0, min(5, int(options.get("max_repairs", 3)))),
         read_retries=max(0, min(3, int(options.get("read_retries", 3)))),
         stop_on_provider_limit=options.get("stop_on_provider_limit") is True,
+        host_commands=host,
     )

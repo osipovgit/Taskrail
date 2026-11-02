@@ -167,6 +167,7 @@ def tool_entry(part, call, stamp):
         error=str(state.get("error", ""))[:TOOL_PREVIEW_LIMIT],
         output=output[:TOOL_PREVIEW_LIMIT],
         output_truncated=len(output) > TOOL_PREVIEW_LIMIT,
+        host=(state.get("metadata") or {}).get("approval") == "host",
     )
 
 

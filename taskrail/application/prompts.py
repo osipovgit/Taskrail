@@ -60,7 +60,7 @@ def make_request(config, execution, state, run):
         instruction_modules.render(run, execution, state),
         execution_requests.instructions(config, stage, run, catalog),
         git_requests.instructions(stage),
-        local.instructions(stage),
+        local.instructions(stage, config.get("host_commands", "auto")),
         response_format.section(stage, state, run, config, catalog),
         f"Context:\n{context_json(request_context(config, execution, state, run))}",
     )

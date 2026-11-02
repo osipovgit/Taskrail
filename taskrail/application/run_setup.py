@@ -44,6 +44,7 @@ SETTINGS_SNAPSHOT = (
     "check_specs",
     "isolation",
     "protected_paths",
+    "host_commands",
 )
 
 

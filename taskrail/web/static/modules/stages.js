@@ -239,7 +239,12 @@ export function stageCard(stage, requirements = []) {
     for (const event of events) {
       if (event.kind === 'text') log.append(messageCard(event));
       else {
-        const box = el('div', undefined, 'message tool-event');
+        // A command that ran outside the sandbox without asking stands out like a decision.
+        const box = el(
+          'div',
+          undefined,
+          'message tool-event' + (event.host ? ' host-command' : ''),
+        );
         const heading = el('div', undefined, 'tool-heading');
         heading.append(
           el(

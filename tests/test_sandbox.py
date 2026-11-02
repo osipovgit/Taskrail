@@ -334,6 +334,25 @@ class SandboxRouteTests(unittest.TestCase):
                 self.assertEqual(local_route.without_decision(actions, payload), "completed")
             self.assertEqual(executed.call_args.args[2]["rule"], approval_policy.SANDBOX)
 
+    def test_a_host_command_runs_without_asking_unless_settings_ask(self):
+        with tempfile.TemporaryDirectory() as directory:
+            run = Path(directory)
+            on_host = dict(request(sandbox=False), stage="03-implement")
+            with patch.object(approval_policy.approvals, "wait") as wait:
+                answer = approval_policy.decision(run, on_host, dict(host_commands="auto"))
+                wait.assert_not_called()
+                self.assertEqual((answer["decision"], answer["rule"]), ("allow", "host"))
+                read = dict(status="ACCESS_REQUEST", calls=[], stage="01-plan")
+                for asked in (
+                    (on_host, dict(host_commands="ask"), False),
+                    (read, dict(host_commands="auto"), False),
+                    (on_host, dict(host_commands="auto"), True),
+                ):
+                    approval_policy.decision(run, asked[0], asked[1], personal=asked[2])
+                self.assertEqual(wait.call_count, 3)
+            ledger = [json.loads(path.read_text()) for path in run.glob("approval-*.json")]
+            self.assertEqual([entry["response"]["rule"] for entry in ledger], ["host"])
+
     def test_a_request_may_ask_for_the_host_and_is_then_another_action(self):
         on_host = local.extract(json.dumps(request(sandbox=False)))
         with patch.object(sandbox, "mode", return_value=sandbox.NAMESPACE):
