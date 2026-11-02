@@ -4,6 +4,7 @@ The planner writes decisions only; the server derives the coverage, evidence,
 blocking gaps, steps and change files, and reports every problem with its line.
 """
 
+import re
 from types import MappingProxyType
 
 from taskrail.core import plan_checks
@@ -19,6 +20,8 @@ from taskrail.core.plan_outcomes import PLACEHOLDER, PLANNED, Coverage
 from taskrail.core.plan_tasks import check, steps
 
 NONE = "none"
+# "None. No Jenkins jobs ..." under After the change means there is no check.
+NO_CHECKS = re.compile(r"(?:none|n/a)\b", re.IGNORECASE)
 DECISIONS = MappingProxyType(
     {
         "split": "split",
@@ -54,9 +57,9 @@ def payload(text, requirements, roots):
 
 
 def after_checks(document):
-    """The checks listed under `## After the change`."""
+    """The checks listed under `## After the change`; a "None" line lists none."""
     checks = [text for text, _ in document[AFTER]]
-    return list(filter(None, checks))
+    return [check for check in checks if check and not NO_CHECKS.match(check)]
 
 
 def finished(found, decision, summary, planned):

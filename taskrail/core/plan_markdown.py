@@ -8,7 +8,8 @@ session can fix that line instead of writing the plan again.
 import re
 
 from taskrail.core.plan_checks import SELECTIONS
-from taskrail.core.plan_keys import CONTINUED, LISTS, NOTES, key_line, stored
+from taskrail.core.plan_keys import CONTINUED, EXTRA, LISTS, NOTES, key_line, stored
+from taskrail.core.prompt_texts import text
 
 BULLET = re.compile(r"^(?:[-*+]|\d+[.)])\s+(.*)$")
 HEADING = re.compile(r"^#{1,6}\s+(.*?)\s*#*$")
@@ -23,6 +24,9 @@ REQUIREMENTS = "requirements"
 PROBLEMS = "problems"
 LINE = "line"
 FIELDS = "fields"
+# "## T2: After the change" is the after-change section written as a task.
+AFTER_TITLE = re.compile(r"after the change\b", re.IGNORECASE)
+NAME_PREVIEW = 40
 
 
 def read_plan_text(text):
@@ -65,7 +69,9 @@ class Reader:
         """A task heading starts a task; known titles start their sections."""
         self.key = None
         task = TASK.match(title)
-        if task:
+        if task and AFTER_TITLE.match(task.group(2)):
+            self.section = AFTER
+        elif task:
             self.document[TASKS].append(task_entry(task, number))
             self.section = TASKS
         else:
@@ -101,15 +107,23 @@ class Reader:
         self.key = key if key in CONTINUED else None
 
     def extend(self, number, line):
-        """A bullet of a list key, more notes, or a line that cannot be read."""
+        """A bullet of a list key, or more notes.
+
+        Inside a task any other line, such as an invented `Facts:` key or prose, is kept
+        in the task's Notes; weak models add such lines, and rejecting the whole plan for
+        them only costs a correction. At the top it names what is not a plan key.
+        """
         if self.key in LISTS and BULLET.match(line):
             bullets = self.target()[self.key][0]
             bullets.append(unbullet(line))
         elif self.key == NOTES:
             note, start = self.target()[NOTES]
             self.target()[NOTES] = (f"{note} {line}".strip(), start)
+        elif self.section == TASKS:
+            self.target().setdefault(EXTRA, []).append(line)
         else:
-            message = f"line {number}: expected 'Key: value' or a bullet of the key above"
+            name = line.partition(":")[0][:NAME_PREVIEW]
+            message = text("validation.unknown_key", line=number, name=name)
             self.document[PROBLEMS].append(message)
 
     def target(self):

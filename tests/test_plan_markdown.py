@@ -108,6 +108,38 @@ class PlanDocumentTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "offset=4, limit=2"):
                 source_claims.validate_claim(plan["evidence"][1], records)
 
+    def test_invented_keys_and_prose_in_a_task_become_notes_instead_of_errors(self):
+        text = PLAN.replace(
+            "Notes: rename the variables",
+            "Facts (cited): project/roles/ntp/tasks/main.yml:1-4 shows the module\n"
+            "Notes: rename the variables",
+        )
+        plan = payload(text, REQUIREMENTS, ROOTS)
+        notes = plan["steps"][0]["notes"]
+        self.assertTrue(notes.startswith("rename the variables and keep the handlers"))
+        self.assertIn("Facts (cited): project/roles/ntp/tasks/main.yml:1-4", notes)
+        with self.assertRaisesRegex(ValueError, "'Approach' is not a plan key here"):
+            payload("Approach: rewrite\n" + PLAN, REQUIREMENTS, ROOTS)
+
+    def test_files_patterns_and_prose_are_named_with_what_to_write(self):
+        text = PLAN.replace(
+            "Files: project/roles/ntp/tasks/main.yml, roles/ntp/defaults/main.yml (new)",
+            "Files: lint fixes under roles/*/tasks/*.yaml, roles/ntp/",
+            1,
+        )
+        with self.assertRaises(ValueError) as rejected:
+            payload(text, REQUIREMENTS, ROOTS)
+        self.assertIn("Files names exact file paths", str(rejected.exception))
+        self.assertIn("'lint fixes under roles/*/tasks/*.yaml'", str(rejected.exception))
+        self.assertIn("'roles/ntp/'", str(rejected.exception))
+
+    def test_after_the_change_written_as_a_task_or_as_none_lists_no_check(self):
+        text = PLAN.replace("## After the change", "## T3: After the change (deferred checks)")
+        text += "None. No remote checks.\n"
+        plan = payload(text, REQUIREMENTS, ROOTS)
+        self.assertEqual([step["id"] for step in plan["steps"]], ["T1", "T2"])
+        self.assertNotIn("None. No remote checks.", plan["unverified"])
+
     def test_read_ranges_keep_quoted_paths_and_skip_prose(self):
         text = PLAN.replace("Done when:", "Read: `project/a file.yml:1-2`,3-4\nDone when:", 1)
         plan = payload(text, REQUIREMENTS, ROOTS)
@@ -147,20 +179,20 @@ class PlanDocumentTests(unittest.TestCase):
 
     def test_every_problem_is_named_with_its_line(self):
         broken = (
-            "Decision: maybe\n## Requirements\n- R1 →\n- R9 → T1\nnot a requirement\n"
-            "## T1: Empty\nDepends on: T1\nrandom text\n"
+            "random text\nDecision: maybe\n## Requirements\n- R1 →\n- R9 → T1\nnot a requirement\n"
+            "## T1: Empty\nDepends on: T1\n"
         )
         with self.assertRaises(ValueError) as raised:
             payload(broken, REQUIREMENTS, ROOTS)
         message = str(raised.exception)
         for expected in (
-            "line 1: Decision must be split, single, no change or blocked",
-            "line 3: R1 has no outcome",
-            "line 4: R9 is unknown",
-            "line 5: expected 'R<n> → <outcome>'",
-            "line 8: expected 'Key: value'",
+            "line 1: 'random text' is not a plan key here",
+            "line 2: Decision must be split, single, no change or blocked",
+            "line 4: R1 has no outcome",
+            "line 5: R9 is unknown",
+            "line 6: expected 'R<n> → <outcome>'",
             "no line for R2, R3",
-            "line 6: T1 has no Files",
+            "line 7: T1 has no Files",
             "T1 depends on an unknown task or itself",
         ):
             self.assertIn(expected, message)
