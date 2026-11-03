@@ -24,6 +24,8 @@ PLAN_FILES = "declared roots (files_read and proposed_change_files name project 
 EVIDENCE = "evidence"
 IMPLEMENTER = "implementer"
 ROLE = "role"
+STAGE = "stage"
+REQUIREMENTS = "requirements"
 
 
 def validate(response, context):
@@ -34,7 +36,7 @@ def validate(response, context):
     try:
         return checked(decoded(response, context), context)
     except ValueError as error:
-        message = plan_file.labelled(str(error), context["requirements"])
+        message = plan_file.labelled(str(error), context[REQUIREMENTS])
         if message == str(error):
             raise
         raise ValueError(message) from error
@@ -43,7 +45,7 @@ def validate(response, context):
 def decoded(response, context):
     """The planner's result comes from plan.md, a reviewer's from review.md and the
     implementer's from its final DONE or BLOCKED."""
-    if context["stage"] == plan_result.PLANNER:
+    if context[STAGE] == plan_result.PLANNER:
         return plan_result.stage_result(context)
     if context[ROLE] == IMPLEMENTER:
         return implementation(response, context)
@@ -54,28 +56,53 @@ def checked(payload, context):
     """Coverage, evidence and role checks of a decoded result."""
     atomic_json(context["folder"] / "response-object.json", payload)
     records = evidence_delivery.session_records(context)
-    if context["stage"] == plan_result.PLANNER and declared_block.present(payload):
+    if context[STAGE] == plan_result.PLANNER and declared_block.present(payload):
         payload = declared_block.stop_result(payload, context)
-    validate_paths(payload, context)
-    payload = review_result.settled(payload, records, context)
-    if context[ROLE] != IMPLEMENTER:
-        coverage.validate_coverage(
-            payload,
-            context["requirements"],
-            context["stage"],
-            execution_evidence.claim_ids(context["run"], payload[EVIDENCE]),
-            check_planning.criteria(payload, context),
-        )
+    if context[STAGE] == plan_result.PLANNER:
+        validate_planner(payload, context)
+    else:
+        validate_paths(payload, context)
+        payload = review_result.settled(payload, records, context)
+        validate_coverage(payload, context)
     proofs = citation_review.validate(payload[EVIDENCE], records, context)
     validate_role(payload, context)
     atomic_json(context["folder"] / "evidence-bindings.json", proofs)
     return payload
 
 
+def validate_planner(payload, context):
+    """Report independent structural defects together before reading cited source bytes."""
+    problems = []
+    checks = (
+        (validate_paths, context),
+        (validate_coverage, context),
+        (plan_contract.validate_plan_steps, context[REQUIREMENTS]),
+    )
+    for validate, inputs in checks:
+        try:
+            validate(payload, inputs)
+        except ValueError as error:
+            problems.append(str(error))
+    if problems:
+        raise ValueError("\n".join(problems))
+
+
+def validate_coverage(payload, context):
+    """Requirement ownership is checked separately from source-path authorization."""
+    if context[ROLE] != IMPLEMENTER:
+        coverage.validate_coverage(
+            payload,
+            context[REQUIREMENTS],
+            context[STAGE],
+            execution_evidence.claim_ids(context["run"], payload[EVIDENCE]),
+            check_planning.criteria(payload, context),
+        )
+
+
 def validate_role(payload, context):
     """Cross-check stage-specific declarations against engine-owned inputs."""
     if context[ROLE] == "planner":
-        plan_contract.validate_plan_steps(payload, context["requirements"])
+        plan_contract.validate_plan_steps(payload, context[REQUIREMENTS])
         for filename in payload["files_read"] + payload["proposed_change_files"]:
             approved_path(filename, context["roots"], PLAN_FILES)
         observed = {

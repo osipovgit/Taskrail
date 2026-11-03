@@ -83,6 +83,8 @@ class Coverage:
         if kind == PLANNED:
             self.assign(requirement, entry)
         if kind == DEFERRED:
+            if requirement["kind"] != "runtime":
+                self.problems.append(prompt_texts.diagnostic("validation.plan_runtime", **entry))
             detail = detail or requirement[TEXT]
             self.found["unverified"].append(detail)
         if kind == "not_applicable" and not detail:

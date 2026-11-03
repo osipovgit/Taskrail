@@ -61,6 +61,12 @@ Path-alias regressions reproduce a rejected `../plan.md` edit followed by a
 canonical read/write, including a prior result correction and subsequent independent
 review. They reject different files and symlink traversal, preserve raw diagnostics,
 and bound unresolved plan-edit recovery within the same session.
+Combined regressions start with a local-check requirement wrongly deferred as
+`runtime` and prose in Files, then a no-match artifact edit. They require one
+planner session, independent plan/result review, bounded artifact repair and no
+replay of the executor request accompanying a rejected edit. The dashboard exposes
+corrections as rejections and keeps provisional agent messages distinct from stage
+verdicts; repaired attempts do not count as first-try successes.
 
 Integration correction regressions use real disposable Git worktrees and scripted
 model output to verify fresh planning, independent checks/review, commit receipts,

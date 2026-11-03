@@ -20,6 +20,65 @@ from taskrail.interactions.session import MAX_RESULT_CORRECTIONS
 
 
 class LiveTests(LiveFixture, unittest.TestCase):
+    def test_artifact_mismatch_repairs_without_a_fresh_planner_or_false_approval(self):
+        self.task.write_text(
+            self.task.read_text().replace(
+                "Return 2", "Return 2 and check the code with local tools"
+            )
+        )
+        self.allow_all_actions()
+        code = "source = open('hello.py').read(); compile(source, 'hello.py', 'exec'); assert 'return 2' in source; print('LOCAL_CHECK_PASSED')"
+        run, status, state = self.run_mode(
+            "artifact-mismatch", verify_commands=[self.verify_command(code)]
+        )
+        self.assertEqual(status, "READY_FOR_REVIEW", state.get("summary"))
+        self.assertEqual(
+            [row["stage"] for row in state["stages"]],
+            ["planner", "plan-reviewer", "implementer", "check", "reviewer"],
+        )
+        planner = state["stages"][0]
+        self.assertEqual(planner["session_turns"], 3)
+        self.assertEqual(planner["result_corrections"], 1)
+        self.assertEqual([row["kind"] for row in planner["rejections"]], ["result", "artifact"])
+        first_error = state["attempts"][0]["validation_errors"][0]
+        self.assertIn("R1 uses runtime", first_error)
+        self.assertIn("Files contains prose", first_error)
+        for review in (state["stages"][1], state["stages"][-1]):
+            self.assertEqual(review["session_turns"], 2)
+            self.assertEqual(review["status"], "RESULT_VALID")
+            self.assertEqual(review["rejections"][0]["kind"], "artifact")
+        self.assertFalse(
+            state.get("git_jobs"), "a request accompanying a failed edit is not replayed"
+        )
+        self.assertEqual((run / "01-plan/plan.md").read_bytes(), (run / "plan.md").read_bytes())
+        self.assertTrue(all(entry["kind"] == "task" for entry in state["requirements"]))
+        self.assertEqual(state["checks"][-1]["status"], "PASS")
+        self.assertIn("LOCAL_CHECK_PASSED", next(run.glob("*-check/verify-01.log")).read_text())
+
+    def test_local_check_failure_stops_after_plan_and_artifact_repairs(self):
+        self.allow_all_actions()
+        code = "import sys; print('LOCAL_CHECK_FAILED'); sys.exit(3)"
+        run, status, state = self.run_mode(
+            "artifact-mismatch", verify_commands=[self.verify_command(code)], max_repairs=0
+        )
+        self.assertEqual(status, "CHECK_FAILED", state.get("summary"))
+        self.assertEqual(state["checks"][-1]["status"], "FAIL")
+        self.assertIn("LOCAL_CHECK_FAILED", next(run.glob("*-check/verify-01.log")).read_text())
+        self.assertFalse(any(row["stage"] == "reviewer" for row in state["stages"]))
+
+    def test_artifact_mismatch_corrections_stop_without_restarting_research(self):
+        _, status, state = self.run_mode("artifact-mismatch-repeated")
+        self.assertEqual(status, "TOOL_ERROR", state.get("summary"))
+        self.assertEqual(len(state["stages"]), 1)
+        self.assertEqual(state["stages"][0]["session_turns"], MAX_RESULT_CORRECTIONS + 2)
+        self.assertFalse(state.get("git_jobs"))
+
+    def test_artifact_mismatch_does_not_recover_a_source_integrity_violation(self):
+        _, status, state = self.run_mode("artifact-mismatch-scope")
+        self.assertEqual(status, "BLOCKED", state.get("summary"))
+        self.assertEqual(state["attempts"][-1]["status"], "SCOPE_VIOLATION")
+        self.assertFalse(any(row["stage"] == "implementer" for row in state["stages"]))
+
     def test_plan_defect_citations_replan_then_reach_independent_result_review(self):
         run, status, state = self.run_mode("plan-review-citations")
         self.assertEqual(status, "READY_FOR_REVIEW", state.get("summary"))
@@ -365,7 +424,8 @@ class LiveTests(LiveFixture, unittest.TestCase):
         self.assertNotIn("ACTION_REQUEST", formats)
         self.assertNotIn("findings", formats)
         planning = (run / "01-plan/request.md").read_text()
-        self.assertIn(f"PLAN FILE: edit the Markdown file {run / 'plan.md'}", planning)
+        self.assertIn(f"PLAN FILE: edit {run / 'plan.md'}", planning)
+        self.assertIn("DONE submits a draft for validation, not approval", planning)
         self.assertIn("[R1]\nReturn 2", planning)
         self.assertEqual(planning.count("Return 2"), 1)
         requests = planning.split("Formats:\n", 1)[1].split("\nContext:")[0]

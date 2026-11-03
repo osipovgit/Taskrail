@@ -1,10 +1,11 @@
 import { badge, detail, durationLabel, el, list, names, timeLabel, timeNode } from './dom.js';
 import { preserveSelection, state } from './state.js';
 
-export function messageCard(message) {
+export function messageCard(message, provisional = false) {
   const node = el('div', undefined, 'message');
   const header = el('div', undefined, 'message-header');
   header.append(timeNode(message.timestamp));
+  if (provisional) header.append(el('small', 'Agent message · not a stage verdict', 'muted'));
   node.append(header, el('div', message.text, 'text'));
   return node;
 }
@@ -237,7 +238,7 @@ export function stageCard(stage, requirements = []) {
     summary.append(close);
     log.append(summary);
     for (const event of events) {
-      if (event.kind === 'text') log.append(messageCard(event));
+      if (event.kind === 'text') log.append(messageCard(event, true));
       else {
         // A command that ran outside the sandbox without asking stands out like a decision.
         const box = el(
@@ -247,21 +248,21 @@ export function stageCard(stage, requirements = []) {
         );
         const heading = el('div', undefined, 'tool-heading');
         heading.append(
-          el(
-            'strong',
-            event.kind === 'tool' ? 'Tool · ' + event.tool + ' · ' + event.status : event.text,
-          ),
+          el('strong', event.kind === 'tool' ? toolTitle(event) : event.text),
           timeNode(event.timestamp),
         );
         box.append(heading);
         if (event.kind === 'tool') {
+          if (event.tool === 'correction' && event.output)
+            box.append(el('p', event.output.split('\n')[0], 'text'));
           box.append(el('pre', event.input));
           if (typeof event.duration_seconds === 'number')
             box.append(el('small', durationLabel(event.duration_seconds)));
           if (event.error) box.append(el('p', event.error, 'text'));
           const output = detail(
             box,
-            'Tool output' + (event.output_truncated ? ' (truncated)' : ''),
+            (event.tool === 'correction' ? 'Correction instructions' : 'Tool output') +
+              (event.output_truncated ? ' (truncated)' : ''),
             event.output,
           );
           if (output) output.csKey = stage.directory + '/' + event.call_id;
@@ -276,6 +277,12 @@ export function stageCard(stage, requirements = []) {
   if (!result && stage.status === 'RUNNING')
     card.append(el('p', 'Waiting for the conclusion. Agent messages are provisional.', 'muted'));
   return card;
+}
+
+function toolTitle(event) {
+  if (event.tool === 'correction')
+    return event.status === 'running' ? 'Preparing correction feedback' : 'Correction required';
+  return 'Tool · ' + event.tool + ' · ' + event.status;
 }
 
 export function executionCard(job) {
