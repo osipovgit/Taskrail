@@ -94,6 +94,56 @@ class PlanWarningTests(unittest.TestCase):
                 self.assertEqual(warning["recovered_by"]["call_id"], "call-2")
                 self.assertEqual(result["tool_errors"][0], warning)
 
+    def test_equivalent_paths_recover_without_rewriting_original_event_arguments(self):
+        aliases = ("/run/task/./plan.md", "/run/task/nested/../plan.md", "/run//task/plan.md")
+        for alias in aliases:
+            for index in range(3):
+                with self.subTest(alias=alias, index=index):
+                    events = self.events()
+                    events[index]["part"]["state"]["input"]["filePath"] = alias
+                    if index == 0:
+                        events[0]["part"]["state"]["error"] = REJECTION.replace(PLAN, alias)
+                    result = self.parse(events)
+                    self.assertEqual(result["errors"], [])
+                    proof = result["warnings"][0]["recovered_by"]
+                    self.assertEqual(proof["read"]["event_line"], 2)
+                    self.assertEqual(proof["event_line"], 3)
+                    original = alias if index == 0 else PLAN
+                    self.assertEqual(result["warnings"][0]["input"]["filePath"], original)
+
+    def test_alias_read_does_not_override_target_session_or_success_boundaries(self):
+        events = self.events()
+        alias = "/run/task/nested/../plan.md"
+        events[0]["part"]["state"].update(
+            input=dict(filePath=alias), error=REJECTION.replace(PLAN, alias)
+        )
+        for selected in (events[:1] + events[3:], events[:2] + events[3:], events[:3]):
+            self.assertTrue(self.parse(selected)["errors"])
+        for index in (1, 2):
+            changed = copy.deepcopy(events)
+            changed[index]["sessionID"] = "other"
+            self.assertTrue(self.parse(changed)["errors"])
+            changed[index]["sessionID"] = "session"
+            changed[index]["part"]["state"]["input"]["filePath"] = "/run/other/plan.md"
+            self.assertTrue(self.parse(changed)["errors"])
+        events[0]["part"]["state"]["error"] = REJECTION.replace(PLAN, "/run/other/plan.md")
+        self.assertTrue(self.parse(events)["errors"])
+
+    def test_aliases_preserve_known_write_recovery_for_source_and_artifact_targets(self):
+        alias = "/run/task/nested/../plan.md"
+        for error in (EDIT_MISMATCH, "Tool execution aborted"):
+            with self.subTest(error=error):
+                events = self.events()
+                events[0]["part"]["tool"] = "edit"
+                events[0]["part"]["state"].update(input=dict(filePath=alias), error=error)
+                events[1]["part"]["state"]["metadata"] = dict(truncated=True)
+                result = self.parse(events, None, (PLAN,))
+                self.assertEqual(result["errors"], [])
+                self.assertEqual(result["warnings"][0]["error"], error)
+                self.assertIn("read", result["warnings"][0]["recovered_by"])
+                unresolved = self.parse([events[0], *events[3:]], None, (PLAN,))
+                self.assertEqual(unresolved["errors"], [error])
+
     def test_exact_edit_mismatch_requires_later_same_file_read_and_write(self):
         for prefix in ("", "Error: "):
             events = self.events()

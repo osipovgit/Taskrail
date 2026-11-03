@@ -75,3 +75,14 @@ def empty_abort(emit):
     state = dict(status="error", input={}, error="Tool execution aborted")
     part = dict(id="empty-abort", callID="empty-abort", tool="edit", state=state)
     emit(json.dumps(dict(type="tool_use", part=part)))
+
+
+def plan_alias(target, content, emit):
+    """A rejected dot-segment edit is repaired through the canonical plan path."""
+    target.write_text("Summary: draft\n")
+    alias = str(target.parent / "00-input" / ".." / target.name)
+    error = f"Error: You must read file {alias} before overwriting it. Use the Read tool first"
+    event(emit, alias, "edit", "error", error)
+    event(emit, target, "read", "completed", target.read_text())
+    target.write_text(content)
+    event(emit, target, "edit", "completed", "File edited successfully")
