@@ -7,7 +7,7 @@ roots are the plan's files_read. The accepted plan.md is kept beside the attempt
 import shutil
 from pathlib import Path
 
-from taskrail.application import evidence_delivery, plan_file
+from taskrail.application import evidence_delivery, plan_file, workspace_paths
 from taskrail.core import schema
 
 PLANNER = "planner"
@@ -17,6 +17,7 @@ def stage_result(context):
     """The validated plan result of plan.md; ValueError names its problems by label."""
     run = context["run"]
     payload = plan_file.read_plan(run, context["requirements"], context["roots"])
+    workspace_paths.plan_targets(payload, context.get("check_config", {}))
     payload["files_read"] = observed_sources(context)
     schema.validate(payload, schema.SCHEMAS[PLANNER])
     shutil.copyfile(plan_file.path(run), context["folder"] / plan_file.NAME)

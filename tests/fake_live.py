@@ -11,6 +11,7 @@ from pathlib import Path
 from fake_contract import attempt, earlier_invalid, enrich, plan_text, review_text
 from fake_file_writes import event as file_event
 from fake_file_writes import implement, plan_mismatches
+from fake_planning_paths import plan as isolated_plan
 from fake_report_repair import executor_result, report_result
 from fake_review_proposal import proposal
 
@@ -555,6 +556,8 @@ if role == "planner" and header["permission"]["edit"].get(str(plan)) == "allow":
     response = "DONE"
 if mode == "plan-review-citations":
     response = proposal(context, role, run, print) or response
+if mode == "isolated-plan-paths" and role == "planner":
+    isolated_plan(run, target, continued, prompt)
 writer_prose = mode in {"writer-prose-always", "writer-extra-prose-always"} or (
     mode == "writer-prose" and not continued
 )

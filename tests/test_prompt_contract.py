@@ -202,6 +202,16 @@ class RequestBudgetTests(LiveFixture, unittest.TestCase):
         )
         modes = (
             ({}, tuple(STAGES)),
+            (
+                {
+                    "worktrees": {
+                        "project": dict(
+                            source=str(self.base / "original checkout"), worktree=str(self.root)
+                        )
+                    }
+                },
+                tuple(STAGES),
+            ),
             ({"decompose": True}, ("planner", "plan-reviewer")),
             ({"read_only": True}, ("planner", "reviewer")),
             ({"read_only": True, "design": True}, ("planner", "reviewer")),

@@ -184,6 +184,35 @@ class PlanDocumentTests(unittest.TestCase):
         self.assertIn("'lint fixes under roles/*/tasks/*.yaml'", str(rejected.exception))
         self.assertIn("'roles/ntp/'", str(rejected.exception))
 
+    def test_file_feedback_names_actual_bullet_lines_and_moves_explanations_to_notes(self):
+        replacement = (
+            "Files:\n- `project/site.yml`\n\n"
+            "- On an isolated task branch change the role files (`roles/*/tasks/main.yaml`).\n"
+            "- `roles/*/handlers/main.yaml`"
+        )
+        source = PLAN.replace(
+            "Files: project/roles/ntp/tasks/main.yml, roles/ntp/defaults/main.yml (new)",
+            replacement,
+        )
+        with self.assertRaises(ValueError) as rejected:
+            payload(source, REQUIREMENTS, ROOTS)
+        message = str(rejected.exception)
+        for number, line in enumerate(source.splitlines(), 1):
+            if "On an isolated task branch" in line:
+                self.assertIn(f"line {number}: Files contains prose", message)
+            if "handlers/main.yaml" in line:
+                self.assertIn(f"line {number}: Files names exact file paths", message)
+        self.assertIn("Move this entire explanation under Notes:", message)
+        self.assertNotIn("'`project/site.yml`'", message)
+
+    def test_quoted_file_spaces_and_new_marker_keep_exact_paths(self):
+        source = PLAN.replace(
+            "Files: project/roles/ntp/tasks/main.yml, roles/ntp/defaults/main.yml (new)",
+            "Files:\n- `project/a file.yml`\n- `project/new file.yml` (new)",
+        )
+        plan = payload(source, REQUIREMENTS, ROOTS)
+        self.assertEqual(plan["steps"][0]["files"], ["/repo/a file.yml", "/repo/new file.yml"])
+
     def test_after_the_change_written_as_a_task_or_as_none_lists_no_check(self):
         text = PLAN.replace("## After the change", "## T3: After the change (deferred checks)")
         text += "None. No remote checks.\n"

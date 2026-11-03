@@ -230,6 +230,10 @@ to the only declared root; basenames are never searched for or guessed. Every
 explicit range still needs matching observed current lines. A diff alone does not
 establish that an unrun check passed.
 
+`Files` contains exact paths only. A rejected pattern or inline explanation reports
+the actual bullet's line number, including blank lines; valid bullets stay intact.
+Replace patterns with discovered files and move scope explanations to `Notes`.
+
 Run instructions and result artifacts (`request.md`, `plan.md`, `review.md`,
 `recovery.md`) never prove completion, even if observed. Path feedback names the
 affected requirements; changing the attempt path or inventing a source handle does
