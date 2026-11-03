@@ -1,6 +1,6 @@
 // Totals across all runs, shown in place of a run.
 import { get } from './app.js';
-import { durationLabel, el, showError, statuses } from './dom.js';
+import { durationLabel, el, showError, statusLabel } from './dom.js';
 import { state } from './state.js';
 
 // First try: model attempts accepted without a same-session correction, of those measured.
@@ -67,7 +67,7 @@ function overview(runs) {
   );
   section.append(tiles);
   const counts = Object.entries(runs.statuses).map(
-    ([status, count]) => `${statuses[status] || status}: ${count}`,
+    ([status, count]) => `${statusLabel(status)}: ${count}`,
   );
   section.append(el('p', counts.join(' · '), 'muted'));
   return section;

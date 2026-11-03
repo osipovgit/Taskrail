@@ -127,7 +127,7 @@
   "child.earlier": "Earlier tasks:",
   "child.none": "This is the first task.",
   "child.later": "Not ToDo — later tasks will do this. Leave it to them unless your task cannot work without it; then do only the minimum it needs and name it in your summary:",
-  "validation.plan_citations": "cite the lines as <path>:<from>-<to>; backtick-quote paths containing spaces or punctuation; separate citations with commas or semicolons, use comma-separated ranges for one path, and put explanations in parentheses",
+  "validation.plan_citations": "cite the lines as <path>:<from>-<to>; quote either the path (`path`:1-3) or the whole citation (`path:1-3`) when it contains spaces or punctuation. Separate citations with commas or semicolons, including after explanations: path:1-3 (reason), other:4-5 (reason). Use comma-separated ranges for one path. Requirement labels such as R3 are not citations; repeat their exact source ranges",
   "validation.missing_source": "$label: cited file does not exist; use the exact read path",
   "validation.regular_source": "$label: cite lines of a regular file, not a directory",
   "validation.task_deferred": "Required task evidence cannot be deferred ($requirement). Assign unfinished work to a task, or use gap: for missing required evidence. A source diff does not prove an unrun check passed.",
