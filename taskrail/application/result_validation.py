@@ -25,6 +25,7 @@ EVIDENCE = "evidence"
 IMPLEMENTER = "implementer"
 ROLE = "role"
 STAGE = "stage"
+REQUIREMENTS = "requirements"
 
 
 def validate(response, context):
@@ -35,7 +36,7 @@ def validate(response, context):
     try:
         return checked(decoded(response, context), context)
     except ValueError as error:
-        message = plan_file.labelled(str(error), context["requirements"])
+        message = plan_file.labelled(str(error), context[REQUIREMENTS])
         if message == str(error):
             raise
         raise ValueError(message) from error
@@ -75,7 +76,7 @@ def validate_planner(payload, context):
     checks = (
         (validate_paths, context),
         (validate_coverage, context),
-        (plan_contract.validate_plan_steps, context["requirements"]),
+        (plan_contract.validate_plan_steps, context[REQUIREMENTS]),
     )
     for validate, inputs in checks:
         try:
@@ -91,7 +92,7 @@ def validate_coverage(payload, context):
     if context[ROLE] != IMPLEMENTER:
         coverage.validate_coverage(
             payload,
-            context["requirements"],
+            context[REQUIREMENTS],
             context[STAGE],
             execution_evidence.claim_ids(context["run"], payload[EVIDENCE]),
             check_planning.criteria(payload, context),
@@ -101,7 +102,7 @@ def validate_coverage(payload, context):
 def validate_role(payload, context):
     """Cross-check stage-specific declarations against engine-owned inputs."""
     if context[ROLE] == "planner":
-        plan_contract.validate_plan_steps(payload, context["requirements"])
+        plan_contract.validate_plan_steps(payload, context[REQUIREMENTS])
         for filename in payload["files_read"] + payload["proposed_change_files"]:
             approved_path(filename, context["roots"], PLAN_FILES)
         observed = {
