@@ -14,6 +14,7 @@ MODELS_ERROR = "settings.models must map roles to provider/model strings"
 # Error tags of opencode builds and the messages upstream 1.x reports without them.
 PERMISSION_MARKERS = (
     "PermissionDenied",
+    "Permission denied:",
     "PermissionRejected",
     "The user rejected permission to use this specific tool call",
     "The user has specified a rule which prevents you from using this specific tool call",

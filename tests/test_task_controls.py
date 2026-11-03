@@ -331,7 +331,7 @@ class TaskControlTests(unittest.TestCase):
         self.assertEqual(json.loads((epic / "epic.json").read_text())["tasks"], {"S-1": "child-1"})
         with self.assertRaisesRegex(ValueError, "No task is ready"):
             self.launcher.action(dict(id="epic", action="epic_next"))
-        self.finish("child-1", "TOOL_ERROR")
+        self.finish("child-1", "TURN_ERROR")
         self.assertEqual(run_view(self.runs, "epic")["delivery"]["next"], "S-1")
         epic_entry = next(run for run in list_runs(self.runs) if run["id"] == "epic")
         self.assertEqual(epic_entry["group"], "attention")
@@ -348,7 +348,7 @@ class TaskControlTests(unittest.TestCase):
             text = launch.call_args.args[0]["text"]
         self.assertNotIn('"auto_approve"', text)
         self.assertEqual(json.loads((epic / "epic.json").read_text())["tasks"]["S-1"], "child-1b")
-        self.finish("child-1b", "TOOL_ERROR")
+        self.finish("child-1b", "TURN_ERROR")
         self.finish("child-1b", "READY_FOR_REVIEW")
         self.launcher.action(dict(id="epic", action="epic_pause", task="S-2"))
         self.assertTrue(run_view(self.runs, "epic")["delivery"]["tasks"][1]["pause_before"])
@@ -473,7 +473,7 @@ class TaskControlTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "Confirmed source/Git"):
                 delivery_confirmation.verify(epic)
             changed.write_text(contents)
-        self.finish("child-2", "TOOL_ERROR")
+        self.finish("child-2", "TURN_ERROR")
         self.assertEqual(run_view(self.runs, "epic")["delivery"]["step"], "needs_you")
         with self.assertRaisesRegex(ValueError, "review evidence changed"):
             delivery_confirmation.verify(epic)
@@ -490,7 +490,7 @@ class TaskControlTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "Stop active delivery phases"):
             self.launcher.action(dict(id="epic", action="integration_review"))
         self.assertEqual(json.loads((epic / "epic.json").read_text()), record)
-        self.finish("old-validation", "TOOL_ERROR")
+        self.finish("old-validation", "TURN_ERROR")
         with self.launching("new-review"):
             self.launcher.action(dict(id="epic", action="integration_review"))
         updated = json.loads((epic / "epic.json").read_text())
@@ -673,7 +673,7 @@ class TaskControlTests(unittest.TestCase):
             self.launching("validation-1"),
         ):
             delivery_launch.advance(self.launcher)
-        self.phase_run("validation-1", "validation", "TOOL_ERROR")
+        self.phase_run("validation-1", "validation", "TURN_ERROR")
         self.assertEqual(run_view(self.runs, "original")["delivery"]["step"], "validation_failed")
         listed = {run["id"]: run for run in list_runs(self.runs)}
         self.assertNotIn("validation-1", listed)
@@ -698,7 +698,7 @@ class TaskControlTests(unittest.TestCase):
         self.assertEqual(phase["run"], "validation-2")
         self.assertEqual(
             phase["attempts"],
-            [dict(run="validation-1", status="TOOL_ERROR", reason="validation-1 failed")],
+            [dict(run="validation-1", status="TURN_ERROR", reason="validation-1 failed")],
         )
         with self.assertRaisesRegex(ValueError, "latest attempt"):
             self.launcher.action(dict(id="validation-1", action="restart"))
@@ -762,7 +762,7 @@ class TaskControlTests(unittest.TestCase):
         self.launcher.action(dict(id="original", action="reopen"))
         self.assertEqual(group(), "review")
         self.launcher.action(dict(id="original", action="done"))
-        index.write_text(json.dumps(dict(state, status="TOOL_ERROR", finished_at="later")))
+        index.write_text(json.dumps(dict(state, status="TURN_ERROR", finished_at="later")))
         self.assertEqual(group(), "attention")
         index.write_text(json.dumps(dict(state, status="NO_CHANGES_REQUIRED")))
         self.assertEqual(group(), "done")

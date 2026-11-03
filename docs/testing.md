@@ -52,21 +52,18 @@ a cited plan defect, replans, obtains approval, implements, checks and reviews t
 result. Executor continuations retain the exact stage; proposal evidence cannot become
 completion evidence or cross into final review.
 
-Review recovery regressions cover aborted artifact writes followed by an observed
-read and successful rewrite at both review stages, unresolved aborts, duplicate
-missing citation windows, and scope rejection before source reads. Contract tests
-also check the server-generated blocked plan shape and preservation of deferred
-checks and requirement bindings in model input projections.
-Path-alias regressions reproduce a rejected `../plan.md` edit followed by a
-canonical read/write, including a prior result correction and subsequent independent
-review. They reject different files and symlink traversal, preserve raw diagnostics,
-and bound unresolved plan-edit recovery within the same session.
-Combined regressions start with a local-check requirement wrongly deferred as
-`runtime` and prose in Files, then a no-match artifact edit. They require one
-planner session, independent plan/result review, bounded artifact repair and no
-replay of the executor request accompanying a rejected edit. The dashboard exposes
-corrections as rejections and keeps provisional agent messages distinct from stage
-verdicts; repaired attempts do not count as first-try successes.
+Native error regressions exercise read, edit, write, unavailable-tool and permission
+failures without error-specific exemptions. Completed turns still face result and
+source validation; interrupted turns retain their session, inspect partial source,
+request controlled Git restore and complete independent review. A dirty-original
+fixture rejects restore and repairs directly while preserving user work. Repeated
+unchanged interruptions stop at the no-progress bound; source violations and Stop
+remain terminal. Tests cover opencode 1.x and 2.x events and the wrapper lifecycle.
+
+Plan and review regressions retain duplicate missing-citation windows, corrected
+path aliases, stale plans, invalid drafts, local-check requirements and independent
+review. UI DOM tests check red error cards, host-command highlighting and correction
+status without repeating a disclaimer on every agent message.
 
 Integration correction regressions use real disposable Git worktrees and scripted
 model output to verify fresh planning, independent checks/review, commit receipts,

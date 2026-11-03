@@ -14,7 +14,7 @@ from taskrail.application import (
 )
 from taskrail.core import protected_paths
 from taskrail.infrastructure.profile_rules import GIT_METADATA, permissions
-from taskrail.interactions import access, read_only
+from taskrail.interactions import read_only
 
 DENY = "deny"
 
@@ -79,9 +79,6 @@ class ProtectedPathTests(unittest.TestCase):
         for name in (".git/config", "certs/server.pem", "id_ed25519", ".npmrc"):
             with self.subTest(name=name):
                 self.assertFalse(self.listing(["cat", name]))
-                call = dict(tool="read", input=dict(filePath=str(self.root / name)))
-                with self.assertRaisesRegex(ValueError, "Protected"):
-                    access.target(call, self.roots)
         custom = protected_paths.read_patterns(["app.py"])
         self.assertFalse(self.listing(["cat", "app.py"], custom))
         self.assertTrue(self.listing(["cat", "certs/server.pem"], custom))

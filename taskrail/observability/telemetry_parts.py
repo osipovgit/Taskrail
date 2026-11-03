@@ -4,6 +4,8 @@ import json
 import math
 from collections import Counter
 
+from taskrail.infrastructure import native_tools
+
 TEXT_PREVIEW_LIMIT = 30000
 TOOL_PREVIEW_LIMIT = 8000
 TIMELINE_LIMIT = 300
@@ -39,7 +41,7 @@ class ToolCalls:
         if not call:
             call = str(len(self.calls))
         arguments = state.get(INPUT) or {}
-        status = state.get(STATUS)
+        status = "error" if native_tools.failure(part) else state.get(STATUS)
         self.calls[call] = dict(tool=part.get(TOOL), status=status)
         if part.get(TOOL) == "read" and call not in self.read_calls:
             self.count_read(call, arguments)
@@ -162,11 +164,11 @@ def tool_entry(part, call, stamp):
         kind=TOOL,
         tool=part.get(TOOL),
         call_id=call,
-        status=state.get(STATUS),
+        status="error" if native_tools.failure(part) else state.get(STATUS),
         input=arguments[:TOOL_PREVIEW_LIMIT],
         timestamp=stamp or end or start,
         duration_seconds=duration(start, end),
-        error=str(state.get("error", ""))[:TOOL_PREVIEW_LIMIT],
+        error=native_tools.failure(part)[:TOOL_PREVIEW_LIMIT],
         output=output[:TOOL_PREVIEW_LIMIT],
         output_truncated=len(output) > TOOL_PREVIEW_LIMIT,
         host=(state.get("metadata") or {}).get("approval") == "host",

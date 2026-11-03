@@ -5,19 +5,16 @@ inside a declared root and away from protected files. Anything else, including a
 unknown option, still goes to the operator.
 """
 
-from functools import partial
 from pathlib import Path
 
 from taskrail.core import protected_paths
-from taskrail.interactions import access, read_grammar
+from taskrail.interactions import read_grammar
 
 
 def request(payload, roots, protected=protected_paths.DEFAULT_PATTERNS):
     """True for reads, Jenkins reads and listed commands that stay inside the roots."""
     status = payload.get("status")
     scope = (roots, protected)
-    if status == "ACCESS_REQUEST":
-        return reads(payload["calls"], *scope)
     if status == "LOCAL_REQUEST":
         return command(payload, *scope)
     return status == "JENKINS_REQUEST"
@@ -34,17 +31,6 @@ def command(payload, roots, protected=protected_paths.DEFAULT_PATTERNS):
     if not inside(cwd, roots, protected):
         return False
     return all(inside(cwd / path, roots, protected) for path in paths)
-
-
-def reads(calls, roots, protected=protected_paths.DEFAULT_PATTERNS):
-    """Read and search calls that target canonical paths inside the roots."""
-    grantable = partial(access.target, roots=roots, protected=protected)
-    try:
-        paths = list(map(grantable, calls))
-    except ValueError:
-        return False
-    within = partial(inside, roots=roots, protected=protected)
-    return bool(paths) and all(map(within, paths))
 
 
 def inside(candidate, roots, protected):

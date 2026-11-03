@@ -39,6 +39,10 @@ validation, confirmation) is driven by the managed service from `web/`; CLI auto
 commands use the same launcher and records. No plugins, message bus, service container or database are used. New
 entry points must call the existing workflow instead of adding an execution path.
 
+Within `git/`, `execution` dispatches fingerprints and `scope` owns mutation preflight.
+Restore receipts depend on index ownership, never the reverse; shared scope checks
+live in `source_scope`, independent of command routing and restore receipts.
+
 Run artifacts: `00-input/`, numbered stage directories, `run.json`, `checkpoint.json`,
 the report and the diff. Declared roots, allowed writes, Git metadata checks and the
 run locks enforce task boundaries. Each run locks its run directory and its source
@@ -169,8 +173,9 @@ explicit overflow errors and compaction events. Missing usage stays unknown.
 A session ends at a measured boundary between 90 and 95
 percent of its model's window; the next attempt starts a fresh session instead of
 compacting. Read-only recovery starts it from recorded evidence while retaining the
-plan file; a writer continues from its kept edits and `progress.md`, never after
-any other interruption. Every turn of a stage runs on one private opencode server
+plan file; a writer continues from its kept edits and `progress.md`. Native tool
+errors stay in opencode. Interrupted turns with a known session resume there through
+`interactions/turn_recovery.py`, with diagnostic feedback and a no-progress bound. Every turn of a stage runs on one private opencode server
 (`opencode_serve.py` for 1.x, the adapter for 2.x), so reads of earlier turns stay
 known and turns start warm. See [context limits](deployment.md#context-limits).
 

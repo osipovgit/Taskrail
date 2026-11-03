@@ -89,6 +89,110 @@ class GitExecutorTests(unittest.TestCase):
         self.env["allowed_paths"] = [self.file, user_file]
         return other
 
+    def test_restore_recovers_only_requested_source_and_preserves_index_and_history(self):
+        unrelated = self.root / "other.txt"
+        unrelated.write_text("User staged content\n")
+        process.checked(self.root, ["add", "other.txt"])
+        self.file.write_text("partial agent edit\n")
+        before = process.checked(self.root, ["ls-files", "--stage"])
+        head = process.checked(self.root, ["rev-parse", "HEAD"])
+        restored = self.execute(["restore", "--worktree", "--", "value.txt"], "implementer")
+        self.assertEqual(restored["status"], "SUCCEEDED", restored)
+        self.assertEqual(self.file.read_text(), "3\n")
+        self.assertEqual(unrelated.read_text(), "User staged content\n")
+        self.assertEqual(before, process.checked(self.root, ["ls-files", "--stage"]))
+        self.assertEqual(head, process.checked(self.root, ["rev-parse", "HEAD"]))
+        repeated = self.execute(
+            ["restore", "--worktree", "--", "value.txt"], "implementer", [restored]
+        )
+        self.assertEqual(repeated["status"], "SUCCEEDED", repeated)
+        replayed = self.execute(
+            ["restore", "--worktree", "--", "value.txt"], "implementer", [restored, repeated]
+        )
+        self.assertEqual(replayed["status"], "REJECTED", replayed)
+        self.file.write_text("different partial edit\n")
+        second = self.execute(
+            ["restore", "--worktree", "--", "value.txt"], "implementer", [restored]
+        )
+        self.assertEqual(second["status"], "SUCCEEDED", second)
+        self.assertEqual(self.file.read_text(), "3\n")
+
+    def test_restore_uses_owned_index_without_discarding_successful_work(self):
+        staged = self.staged_change()
+        self.file.write_text("unfinished next edit\n")
+        restored = self.execute(
+            ["restore", "--worktree", "--", "value.txt"], "implementer", [staged]
+        )
+        self.assertEqual(restored["status"], "SUCCEEDED", restored)
+        self.assertEqual(self.file.read_text(), "4\n")
+        self.assertEqual(index_ownership.owned([staged, restored], self.root), staged["staged"])
+        committed = self.execute(
+            ["commit", "-m", "Recovered task"], "implementer", [staged, restored]
+        )
+        self.assertEqual(committed["status"], "SUCCEEDED", committed)
+
+    def test_restore_receipt_rejects_concurrent_index_change(self):
+        from taskrail.git import worktree_restore
+
+        self.file.write_text("partial edit\n")
+        verify = worktree_restore.verify
+
+        def changed_index(repo, entry):
+            self.file.write_text("concurrent user staging\n")
+            process.checked(repo, ["add", "value.txt"])
+            verify(repo, entry)
+
+        with patch.object(worktree_restore, "verify", side_effect=changed_index):
+            restored = self.execute(["restore", "--worktree", "--", "value.txt"], "implementer")
+        self.assertEqual(restored["status"], "UNKNOWN", restored)
+        self.assertEqual(self.file.read_text(), "concurrent user staging\n")
+        self.assertEqual(
+            self.execute(["restore", "--worktree", "--", "value.txt"], "implementer", [restored])[
+                "status"
+            ],
+            "REJECTED",
+        )
+
+    def test_restore_cannot_discard_original_user_edits_or_foreign_staging(self):
+        self.file.write_text("user work\n")
+        (self.run / "00-input/manifest.json").write_text(json.dumps(snapshot(self.roots)))
+        self.file.write_text("partial agent edit over user work\n")
+        denied = self.execute(["restore", "--worktree", "--", "value.txt"], "implementer")
+        self.assertEqual(denied["status"], "REJECTED", denied)
+        self.assertEqual(self.file.read_text(), "partial agent edit over user work\n")
+        self.file.write_text("3\n")
+        (self.run / "00-input/manifest.json").write_text(json.dumps(snapshot(self.roots)))
+        self.file.write_text("user staged change\n")
+        process.checked(self.root, ["add", "value.txt"])
+        self.file.write_text("agent partial edit\n")
+        denied = self.execute(["restore", "--worktree", "--", "value.txt"], "implementer")
+        self.assertEqual(denied["status"], "REJECTED", denied)
+        self.assertEqual(self.file.read_text(), "agent partial edit\n")
+
+    def test_restore_rejects_broad_scope_index_changes_and_read_only_roles(self):
+        for argv in (
+            ["restore", "."],
+            ["restore", "--staged", "--", "value.txt"],
+            ["restore", "--source=HEAD~1", "--worktree", "--", "value.txt"],
+            ["restore", "--worktree", "--", "."],
+            ["restore", "--worktree", "--", "../value.txt"],
+            ["restore", "--worktree", "--", "*.txt"],
+        ):
+            self.assertEqual(self.execute(argv, "implementer")["status"], "REJECTED", argv)
+        for role in ("planner", "reviewer"):
+            self.assertEqual(
+                self.execute(["restore", "--worktree", "--", "value.txt"], role)["status"],
+                "REJECTED",
+            )
+        untracked = self.root / "new.txt"
+        untracked.write_text("agent work")
+        self.env["allowed_paths"].append(untracked)
+        self.assertEqual(
+            self.execute(["restore", "--worktree", "--", "new.txt"], "implementer")["status"],
+            "REJECTED",
+        )
+        self.assertEqual(untracked.read_text(), "agent work")
+
     def test_history_is_real_and_does_not_mutate_metadata(self):
         before = git_metadata(self.roots)
         record = self.execute(["log", "-3", "--format=%H %s", "--", "."])
@@ -323,8 +427,7 @@ class GitExecutorTests(unittest.TestCase):
         self.assertNotIn(staging_baseline.KEY, record)
         self.assertNotIn("staged", record)
         (self.run / "git-execution.json").write_text(json.dumps([record]))
-        with self.assertRaisesRegex(ValueError, "unknown"):
-            requests.context(self.run)
+        self.assertIn("UNKNOWN", requests.context(self.run))
         with patch("taskrail.git.process.invoke") as invoke:
             repeated = self.execute(record["request"]["argv"], "implementer", [record])
             invoke.assert_not_called()
@@ -726,10 +829,20 @@ class GitExecutorTests(unittest.TestCase):
             ["git", "git"],
         )
 
-    def test_unknown_actions_cannot_resume(self):
-        (self.run / "git-execution.json").write_text(json.dumps([dict(status="RUNNING")]))
-        with self.assertRaisesRegex(ValueError, "unknown"):
-            requests.context(self.run)
+    def test_unknown_mutation_allows_diagnostics_but_not_another_write(self):
+        unknown = dict(
+            status="UNKNOWN", mutation=True, request=self.payload(["add", "--", "value.txt"])
+        )
+        (self.run / "git-execution.json").write_text(json.dumps([unknown]))
+        self.assertIn("UNKNOWN", requests.context(self.run))
+        read = self.execute(["diff", "--", "value.txt"], "implementer", [unknown])
+        self.assertEqual(read["status"], "SUCCEEDED", read)
+        with patch("taskrail.git.process.invoke") as invoke:
+            write = self.execute(
+                ["restore", "--worktree", "--", "value.txt"], "implementer", [unknown]
+            )
+            invoke.assert_not_called()
+        self.assertEqual(write["status"], "REJECTED", write)
 
     def test_subproject_guards_parent_repository_metadata(self):
         child = self.root / "subproject"
@@ -774,8 +887,7 @@ class GitExecutorTests(unittest.TestCase):
         pending = json.loads((self.run / "git-execution.json").read_text())[0]
         self.assertEqual(pending["effective_argv"], argv)
         self.assertEqual(pending["status"], "RUNNING")
-        with self.assertRaisesRegex(ValueError, "unknown"):
-            requests.context(self.run)
+        self.assertIn("RUNNING", requests.context(self.run))
 
     def test_external_diff_and_textconv_do_not_execute(self):
         marker = self.base / "must-not-run"

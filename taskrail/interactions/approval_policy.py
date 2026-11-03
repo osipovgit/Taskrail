@@ -3,7 +3,7 @@
 The initial setting lives in trusted task input. Personal card grants are durable
 outside project roots and inherited only through authenticated family links. The
 operator can revoke them; ancestor denials override copied flags. It covers local
-commands and reads; SSH actions
+commands; SSH actions
 and Jenkins builds keep their separate root-only approval. A command that runs in
 the sandbox needs no decision; its automatic approval is recorded the same way.
 """

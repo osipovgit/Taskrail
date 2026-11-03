@@ -3,12 +3,14 @@
 `access.json` and the runtime profile share one input manifest: canonical project,
 task, source, recovery and executor paths. Each role writes only its designated
 artifact; approved implementers may also edit source. Declared roots grant scope,
-not OS privileges or authentication.
+not OS privileges or authentication. Native permission errors return to the agent
+without stopping the turn or creating a read-grant prompt. The agent corrects its
+path or uses an allowed source; it reports a gap if required evidence is inaccessible.
 
 ## Protected paths
 
 Protected files are never read or edited by a model: the profile denies them after
-every allowance, read-only requests and read grants refuse them, and the project map,
+every allowance, read-only requests refuse them, and the project map,
 source packets and source views leave them out. `.env` and `.env.*` are always
 protected. The `protected_paths` setting lists the other patterns; its default is:
 
@@ -99,7 +101,7 @@ Unknown flags, link following, recursive or continuous content reads require app
 `find` permits only name/path/type/depth tests and printing. The executor rechecks
 scope immediately before execution. Remote inspection uses its own bounded grammar.
 
-**Allow all actions** approves local commands and read access, including inline code.
+**Allow all actions** approves local commands, including inline code.
 Inline-code cards identify scripts and interpreter wrappers whose effects cannot be
 inferred from argv. This grant never authorizes Git pushes or changes root-only remote
 approval. The task badge and Stop allowing all actions button expose the durable grant.

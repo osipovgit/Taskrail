@@ -36,15 +36,6 @@ def tool_error(error):
     ]
     if error.get("resolution"):
         lines.append("  Resolution: {}".format(error["resolution"]))
-    if error.get("recovered_by"):
-        proof = error["recovered_by"]
-        event = proof["event_line"]
-        recovery = (
-            "a native read and subsequent successful write"
-            if proof.get("read")
-            else "a later full read"
-        )
-        lines.append(f"  Recovered by {recovery}; event: {event}")
     return lines
 
 

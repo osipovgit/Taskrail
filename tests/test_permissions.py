@@ -6,7 +6,6 @@ from pathlib import Path
 
 from taskrail.infrastructure.agent_profile import make_profile
 from taskrail.infrastructure.artifact_access import manifest, model_inputs, result_inputs
-from taskrail.infrastructure.process_watch import permission_denied_event
 from taskrail.infrastructure.profile_rules import permission_worktree
 from taskrail.infrastructure.runner import run_agent
 
@@ -103,15 +102,7 @@ class PermissionTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 permission_worktree(root)
 
-    def test_permission_text_is_not_a_denial_event(self):
-        self.assertFalse(
-            permission_denied_event(
-                json.dumps({"type": "text", "part": {"text": "PermissionDenied"}})
-            )
-        )
-        self.assertFalse(permission_denied_event("not json"))
-
-    def test_stop_before_retry_after_denial(self):
+    def test_native_denial_does_not_stop_opencode_recovery(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
             prompt = root / "input.md"
@@ -145,10 +136,10 @@ class PermissionTests(unittest.TestCase):
                     timeout=10,
                 )
             )
-            self.assertEqual(result["status"], "BLOCKED_PERMISSION")
-            self.assertFalse(marker.exists())
+            self.assertEqual(result["status"], "INCOMPLETE")
+            self.assertTrue(marker.exists())
             self.assertEqual(result["tool_errors"][0]["tool"], "edit")
-            self.assertLess(result["elapsed_seconds"], 4)
+            self.assertGreaterEqual(result["elapsed_seconds"], 4)
 
 
 class AccessManifestTests(unittest.TestCase):
@@ -192,7 +183,7 @@ class AccessManifestTests(unittest.TestCase):
         self.assertIn("as your entire message", instructions("planner"))
         self.assertIn("absence from your tool list is expected", instructions("planner"))
         self.assertNotIn("push", instructions("reviewer"))
-        self.assertIn("A push waits for the operator's approval", instructions("implementer"))
+        self.assertIn("Push needs personal approval", instructions("implementer"))
         self.assertEqual(
             executor_contracts.ssh_schema()["properties"]["status"], {"const": "ACTION_REQUEST"}
         )

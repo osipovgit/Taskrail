@@ -1,11 +1,10 @@
 import { badge, detail, durationLabel, el, list, names, timeLabel, timeNode } from './dom.js';
 import { preserveSelection, state } from './state.js';
 
-export function messageCard(message, provisional = false) {
+export function messageCard(message) {
   const node = el('div', undefined, 'message');
   const header = el('div', undefined, 'message-header');
   header.append(timeNode(message.timestamp));
-  if (provisional) header.append(el('small', 'Agent message · not a stage verdict', 'muted'));
   node.append(header, el('div', message.text, 'text'));
   return node;
 }
@@ -128,9 +127,7 @@ export function tickStageTimers() {
 export function warningLines(warnings) {
   const groups = new Map();
   for (const w of warnings || []) {
-    const text =
-      w.resolution ||
-      (w.input?.filePath || '') + ': ' + w.error + ' → subsequent full read confirmed';
+    const text = w.resolution || (w.input?.filePath || '') + ': ' + w.error;
     const group = groups.get(text) || { count: 0, files: [] };
     const file = w.resolution && w.input?.filePath;
     if (file && !group.files.includes(file)) group.files.push(file);
@@ -166,9 +163,6 @@ export function stageCard(stage, requirements = []) {
   if (stage.verdict) card.append(badge(stage.verdict));
   const modes = {
     import: 'Imported plan',
-    'format-repair': 'Format repair',
-    'scope-repair': 'Scoped retry',
-    'access-recovery': 'Access denied; continuing with allowed sources',
     'research-recovery': 'Recovery from recorded evidence',
   };
   const context = [
@@ -238,13 +232,17 @@ export function stageCard(stage, requirements = []) {
     summary.append(close);
     log.append(summary);
     for (const event of events) {
-      if (event.kind === 'text') log.append(messageCard(event, true));
+      if (event.kind === 'text') log.append(messageCard(event));
       else {
         // A command that ran outside the sandbox without asking stands out like a decision.
         const box = el(
           'div',
           undefined,
-          'message tool-event' + (event.host ? ' host-command' : ''),
+          'message tool-event' +
+            (event.host ? ' host-command' : '') +
+            (event.status === 'error' || event.error || event.kind === 'error'
+              ? ' tool-failure'
+              : ''),
         );
         const heading = el('div', undefined, 'tool-heading');
         heading.append(
