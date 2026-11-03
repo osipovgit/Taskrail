@@ -11,19 +11,36 @@ ERROR_LIMIT = 5
 def validate(claims, records, context):
     """Every citation must pass; bounded feedback repairs several gaps in one turn."""
     proofs = []
-    errors = []
+    errors = {}
     views = {}
-    for claim in claims:
+    for claim in pending(claims, errors):
         try:
             proofs.append(checked(claim, records, context))
         except citation_errors.MissingLines as error:
             delivered = delivery(error, context, len(errors))
-            errors.append(delivered or guidance(claim, context, str(error), views))
+            errors[window(claim)] = delivered or guidance(
+                claim,
+                context,
+                str(error),
+                views,
+            )
         except ValueError as error:
-            errors.append(guidance(claim, context, str(error), views))
+            errors[window(claim)] = guidance(claim, context, str(error), views)
     if errors:
-        raise ValueError(feedback(errors))
+        raise ValueError(feedback(list(errors.values())))
     return proofs
+
+
+def window(claim):
+    """One source range may support multiple independently checked requirements."""
+    return claim["path"], claim["line_start"], claim["line_end"]
+
+
+def pending(claims, errors):
+    """A repeated failing window shares feedback; successful claims keep individual proofs."""
+    for claim in claims:
+        if window(claim) not in errors:
+            yield claim
 
 
 def delivery(error, context, preceding):

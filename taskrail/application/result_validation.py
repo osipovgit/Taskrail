@@ -56,6 +56,7 @@ def checked(payload, context):
     records = evidence_delivery.session_records(context)
     if context["stage"] == plan_result.PLANNER and declared_block.present(payload):
         payload = declared_block.stop_result(payload, context)
+    validate_paths(payload, context)
     payload = review_result.settled(payload, records, context)
     if context[ROLE] != IMPLEMENTER:
         coverage.validate_coverage(
@@ -65,7 +66,6 @@ def checked(payload, context):
             execution_evidence.claim_ids(context["run"], payload[EVIDENCE]),
             check_planning.criteria(payload, context),
         )
-    validate_paths(payload, context)
     proofs = citation_review.validate(payload[EVIDENCE], records, context)
     validate_role(payload, context)
     atomic_json(context["folder"] / "evidence-bindings.json", proofs)

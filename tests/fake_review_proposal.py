@@ -34,8 +34,9 @@ def proposal(context, role, run, emit):
                 f"fails: {plan}:{bad}-{bad} (the proposed check skips required verification)."
             )
         else:
+            snapshot = run / context["plan_result"]
             state = json.loads((run / "run.json").read_text())
-            snapshot = run / state["results"]["plan"]
+            assert snapshot == run / state["results"]["plan"]
             observed(snapshot, 1, 1, emit)
             decision = f"planned: {snapshot}:1 (the revised proposal owns this work)."
         (run / "review.md").write_text(f"Summary: Inspect the proposal\n- R1: {decision}\n")

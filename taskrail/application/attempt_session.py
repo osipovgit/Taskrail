@@ -78,9 +78,7 @@ def launch_options(workflow, active, allowance):
             context_budget=context_windows.role_capacity(config, record["role"]),
             env_allow=config["agent_env_allow"],
             autocompact=False,
-            writable_files=record.get("writable_files", ())
-            if record["stage"] == "implementer"
-            else (),
+            writable_files=record.get("writable_files", ()),
             plan_file=str(workflow.run / "plan.md") if record["stage"] == "planner" else None,
             attached_files=record.get(stage_artifacts.ATTACHED, ()),
         ),

@@ -1,6 +1,6 @@
 """The approved plan as the next stage reads it: decisions and tasks, no copied facts."""
 
-PLAN_FIELDS = ("decision", "summary", "proposed_change_files", "check_selections")
+PLAN_FIELDS = ("decision", "summary", "proposed_change_files", "unverified")
 # The plan line is for problem messages; the action repeats the title and results.
 HIDDEN_STEP_FIELDS = frozenset(("line", "action"))
 EMPTY = (None, "", [], {})
@@ -11,12 +11,20 @@ def plan_context(plan, requirements=()):
     if plan is None:
         return None
     context = {key: plan[key] for key in PLAN_FIELDS if key in plan}
-    if not context.get("check_selections"):
-        context.pop("check_selections", None)
     named = labels(requirements)
+    if plan.get("check_selections"):
+        context["check_selections"] = [
+            labelled_criteria(selection, named) for selection in plan["check_selections"]
+        ]
     steps = plan.get("steps", [])
     context["steps"] = [step_context(step, named) for step in steps]
     return context
+
+
+def labelled_criteria(entry, named):
+    """Show check bindings with the same labels as the task, without changing stored IDs."""
+    criteria = [named.get(name, name) for name in entry["criteria"]]
+    return dict(entry, criteria=criteria)
 
 
 def step_context(step, named):

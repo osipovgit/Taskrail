@@ -3,6 +3,7 @@
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from taskrail.application import (
     evidence,
@@ -179,17 +180,34 @@ class DecisionContractTests(unittest.TestCase):
             self.review("- R1: <outcome>")
         with self.assertRaisesRegex(ValueError, "R1 needs one outcome"):
             self.review("- R1: planned")
-        with self.assertRaisesRegex(ValueError, "unknown or repeated"):
+        with self.assertRaisesRegex(ValueError, "R1 is repeated.*remove the duplicate"):
             self.review(f"- R1: done: {self.path}:1", f"- R1: done: {self.path}:1")
 
     def test_unconfirmed_evidence_gets_a_fresh_attempt_before_it_becomes_a_gap(self):
-        with self.assertRaisesRegex(ValueError, "R1: the cited lines never reached"):
+        with self.assertRaisesRegex(ValueError, "offset=2, limit=1") as rejected:
             self.review(f"- R1: done: {self.path}:2", final=True)
+        self.assertIn(str(self.path), str(rejected.exception))
         result = self.review(f"- R1: done: {self.path}:2", final=True, rebuilt=True)
         self.assertEqual(result["status"], "BLOCKED")
         self.assertEqual(result["coverage"][0]["outcome"], "gap")
         self.assertIn("evidence not confirmed", result["blocking_gaps"][0])
         self.assertEqual(result["evidence"], [])
+
+    def test_final_review_checks_scope_before_reading_or_downgrading_evidence(self):
+        outside = self.base / "private.txt"
+        outside.write_text("not authorized\n")
+        for rebuilt in (False, True):
+            with (
+                self.subTest(rebuilt=rebuilt),
+                patch("taskrail.core.source_claims.file_bytes") as read,
+                self.assertRaisesRegex(ValueError, "Path outside"),
+            ):
+                self.review(f"- R1: done: {outside}:1", final=True, rebuilt=rebuilt)
+            read.assert_not_called()
+
+    def test_final_review_retains_the_actual_failure_for_an_invalid_range(self):
+        with self.assertRaisesRegex(ValueError, "range outside source of 2 lines"):
+            self.review(f"- R1: done: {self.path}:99", final=True)
 
 
 if __name__ == "__main__":

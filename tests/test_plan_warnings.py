@@ -32,11 +32,11 @@ class PlanWarningTests(unittest.TestCase):
         )
         return events
 
-    def parse(self, events, target=PLAN, writable_files=()):
+    def parse(self, events, target=PLAN, writable_files=(), notes=()):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "events.jsonl"
             path.write_text("\n".join(map(json.dumps, events)))
-            return parse_events(path, plan_file=target, writable_files=writable_files)
+            return parse_events(path, plan_file=target, writable_files=writable_files, notes=notes)
 
     def test_only_the_same_approved_source_can_recover_each_write(self):
         events = self.events()
@@ -195,7 +195,7 @@ class PlanWarningTests(unittest.TestCase):
         for error in (
             "PermissionDeniedError",
             "Must read before writing",
-            "Tool execution aborted",
+            "Tool execution aborted: unknown cause",
         ):
             events = self.events()
             extra = copy.deepcopy(events[0])
@@ -204,6 +204,41 @@ class PlanWarningTests(unittest.TestCase):
             result = self.parse([extra, *events])
             self.assertEqual(result["errors"], [error])
             self.assertEqual(len(result["warnings"]), 1)
+
+    def test_aborted_native_write_requires_a_new_read_and_successful_write(self):
+        for prefix in ("", "Error: "):
+            for tool in ("write", "edit"):
+                events = self.events()
+                message = prefix + "Tool execution aborted"
+                events[0]["part"]["tool"] = tool
+                events[0]["part"]["state"]["error"] = message
+                with self.subTest(tool=tool, prefix=prefix):
+                    result = self.parse(events, None, (PLAN,))
+                    self.assertEqual(result["errors"], [])
+                    self.assertEqual(result["warnings"][0]["error"], message)
+                    for indices in ((1, 0, 2, 3, 4), (0, 1, 3, 4), (0, 1, 2)):
+                        interrupted = [events[index] for index in indices]
+                        self.assertEqual(self.parse(interrupted)["errors"], [message])
+                    self.assertEqual(self.parse(events, None)["errors"], [message])
+
+    def test_empty_aborted_edit_in_artifact_only_stage_does_not_prove_a_write(self):
+        events = self.events()
+        failure = events[0]["part"]
+        failure["tool"] = "edit"
+        failure["state"].update(input={}, error="Tool execution aborted")
+        events = [events[0], *events[3:]]
+        result = self.parse(events, None, (PLAN,), (PLAN,))
+        self.assertEqual(result["errors"], [])
+        self.assertNotIn("recovered_by", result["warnings"][0])
+        self.assertIn("proves no write", result["warnings"][0]["resolution"])
+        for targets, notes in (((PLAN,), ()), ((PLAN, "/repo/source.py"), (PLAN,)), ((), (PLAN,))):
+            self.assertEqual(
+                self.parse(events, None, targets, notes)["errors"], ["Tool execution aborted"]
+            )
+        for selected in (events[:1], [*events[1:], events[0]]):
+            self.assertTrue(self.parse(selected, None, (PLAN,), (PLAN,))["errors"])
+        failure["state"]["input"] = dict(filePath=PLAN)
+        self.assertTrue(self.parse(events, None, (PLAN,), (PLAN,))["errors"])
 
 
 if __name__ == "__main__":

@@ -12,6 +12,7 @@ REJECTION = "You must read file {0} before overwriting it. Use the Read tool fir
 EDIT_MISMATCH = "Could not find oldString in the file. It must match exactly, including whitespace, indentation, and line endings."
 NOTE_RESOLUTION = "A rejected overwrite of an orchestrator run file is not a failure: the file is a note, never evidence. Result validation and independent review still apply."
 RESOLUTION = "An actual read and a later successful write of the same approved file in the same session resolved the rejected change. Failed exact-match edits do not invalidate that read. Result validation and independent review still apply."
+EMPTY_RESOLUTION = "An empty-argument native write was aborted in an artifact-only stage before the session's final answer. Source integrity and result validation still apply; this warning proves no write or source evidence."
 WRITERS = frozenset(("write", "edit"))
 TOOLS = WRITERS | {"read"}
 PROVENANCE = ("event_line", "call_id", "part_id")
@@ -66,6 +67,7 @@ class FileWrites:
         answered = final_line is not None and outcome["final_text"].strip()
         if not self.targets or not answered or len(sessions) != 1:
             return outcome
+        self.excuse_empty(outcome, sessions[0], final_line)
         for failure in outcome["tool_errors"]:
             proof = self.recovery(failure, sessions[0], final_line)
             if proof is not None and failure[ERROR] in outcome[ERRORS]:
@@ -73,6 +75,20 @@ class FileWrites:
                 outcome["warnings"].append(dict(failure))
                 outcome[ERRORS].remove(failure[ERROR])
         return outcome
+
+    def excuse_empty(self, outcome, session_id, final_line):
+        """Only artifact-only stages may finish after an empty aborted native call."""
+        if not self.targets <= self.notes:
+            return
+        for failure in outcome["tool_errors"]:
+            same = failure.get("session_id") == session_id
+            prior = failure[EVENT_LINE] < final_line
+            arguments = failure.get(INPUT)
+            empty = isinstance(arguments, dict) and not arguments and aborted(failure)
+            if same and prior and empty and failure[ERROR] in outcome[ERRORS]:
+                failure.update(resolution=EMPTY_RESOLUTION)
+                outcome["warnings"].append(dict(failure))
+                outcome[ERRORS].remove(failure[ERROR])
 
     def excuse_notes(self, outcome):
         """A known rejection of an orchestrator run file never fails the turn."""
@@ -90,7 +106,8 @@ class FileWrites:
         target = failure.get(INPUT, {}).get(FILE_PATH)
         if target not in self.targets or failure.get("session_id") != session_id:
             return None
-        if not unread(failure, target) and not edit_mismatch(failure):
+        known = unread(failure, target) or edit_mismatch(failure) or aborted(failure)
+        if not known:
             return None
         return self.proof(failure, session_id, final_line)
 
@@ -137,4 +154,12 @@ def edit_mismatch(failure):
     return failure.get(TOOL) == "edit" and failure.get(ERROR) in {
         EDIT_MISMATCH,
         f"Error: {EDIT_MISMATCH}",
+    }
+
+
+def aborted(failure):
+    """An interrupted native write needs a new read before a later successful write."""
+    return failure.get(TOOL) in WRITERS and failure.get(ERROR) in {
+        "Tool execution aborted",
+        "Error: Tool execution aborted",
     }

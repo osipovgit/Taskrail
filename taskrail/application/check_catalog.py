@@ -1,5 +1,7 @@
 """Small model-facing catalog; execution recipes remain server-owned."""
 
+from taskrail.application import plan_projection
+
 KIND = "kind"
 PHASE = "phase"
 
@@ -34,9 +36,11 @@ def context(config, stage, plan):
 def configured_checks(config):
     """Retain criterion bindings without repeating empty parameters or recipe details."""
     checks = []
+    named = plan_projection.labels(config.get("task_spec", {}).get("requirements", []))
     fields = ("id", "recipe_id", "criteria")
     for spec in config.get("check_specs", []):
-        checks.append({key: spec[key] for key in fields})
+        entry = {key: spec[key] for key in fields}
+        checks.append(plan_projection.labelled_criteria(entry, named))
     return checks
 
 
