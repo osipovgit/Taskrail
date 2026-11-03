@@ -272,7 +272,7 @@ class RequestBudgetTests(LiveFixture, unittest.TestCase):
         self.assertNotIn("Your only writable file", requests["03-implement"])
         self.assertIn("Edit only the allowed files", requests["03-implement"])
         self.assertNotIn("Edit only the allowed files", requests["05-review"])
-        self.assertIn("A push waits for the operator's approval", requests["03-implement"])
+        self.assertIn("Push needs personal approval", requests["03-implement"])
         self.assertNotIn("push", requests["05-review"].split("Local commands:")[0])
         self.assertNotIn('"findings"', requests["03-implement"])
         self.assertEqual(requests["01-plan"].count("as your entire message"), 3)

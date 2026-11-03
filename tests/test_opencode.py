@@ -23,7 +23,6 @@ from taskrail.infrastructure.opencode_events import EventTranslator
 from taskrail.infrastructure.permission_check import verify_launch
 from taskrail.infrastructure.profile_rules import permissions
 from taskrail.infrastructure.runner import run_agent
-from taskrail.interactions import provider_resume
 from taskrail.interactions.session import StageSession
 
 RECORDER = """
@@ -281,7 +280,7 @@ class DenialTests(unittest.TestCase):
                     timeout=10,
                 )
             )
-        self.assertEqual(result["status"], "BLOCKED_PERMISSION")
+        self.assertEqual(result["status"], "INCOMPLETE")
         self.assertTrue(
             opencode_cli.permission_error("PermissionDeniedError: Permission denied: read")
         )
@@ -379,27 +378,19 @@ class TranslationTests(unittest.TestCase):
         state.update(input=dict(path="a.py"), metadata=dict(metadata=dict(truncated=True)))
         self.assertEqual(self.tool(state)["state"]["output"], output)
 
-    def test_errors_use_the_classified_messages(self):
-        denied = self.tool(
-            dict(status="error", input=dict(path="x"), error="Permission denied: edit")
-        )
-        self.assertTrue(denied["state"]["error"].startswith("PermissionDeniedError"))
-        missing = "File not found: x\n\nDid you mean one of these?\n/work/y"
-        state = dict(status="error", input=dict(path="x"), error=missing)
-        self.assertTrue(
-            self.tool(state)["state"]["error"].startswith("Error: File not found: /work/x\n")
-        )
-        offset = "Offset 4 is out of range for this file (1 line)"
-        state = dict(status="error", input=dict(path="/a"), error=offset)
-        expected = "Error: Offset 4 is out of range for this file (1 lines)"
-        self.assertEqual(self.tool(state)["state"]["error"], expected)
-
-    def test_unknown_tool_call_continues_like_opencode_1(self):
-        message = 'No tool named "GIT_REQUEST" is currently available. Please use a tool.'
-        part = self.tool(dict(status="error", input=dict(root="/x"), error=message), "GIT_REQUEST")
-        self.assertEqual(part["state"]["status"], "completed")
-        self.assertEqual(part["state"]["output"], message)
-        self.assertNotIn("error", part["state"])
+    def test_errors_keep_native_messages_and_statuses(self):
+        for tool, message in (
+            ("read", "Permission denied: read"),
+            ("read", "File not found: x\nDid you mean /work/y?"),
+            ("read", "Offset 4 is out of range for this file (1 line)"),
+            (
+                "GIT_REQUEST",
+                'No tool named "GIT_REQUEST" is currently available. Please use a tool.',
+            ),
+        ):
+            part = self.tool(dict(status="error", input=dict(path="x"), error=message), tool)
+            self.assertEqual(part["state"]["status"], "error")
+            self.assertEqual(part["state"]["error"], message)
 
     def test_step_total_and_missing_final_step(self):
         translator = EventTranslator("/work")
@@ -419,6 +410,10 @@ class TranslationTests(unittest.TestCase):
         failing.translate(json.dumps(dict(type="error", error=dict(message="boom"))))
         self.assertIsNone(failing.finish(0))
         self.assertEqual(failing.translate("not json"), "not json")
+        failing.translate(json.dumps(text))
+        self.assertIsNotNone(failing.finish(0))
+        failing.translate(json.dumps(dict(type="tool_use", part=dict(tool="read", state={}))))
+        self.assertIsNone(failing.finish(0))
 
 
 def supports(record, claim, excerpt):
@@ -583,28 +578,6 @@ class RealStreamTests(unittest.TestCase):
                 result = parse_events(events)
                 self.assertEqual(result["provider_limit"], expected[name])
                 self.assertEqual(len(result["errors"]), 1)
-
-    def test_only_a_turn_the_provider_alone_broke_off_is_continued(self):
-        gateway = "{'name': 'APIError', 'data': {'message': 'Retries exhausted'}}"
-        broken = dict(status="TOOL_ERROR", sessions=["ses1"], errors=[gateway], tool_errors=[])
-        cases = {
-            "provider": (broken, {}, True),
-            "failed tool": (dict(broken, tool_errors=[dict(error=gateway)]), {}, False),
-            "denied": (dict(broken, permission=True), {}, False),
-            "answered": (dict(broken, final_text="{}"), {}, False),
-            "quota kept": (dict(broken, provider_limit=True), {}, True),
-            "quota stops": (
-                dict(broken, provider_limit=True),
-                dict(stop_on_provider_limit=True),
-                False,
-            ),
-            "overflow": (dict(broken, status="CONTEXT_EXCEEDED"), {}, False),
-            "two sessions": (dict(broken, sessions=["ses1", "ses2"]), {}, False),
-        }
-        for name, (outcome, config, continued) in cases.items():
-            with self.subTest(name=name):
-                errors = provider_resume.interruptions(outcome, config)
-                self.assertEqual(errors, [gateway] if continued else [])
 
 
 class SelectionTests(unittest.TestCase):
@@ -864,7 +837,7 @@ class AdapterTests(unittest.TestCase):
         with opencode_api.stage_server([missing], self.workspace, (), attach=False) as server:
             self.assertIsNone(server)
 
-    def test_denied_read_stops_the_turn_for_a_decision(self):
+    def test_denied_read_keeps_native_recovery_and_final_result(self):
         prompt = self.root / "request.md"
         prompt.write_text("task")
         with mock.patch.dict(os.environ, {"FAKE_DENY": "1"}):
@@ -879,7 +852,7 @@ class AdapterTests(unittest.TestCase):
                     timeout=30,
                 )
             )
-        self.assertEqual(result["status"], "BLOCKED_PERMISSION")
+        self.assertEqual(result["status"], "OK")
         self.assertEqual(result["tool_errors"][0]["input"]["filePath"], "/etc/hostname")
 
 

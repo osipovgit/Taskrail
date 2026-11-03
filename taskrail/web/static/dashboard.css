@@ -1133,3 +1133,9 @@ summary.run-group {
     justify-self: end;
   }
 }
+
+.tool-event.tool-failure {
+  background: var(--bad-bg);
+  border-color: var(--bad-fg);
+  box-shadow: inset 3px 0 var(--bad-fg);
+}

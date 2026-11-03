@@ -47,13 +47,13 @@ class ContextEventTests(unittest.TestCase):
         self.assertLess(result["elapsed_seconds"], 3)
         self.assertTrue(result["provider_context_exceeded"])
 
-    def test_permission_denial_keeps_precedence_over_provider_context_error(self):
+    def test_permission_denial_does_not_override_provider_context_stop(self):
         events = [
             dict(type="error", error="context_length_exceeded"),
             dict(type="error", error="PermissionDeniedError"),
         ]
         result = self.run_events(events, pause=True)
-        self.assertEqual(result["status"], "BLOCKED_PERMISSION", result)
+        self.assertEqual(result["status"], "CONTEXT_EXCEEDED", result)
         self.assertLess(result["elapsed_seconds"], 3)
 
     def test_successful_read_quoting_context_failure_is_ordinary_content(self):
@@ -64,12 +64,12 @@ class ContextEventTests(unittest.TestCase):
         self.assertEqual(result["status"], "OK", result)
         self.assertFalse(result["provider_context_exceeded"])
 
-    def test_failed_write_quoting_context_failure_is_a_tool_error(self):
+    def test_failed_write_stays_native_feedback_without_provider_overflow(self):
         state = dict(status="error", input={}, error="Cannot write: context_length_exceeded")
         result = self.run_events(
             [dict(type="tool_use", part=dict(tool="write", state=state)), *finished()]
         )
-        self.assertEqual(result["status"], "TOOL_ERROR", result)
+        self.assertEqual(result["status"], "OK", result)
         self.assertFalse(result["provider_context_exceeded"])
 
     def test_completed_answer_survives_reserve_crossing_before_exit_and_during_drain(self):

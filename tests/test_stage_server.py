@@ -115,9 +115,7 @@ class WriterHandoffTests(unittest.TestCase):
             guard=SimpleNamespace(expected={}),
         )
         attempts = SimpleNamespace(workflow=workflow, request="REQUEST", recovery=None)
-        with patch("taskrail.application.attempt_retries.access_recovery.restore") as access:
-            access.return_value = SimpleNamespace(count=0)
-            return Retries(attempts)
+        return Retries(attempts)
 
     def test_a_writer_that_filled_its_context_continues_in_a_fresh_session(self):
         retries = self.retries("implementer")

@@ -31,7 +31,7 @@ apply. Read requests are routed to the executor before final-result validation.
   branch/tag listing, `remote -v`).
 - Implementer: additionally `add -- <files>`, `commit -m <message>`,
   `revert --no-edit <full hash>`, `cherry-pick --no-edit <full hash>`,
-  `merge --ff-only <full hash>`, `fetch <remote>`,
+  `merge --ff-only <full hash>`, `restore --worktree -- <explicit files>`, `fetch <remote>`,
   `push <remote> HEAD:refs/heads/<branch>`, when needed by the task. A push waits for
   your personal decision in the UI (or `taskrail decide`); **Allow all actions** does
   not cover it.
@@ -62,12 +62,23 @@ or HEAD changes, failed receipt reads and unexpected byte normalization produce 
 unknown outcome rather than adopting another writer's work; inspect before restarting.
 
 The same write is not repeated: an identical request is rejected while its earlier
-outcome is unknown, and other writes are never repeated. An `add` or `commit` that
+outcome is unknown, and other writes are never repeated. An `add`, `commit` or `restore` that
 repeats an earlier one with a known outcome runs only when what it acts on changed:
-the files to stage after further edits, or the staged content to commit. A failed or
+the files after further edits, or the staged content to commit. A failed or
 interrupted write is never automatically replayed or rolled back. Conflicts remain
-for inspection. An unknown outcome blocks continuation pending operator
-reconciliation; start a new task after inspecting the repository.
+for inspection. An unknown Git mutation blocks new Git mutations pending reconciliation. Read-only
+Git diagnostics still reach the agent; it reports a precise blocker if the outcome
+cannot be established within the permitted routes.
+
+An agent may recover an interrupted project-file edit with
+`restore --worktree -- <explicit files>` after inspecting the current diff. Restore
+uses the current index, leaves staging and commits unchanged, and only accepts tracked,
+unconflicted files in the approved scope. Their original content must match the
+trusted committed baseline; selected staged entries must belong to this run. Unrelated
+staging is preserved. Pre-existing edits, foreign staged entries, untracked files,
+directories, path patterns, symlinks and other restore options are rejected with
+feedback. The agent can repair such files directly while retaining user changes.
+No automatic rollback or blanket reset is performed.
 
 Hooks, external diffs, text conversion, process filters, custom merge drivers, automatic signatures,
 credential helpers and interactive credential prompts are disabled.

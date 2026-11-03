@@ -70,8 +70,8 @@ class StageBoundaryTests(unittest.TestCase):
             json.dumps(current_run(dict(stage="implementer")))
         )
         self.assertTrue(actions(self.run, state, IDLE)["resume"])
-        state["status"] = "BLOCKED_PERMISSION"
-        self.assertFalse(actions(self.run, state, IDLE)["resume"])
+        state["status"] = "PROCESS_ERROR"
+        self.assertTrue(actions(self.run, state, IDLE)["resume"])
         (self.run / "checkpoint.json").unlink()
         state["status"] = "INTERRUPTED"
         self.assertFalse(actions(self.run, state, IDLE)["resume"])

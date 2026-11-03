@@ -6,7 +6,7 @@ import unittest
 from pathlib import Path
 from typing import ClassVar
 
-from taskrail.application import artifact_write, reviewed_artifacts
+from taskrail.application import reviewed_artifacts
 from taskrail.core import task_lineage, task_markdown, task_spec
 from taskrail.core.plan_document import payload
 from taskrail.web import requests, task_form
@@ -243,18 +243,6 @@ class StrictPlanTests(unittest.TestCase):
                 payload(
                     text + "## Check selections\n" + selection, requirements, dict(project="/repo")
                 )
-
-    def test_only_the_exact_plan_read_before_write_error_is_recoverable(self):
-        run = Path("/run/task")
-        failure = dict(
-            tool="write",
-            input=dict(filePath=str(run / "plan.md")),
-            error=f"You must read file {run / 'plan.md'} before overwriting it. Use the Read tool first",
-        )
-        outcome = dict(status="TOOL_ERROR", tool_errors=[failure], errors=[failure["error"]])
-        self.assertIn("in THIS session", artifact_write.feedback(outcome, (str(run / "plan.md"),)))
-        failure["input"]["filePath"] = "/repo/source.py"
-        self.assertIsNone(artifact_write.feedback(outcome, (str(run / "plan.md"),)))
 
 
 if __name__ == "__main__":

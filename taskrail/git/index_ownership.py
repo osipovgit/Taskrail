@@ -46,7 +46,7 @@ def owned(previous, repo):
             continue
         if record["request"]["argv"][0] == ADD:
             staged.update(record.get("staged", {}))
-        else:
+        elif record["request"]["argv"][0] in {"commit", "revert", "cherry-pick", "merge"}:
             staged = {}
     return staged
 

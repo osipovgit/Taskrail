@@ -5,9 +5,6 @@ import json
 from taskrail.application import run_store
 
 STATUS = "status"
-# A denied write cannot be granted by a note; any other block may continue with one.
-READ_ONLY_STAGES = frozenset(("planner", "plan-reviewer", "reviewer"))
-
 RESUMABLE = frozenset(
     (
         "TIMEOUT",
@@ -19,10 +16,9 @@ RESUMABLE = frozenset(
         "RUNNING",
         "TOKEN_BUDGET_EXCEEDED",
         "STAGE_BUDGET_EXCEEDED",
-        "BLOCKED_PERMISSION",
         "BLOCKED",
         "INVALID_RESULT",
-        "TOOL_ERROR",
+        "TURN_ERROR",
         "CONTEXT_EXCEEDED",
         "NO_PROGRESS",
     )
@@ -35,9 +31,6 @@ def load_checkpoint(run, state):
     if path.is_file():
         checkpoint = json.loads(path.read_text())
         run_store.validate(checkpoint)
-        denied = state.get(STATUS) == "BLOCKED_PERMISSION"
-        if denied and checkpoint.get("stage") not in READ_ONLY_STAGES:
-            raise ValueError("Permission-denied writes cannot be automatically continued")
         return checkpoint
     raise ValueError("No safe checkpoint. Restart creates a fresh run against current source.")
 

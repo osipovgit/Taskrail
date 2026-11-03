@@ -2,7 +2,6 @@
 
 import json
 import os
-import re
 
 PART = "part"
 SESSION = "sessionID"
@@ -10,13 +9,8 @@ READ = "read"
 INPUT = "input"
 ERROR = "error"
 FILE_TOOLS = frozenset((READ, "edit", "write"))
-PERMISSION_PREFIX = "Permission denied:"
-READ_ERROR_PREFIX = "Error: "
-MISSING_PREFIX = "File not found: "
 FULL_READ = "<path>{0}</path>\n<type>file</type>\n<content>\n{1}\n\n(End of file - total {2} lines)\n</content>"
 STOP = "stop"
-# 1.x answers an unknown tool call with a completed `invalid` call; 2.x reports an error.
-UNKNOWN_TOOL = re.compile(r'No tool named "[^"]+" is currently available\..*', re.S)
 COUNTERS = (INPUT, "output")
 CACHE_COUNTERS = ("read", "write")
 
@@ -27,7 +21,6 @@ class EventTranslator:
     def __init__(self, directory):
         self.directory = directory
         self.final_text = None
-        self.failed = False
 
     def translate(self, raw):
         """Unknown or malformed lines pass through unchanged."""
@@ -43,6 +36,8 @@ class EventTranslator:
 
     def observe(self, event):
         kind, part = event.get("type"), event.get(PART, {})
+        if kind in {"tool_use", "step_start", ERROR}:
+            self.final_text = None
         if kind == "tool_use":
             return dict(event, part=tool_part(part, self.directory))
         if kind == "step_finish":
@@ -51,12 +46,11 @@ class EventTranslator:
             return dict(event, part=self.step_part(part))
         if kind == "text":
             self.final_text = event
-        self.failed = self.failed or kind == ERROR
         return event
 
     def finish(self, returncode):
         """opencode 2.x may end a successful turn without its final step event."""
-        if returncode or self.failed or self.final_text is None:
+        if returncode or self.final_text is None:
             return None
         session, text = self.final_text.get(SESSION), self.final_text[PART]
         stop_id = "{}-stop".format(text.get("id", ""))
@@ -76,7 +70,7 @@ class EventTranslator:
 
 
 def tool_part(part, directory):
-    """Restore 1.x part identifiers, absolute file inputs and error tags."""
+    """Restore 1.x part identifiers and absolute inputs; preserve native error text."""
     tool = part.get("tool")
     state = part.get("state") or {}
     arguments = file_arguments(tool, state.get(INPUT) or {}, directory)
@@ -86,13 +80,7 @@ def tool_part(part, directory):
 
 
 def tool_state(tool, state):
-    message = str(state.get(ERROR, ""))
-    if state.get("status") == ERROR and UNKNOWN_TOOL.fullmatch(message):
-        state.pop(ERROR)
-        state.update(status="completed", output=message)
-    elif state.get("status") == ERROR:
-        state[ERROR] = tool_error(message, tool, state[INPUT])
-    elif tool == READ:
+    if state.get("status") == "completed" and tool == READ:
         state["output"] = read_output(state)
     return state
 
@@ -110,19 +98,6 @@ def file_arguments(tool, arguments, directory):
     if tool in FILE_TOOLS and isinstance(path, str):
         arguments["filePath"] = os.path.normpath(os.path.join(directory, path))
     return arguments
-
-
-def tool_error(message, tool, arguments):
-    """Permission and missing-read classification match the 1.x messages."""
-    if message.startswith(PERMISSION_PREFIX):
-        return f"PermissionDeniedError: {message}"
-    if tool != READ or message.startswith(READ_ERROR_PREFIX):
-        return message
-    first, newline, rest = message.partition("\n")
-    if first.startswith(MISSING_PREFIX):
-        first = "{}{}".format(MISSING_PREFIX, arguments.get("filePath", ""))
-    first = re.sub(r"\(1 line\)$", "(1 lines)", first)
-    return "".join((READ_ERROR_PREFIX, first, newline, rest))
 
 
 def read_output(state):

@@ -21,12 +21,14 @@ Keep machine-specific settings and task history outside version control.
   execution lock, declared roots, integrity guards and independent review.
 - Use the controlled local Git executor. Forbid hard reset, clean, history
   rewriting and forced pushes. Never automatically roll back or blindly retry an
-  interrupted writer. Local argv and shell scripts run without asking, in the OS sandbox
+  interrupted writer. Agents inspect partial edits and may request scoped Git restore
+  or repair source directly, preserving earlier user work. Return native errors, including
+  access denials, to the agent without granting new permissions. Local argv and shell scripts run without asking, in the OS sandbox
   (no network, read-only host, hidden home credentials, read-only Git metadata) where the
   host has one, and on the host otherwise or when a request asks for it; such host
   commands are recorded and highlighted, and `host_commands: "ask"` makes them wait for
-  personal approval again. Reads outside declared roots, pushes and remote actions always
-  wait for the operator. Remote actions must pass
+  personal approval again. Native reads outside declared roots remain denied; pushes
+  and remote actions wait for the operator. Remote actions must pass
   the isolated executor and root-only approval route; before the operator confirms a
   change they only inspect, and server checks run after the confirmation.
 - Repository conventions guide implementation only within server-owned policy.

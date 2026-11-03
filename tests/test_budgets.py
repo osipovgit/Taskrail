@@ -5,7 +5,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from taskrail.application import access_recovery, attempt_context, budgets
+from taskrail.application import attempt_context, budgets
 
 
 class BudgetTests(unittest.TestCase):
@@ -50,29 +50,6 @@ class BudgetTests(unittest.TestCase):
         remaining = budgets.reserve(self.run, self.record(2), self.limits)
         self.assertEqual(remaining["stage_seconds_remaining"], 99)
         self.assertNotIn("tools", remaining)
-
-    def test_repeated_denied_arguments_stay_known_after_resume(self):
-        error = dict(
-            tool="glob", input={"path": "/outside", "pattern": "*"}, error="PermissionDeniedError"
-        )
-        state = {
-            "stages": [
-                dict(
-                    stage="reviewer",
-                    mode="access-recovery",
-                    tool_errors=[error],
-                    errors=["PermissionDeniedError"],
-                )
-            ]
-        }
-        restored = access_recovery.restore(state, "reviewer")
-        self.assertEqual(restored.count, 1)
-        self.assertFalse(
-            restored.accept(
-                dict(tool_errors=[error], errors=["PermissionDeniedError"], elapsed_seconds=1), 3600
-            )
-        )
-        self.assertEqual(access_recovery.restore(state, "planner").count, 0)
 
     def test_attempt_limit_applies_independently_to_each_stage(self):
         limits = dict(self.limits, attempts=1)
