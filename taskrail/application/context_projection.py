@@ -10,6 +10,7 @@ from taskrail.application import (
     source_packet,
     source_windows,
 )
+from taskrail.application.workspace_paths import public_mapping
 from taskrail.core import protected_paths, requirements, task_spec
 from taskrail.core.paths import tool_paths
 
@@ -32,6 +33,7 @@ def request_context(config, execution, state, run):
     context = dict(
         stage=execution[0],
         roots=state["roots"],
+        workspace_paths=public_mapping(config),
         task_file=str(run / "00-input/task.md"),
         plan=plan_projection.plan_context(tool_paths(plan, roots), state.get("requirements", [])),
         imported_draft=instruction_sources.imported_draft(run, execution[0]),

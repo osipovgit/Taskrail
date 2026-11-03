@@ -10,6 +10,7 @@ DEPENDS = "depends"
 NOTES = "notes"
 # Lines of a task that are no key, kept as more notes.
 EXTRA = "extra"
+ENTRY_LINES = "entry_lines"
 VERIFY = "verify"
 READ = "read"
 KEYS = MappingProxyType(

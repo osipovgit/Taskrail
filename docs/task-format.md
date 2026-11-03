@@ -142,6 +142,12 @@ Source evidence uses the current effective roots, including isolated worktrees.
 Repository documentation inside those roots is eligible after an observed read;
 the original checkout, an adjacent worktree or a README above a nested root is not
 implicitly authorized. An out-of-scope citation reports the exact effective roots.
+Each stage receives the recorded source-checkout to worktree mapping. Exact source
+paths in a plan's `Files` and future `Read` hints are translated to the corresponding
+effective root before validation. Evidence, observed reads, executor requests and
+the original task/plan text are never rewritten; the accepted result records the
+effective targets. Unknown checkouts, noncanonical paths and symlinks do not gain
+access through this mapping, and normal target and scope checks still apply.
 
 A code change runs in worktrees by default: with `"isolation": "auto"` (or no
 `isolation`) when every root is the top level of a Git repository with a commit.
