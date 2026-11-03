@@ -208,6 +208,22 @@ correction; implementation stages with source access do not get
 this exception.
 Raw responses and rejected drafts remain diagnostic artifacts.
 
+An exact native `oldString` mismatch or read-before-write rejection on a stage's
+approved plan/review file changes nothing. The same session receives up to three
+artifact repair prompts, independently of its result-format corrections. It must
+read the current text before repairing the intended lines; the server never replays
+the rejected write or an accompanying executor request. Permission, source integrity,
+unknown-error and aborted-writer failures do not use this route. Result validation
+and independent review still decide whether the draft can advance.
+
+Ordinary Goal and Acceptance criteria may require local lint, syntax and test
+commands. Assign that work to a task; `runtime` is a deferral outcome reserved for
+requirements explicitly labelled runtime, not a synonym for executing a command.
+Invalid deferrals are reported with other plan structure errors. Independently
+checkable plan scope, coverage and task-contract defects are reported together
+before citation source bytes are read. A `DONE` message submits a draft; a completed
+correction event only records delivery of rejection feedback, never plan approval.
+
 Transport retry, context handoff, budgets and output delivery are described in
 [monitoring](monitoring.md) and [deployment](deployment.md#context-limits).
 

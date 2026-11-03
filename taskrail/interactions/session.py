@@ -1,9 +1,9 @@
 """Continue executor turns through an explicit opencode session inside one stage."""
 
 from taskrail.application import (
+    artifact_write,
     budgets,
     evidence_delivery,
-    plan_write,
     response_format,
 )
 from taskrail.application.artifacts import save_run
@@ -173,7 +173,7 @@ def result_feedback(session, outcome):
     """
     check = session.environment.get("check_result")
     context = session.context
-    correction = plan_feedback(session, outcome)
+    correction = artifact_feedback(session, outcome)
     if correction is not None:
         return correction
     if check is None or outcome["status"] != "OK":
@@ -201,16 +201,19 @@ def unavailable_tool_feedback(session, outcome):
     return feedback
 
 
-def plan_feedback(session, outcome):
-    """Recover a rejected plan edit without restarting or asserting a fictitious read."""
+def artifact_feedback(session, outcome):
+    """Repair known no-op artifact edits without replaying a source writer or restarting."""
     context = session.context
-    eligible = session.active[1][ROLE] == "planner"
-    if not eligible or context[RESULT_CORRECTIONS] >= MAX_RESULT_CORRECTIONS:
+    runtime = session.launch.get("runtime", {})
+    targets = set(runtime.get("writable_files", ()))
+    eligible = session.active[1][ROLE] != "implementer" and bool(targets)
+    eligible = eligible and targets <= set(runtime.get("attached_files", ()))
+    if not eligible or context.get("artifact_corrections", 0) >= MAX_RESULT_CORRECTIONS:
         return None
-    feedback = plan_write.read_before_write(outcome, session.environment["run"])
+    feedback = artifact_write.feedback(outcome, targets)
     if feedback is not None:
-        context[RESULT_CORRECTIONS] += 1
-        events.correction(session, "plan file", "unread plan", feedback)
+        context["artifact_corrections"] = context.get("artifact_corrections", 0) + 1
+        events.correction(session, "artifact", "rejected artifact edit", feedback)
     return feedback
 
 

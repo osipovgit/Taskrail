@@ -12,6 +12,7 @@ from taskrail.application import (
     source_packet,
 )
 from taskrail.core.files import atomic_json
+from taskrail.core.plan_document import payload as plan_payload
 from taskrail.interactions import transcripts
 
 
@@ -68,6 +69,28 @@ class DecisionContractTests(unittest.TestCase):
         self.assertEqual(blocked["completed_steps"], [])
         with self.assertRaisesRegex(ValueError, "End your final message with DONE"):
             result_validation.validate('{"schema_version": 2}', self.context)
+
+    def test_planner_reports_scope_and_task_defects_together_before_source_reads(self):
+        requirements = [
+            *self.context["requirements"],
+            dict(id="R-second", kind="task", text="Fix it"),
+        ]
+        draft = (
+            f"Decision: single\nSummary: Fix it\n## Requirements\n"
+            f"R1 → done: {self.run / '00-input/project-map.md'}:1\nR2 → T1\n"
+            f"## T1: Fix\nFiles: {self.path}\nDone when: Works\nVerify: Check it\n"
+        )
+        plan = plan_payload(draft, requirements, self.context["roots"])
+        plan["steps"][0]["criteria"] = []
+        context = dict(self.context, role="planner", stage="planner", requirements=requirements)
+        with (
+            patch("taskrail.core.source_claims.file_bytes") as read,
+            self.assertRaises(ValueError) as rejected,
+        ):
+            result_validation.checked(plan, context)
+        self.assertIn("project-map.md", str(rejected.exception))
+        self.assertIn("Step needs criteria", str(rejected.exception))
+        read.assert_not_called()
 
     def test_closing_summaries_of_weak_models_keep_their_final_word(self):
         self.context.update(role="implementer", stage="implementer")

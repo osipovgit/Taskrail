@@ -43,6 +43,12 @@ class AnalyticsTests(unittest.TestCase):
                         ),
                         stage("implementer", "RESULT_VALID", result_corrections=2),
                         stage("implementer", "INVALID_RESULT", result_corrections=3),
+                        stage(
+                            "implementer",
+                            "RESULT_VALID",
+                            result_corrections=0,
+                            rejections=[dict(kind="artifact", reason="Native edit rejected")],
+                        ),
                     ],
                 ),
                 "b": dict(
@@ -73,9 +79,9 @@ class AnalyticsTests(unittest.TestCase):
             model["reasons"][0], dict(reason="result: line …: R… needs one outcome", count=2)
         )
         self.assertEqual(model["tokens"], 40)
-        self.assertEqual(totals["models"]["opencode default"]["attempts"], 4)
+        self.assertEqual(totals["models"]["opencode default"]["attempts"], 5)
         implementer = totals["stages"]["implementer"]
-        self.assertEqual((implementer["first_try"], implementer["first_try_measured"]), (1, 3))
+        self.assertEqual((implementer["first_try"], implementer["first_try_measured"]), (1, 4))
         self.assertEqual(totals["stages"]["planner"]["first_try_measured"], 0)
         self.assertEqual(totals["stages"]["reviewer"]["recoveries"], 1)
         self.assertEqual(totals["stages"]["implementer"]["elapsed_seconds"], 5.2)

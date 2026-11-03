@@ -88,7 +88,9 @@ def add(entry, record):
     entry["attempts"] += 1
     entry["failed"] += not accepted
     entry["first_try_measured"] += measured
-    entry["first_try"] += measured and accepted and not record[CORRECTIONS]
+    entry["first_try"] += (
+        measured and accepted and not record[CORRECTIONS] and not record.get(rejections.REJECTIONS)
+    )
     reasons = rejections.counted(record)
     entry[rejections.REJECTIONS] += sum(reasons.values())
     entry["reasons"].update(reasons)
