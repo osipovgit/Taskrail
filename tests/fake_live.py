@@ -9,7 +9,14 @@ import uuid
 from pathlib import Path
 
 from fake_contract import attempt, earlier_invalid, enrich, plan_text, review_text
-from fake_file_writes import empty_abort, implement, plan_alias, plan_mismatches, review_abort
+from fake_file_writes import (
+    EDIT_MISMATCH,
+    empty_abort,
+    implement,
+    plan_alias,
+    plan_mismatches,
+    review_abort,
+)
 from fake_file_writes import event as file_event
 from fake_planning_paths import plan as isolated_plan
 from fake_report_repair import executor_result, report_result
@@ -575,6 +582,32 @@ if mode == "plan-review-citations":
     response = proposal(context, role, run, print) or response
 if mode == "isolated-plan-paths" and role == "planner":
     isolated_plan(run, target, continued, prompt)
+if mode.startswith("artifact-mismatch") and role != "implementer":
+    turn_number = record.get("session_turns", 0)
+    if role == "planner" and turn_number == 0:
+        draft = plan.read_text().replace("- R1 → T1", "- R1 → runtime")
+        draft = draft.replace("Files:", "Files: (any other file named by lint) from `all/`, ")
+        plan.write_text(draft)
+    else:
+        failing_turn = 1 if role == "planner" else 0
+        if turn_number == failing_turn or mode == "artifact-mismatch-repeated":
+            file_event(print, own, "edit", "error", EDIT_MISMATCH)
+            response = json.dumps(
+                dict(
+                    schema_version=1,
+                    status="GIT_REQUEST",
+                    root=str(root),
+                    argv=["status"],
+                    reason="Next operation",
+                )
+            )
+        else:
+            assert "exact current text" in prompt
+            assert "do not restart research" in prompt
+            file_event(print, own, "read", "completed", own.read_text())
+            file_event(print, own, "write", "completed", "File written successfully")
+    if mode == "artifact-mismatch-scope" and role == "plan-reviewer":
+        target.write_text("unauthorized edit\n")
 writer_prose = mode in {"writer-prose-always", "writer-extra-prose-always"} or (
     mode == "writer-prose" and not continued
 )

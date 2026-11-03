@@ -4,11 +4,28 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from taskrail.application import plan_write
+from taskrail.application import artifact_write
 from taskrail.infrastructure import write_targets
+from taskrail.infrastructure.write_warnings import EDIT_MISMATCH
 
 
 class WriteTargetTests(unittest.TestCase):
+    def test_only_known_no_op_artifact_rejections_get_correction_guidance(self):
+        path = "/run/task/review.md"
+        failure = dict(tool="edit", input=dict(filePath=path), error=EDIT_MISMATCH)
+        outcome = dict(status="TOOL_ERROR", tool_errors=[failure], errors=[EDIT_MISMATCH])
+        feedback = artifact_write.feedback(outcome, (path,))
+        self.assertIn(path, feedback)
+        self.assertIn("do not restart research", feedback)
+        self.assertIsNone(artifact_write.feedback(outcome, ("/run/task/plan.md",)))
+        for message in ("Tool execution aborted", "PermissionDeniedError", "Unknown error"):
+            rejected = dict(failure, error=message)
+            self.assertIsNone(
+                artifact_write.feedback(
+                    dict(outcome, tool_errors=[rejected], errors=[message]), (path,)
+                )
+            )
+
     def test_plan_feedback_uses_canonical_target_for_aliases_and_preserves_raw_failures(self):
         run = Path("/run/task")
         target = str(run / "plan.md")
@@ -24,7 +41,7 @@ class WriteTargetTests(unittest.TestCase):
                     outcome = dict(
                         status="TOOL_ERROR", tool_errors=[failure], errors=[failure["error"]]
                     )
-                    feedback = plan_write.read_before_write(outcome, run)
+                    feedback = artifact_write.feedback(outcome, (str(run / "plan.md"),))
                     self.assertIn(target, feedback)
                     self.assertNotIn("../", feedback)
                     self.assertEqual(failure["input"]["filePath"], supplied)
@@ -34,7 +51,9 @@ class WriteTargetTests(unittest.TestCase):
                         dict(status="SCOPE_VIOLATION"),
                         dict(errors=[failure["error"], "unknown error"]),
                     ):
-                        self.assertIsNone(plan_write.read_before_write(dict(outcome, **extra), run))
+                        self.assertIsNone(
+                            artifact_write.feedback(dict(outcome, **extra), (str(run / "plan.md"),))
+                        )
 
     def test_alias_matching_does_not_follow_symlinks_to_another_file(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -69,13 +88,15 @@ class WriteTargetTests(unittest.TestCase):
             errors=[rejected["error"]],
             tool_errors=[resolved, rejected],
         )
-        self.assertIn(str(run / "plan.md"), plan_write.read_before_write(outcome, run))
+        self.assertIn(
+            str(run / "plan.md"), artifact_write.feedback(outcome, (str(run / "plan.md"),))
+        )
         outcome["tool_errors"].insert(
             0, dict(error="File not found", resolution="Read changed nothing")
         )
-        self.assertIsNotNone(plan_write.read_before_write(outcome, run))
+        self.assertIsNotNone(artifact_write.feedback(outcome, (str(run / "plan.md"),)))
         outcome["errors"].append("unexplained failure")
-        self.assertIsNone(plan_write.read_before_write(outcome, run))
+        self.assertIsNone(artifact_write.feedback(outcome, (str(run / "plan.md"),)))
 
     def test_paths_outside_exact_targets_and_unknown_messages_are_not_recoverable(self):
         target = "/run/task/plan.md"

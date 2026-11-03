@@ -6,7 +6,7 @@ import unittest
 from pathlib import Path
 from typing import ClassVar
 
-from taskrail.application import plan_write, reviewed_artifacts
+from taskrail.application import artifact_write, reviewed_artifacts
 from taskrail.core import task_lineage, task_markdown, task_spec
 from taskrail.core.plan_document import payload
 from taskrail.web import requests, task_form
@@ -199,6 +199,21 @@ class StrictPlanTests(unittest.TestCase):
             with self.subTest(changed=changed), self.assertRaisesRegex(ValueError, "line"):
                 payload(changed, self.requirements, dict(project="/repo"))
 
+    def test_task_runtime_and_invalid_files_are_reported_in_the_same_correction(self):
+        text = self.plan.replace("R1 → T1", "R1 → runtime")
+        text = text.replace(
+            "Files: project/a.py",
+            "Files:\n- project/a.py\n- (any other file named by lint); the list covers `all/`",
+        )
+        with self.assertRaises(ValueError) as rejected:
+            payload(text, self.requirements, dict(project="/repo"))
+        message = str(rejected.exception)
+        self.assertIn("line 5: R1 uses runtime", message)
+        self.assertIn("Assign this unfinished requirement to T<n>", message)
+        self.assertIn("Files contains prose", message)
+        corrected = payload(self.plan, self.requirements, dict(project="/repo"))
+        self.assertEqual(corrected["coverage"][0]["outcome"], "planned")
+
     def test_answer_keeps_all_markdown_subsections(self):
         answer = "## Details\nKeep this.\n\n## A second heading\nKeep this too."
         text = "Decision: no change\n## Requirements\nR1 → done: project/a.py:1\n## Answer\n"
@@ -237,9 +252,9 @@ class StrictPlanTests(unittest.TestCase):
             error=f"You must read file {run / 'plan.md'} before overwriting it. Use the Read tool first",
         )
         outcome = dict(status="TOOL_ERROR", tool_errors=[failure], errors=[failure["error"]])
-        self.assertIn("in THIS session", plan_write.read_before_write(outcome, run))
+        self.assertIn("in THIS session", artifact_write.feedback(outcome, (str(run / "plan.md"),)))
         failure["input"]["filePath"] = "/repo/source.py"
-        self.assertIsNone(plan_write.read_before_write(outcome, run))
+        self.assertIsNone(artifact_write.feedback(outcome, (str(run / "plan.md"),)))
 
 
 if __name__ == "__main__":

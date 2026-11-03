@@ -144,6 +144,33 @@ async function main() {
   assert.ok(all(hosted[0]).some((n) => n.textContent === 'Tool · local_command · completed'));
   assert.match(css, /\.tool-event\.host-command\s*\{[^}]*background:\s*var\(--warn-bg\)/);
   assert.ok(all(traced).some((n) => n.textContent === '<script>not executable</script>'));
+  const corrected = stages.stageCard({
+    ...stage,
+    telemetry: {
+      ...telemetry,
+      timeline: [
+        { kind: 'text', text: 'DONE', timestamp: stamp },
+        {
+          kind: 'tool',
+          tool: 'correction',
+          status: 'completed',
+          timestamp: stamp,
+          input: '{"response":"final result"}',
+          output:
+            'Your final result was rejected: R5 cannot be deferred.\nCorrect the current draft.',
+        },
+      ],
+    },
+  });
+  assert.ok(all(corrected).some((n) => n.textContent === 'Agent message · not a stage verdict'));
+  assert.ok(all(corrected).some((n) => n.textContent === 'Correction required'));
+  assert.ok(
+    all(corrected).some(
+      (n) => n.textContent === 'Your final result was rejected: R5 cannot be deferred.',
+    ),
+  );
+  assert.ok(all(corrected).some((n) => n.textContent === 'Correction instructions'));
+  assert.ok(!all(corrected).some((n) => n.textContent === 'Tool · correction · completed'));
   monitorModule.renderMonitor({
     stages: [{ ...stage, telemetry }],
     status: 'READY_FOR_REVIEW',
