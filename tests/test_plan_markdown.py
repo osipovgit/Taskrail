@@ -362,7 +362,8 @@ class PlanFileTests(unittest.TestCase):
             (source / "site.yml").write_text("- name: Run the playbook check\n")
             instructions = plan_file.instructions(run, dict(project=source), REQUIREMENTS)
             self.assertIn(f"PROJECT MAP: {run / '00-input/project-map.md'}", instructions)
-            self.assertIn(f"the Markdown file {target}", instructions)
+            self.assertIn(f"PLAN FILE: edit {target}", instructions)
+            self.assertIn("DONE submits a draft for validation, not approval", instructions)
             self.assertIn("R6 → all tasks", instructions)
 
     def test_messages_name_requirements_by_label(self):

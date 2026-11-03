@@ -63,8 +63,8 @@ def checked(payload, context):
         validate_paths(payload, context)
         payload = review_result.settled(payload, records, context)
         validate_coverage(payload, context)
-        validate_role(payload, context)
     proofs = citation_review.validate(payload[EVIDENCE], records, context)
+    validate_role(payload, context)
     atomic_json(context["folder"] / "evidence-bindings.json", proofs)
     return payload
 
@@ -72,9 +72,14 @@ def checked(payload, context):
 def validate_planner(payload, context):
     """Report independent structural defects together before reading cited source bytes."""
     problems = []
-    for validate in (validate_paths, validate_coverage, validate_role):
+    checks = (
+        (validate_paths, context),
+        (validate_coverage, context),
+        (plan_contract.validate_plan_steps, context["requirements"]),
+    )
+    for validate, inputs in checks:
         try:
-            validate(payload, context)
+            validate(payload, inputs)
         except ValueError as error:
             problems.append(str(error))
     if problems:
