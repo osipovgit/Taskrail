@@ -112,7 +112,7 @@ class Coverage:
     def cite(self, detail, line, explanation=True):
         """Evidence entries for `path:from-to` citations; returns their IDs."""
         try:
-            found = plan_citations.parse(detail, explanation)
+            found = plan_citations.parts(detail, explanation)[0]
         except ValueError as error:
             self.problems.append(f"line {line}: {error}")
             return []

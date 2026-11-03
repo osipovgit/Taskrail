@@ -41,6 +41,13 @@ export const statuses = {
   COMPLETED: 'Completed',
 };
 
+export function statusLabel(value) {
+  if (Object.hasOwn(statuses, value)) return statuses[value];
+  if (!/^[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)*$/.test(value)) return value;
+  const words = value.toLowerCase().replaceAll('_', ' ');
+  return words[0].toUpperCase() + words.slice(1);
+}
+
 // Treat every task, model message and file as text, never executable markup.
 export function el(tag, text, cls) {
   const node = document.createElement(tag);
@@ -60,7 +67,7 @@ export function badge(text) {
     'COMPLETED',
   ].includes(text);
   const cls = good ? 'good' : /ERROR|BLOCKED|FAIL|INVALID|TIMEOUT/.test(text) ? 'bad' : '';
-  return el('span', statuses[text] || text, 'badge ' + cls);
+  return el('span', statusLabel(text), 'badge ' + cls);
 }
 export function detail(parent, title, text) {
   if (!text) return;

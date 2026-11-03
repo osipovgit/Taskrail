@@ -45,6 +45,11 @@ const load = (name) => import(pathToFileURL(path.join(staticDir, 'modules', name
 
 async function main() {
   const [{ state }, dom, stages, monitorModule, app] = await Promise.all(moduleNames.map(load));
+  assert.equal(dom.statusLabel('TOOL_ERROR'), 'Tool error');
+  assert.equal(dom.statusLabel('PROCESS_ERROR'), 'Process error');
+  assert.equal(dom.statusLabel('INVALID_RESULT'), 'Invalid result');
+  assert.equal(dom.badge('TOOL_ERROR').textContent, 'Tool error');
+  assert.equal(dom.badge('TOOL_ERROR').className, 'badge bad');
   const stamp = 1791790000000;
   const stage = {
     number: 5,
@@ -76,6 +81,9 @@ async function main() {
   function all(node) {
     return [node, ...node.children.flatMap(all)];
   }
+  const historical = all(stages.stageCard({ ...stage, status: 'TOOL_ERROR', verdict: null }));
+  assert.ok(historical.some((node) => node.textContent === 'Tool error'));
+  assert.ok(historical.every((node) => node.textContent !== 'TOOL_ERROR'));
   const activityLog = all(card).find((node) => node.className === 'activity-log');
   const closeLog = all(activityLog).find((node) => node.textContent === 'Close log');
   activityLog.open = true;
@@ -1069,7 +1077,7 @@ async function main() {
         count: 2,
         succeeded: 1,
         success_rate: 0.5,
-        statuses: { TIMEOUT: 1 },
+        statuses: { TIMEOUT: 1, TOOL_ERROR: 1 },
         elapsed_seconds: 3,
         tokens: 9,
         continuations: 0,
@@ -1092,7 +1100,7 @@ async function main() {
   });
   await analytics.showAnalytics();
   assert.ok(all(nodes.chat).some((n) => n.textContent === '50%'));
-  assert.ok(all(nodes.chat).some((n) => n.textContent === 'Timed out: 1'));
+  assert.ok(all(nodes.chat).some((n) => n.textContent === 'Timed out: 1 · Tool error: 1'));
   assert.ok(all(nodes.chat).some((n) => n.textContent === 'p/m'));
   assert.ok(all(nodes.chat).some((n) => n.textContent === '25% of 4'));
   assert.ok(
