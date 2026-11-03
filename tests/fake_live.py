@@ -556,6 +556,8 @@ if role == "planner" and header["permission"]["edit"].get(str(plan)) == "allow":
             assert "in THIS session" in prompt
             plan.read_text()
         plan.write_text(plan_text(value, context))
+        if mode == "plan-empty-abort":
+            empty_abort(print)
         if mode == "plan-mismatches":
             plan_mismatches(plan, plan_text(value, context), print)
         if mode == "plan-instruction-citation":

@@ -27,10 +27,11 @@ ERRORS = "errors"
 class FileWrites:
     """Record completed native operations only for server-approved writable files."""
 
-    def __init__(self, targets, notes=()):
+    def __init__(self, targets, notes=(), artifacts=()):
         """Without explicit writable paths, no failed write may be recovered."""
         self.targets = frozenset(targets)
         self.notes = frozenset(map(str, notes))
+        self.artifacts = frozenset(map(str, artifacts))
         self.calls = []
         self.seen = set()
 
@@ -78,7 +79,7 @@ class FileWrites:
 
     def excuse_empty(self, outcome, session_id, final_line):
         """Only artifact-only stages may finish after an empty aborted native call."""
-        if not self.targets <= self.notes:
+        if not self.targets <= self.artifacts:
             return
         for failure in outcome["tool_errors"]:
             same = failure.get("session_id") == session_id

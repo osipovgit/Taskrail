@@ -195,9 +195,10 @@ replays the writer itself. Permission failures, unknown errors and unfinished
 recovery remain failures. Result validation, source guards and independent review
 still apply.
 An aborted native edit with empty arguments may be a warning when the stage can
-write only its attached artifacts and subsequently finishes its response. It proves
-no successful edit. Source changes still fail the integrity guard, and an invalid
-review still needs correction; implementation stages with source access do not get
+write only its attached artifacts and subsequently finishes its response. This
+includes planning and both review stages, and proves no successful edit. Source
+changes still fail the integrity guard, and an invalid plan or review still needs
+correction; implementation stages with source access do not get
 this exception.
 Raw responses and rejected drafts remain diagnostic artifacts.
 

@@ -231,6 +231,9 @@ class PlanWarningTests(unittest.TestCase):
         self.assertEqual(result["errors"], [])
         self.assertNotIn("recovered_by", result["warnings"][0])
         self.assertIn("proves no write", result["warnings"][0]["resolution"])
+        planner = self.parse(events, PLAN, (PLAN,), (PLAN,))
+        self.assertEqual(planner["errors"], [])
+        self.assertNotIn("recovered_by", planner["warnings"][0])
         for targets, notes in (((PLAN,), ()), ((PLAN, "/repo/source.py"), (PLAN,)), ((), (PLAN,))):
             self.assertEqual(
                 self.parse(events, None, targets, notes)["errors"], ["Tool execution aborted"]

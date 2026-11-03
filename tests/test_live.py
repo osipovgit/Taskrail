@@ -634,6 +634,17 @@ class LiveTests(LiveFixture, unittest.TestCase):
             self.assertEqual(warning["error"], "Tool execution aborted")
             self.assertIn("read", warning["recovered_by"])
 
+    def test_empty_aborted_plan_edit_keeps_a_valid_plan_and_independent_review(self):
+        _, status, state = self.run_mode("plan-empty-abort")
+        self.assertEqual(status, "READY_FOR_REVIEW", state.get("summary"))
+        planner = state["stages"][0]
+        self.assertEqual(planner["session_turns"], 1)
+        self.assertEqual(planner["status"], "RESULT_VALID")
+        self.assertEqual(planner["errors"], [])
+        self.assertNotIn("recovered_by", planner["warnings"][0])
+        self.assertEqual(state["stages"][1]["stage"], "plan-reviewer")
+        self.assertEqual(state["stages"][-1]["stage"], "reviewer")
+
     def test_empty_aborted_review_edit_keeps_a_valid_review(self):
         _, status, state = self.run_mode("review-empty-abort")
         self.assertEqual(status, "READY_FOR_REVIEW", state.get("summary"))

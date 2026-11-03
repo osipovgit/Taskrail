@@ -39,6 +39,7 @@ def parse_events(path, start=0, plan_file=None, writable_files=(), notes=()):
     writes = write_warnings.FileWrites(
         (*writable_files, plan_file) if plan_file else writable_files,
         [note for note in notes if note != plan_file],
+        artifacts=notes,
     )
     for event_line, line in turn_io.event_lines(path, start):
         event = decoded(line)
