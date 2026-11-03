@@ -183,7 +183,7 @@ class AccessManifestTests(unittest.TestCase):
         self.assertIn("as your entire message", instructions("planner"))
         self.assertIn("absence from your tool list is expected", instructions("planner"))
         self.assertNotIn("push", instructions("reviewer"))
-        self.assertIn("A push waits for the operator's approval", instructions("implementer"))
+        self.assertIn("Push needs personal approval", instructions("implementer"))
         self.assertEqual(
             executor_contracts.ssh_schema()["properties"]["status"], {"const": "ACTION_REQUEST"}
         )
