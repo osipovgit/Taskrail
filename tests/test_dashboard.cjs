@@ -162,7 +162,7 @@ async function main() {
       ],
     },
   });
-  assert.ok(all(corrected).some((n) => n.textContent === 'Agent message · not a stage verdict'));
+  assert.ok(!all(corrected).some((n) => n.textContent === 'Agent message · not a stage verdict'));
   assert.ok(all(corrected).some((n) => n.textContent === 'Correction required'));
   assert.ok(
     all(corrected).some(

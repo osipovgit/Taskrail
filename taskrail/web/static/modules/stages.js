@@ -1,11 +1,10 @@
 import { badge, detail, durationLabel, el, list, names, timeLabel, timeNode } from './dom.js';
 import { preserveSelection, state } from './state.js';
 
-export function messageCard(message, provisional = false) {
+export function messageCard(message) {
   const node = el('div', undefined, 'message');
   const header = el('div', undefined, 'message-header');
   header.append(timeNode(message.timestamp));
-  if (provisional) header.append(el('small', 'Agent message · not a stage verdict', 'muted'));
   node.append(header, el('div', message.text, 'text'));
   return node;
 }
@@ -238,7 +237,7 @@ export function stageCard(stage, requirements = []) {
     summary.append(close);
     log.append(summary);
     for (const event of events) {
-      if (event.kind === 'text') log.append(messageCard(event, true));
+      if (event.kind === 'text') log.append(messageCard(event));
       else {
         // A command that ran outside the sandbox without asking stands out like a decision.
         const box = el(

@@ -20,6 +20,35 @@ from taskrail.interactions.session import MAX_RESULT_CORRECTIONS
 
 
 class LiveTests(LiveFixture, unittest.TestCase):
+    def test_identical_artifact_edits_keep_all_stages_without_extra_turns(self):
+        _, status, state = self.run_mode("artifact-identical")
+        self.assertEqual(status, "READY_FOR_REVIEW", state.get("summary"))
+        artifacts = [row for row in state["stages"] if row["role"] in {"planner", "reviewer"}]
+        self.assertEqual(
+            [row["stage"] for row in artifacts], ["planner", "plan-reviewer", "reviewer"]
+        )
+        for stage in artifacts:
+            self.assertEqual(stage["session_turns"], 1)
+            self.assertEqual(stage["status"], "RESULT_VALID")
+            self.assertEqual(stage["errors"], [])
+            self.assertIn("identical strings", stage["warnings"][0]["resolution"])
+            self.assertNotIn("recovered_by", stage["warnings"][0])
+
+    def test_identical_artifact_edits_do_not_skip_invalid_result_correction(self):
+        _, status, state = self.run_mode("artifact-identical-invalid")
+        self.assertEqual(status, "READY_FOR_REVIEW", state.get("summary"))
+        for stage in state["stages"]:
+            if stage["role"] in {"planner", "reviewer"}:
+                self.assertEqual(stage["session_turns"], 2)
+                self.assertEqual(stage["result_corrections"], 1)
+                self.assertEqual(stage["rejections"][0]["kind"], "result")
+
+    def test_identical_artifact_edits_cannot_hide_source_changes(self):
+        _, status, state = self.run_mode("artifact-identical-scope")
+        self.assertEqual(status, "BLOCKED", state.get("summary"))
+        self.assertEqual(state["attempts"][-1]["status"], "SCOPE_VIOLATION")
+        self.assertFalse(any(row["stage"] == "implementer" for row in state["stages"]))
+
     def test_artifact_mismatch_repairs_without_a_fresh_planner_or_false_approval(self):
         self.task.write_text(
             self.task.read_text().replace(

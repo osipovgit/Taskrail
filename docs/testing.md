@@ -65,8 +65,11 @@ Combined regressions start with a local-check requirement wrongly deferred as
 `runtime` and prose in Files, then a no-match artifact edit. They require one
 planner session, independent plan/result review, bounded artifact repair and no
 replay of the executor request accompanying a rejected edit. The dashboard exposes
-corrections as rejections and keeps provisional agent messages distinct from stage
-verdicts; repaired attempts do not count as first-try successes.
+corrections as rejections without repeating a disclaimer on every agent message;
+repaired attempts do not count as first-try successes.
+Identical-string edit regressions cover planning and both reviews, validation of
+unchanged invalid drafts, source-integrity failures, exact diagnostic/argument
+matching, and rejection of unknown errors or targets outside approved artifacts.
 
 Integration correction regressions use real disposable Git worktrees and scripted
 model output to verify fresh planning, independent checks/review, commit receipts,

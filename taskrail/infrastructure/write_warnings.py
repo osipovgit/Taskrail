@@ -11,6 +11,8 @@ from itertools import pairwise
 from taskrail.infrastructure import write_targets
 
 EDIT_MISMATCH = "Could not find oldString in the file. It must match exactly, including whitespace, indentation, and line endings."
+IDENTICAL_EDIT = "No changes to apply: oldString and newString are identical."
+IDENTICAL_RESOLUTION = "An edit with identical strings changed no approved artifact. The current document still requires result validation and independent review; this warning proves no write or source evidence."
 NOTE_RESOLUTION = "A rejected overwrite of an orchestrator run file is not a failure: the file is a note, never evidence. Result validation and independent review still apply."
 RESOLUTION = "An actual read and a later successful write of the same approved file in the same session resolved the rejected change. Failed exact-match edits do not invalidate that read. Result validation and independent review still apply."
 EMPTY_RESOLUTION = "An empty-argument native write was aborted in an artifact-only stage before the session's final answer. Source integrity and result validation still apply; this warning proves no write or source evidence."
@@ -68,7 +70,7 @@ class FileWrites:
         answered = final_line is not None and outcome["final_text"].strip()
         if not self.targets or not answered or len(sessions) != 1:
             return outcome
-        self.excuse_empty(outcome, sessions[0], final_line)
+        self.excuse_noops(outcome, sessions[0], final_line)
         for failure in outcome["tool_errors"]:
             proof = self.recovery(failure, sessions[0], final_line)
             if proof is not None and failure[ERROR] in outcome[ERRORS]:
@@ -77,17 +79,16 @@ class FileWrites:
                 outcome[ERRORS].remove(failure[ERROR])
         return outcome
 
-    def excuse_empty(self, outcome, session_id, final_line):
-        """Only artifact-only stages may finish after an empty aborted native call."""
+    def excuse_noops(self, outcome, session_id, final_line):
+        """Artifact-only stages still validate their result after known harmless calls."""
         if not self.targets <= self.artifacts:
             return
         for failure in outcome["tool_errors"]:
             same = failure.get("session_id") == session_id
             prior = failure[EVENT_LINE] < final_line
-            arguments = failure.get(INPUT)
-            empty = isinstance(arguments, dict) and not arguments and aborted(failure)
-            if same and prior and empty and failure[ERROR] in outcome[ERRORS]:
-                failure.update(resolution=EMPTY_RESOLUTION)
+            resolution = artifact_noop(failure, self.artifacts)
+            if same and prior and resolution and failure[ERROR] in outcome[ERRORS]:
+                failure.update(resolution=resolution)
                 outcome["warnings"].append(dict(failure))
                 outcome[ERRORS].remove(failure[ERROR])
 
@@ -154,3 +155,22 @@ def aborted(failure):
         "Tool execution aborted",
         "Error: Tool execution aborted",
     }
+
+
+def artifact_noop(failure, targets):
+    """Require exact native diagnostics and matching arguments, never inferred success."""
+    arguments = failure.get(INPUT)
+    if not isinstance(arguments, dict):
+        return None
+    if not arguments and aborted(failure):
+        return EMPTY_RESOLUTION
+    known = failure.get(ERROR) in {
+        IDENTICAL_EDIT,
+        f"Error: {IDENTICAL_EDIT}",
+    }
+    known = known and failure.get(TOOL) == "edit"
+    original = arguments.get("oldString")
+    identical = isinstance(original, str) and original == arguments.get("newString")
+    if known and identical and write_targets.from_call(failure, targets):
+        return IDENTICAL_RESOLUTION
+    return None

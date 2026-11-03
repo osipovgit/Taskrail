@@ -5,13 +5,69 @@ import unittest
 from pathlib import Path
 
 from taskrail.infrastructure.event_summary import parse_events
-from taskrail.infrastructure.write_warnings import EDIT_MISMATCH
+from taskrail.infrastructure.write_warnings import EDIT_MISMATCH, IDENTICAL_EDIT
 
 PLAN = "/run/task/plan.md"
 REJECTION = f"You must read file {PLAN} before overwriting it. Use the Read tool first"
 
 
 class PlanWarningTests(unittest.TestCase):
+    def identical_events(self, error=IDENTICAL_EDIT):
+        events = self.events()
+        events[0]["part"]["tool"] = "edit"
+        events[0]["part"]["state"].update(
+            input=dict(filePath=PLAN, oldString="same", newString="same"), error=error
+        )
+        return [events[0], *events[3:]]
+
+    def test_identical_edit_is_a_warning_only_for_an_approved_artifact(self):
+        for prefix in ("", "Error: "):
+            events = self.identical_events(prefix + IDENTICAL_EDIT)
+            for target, writable, notes in ((PLAN, (), (PLAN,)), (None, (PLAN,), (PLAN,))):
+                with self.subTest(prefix=prefix, target=target):
+                    result = self.parse(events, target, writable, notes)
+                    self.assertEqual(result["errors"], [])
+                    warning = result["warnings"][0]
+                    self.assertEqual(warning["error"], prefix + IDENTICAL_EDIT)
+                    self.assertEqual(warning["input"]["oldString"], "same")
+                    self.assertNotIn("recovered_by", warning)
+                    self.assertIn("proves no write", warning["resolution"])
+            self.assertTrue(self.parse(events, None, (PLAN,))["errors"])
+            self.assertTrue(self.parse(events, None, (PLAN, "/repo/source.py"), (PLAN,))["errors"])
+
+    def test_identical_edit_requires_exact_diagnostic_arguments_session_and_order(self):
+        cases = []
+        for arguments in (
+            {},
+            dict(filePath=PLAN),
+            dict(filePath=PLAN, oldString=None, newString=None),
+            dict(filePath=PLAN, oldString="same", newString="different"),
+            dict(filePath="/outside/plan.md", oldString="same", newString="same"),
+        ):
+            events = self.identical_events()
+            events[0]["part"]["state"]["input"] = arguments
+            cases.append(events)
+        for tool in ("write", "apply_patch"):
+            events = self.identical_events()
+            events[0]["part"]["tool"] = tool
+            cases.append(events)
+        events = self.identical_events()
+        events[0]["sessionID"] = "other"
+        cases.append(events)
+        events = self.identical_events()
+        cases.extend((events[:1], [*events[1:], events[0]]))
+        cases.append(self.identical_events(IDENTICAL_EDIT + " Unknown failure"))
+        for events in cases:
+            with self.subTest(events=events):
+                self.assertTrue(self.parse(events, notes=(PLAN,))["errors"])
+        events = self.identical_events()
+        unrelated = copy.deepcopy(events[0])
+        unrelated["part"].update(id="other", callID="other")
+        unrelated["part"]["state"]["error"] = "PermissionDeniedError"
+        result = self.parse([events[0], unrelated, *events[1:]], notes=(PLAN,))
+        self.assertEqual(result["errors"], ["PermissionDeniedError"])
+        self.assertEqual(len(result["warnings"]), 1)
+
     def events(self):
         operations = (("write", "error"), ("read", "completed"), ("edit", "completed"))
         events = []

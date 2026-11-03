@@ -12,6 +12,7 @@ from fake_contract import attempt, earlier_invalid, enrich, plan_text, review_te
 from fake_file_writes import (
     EDIT_MISMATCH,
     empty_abort,
+    identical_edit,
     implement,
     plan_alias,
     plan_mismatches,
@@ -582,6 +583,12 @@ if mode == "plan-review-citations":
     response = proposal(context, role, run, print) or response
 if mode == "isolated-plan-paths" and role == "planner":
     isolated_plan(run, target, continued, prompt)
+if mode.startswith("artifact-identical") and role != "implementer":
+    if mode == "artifact-identical-invalid" and not continued:
+        own.write_text("Summary: incomplete artifact\n")
+    identical_edit(own, print)
+    if mode == "artifact-identical-scope" and role == "plan-reviewer":
+        target.write_text("unauthorized edit\n")
 if mode.startswith("artifact-mismatch") and role != "implementer":
     turn_number = record.get("session_turns", 0)
     if role == "planner" and turn_number == 0:

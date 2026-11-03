@@ -216,6 +216,13 @@ the rejected write or an accompanying executor request. Permission, source integ
 unknown-error and aborted-writer failures do not use this route. Result validation
 and independent review still decide whether the draft can advance.
 
+A native edit rejected because `oldString` and `newString` are identical is a
+warning in an artifact-only stage when both recorded strings match and the target
+is an approved plan/review file. It proves no write and consumes no repair turn:
+the current document goes through normal validation, including any needed result
+corrections. The original error remains in the activity log. Other targets,
+unknown errors and source-integrity failures retain their normal handling.
+
 Ordinary Goal and Acceptance criteria may require local lint, syntax and test
 commands. Assign that work to a task; `runtime` is a deferral outcome reserved for
 requirements explicitly labelled runtime, not a synonym for executing a command.

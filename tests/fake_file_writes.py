@@ -77,6 +77,19 @@ def empty_abort(emit):
     emit(json.dumps(dict(type="tool_use", part=part)))
 
 
+def identical_edit(target, emit):
+    """A redundant native edit changes nothing, followed by a read and final result."""
+    arguments = dict(filePath=str(target), oldString="same", newString="same", replaceAll=False)
+    state = dict(
+        status="error",
+        input=arguments,
+        error="Error: No changes to apply: oldString and newString are identical.",
+    )
+    part = dict(id="identical-edit", callID="identical-edit", tool="edit", state=state)
+    emit(json.dumps(dict(type="tool_use", part=part)))
+    event(emit, target, "read", "completed", target.read_text())
+
+
 def plan_alias(target, content, emit):
     """A rejected dot-segment edit is repaired through the canonical plan path."""
     target.write_text("Summary: draft\n")
