@@ -13,6 +13,7 @@ from taskrail.git import (
     requests,
     scope,
     staging_baseline,
+    worktree_restore,
 )
 
 REQUEST = "request"
@@ -21,7 +22,7 @@ ARGV = "argv"
 MUTATION = "mutation"
 REPOSITORY = "repository"
 FINGERPRINT = "fingerprint"
-INDEX_WRITES = frozenset(("add", "commit"))
+CONTENT_WRITES = frozenset(("add", "commit", "restore"))
 # A write whose outcome is not known is never repeated, even with changed content.
 UNCERTAIN = frozenset(("RUNNING", "UNKNOWN"))
 
@@ -53,6 +54,7 @@ def perform(entry, previous, role, environment):
         stderr=outcome.stderr,
     )
     index_ownership.record(root, entry)
+    worktree_restore.record(entry)
     staging_baseline.record(entry)
 
 
@@ -74,6 +76,11 @@ def prepare(root, entry, previous, environment):
     payload = entry[REQUEST]
     if not entry[MUTATION]:
         return payload[ARGV]
+    same = [record for record in previous if record[STATUS] in UNCERTAIN]
+    require(
+        not any(record.get(MUTATION) for record in same),
+        prompt_texts.text("git.unknown"),
+    )
     same = [record for record in previous if identical(record, payload)]
     require(not any(map(replayed, same)), prompt_texts.text("git.replay"))
     repo = scope.repository(root)
@@ -113,4 +120,4 @@ def replayed(record):
     content, is a new operation once its fingerprint differs.
     """
     command = record[REQUEST][ARGV][0]
-    return record[STATUS] in UNCERTAIN or command not in INDEX_WRITES
+    return record[STATUS] in UNCERTAIN or command not in CONTENT_WRITES

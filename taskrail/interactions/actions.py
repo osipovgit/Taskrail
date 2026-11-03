@@ -1,13 +1,11 @@
 """Route intermediate operations while retaining the original stage/session."""
 
-import json
 import re
 from pathlib import Path
 
 from taskrail.core import json_response, prompt_texts, protected_paths
 from taskrail.git import dispatch
 from taskrail.interactions import (
-    access,
     approval_policy,
     command_effects,
     events,
@@ -35,9 +33,7 @@ class Actions:
         self.rule = None
 
     def route(self, outcome):
-        """An executor request, an access decision or a near-miss request; else None."""
-        if outcome["status"] == "BLOCKED_PERMISSION":
-            return self.access_action(outcome)
+        """An executor request or a near-miss request; otherwise None."""
         if outcome["status"] != "OK":
             return None
         routed = request_routes.route(self, outcome)
@@ -67,17 +63,6 @@ class Actions:
             return None
         reason = decision.get("alternative") or "declined."
         return prompt_texts.text("feedback.push_declined", reason=reason)
-
-    def access_action(self, outcome):
-        """Declined reads return feedback; an approved scope remains read-only."""
-        calls = outcome.get("tool_errors", [])
-        decision = self.approve(dict(status="ACCESS_REQUEST", calls=calls))
-        answer = dict(status="DECLINED", decision=decision)
-        if decision["decision"] == "allow":
-            answer = access.apply_all(self.session.environment, calls)
-        text = json.dumps(answer)
-        events.append(self.folder, "permission", dict(calls=calls), text)
-        return "{}\n{}".format(text, prompt_texts.text("feedback.access"))
 
     def approve(self, payload, personal=False):
         """Pause only approval time, with no deadline for the operator."""

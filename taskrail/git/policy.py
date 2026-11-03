@@ -23,7 +23,7 @@ READ_FLAGS = MappingProxyType(
 )
 VALUE_FLAGS = frozenset(("--format", "--pretty", "--max-count", "-n", "--since", "--until", "-L"))
 REFLOG_WRITES = frozenset(("expire", "delete", "drop", "write"))
-WRITERS = frozenset(("add", "commit", "revert", "cherry-pick", "merge", "fetch", "push"))
+WRITERS = frozenset(("add", "commit", "revert", "cherry-pick", "merge", "fetch", "push", "restore"))
 PRETTY_NAMES = frozenset(("oneline", "short", "medium", "full", "fuller", "reference", "raw"))
 PRETTY_FLAGS = frozenset(("--format", "--pretty"))
 
@@ -94,7 +94,12 @@ def read_value(flag, text):
 def write_arguments(argv):
     """Supported writes cannot replace commits, run scripts or force remote updates."""
     command, *arguments = argv
-    if command == "add":
+    if command == "restore":
+        require(
+            len(arguments) > 2 and arguments[:2] == ["--worktree", "--"],
+            "Use restore --worktree -- <explicit files>",
+        )
+    elif command == "add":
         require(len(arguments) > 1, "Use add -- <explicit files>")
         require(arguments[0] == "--", "Use add -- <explicit files>")
     elif command == "commit":

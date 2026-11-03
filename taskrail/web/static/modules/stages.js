@@ -127,9 +127,7 @@ export function tickStageTimers() {
 export function warningLines(warnings) {
   const groups = new Map();
   for (const w of warnings || []) {
-    const text =
-      w.resolution ||
-      (w.input?.filePath || '') + ': ' + w.error + ' → subsequent full read confirmed';
+    const text = w.resolution || (w.input?.filePath || '') + ': ' + w.error;
     const group = groups.get(text) || { count: 0, files: [] };
     const file = w.resolution && w.input?.filePath;
     if (file && !group.files.includes(file)) group.files.push(file);
@@ -165,9 +163,6 @@ export function stageCard(stage, requirements = []) {
   if (stage.verdict) card.append(badge(stage.verdict));
   const modes = {
     import: 'Imported plan',
-    'format-repair': 'Format repair',
-    'scope-repair': 'Scoped retry',
-    'access-recovery': 'Access denied; continuing with allowed sources',
     'research-recovery': 'Recovery from recorded evidence',
   };
   const context = [
@@ -243,7 +238,11 @@ export function stageCard(stage, requirements = []) {
         const box = el(
           'div',
           undefined,
-          'message tool-event' + (event.host ? ' host-command' : ''),
+          'message tool-event' +
+            (event.host ? ' host-command' : '') +
+            (event.status === 'error' || event.error || event.kind === 'error'
+              ? ' tool-failure'
+              : ''),
         );
         const heading = el('div', undefined, 'tool-heading');
         heading.append(

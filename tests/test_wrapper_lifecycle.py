@@ -154,7 +154,7 @@ class WrapperLifecycleTests(unittest.TestCase):
         with opencode_api.stage_server(command, self.root, ("WRAPPER_TOKEN",), False) as server:
             with patch.dict(os.environ, WRAPPER_GATEWAY="1"):
                 failure = self.launch(command, server)
-            self.assertEqual(failure["status"], "TOOL_ERROR")
+            self.assertEqual(failure["status"], "TURN_ERROR")
             self.assertIn("Retries exhausted", failure["errors"][0])
             with patch.dict(os.environ, WRAPPER_INPUT="20000"):
                 completed = self.launch(command, server)

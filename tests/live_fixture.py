@@ -66,7 +66,7 @@ class LiveFixture:
                 "taskrail.interactions.approvals.wait",
                 return_value=dict(decision="deny", alternative="Use permitted source paths"),
             ),
-            patch("taskrail.interactions.provider_resume.WAITS", (0, 0, 0)),
+            patch("taskrail.interactions.turn_recovery.WAITS", (0, 0, 0)),
         ):
             run, status = execute_task(self.task, self.settings, run_dir=self.base / "result")
         state = json.loads((run / "run.json").read_text())

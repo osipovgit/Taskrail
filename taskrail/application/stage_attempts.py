@@ -3,7 +3,6 @@
 from functools import partial
 
 from taskrail.application import (
-    access_recovery,
     attempt_context,
     evidence,
     plan_recovery,
@@ -144,19 +143,9 @@ def checker(workflow, active):
 
 
 def first_request(workflow):
-    """The stage request, followed by earlier access corrections on continuation."""
+    """The current stage request uses the same declared authority on continuation."""
     execution = tuple(workflow.flow[key] for key in EXECUTION_KEYS)
-    state = workflow.state
-    request = prompts.make_request(workflow.config, execution, state, workflow.run)
-    return f"{request}{previous_corrections(workflow)}"
-
-
-def previous_corrections(workflow):
-    """A continuation repeats the access corrections of the interrupted stage."""
-    if not workflow.runtime["resumed"]:
-        return ""
-    stage = workflow.flow[STAGE]
-    return access_recovery.previous_correction(workflow.state, stage, workflow.config["roots"])
+    return prompts.make_request(workflow.config, execution, workflow.state, workflow.run)
 
 
 def evidence_roots(workflow):

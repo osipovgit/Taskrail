@@ -12,7 +12,7 @@ class PlanRecoveryTests(unittest.TestCase):
             ("implementer", "CONTEXT_EXCEEDED"),
             ("reviewer", "CONTEXT_EXCEEDED"),
             ("planner", "SCOPE_VIOLATION"),
-            ("planner", "BLOCKED_PERMISSION"),
+            ("planner", "TURN_ERROR"),
             ("planner", "INTERRUPTED"),
         ]
         for stage, status in cases:

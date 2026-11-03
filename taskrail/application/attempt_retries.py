@@ -1,7 +1,7 @@
-"""Bounded retry policy of one stage: a full attempt for an invalid result, access and
+"""Bounded retry policy of one stage: a full attempt for an invalid result and
 transport recovery."""
 
-from taskrail.application import access_recovery, context_handoff, evidence, plan_recovery
+from taskrail.application import context_handoff, evidence, plan_recovery
 from taskrail.core import prompt_texts
 from taskrail.infrastructure import context_overflow
 from taskrail.observability.progress import say
@@ -13,25 +13,21 @@ RESULT_KEY = "result"
 CONTRACT_ERROR = "contract_error"
 LARGE_OUTPUT = 10000
 NAMED_OUTPUTS = 5
-# Errors only a pass that can read sources again can fix.
 
 
 class Retries:
     """Decide whether a failed attempt may run again and what the next attempt gets."""
 
     def __init__(self, attempts):
-        """Restore access recovery history from earlier records of the same stage."""
+        """Track bounded context and result recovery for the current stage."""
         self.attempts = attempts
         self.stage = attempts.workflow.flow["stage"]
-        self.access = access_recovery.restore(attempts.workflow.state, self.stage)
         self.counts = {TRANSPORT_KEY: 0, RESULT_KEY: 0}
         self.repair = {}
         self.handoffs = set()
 
     def mode(self):
         """The record mode of the next attempt."""
-        if self.access.count:
-            return "access-recovery"
         if self.attempts.recovery:
             return "research-recovery"
         return "model"
@@ -43,8 +39,6 @@ class Retries:
         status = outcome["status"]
         if status == "INVALID_RESULT":
             return self.result_repair(outcome)
-        if status == "BLOCKED_PERMISSION":
-            return self.access_recovery(outcome)
         if status == context_overflow.STATUS:
             return self.handoff(outcome)
         return status in TRANSPORT and self.transport_retry()
@@ -68,32 +62,17 @@ class Retries:
         self.repair = dict(request=self.attempts.request, error=outcome[CONTRACT_ERROR])
         return full_attempt(self)
 
-    def access_recovery(self, outcome):
-        """Continue a read-only stage with allowed sources after a new denial."""
-        workflow = self.attempts.workflow
-        if self.stage == IMPLEMENTER:
-            return False
-        if not self.access.accept(outcome, workflow.config["timeout"]):
-            return False
-        self.attempts.recovery = evidence.load_index(workflow.run)
-        denied = access_recovery.denied_calls(outcome)
-        correction = access_recovery.correction(denied, workflow.config["roots"])
-        self.attempts.request += correction
-        count = self.access.count
-        say(f"  Access denied; continuing with allowed sources ({count}/2)")
-        return True
-
     def transport_retry(self, *notes, handoff=False):
         """Read-only stages retry interrupted transports in a new session with recorded evidence.
 
         A writer that filled its context hands off to a fresh session the same way; it
-        is never retried after any other interruption.
+        uses same-session turn recovery for other interruptions.
         """
         workflow = self.attempts.workflow
         limit = workflow.config["read_retries"]
         if self.stage == IMPLEMENTER and not handoff:
             limit = 0
-        if self.counts[TRANSPORT_KEY] >= limit or self.access.count:
+        if self.counts[TRANSPORT_KEY] >= limit:
             return False
         self.counts[TRANSPORT_KEY] += 1
         for note in notes:

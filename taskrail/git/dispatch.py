@@ -19,7 +19,6 @@ def consume(outcome, active, state, environment):
         return None
     run = active[0].parent
     entries = requests.history(run)
-    requests.context(run)
     entry = dict(request=payload, stage=active[0].name, status="RUNNING")
     entries.append(entry)
     atomic_json(run / LEDGER, entries)

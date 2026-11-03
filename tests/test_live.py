@@ -20,6 +20,42 @@ from taskrail.interactions.session import MAX_RESULT_CORRECTIONS
 
 
 class LiveTests(LiveFixture, unittest.TestCase):
+    def test_interrupted_source_write_is_inspected_restored_and_reviewed(self):
+        for mode in ("native-partial", "native-partial-dirty"):
+            with self.subTest(mode=mode):
+                self.setUp()
+                self.real_repository()
+                header = {"roots": {"project": str(self.root)}, "isolation": "in_place"}
+                self.task.write_text(f"```taskrail-task\n{json.dumps(header)}\n```\nReturn 2")
+                target = self.root / "hello.py"
+                if mode.endswith("dirty"):
+                    target.write_text("# earlier user work\n" + target.read_text())
+                original = target.read_text()
+                (self.root / "unrelated.txt").write_text("New unrelated user edits\n")
+                self.configure_mode(mode, timeout_seconds=20)
+                with patch("taskrail.interactions.approvals.wait") as approval:
+                    run, status = execute_task(
+                        self.task, self.settings, run_dir=self.base / "result"
+                    )
+                approval.assert_not_called()
+                state = json.loads((run / "run.json").read_text())
+                self.assertEqual(status, "READY_FOR_REVIEW", state.get("summary"))
+                self.assertEqual(target.read_text(), original.replace("return 1", "return 2"))
+                self.assertEqual(
+                    (self.root / "unrelated.txt").read_text(), "New unrelated user edits\n"
+                )
+                writers = [row for row in state["stages"] if row["role"] == "implementer"]
+                self.assertEqual(len(writers), 1)
+                self.assertEqual(writers[0]["session_turns"], 4)
+                self.assertEqual(writers[0]["rejections"][0]["kind"], "turn")
+                jobs = json.loads((run / "git-execution.json").read_text())
+                self.assertEqual([row["request"]["argv"][0] for row in jobs], ["diff", "restore"])
+                self.assertEqual(
+                    jobs[-1]["status"], "REJECTED" if mode.endswith("dirty") else "SUCCEEDED"
+                )
+                self.assertEqual(state["stages"][-1]["stage"], "reviewer")
+                self.assertEqual(state["stages"][-1]["status"], "RESULT_VALID")
+
     def test_identical_artifact_edits_keep_all_stages_without_extra_turns(self):
         _, status, state = self.run_mode("artifact-identical")
         self.assertEqual(status, "READY_FOR_REVIEW", state.get("summary"))
@@ -31,7 +67,7 @@ class LiveTests(LiveFixture, unittest.TestCase):
             self.assertEqual(stage["session_turns"], 1)
             self.assertEqual(stage["status"], "RESULT_VALID")
             self.assertEqual(stage["errors"], [])
-            self.assertIn("identical strings", stage["warnings"][0]["resolution"])
+            self.assertIn("No successful operation", stage["warnings"][0]["resolution"])
             self.assertNotIn("recovered_by", stage["warnings"][0])
 
     def test_identical_artifact_edits_do_not_skip_invalid_result_correction(self):
@@ -68,17 +104,15 @@ class LiveTests(LiveFixture, unittest.TestCase):
         planner = state["stages"][0]
         self.assertEqual(planner["session_turns"], 3)
         self.assertEqual(planner["result_corrections"], 1)
-        self.assertEqual([row["kind"] for row in planner["rejections"]], ["result", "artifact"])
+        self.assertEqual([row["kind"] for row in planner["rejections"]], ["result"])
         first_error = state["attempts"][0]["validation_errors"][0]
         self.assertIn("R1 uses runtime", first_error)
         self.assertIn("Files contains prose", first_error)
         for review in (state["stages"][1], state["stages"][-1]):
             self.assertEqual(review["session_turns"], 2)
             self.assertEqual(review["status"], "RESULT_VALID")
-            self.assertEqual(review["rejections"][0]["kind"], "artifact")
-        self.assertFalse(
-            state.get("git_jobs"), "a request accompanying a failed edit is not replayed"
-        )
+            self.assertEqual(review["rejections"], [])
+        self.assertEqual(len(state["git_jobs"]), 3)
         self.assertEqual((run / "01-plan/plan.md").read_bytes(), (run / "plan.md").read_bytes())
         self.assertTrue(all(entry["kind"] == "task" for entry in state["requirements"]))
         self.assertEqual(state["checks"][-1]["status"], "PASS")
@@ -94,13 +128,6 @@ class LiveTests(LiveFixture, unittest.TestCase):
         self.assertEqual(state["checks"][-1]["status"], "FAIL")
         self.assertIn("LOCAL_CHECK_FAILED", next(run.glob("*-check/verify-01.log")).read_text())
         self.assertFalse(any(row["stage"] == "reviewer" for row in state["stages"]))
-
-    def test_artifact_mismatch_corrections_stop_without_restarting_research(self):
-        _, status, state = self.run_mode("artifact-mismatch-repeated")
-        self.assertEqual(status, "TOOL_ERROR", state.get("summary"))
-        self.assertEqual(len(state["stages"]), 1)
-        self.assertEqual(state["stages"][0]["session_turns"], MAX_RESULT_CORRECTIONS + 2)
-        self.assertFalse(state.get("git_jobs"))
 
     def test_artifact_mismatch_does_not_recover_a_source_integrity_violation(self):
         _, status, state = self.run_mode("artifact-mismatch-scope")
@@ -226,34 +253,34 @@ class LiveTests(LiveFixture, unittest.TestCase):
         self.assertEqual(len(writer), 1)
         self.assertEqual(writer[0]["errors"], [])
         warning = writer[0]["warnings"][0]
-        self.assertIn("read", warning["recovered_by"])
+        self.assertNotIn("recovered_by", warning)
         stages = state["stages"]
         self.assertEqual(stages[-1]["stage"], "reviewer")
         self.assertEqual(stages[-1]["status"], "RESULT_VALID")
         self.assertIn(
-            "Recovered by a native read and subsequent successful write",
+            "Tool:",
             (run / "report.md").read_text(),
         )
 
-    def test_source_overwrite_recovery_never_hides_stops_or_replays_writes(self):
-        cases = (
-            ("write-unresolved", "TOOL_ERROR"),
-            ("write-mismatch-unresolved", "TOOL_ERROR"),
-            ("write-scope", "BLOCKED"),
-        )
-        for mode, expected in cases:
+    def test_native_write_failures_do_not_skip_independent_review_or_scope_guards(self):
+        for mode in ("write-unresolved", "write-mismatch-unresolved", "write-scope"):
             with self.subTest(mode=mode):
                 self.setUp()
-                _, status, state = self.run_mode(mode)
-                self.assertEqual(status, expected, state.get("summary"))
+                _, status, state = self.run_mode(mode, max_repairs=0)
+                self.assertEqual(
+                    status,
+                    "BLOCKED" if mode == "write-scope" else "CHANGES_REQUESTED",
+                    state.get("summary"),
+                )
                 writer = [entry for entry in state["stages"] if entry["stage"] == "implementer"]
                 self.assertEqual(len(writer), 1)
                 self.assertEqual(writer[0]["session_turns"], 1)
-                self.assertNotIn("reviewer", [entry["stage"] for entry in state["stages"]])
-                if mode == "write-unresolved":
-                    self.assertIn("return 1", (self.root / "hello.py").read_text())
                 if mode == "write-scope":
                     self.assertIn("Scope violation", state["summary"])
+                    self.assertNotIn("reviewer", [entry["stage"] for entry in state["stages"]])
+                else:
+                    self.assertIn("return 1", (self.root / "hello.py").read_text())
+                    self.assertEqual(state["stages"][-1]["verdict"], "REQUEST_CHANGES")
 
     def test_a_writer_that_fills_its_context_continues_in_a_fresh_session(self):
         run, status, state = self.run_mode("write-context")
@@ -272,7 +299,7 @@ class LiveTests(LiveFixture, unittest.TestCase):
         self.assertEqual(status, "READY_FOR_REVIEW", state.get("summary"))
         writer = [entry for entry in state["attempts"] if entry["stage"] == "implementer"]
         self.assertEqual(writer[0]["errors"], [])
-        self.assertIn("never evidence", writer[0]["warnings"][0]["resolution"])
+        self.assertIn("No successful operation", writer[0]["warnings"][0]["resolution"])
 
     def test_git_policy_rejection_returns_feedback_and_workflow_continues(self):
         run, status, state = self.run_mode("git-denied")
@@ -585,11 +612,11 @@ class LiveTests(LiveFixture, unittest.TestCase):
         self.assertEqual(state["stages"][1]["session_turns"], 2)
         profile = json.loads((run / "02-plan-review/agent.md").read_text().split("---")[1])
         self.assertNotIn(str(self.root.parent) + "/*", profile["permission"]["external_directory"])
-        self.assertIn("DECLINED", (run / "02-plan-review/tool-result.md").read_text())
+        self.assertIn("PermissionDeniedError", (run / "02-plan-review/tool-result.md").read_text())
 
     def test_repeated_denied_search_obeys_stage_time_without_writer(self):
-        _run, status, state = self.run_mode("parent-twice", read_retries=0, timeout_seconds=1)
-        self.assertEqual(status, "TIMEOUT")
+        _run, status, state = self.run_mode("parent-twice", read_retries=0, timeout_seconds=5)
+        self.assertEqual(status, "NO_PROGRESS")
         self.assertEqual([a["stage"] for a in state["attempts"]], ["planner", "plan-reviewer"])
         self.assertIn("return 1", (self.root / "hello.py").read_text())
 
@@ -599,7 +626,7 @@ class LiveTests(LiveFixture, unittest.TestCase):
         self.assertEqual(state["stages"][0]["errors"], [])
         warning = state["stages"][0]["warnings"][0]
         self.assertEqual(warning["tool"], "read")
-        self.assertIn("Unsuccessful exploratory read", warning["resolution"])
+        self.assertIn("No successful operation", warning["resolution"])
         self.assertEqual(state["attempts"][1]["stage"], "plan-reviewer")
         self.assertIn("File not found", (run / "report.md").read_text())
 
@@ -607,10 +634,8 @@ class LiveTests(LiveFixture, unittest.TestCase):
         run, status, state = self.run_mode("offset-recovered")
         self.assertEqual(status, "READY_FOR_REVIEW")
         self.assertEqual(state["stages"][0]["errors"], [])
-        self.assertTrue(
-            state["stages"][0]["warnings"][0]["recovered_by"]["call_id"].endswith("corrected")
-        )
-        self.assertIn("Recovered by a later full read", (run / "report.md").read_text())
+        self.assertEqual(state["stages"][0]["warnings"][0]["tool"], "read")
+        self.assertIn("Tool: read", (run / "report.md").read_text())
         self.assertEqual(state["attempts"][1]["stage"], "plan-reviewer")
 
     def test_timeout_passes_attributed_read_evidence_to_retry(self):
@@ -680,8 +705,8 @@ class LiveTests(LiveFixture, unittest.TestCase):
         self.assertEqual(status, "READY_FOR_REVIEW", state.get("summary"))
         self.assertEqual(state["stages"][0]["session_turns"], 2)
         correction = (run / "01-plan/tool-result.md").read_text()
-        self.assertIn("in THIS session", correction)
-        self.assertIn(str(run / "plan.md"), correction)
+        self.assertIn("final result was rejected", correction)
+        self.assertIn("plan.md:", correction)
         self.assertEqual([stage["stage"] for stage in state["attempts"]].count("planner"), 1)
 
     def test_resolved_plan_read_before_write_needs_no_extra_model_turn(self):
@@ -691,11 +716,9 @@ class LiveTests(LiveFixture, unittest.TestCase):
         self.assertEqual(planner["session_turns"], 1)
         self.assertEqual(planner["status"], "RESULT_VALID")
         self.assertEqual(state["stages"][1]["stage"], "plan-reviewer")
-        proof = planner["warnings"][0]["recovered_by"]
-        self.assertTrue(proof["read"]["call_id"].endswith("plan-read"))
-        self.assertTrue(proof["call_id"].endswith("plan-write"))
+        self.assertEqual(planner["warnings"][0]["tool"], "write")
         self.assertIn(
-            "Recovered by a native read and subsequent successful write",
+            "Tool:",
             (run / "report.md").read_text(),
         )
 
@@ -709,7 +732,7 @@ class LiveTests(LiveFixture, unittest.TestCase):
         self.assertEqual(planner["errors"], [])
         warning = planner["warnings"][0]
         self.assertIn("00-input/../plan.md", warning["input"]["filePath"])
-        self.assertIn("read", warning["recovered_by"])
+        self.assertNotIn("recovered_by", warning)
         self.assertEqual((run / "plan.md").read_bytes(), (run / "01-plan/plan.md").read_bytes())
         self.assertEqual(
             [entry["stage"] for entry in state["stages"]],
@@ -722,12 +745,12 @@ class LiveTests(LiveFixture, unittest.TestCase):
         self.assertEqual(state["stages"][0]["session_turns"], 2)
         self.assertEqual([row["stage"] for row in state["attempts"]].count("planner"), 1)
         feedback = (run / "01-plan/tool-result.md").read_text()
-        self.assertIn(str(run / "plan.md"), feedback)
+        self.assertIn("plan.md:", feedback)
         self.assertNotIn("00-input/../plan.md", feedback)
 
     def test_repeated_unresolved_plan_alias_stops_at_the_correction_limit(self):
         _, status, state = self.run_mode("plan-alias-unresolved")
-        self.assertEqual(status, "TOOL_ERROR", state.get("summary"))
+        self.assertEqual(status, "INVALID_RESULT", state.get("summary"))
         self.assertEqual(state["stages"][0]["session_turns"], MAX_RESULT_CORRECTIONS + 1)
         self.assertEqual(len(state["stages"]), 1)
         self.assertEqual(len(state["attempts"]), 1)
@@ -755,7 +778,7 @@ class LiveTests(LiveFixture, unittest.TestCase):
             self.assertEqual(review["errors"], [])
             warning = review["warnings"][0]
             self.assertEqual(warning["error"], "Tool execution aborted")
-            self.assertIn("read", warning["recovered_by"])
+            self.assertNotIn("recovered_by", warning)
 
     def test_empty_aborted_plan_edit_keeps_a_valid_plan_and_independent_review(self):
         _, status, state = self.run_mode("plan-empty-abort")
@@ -785,13 +808,17 @@ class LiveTests(LiveFixture, unittest.TestCase):
         self.assertTrue(state["attempts"][-1]["warnings"])
         self.assertFalse(any(row["stage"] == "implementer" for row in state["stages"]))
 
-    def test_permission_denied_retains_tool_input_after_operator_declines(self):
-        run, status, _state = self.run_mode("denied", read_retries=0, timeout_seconds=1)
-        self.assertEqual(status, "TIMEOUT")
+    def test_permission_denied_is_native_feedback_without_an_operator_decision(self):
+        self.configure_mode("denied")
+        with patch("taskrail.interactions.approvals.wait") as approval:
+            run, status = execute_task(self.task, self.settings, run_dir=self.base / "result")
+        state = json.loads((run / "run.json").read_text())
+        self.assertEqual(status, "READY_FOR_REVIEW", state.get("summary"))
+        approval.assert_not_called()
         events = (run / "02-plan-review/events.jsonl").read_text()
         self.assertIn("/outside/skills/SKILL.md", events)
-        self.assertIn("DECLINED", events)
-        self.assertFalse((run / "02-plan-review/result.json").exists())
+        self.assertNotIn("DECLINED", events)
+        self.assertTrue((run / "02-plan-review/result.json").exists())
 
     def test_ordered_layout_has_one_result_per_stage(self):
         run, _status, state = self.run_mode()
@@ -926,8 +953,9 @@ class LiveTests(LiveFixture, unittest.TestCase):
     def test_a_provider_quota_is_retried_by_default(self):
         _run, _status, state = self.run_mode("provider-quota")
         reviews = [entry for entry in state["attempts"] if entry["stage"] == "plan-reviewer"]
-        self.assertGreater(len(reviews), 1, state["attempts"])
-        self.assertIn("Free usage limit reached", state["summary"])
+        self.assertEqual(len(reviews), 1, state["attempts"])
+        self.assertEqual(state["stages"][-1]["session_turns"], 4)
+        self.assertEqual(reviews[0]["status"], "NO_PROGRESS")
 
     def test_a_review_may_cite_the_original_file_it_compared(self):
         run, status, state = self.run_mode("review-preimage")
@@ -944,7 +972,7 @@ class LiveTests(LiveFixture, unittest.TestCase):
         implementer = next(stage for stage in state["stages"] if stage["role"] == "implementer")
         self.assertEqual(implementer["session_turns"], 2)
         note = (run / implementer["directory"] / "tool-result.md").read_text()
-        self.assertIn("The provider broke off your previous turn", note)
+        self.assertIn("The previous turn was interrupted", note)
         self.assertIn("Retries exhausted", note)
 
     def test_stop_on_provider_limit_ends_the_stage_without_retries(self):
@@ -1045,9 +1073,9 @@ class LiveTests(LiveFixture, unittest.TestCase):
         from taskrail.application.checkpoints import resume_available
 
         run, status, state = self.run_mode(
-            "review-denied-always", read_retries=0, timeout_seconds=1
+            "review-denied-always", read_retries=0, timeout_seconds=5
         )
-        self.assertEqual(status, "TIMEOUT")
+        self.assertEqual(status, "NO_PROGRESS")
         self.assertTrue(resume_available(run, state)[0])
         old_steps = len(state["stages"])
         before = (self.root / "hello.py").read_bytes()
@@ -1281,7 +1309,7 @@ class LiveTests(LiveFixture, unittest.TestCase):
         self.assertEqual(len(writer), 1)
         self.assertEqual(writer[0]["errors"], [])
         self.assertIn("Could not find oldString", writer[0]["warnings"][0]["error"])
-        self.assertIn("read", writer[0]["warnings"][0]["recovered_by"])
+        self.assertEqual(writer[0]["warnings"][0]["tool"], "edit")
         self.assertIn("return 2", (self.root / "hello.py").read_text())
         self.assertEqual((self.root / "unrelated.txt").read_text(), "user dirty work\n")
         self.assertEqual(state["stages"][-1]["stage"], "reviewer")
@@ -1435,7 +1463,7 @@ class LiveTests(LiveFixture, unittest.TestCase):
         self.assertEqual(status, "READY_FOR_REVIEW", state.get("summary"))
         planner = state["stages"][0]
         self.assertEqual(planner["status"], "RESULT_VALID")
-        self.assertIn("changed nothing", planner["warnings"][0]["resolution"])
+        self.assertIn("No successful operation", planner["warnings"][0]["resolution"])
 
     def test_unsafe_permissions_no_model(self):
         _, status, state = self.run_mode("unsafe")

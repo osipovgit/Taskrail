@@ -10,7 +10,7 @@ SUCCESS = frozenset(("READY_FOR_REVIEW", "NO_CHANGES_REQUIRED", "TASKS_READY"))
 STAGE_OK = frozenset(
     ("RESULT_VALID", "CHECK_COMPLETED", "ACTION_REQUEST", "GIT_REQUEST", "RUNNING")
 )
-RECOVERY_MODES = frozenset(("access-recovery", "research-recovery"))
+RECOVERY_MODES = frozenset(("research-recovery",))
 DEFAULT_MODEL = "opencode default"
 ELAPSED = "elapsed_seconds"
 TOKENS = "tokens"

@@ -1,4 +1,4 @@
-"""Watch one opencode process: Stop, deadline, token budget and permission denials."""
+"""Watch one opencode process: Stop, deadline, token budget and provider context limits."""
 
 import contextlib
 import subprocess
@@ -6,7 +6,7 @@ import time
 
 from taskrail.core.control import check_stop
 from taskrail.core.files import atomic_json
-from taskrail.infrastructure import context_overflow, opencode_cli, usage_limits
+from taskrail.infrastructure import context_overflow, usage_limits
 from taskrail.infrastructure.event_summary import decoded
 from taskrail.infrastructure.process_group import stop_group
 from taskrail.observability.activity import Progress
@@ -70,7 +70,7 @@ class TurnWatch:
             stop_group(process.pid)
 
     def follow(self, process, deadline):
-        """Poll events until exit, a budget stop, a denial or the deadline."""
+        """Poll events until exit, a budget stop or the deadline."""
         while True:
             check_stop(self.attempt.parent)
             status = turn_status(
@@ -127,10 +127,8 @@ def announce(watch):
 
 
 def turn_status(telemetry, budgets, lines, completed=False):
-    """Stop on measured limits, permission denials or an explicit provider overflow."""
+    """Stop on measured limits or an explicit provider overflow."""
     status = usage_limits.exceeded(telemetry, **budgets, completed=completed)
-    if status == SUCCESS and any(permission_denied_event(line) for line in lines):
-        return "BLOCKED_PERMISSION"
     if status == SUCCESS and any(context_exceeded_event(line) for line in lines):
         return context_overflow.STATUS
     return status
@@ -142,23 +140,3 @@ def context_exceeded_event(line):
     if event is None or event.get("type") != ERROR:
         return False
     return context_overflow.exceeded([event.get(ERROR, "")])
-
-
-def permission_denied_event(line):
-    """A denied tool call or a denial error in one raw event line."""
-    event = decoded(line)
-    if event is None:
-        return False
-    return opencode_cli.permission_error(event_error(event))
-
-
-def event_error(event):
-    """The error text of a failed tool call or an error event."""
-    if event.get("type") == ERROR:
-        return str(event.get(ERROR, ""))
-    state = event.get("part", {}).get("state", {})
-    if event.get("type") != "tool_use" or not isinstance(state, dict):
-        return ""
-    if state.get("status") != ERROR:
-        return ""
-    return str(state.get(ERROR, ""))

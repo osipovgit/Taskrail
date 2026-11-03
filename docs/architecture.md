@@ -169,8 +169,9 @@ explicit overflow errors and compaction events. Missing usage stays unknown.
 A session ends at a measured boundary between 90 and 95
 percent of its model's window; the next attempt starts a fresh session instead of
 compacting. Read-only recovery starts it from recorded evidence while retaining the
-plan file; a writer continues from its kept edits and `progress.md`, never after
-any other interruption. Every turn of a stage runs on one private opencode server
+plan file; a writer continues from its kept edits and `progress.md`. Native tool
+errors stay in opencode. Interrupted turns with a known session resume there through
+`interactions/turn_recovery.py`, with diagnostic feedback and a no-progress bound. Every turn of a stage runs on one private opencode server
 (`opencode_serve.py` for 1.x, the adapter for 2.x), so reads of earlier turns stay
 known and turns start warm. See [context limits](deployment.md#context-limits).
 

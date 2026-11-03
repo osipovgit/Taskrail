@@ -362,10 +362,10 @@ class SandboxRouteTests(unittest.TestCase):
                 answer = approval_policy.decision(run, on_host, dict(host_commands="auto"))
                 wait.assert_not_called()
                 self.assertEqual((answer["decision"], answer["rule"]), ("allow", "host"))
-                read = dict(status="ACCESS_REQUEST", calls=[], stage="01-plan")
+                remote = dict(status="ACTION_REQUEST", stage="01-plan")
                 for asked in (
                     (on_host, dict(host_commands="ask"), False),
-                    (read, dict(host_commands="auto"), False),
+                    (remote, dict(host_commands="auto"), False),
                     (on_host, dict(host_commands="auto"), True),
                 ):
                     approval_policy.decision(run, asked[0], asked[1], personal=asked[2])

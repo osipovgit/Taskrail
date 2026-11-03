@@ -54,10 +54,6 @@ def history(run):
 def context(run):
     """Snapshots contain untrusted command output, not instructions."""
     entries = history(run)
-    schema.require(
-        not any(entry[STATUS_KEY] in {"RUNNING", "UNKNOWN"} for entry in entries),
-        prompt_texts.text("git.unknown"),
-    )
     if not entries:
         return ""
     recent = list(map(brief, entries[-RECENT_ACTIONS:]))

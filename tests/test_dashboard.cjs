@@ -70,10 +70,7 @@ async function main() {
       { resolution: missing, input: { filePath: '/p/a.py' } },
       { input: { filePath: '/p/c.py' }, error: 'Offset 9' },
     ]),
-    [
-      '3 × ' + missing + ' Files: /p/a.py, /p/b.py',
-      '/p/c.py: Offset 9 → subsequent full read confirmed',
-    ],
+    ['3 × ' + missing + ' Files: /p/a.py, /p/b.py', '/p/c.py: Offset 9'],
   );
   const card = stages.stageCard(stage);
   function all(node) {
@@ -137,6 +134,14 @@ async function main() {
     output: 'Passed',
     host: true,
   });
+  telemetry.timeline.push({
+    kind: 'tool',
+    tool: 'edit',
+    status: 'error',
+    timestamp: stamp,
+    input: '{"filePath":"/repo/file"}',
+    error: 'Permission denied',
+  });
   const traced = stages.stageCard({ ...stage, telemetry });
   assert.ok(all(traced).some((n) => n.textContent === 'Tool · read · completed'));
   const hosted = all(traced).filter((n) => String(n.className).includes('host-command'));
@@ -144,6 +149,10 @@ async function main() {
   assert.ok(all(hosted[0]).some((n) => n.textContent === 'Tool · local_command · completed'));
   assert.match(css, /\.tool-event\.host-command\s*\{[^}]*background:\s*var\(--warn-bg\)/);
   assert.ok(all(traced).some((n) => n.textContent === '<script>not executable</script>'));
+  const failed = all(traced).filter((n) => String(n.className).includes('tool-failure'));
+  assert.equal(failed.length, 1);
+  assert.ok(all(failed[0]).some((n) => n.textContent === 'Tool · edit · error'));
+  assert.match(css, /\.tool-event\.tool-failure\s*\{[^}]*background:\s*var\(--bad-bg\)/);
   const corrected = stages.stageCard({
     ...stage,
     telemetry: {

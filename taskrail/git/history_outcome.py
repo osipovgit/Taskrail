@@ -24,7 +24,7 @@ def head(repo, unborn=False):
 
 def prepare(repo, entry):
     """Pin the starting revision before source/index preflight and the actual write."""
-    if entry["request"]["argv"][0] in HISTORY_WRITES | {"add"}:
+    if entry["request"]["argv"][0] in HISTORY_WRITES | {"add", "restore"}:
         entry[BEFORE] = head(repo, unborn=True)
 
 

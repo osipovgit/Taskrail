@@ -3,7 +3,13 @@
 from pathlib import Path
 
 from taskrail.core.schema import require
-from taskrail.git import history_outcome, index_ownership, process, staging_baseline
+from taskrail.git import (
+    history_outcome,
+    index_ownership,
+    process,
+    staging_baseline,
+    worktree_restore,
+)
 
 
 def repository(root):
@@ -66,6 +72,8 @@ def preflight(root, argv, context):
             "Existing staged changes belong to the user",
         )
         check_paths(paths + staged, allowed)
+    elif command == "restore":
+        return worktree_restore.prepare(root, argv, context, staged)
     elif command == "commit":
         require(
             index_ownership.belongs(repo, staged, context["owned"]),

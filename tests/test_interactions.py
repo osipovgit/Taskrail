@@ -18,7 +18,6 @@ from sandbox_fixture import without_sandbox
 from taskrail.core import protected_paths
 from taskrail.git import deadline, process
 from taskrail.interactions import (
-    access,
     approval_policy,
     approvals,
     local,
@@ -209,10 +208,6 @@ class InteractionTests(unittest.TestCase):
             answer = approval_policy.decision(self.run, self.request(["ls"]), state, scope)
         wait.assert_not_called()
         self.assertEqual((answer["decision"], answer["rule"]), ("allow", "read_only"))
-        read = dict(tool="read", input=dict(filePath=str(self.root / "roles/main.yml")))
-        secret = dict(tool="read", input=dict(filePath=str(self.root / ".env")))
-        self.assertTrue(read_only.reads([read], roots))
-        self.assertFalse(read_only.reads([read, secret], roots))
 
     def test_allow_all_can_be_revoked_and_restored_on_a_card(self):
         state = dict(auto_approve=True)
@@ -332,37 +327,6 @@ class InteractionTests(unittest.TestCase):
             clock.paused = 7800
             self.assertEqual(clock.elapsed(), 100)
             self.assertEqual(clock.remaining(), 3500)
-
-    def test_access_requires_exact_roots_and_never_grants_edits(self):
-        profile = self.run / "agent.md"
-        profile.write_text(
-            "---\n"
-            + json.dumps(
-                {
-                    "permission": {
-                        "read": {"*": "deny"},
-                        "external_directory": {"*": "deny"},
-                        "edit": "deny",
-                    }
-                }
-            )
-            + "\n---\nRole instructions"
-        )
-        environment = dict(profile=profile, roots={"project": self.root})
-        before = profile.read_text()
-        answer = access.apply_all(
-            environment, [dict(tool="read", input={"filePath": "/etc/passwd"})]
-        )
-        self.assertEqual(answer["status"], "REJECTED")
-        self.assertEqual(profile.read_text(), before)
-        allowed = self.root / "sample.txt"
-        answer = access.apply_all(
-            environment, [dict(tool="read", input={"filePath": str(allowed)})]
-        )
-        self.assertEqual(answer["status"], "GRANTED")
-        rights = json.loads(profile.read_text()[4:].split("\n---")[0])["permission"]
-        self.assertEqual(rights["edit"], "deny")
-        self.assertEqual(rights["read"][str(allowed)], "allow")
 
     def test_long_output_is_readable_line_by_line(self):
         stage = self.run / "01-plan"

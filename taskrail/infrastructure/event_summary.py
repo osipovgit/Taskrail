@@ -1,57 +1,36 @@
 """Summarize one opencode turn from its JSON event stream."""
 
 import json
-import os
-import re
 from collections import defaultdict
 
 from taskrail.infrastructure import (
     context_overflow,
-    invalid_tools,
+    native_tools,
     opencode_cli,
     provider_limits,
-    read_warnings,
     turn_io,
-    write_warnings,
 )
 
-END_OF_FILE = re.compile(r"\(End of file - total (\d+) lines\)")
-LINE_NUMBER = re.compile(r"^\s*(\d+):", re.MULTILINE)
-OFFSET_ERROR = re.compile(r"Error: Offset \d+ is out of range for this file \(\d+ lines\)")
 TOKEN_FIELDS = ("input", "output", "reasoning", "total")
-RECOVERY_KEYS = ("event_line", "call_id", "part_id")
-STATUS = "status"
 ERROR = "error"
 ERRORS = "errors"
 TOOL = "tool"
 PART = "part"
 INPUT = "input"
-FILE_PATH = "filePath"
+NATIVE_FAILURE = "Native tool failure returned to the agent. No successful operation or evidence is inferred; source integrity and final result validation still apply."
+SESSION_RECOVERY = (
+    "opencode continued after this session error; the final result still requires validation."
+)
 
 
-def parse_events(path, start=0, plan_file=None, writable_files=(), notes=()):
-    """Usage, sessions, errors and the final text of events after line `start`.
-
-    notes: the orchestrator's run files attached to the turn. The plan file among them
-    is the planner's result, not a note, so its rejected overwrite still needs a proof.
-    """
+def parse_events(path, start=0):
+    """Keep native diagnostics without overriding opencode's tool recovery loop."""
     summary = EventSummary()
-    writes = write_warnings.FileWrites(
-        (*writable_files, plan_file) if plan_file else writable_files,
-        [note for note in notes if note != plan_file],
-        artifacts=notes,
-    )
     for event_line, line in turn_io.event_lines(path, start):
         event = decoded(line)
         if event is not None:
             summary.observe(event_line, event)
-            writes.observe(event_line, event)
-    return invalid_tools.recover(
-        writes.recover(
-            read_warnings.classify_missing_reads(summary.outcome()), summary.identity["final_line"]
-        ),
-        summary.identity["final_line"],
-    )
+    return summary.outcome()
 
 
 def decoded(line):
@@ -77,14 +56,19 @@ class EventSummary:
         self.identity["seen"] = set()
         self.counts = dict(tool_calls=0, steps=0)
         self.failures = dict(errors=[], tool_errors=[], session=[], permission=False)
-        self.full_reads = []
 
     def observe(self, event_line, event):
         """Dispatch one new event by type."""
         if not self.fresh(event):
             return
-        part = event.get(PART, {})
         kind = event.get("type")
+        if kind in {"step_start", "tool_use"}:
+            self.identity.update(final=None, final_line=None)
+        self.dispatch(event_line, event, kind)
+
+    def dispatch(self, event_line, event, kind):
+        """Aggregate one normalized event after updating its lifecycle."""
+        part = event.get(PART, {})
         if kind == "text" and isinstance(part.get("text"), str):
             message = self.texts[part.get("messageID")]
             message.append(part["text"])
@@ -92,7 +76,8 @@ class EventSummary:
             self.tool(event_line, part, event.get("sessionID"))
         elif kind == ERROR:
             error = str(event.get(ERROR, event))
-            self.fail(error)
+            self.failures[ERRORS].append(error)
+            self.failures["permission"] |= opencode_cli.permission_error(error)
             self.failures["session"].append(dict(error=error, event_line=event_line))
         elif kind == "step_finish":
             self.step(event_line, part)
@@ -109,26 +94,17 @@ class EventSummary:
         return True
 
     def tool(self, event_line, part, session_id):
-        """Count a call; record failures and complete first-line reads."""
+        """Count a call and retain native failures for the agent and operator."""
         self.counts["tool_calls"] += 1
         state = part.get("state", {})
-        call = dict(event_line=event_line, call_id=part.get("callID"))
-        call["part_id"] = part.get("id")
-        if state.get(STATUS) == ERROR:
-            error = str(state.get(ERROR, "unknown tool error"))
-            self.fail(error)
-            failure = dict(tool=part.get(TOOL), call_id=call["call_id"])
+        error = native_tools.failure(part)
+        if error:
+            self.failures[ERRORS].append(error)
+            self.failures["permission"] |= opencode_cli.permission_error(error)
+            failure = dict(tool=part.get(TOOL), call_id=part.get("callID"))
             failure.update(input=state.get(INPUT, {}), error=error, event_line=event_line)
             failure["session_id"] = session_id
             self.failures["tool_errors"].append(failure)
-        elif part.get(TOOL) == "read" and full_read(state):
-            call["source"] = state.get(INPUT, {}).get(FILE_PATH)
-            self.full_reads.append(call)
-
-    def fail(self, error):
-        """Every error is kept; a permission denial is also flagged."""
-        self.failures[ERRORS].append(error)
-        self.failures["permission"] |= opencode_cli.permission_error(error)
 
     def step(self, event_line, part):
         """Add reported usage; a stopping step marks the final message."""
@@ -144,14 +120,14 @@ class EventSummary:
             self.identity.update(final=part.get("messageID"), final_line=event_line)
 
     def outcome(self):
-        """The turn summary; recovered errors and later-fixed offset errors become warnings."""
+        """Native tool diagnostics do not override a completed, independently checked result."""
         final = self.identity["final"]
         text = "\n".join(self.texts[final]) if final else ""
         summary = dict(
             tokens=self.tokens,
             steps=self.counts["steps"],
             tool_calls=self.counts["tool_calls"],
-            warnings=offset_warnings(self.failures, self.full_reads),
+            warnings=[],
             sessions=sorted(self.identity["sessions"]),
             errors=self.failures[ERRORS],
             tool_errors=self.failures["tool_errors"],
@@ -163,52 +139,13 @@ class EventSummary:
             completed=final is not None,
             final_text=text,
         )
-        session = self.failures["session"]
-        read_warnings.recover_session_errors(summary, session, self.identity["final_line"])
+        for failure in summary["tool_errors"]:
+            summary[ERRORS].remove(failure[ERROR])
+            summary["warnings"].append(dict(failure, resolution=NATIVE_FAILURE))
+        last = self.identity["final_line"]
+        for failure in self.failures["session"]:
+            if text.strip() and last is not None and failure["event_line"] < last:
+                summary[ERRORS].remove(failure[ERROR])
+                summary["warnings"].append(dict(failure, resolution=SESSION_RECOVERY))
+        summary["provider_context_exceeded"] = context_overflow.exceeded(summary[ERRORS])
         return summary
-
-
-def full_read(state):
-    """A completed, untruncated read from line 1."""
-    output = state.get("output", "")
-    metadata = state.get("metadata") or {}
-    if not isinstance(output, str) or metadata.get("truncated"):
-        return False
-    if state.get(INPUT, {}).get("offset", 1) != 1:
-        return False
-    return complete_listing(output)
-
-
-def complete_listing(output):
-    """The numbered lines run from 1 to the reported end of file."""
-    end = END_OF_FILE.search(output)
-    if not end:
-        return False
-    body = output.split("<content>", 1)[-1]
-    body = body.split("</content>", 1)[0]
-    numbers = [int(number) for number in LINE_NUMBER.findall(body)]
-    total = int(end.group(1))
-    return numbers == list(range(1, total + 1))
-
-
-def offset_warnings(failures, full_reads):
-    """An out-of-range read later followed by a full read of the same file is recovered."""
-    warnings = []
-    for failure in failures["tool_errors"]:
-        read = recovering_read(failure, full_reads)
-        if read is not None:
-            failure["recovered_by"] = {key: read[key] for key in RECOVERY_KEYS}
-            warnings.append(dict(failure))
-            failures["errors"].remove(failure[ERROR])
-    return warnings
-
-
-def recovering_read(failure, full_reads):
-    """The first later full read of the absolute file an offset error named."""
-    source = failure[INPUT].get(FILE_PATH)
-    if failure[TOOL] != "read" or not OFFSET_ERROR.fullmatch(failure[ERROR]):
-        return None
-    if not isinstance(source, str) or not os.path.isabs(source):
-        return None
-    later = [read for read in full_reads if read["event_line"] > failure["event_line"]]
-    return next((read for read in later if read["source"] == source), None)

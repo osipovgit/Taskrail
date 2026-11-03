@@ -1,17 +1,16 @@
 """Continue executor turns through an explicit opencode session inside one stage."""
 
 from taskrail.application import (
-    artifact_write,
     budgets,
     evidence_delivery,
     response_format,
 )
 from taskrail.application.artifacts import save_run
-from taskrail.core import control, prompt_texts
+from taskrail.core import control
 from taskrail.core.files import atomic_json, changed
-from taskrail.infrastructure import invalid_tools, opencode_api
+from taskrail.infrastructure import opencode_api
 from taskrail.infrastructure.runner import run_agent
-from taskrail.interactions import events, provider_resume, request_limits
+from taskrail.interactions import events, request_limits, turn_recovery
 from taskrail.interactions.actions import Actions
 from taskrail.interactions.clock import StageClock
 
@@ -69,7 +68,7 @@ class StageSession:
             if request_limits.check(self, outcome):
                 return self.finished(outcome)
             response = Actions(self).route(outcome) or result_feedback(self, outcome)
-            response = response or provider_resume.response(self, outcome)
+            response = response or turn_recovery.response(self, outcome)
             if response is None:
                 return self.finished(outcome)
             if not self.continue_context(outcome, response):
@@ -102,6 +101,8 @@ class StageSession:
             self.check_sources()
         except ValueError as error:
             outcome.update(status="SCOPE_VIOLATION", errors=[str(error)])
+        if outcome["status"] == "OK":
+            self.context.pop("turn_recovery", None)
         return outcome
 
     def check_sources(self):
@@ -173,11 +174,8 @@ def result_feedback(session, outcome):
     """
     check = session.environment.get("check_result")
     context = session.context
-    correction = artifact_feedback(session, outcome)
-    if correction is not None:
-        return correction
     if check is None or outcome["status"] != "OK":
-        return unavailable_tool_feedback(session, outcome)
+        return None
     if context[RESULT_CORRECTIONS] >= MAX_RESULT_CORRECTIONS:
         return None
     error = check(outcome)
@@ -187,33 +185,6 @@ def result_feedback(session, outcome):
     context[VALIDATION_ERRORS].append(error)
     feedback = response_format.correction(session.active[1][ROLE], error)
     events.correction(session, "result", "final result", feedback)
-    return feedback
-
-
-def unavailable_tool_feedback(session, outcome):
-    """A rejected tool name needs guidance, without weakening final result validation."""
-    errors = invalid_tools.correction(outcome)
-    if not errors or session.context[RESULT_CORRECTIONS] >= MAX_RESULT_CORRECTIONS:
-        return None
-    session.context[RESULT_CORRECTIONS] += 1
-    feedback = prompt_texts.text("recovery.invalid_tool", error="; ".join(errors))
-    events.correction(session, "tool", "unavailable tool", feedback)
-    return feedback
-
-
-def artifact_feedback(session, outcome):
-    """Repair known no-op artifact edits without replaying a source writer or restarting."""
-    context = session.context
-    runtime = session.launch.get("runtime", {})
-    targets = set(runtime.get("writable_files", ()))
-    eligible = session.active[1][ROLE] != "implementer" and bool(targets)
-    eligible = eligible and targets <= set(runtime.get("attached_files", ()))
-    if not eligible or context.get("artifact_corrections", 0) >= MAX_RESULT_CORRECTIONS:
-        return None
-    feedback = artifact_write.feedback(outcome, targets)
-    if feedback is not None:
-        context["artifact_corrections"] = context.get("artifact_corrections", 0) + 1
-        events.correction(session, "artifact", "rejected artifact edit", feedback)
     return feedback
 
 

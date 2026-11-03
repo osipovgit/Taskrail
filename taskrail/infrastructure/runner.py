@@ -8,10 +8,10 @@ from taskrail.infrastructure.event_summary import parse_events
 from taskrail.infrastructure.opencode_serve import ATTACH
 from taskrail.infrastructure.process_watch import SUCCESS, TurnWatch
 
-AUTO_REJECT = "auto-rejecting"
 PROMPT_ARGUMENT = "Execute_the_task_in_the_attached_file"
 ATTACHED = "attached_files"
 RUNTIME = "runtime"
+STDERR_LIMIT = 4000
 DEBUG_LOGS = ("--print-logs", "--log-level", "DEBUG")
 OPTIONAL = MappingProxyType(dict(debug=False, progress=False, runtime=None))
 
@@ -53,17 +53,13 @@ def summarize(watch, process, options):
         status = usage_limits.exceeded(
             watch.telemetry, **turn.budgets, completed=watch.telemetry.steps.reason == "stop"
         )
-    outcome = parse_events(
-        turn.path,
-        len(turn.previous.splitlines()),
-        plan_file=(options[RUNTIME] or {}).get("plan_file"),
-        writable_files=(options[RUNTIME] or {}).get("writable_files", ()),
-        notes=(options[RUNTIME] or {}).get(ATTACHED, ()),
-    )
+    outcome = parse_events(turn.path, len(turn.previous.splitlines()))
     if status == context_overflow.STATUS:
         usage_limits.explain(outcome, watch.telemetry, turn.budgets["context_budget"])
     stderr = turn.error_text()
-    status = final_status(status, code, outcome, stderr)
+    if code != 0 and stderr.strip():
+        outcome["errors"].append(stderr[-STDERR_LIMIT:])
+    status = final_status(status, code, outcome)
     outcome.update(
         status=status,
         exit_code=code,
@@ -87,16 +83,15 @@ def arguments(target, debug, server=None):
     return [*(DEBUG_LOGS if debug else ()), *options, *attached, "--", PROMPT_ARGUMENT]
 
 
-def final_status(status, code, outcome, stderr):
-    """A clean exit still fails on denials, tool errors or a missing final answer."""
+def final_status(status, code, outcome):
+    """Native failures stay with opencode; only unresolved turn failures stop transport."""
     if status != SUCCESS:
         return status
     errors = outcome["errors"]
     failures = (
-        (outcome["permission"] or AUTO_REJECT in stderr, "BLOCKED_PERMISSION"),
         (outcome.get("provider_context_exceeded"), context_overflow.STATUS),
         (code != 0, "PROCESS_ERROR"),
-        (bool(errors), "TOOL_ERROR"),
+        (bool(errors), "TURN_ERROR"),
         (not outcome["completed"] or not outcome["final_text"].strip(), "INCOMPLETE"),
     )
     return next((name for failed, name in failures if failed), SUCCESS)

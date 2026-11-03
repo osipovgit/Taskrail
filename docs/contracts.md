@@ -187,41 +187,23 @@ corrections retain exact path/range failures for the fresh attempt. Source scope
 checked before reading a citation or converting an unconfirmed review claim to a gap.
 An explicit blocker prevents progression even if the model claims approval.
 
-A native `Tool execution aborted` on an approved file remains an error unless the
-same session subsequently reads and successfully writes that exact file before its
-final answer. This applies to plan and review artifacts as well as implementation
-files. The server records the failed call and recovery proof as a warning; it never
-replays the writer itself. Permission failures, unknown errors and unfinished
-recovery remain failures. Result validation, source guards and independent review
-still apply.
-Recovery compares absolute paths by their approved canonical identity: `.` and
-`..` spellings may identify the same file, but relative paths, different targets
-and symlinks whose resolution changes that identity do not. Original event paths
-and error messages remain unchanged. A still-unresolved native read-before-write
-rejection for the plan receives bounded same-session guidance with the canonical
-path; the server neither repeats the write nor approves the plan itself.
-An aborted native edit with empty arguments may be a warning when the stage can
-write only its attached artifacts and subsequently finishes its response. This
-includes planning and both review stages, and proves no successful edit. Source
-changes still fail the integrity guard, and an invalid plan or review still needs
-correction; implementation stages with source access do not get
-this exception.
-Raw responses and rejected drafts remain diagnostic artifacts.
+Native tool errors, including access denials, stay in opencode's conversation so the
+agent can correct arguments, inspect partial edits or choose a permitted alternative.
+They remain visible in the activity log with a red background. A completed turn goes
+through normal result, evidence and source-integrity validation regardless of earlier
+tool failures. An error never proves a successful read or write and never expands
+permissions. There are no error-text-specific recovery exceptions or temporary read
+grants. Raw responses and rejected drafts remain diagnostic artifacts.
 
-An exact native `oldString` mismatch or read-before-write rejection on a stage's
-approved plan/review file changes nothing. The same session receives up to three
-artifact repair prompts, independently of its result-format corrections. It must
-read the current text before repairing the intended lines; the server never replays
-the rejected write or an accompanying executor request. Permission, source integrity,
-unknown-error and aborted-writer failures do not use this route. Result validation
-and independent review still decide whether the draft can advance.
-
-A native edit rejected because `oldString` and `newString` are identical is a
-warning in an artifact-only stage when both recorded strings match and the target
-is an approved plan/review file. It proves no write and consumes no repair turn:
-the current document goes through normal validation, including any needed result
-corrections. The original error remains in the activity log. Other targets,
-unknown errors and source-integrity failures retain their normal handling.
+If the process or provider interrupts a turn, the server returns bounded diagnostics
+to the same uniquely identified session. It does not replay tools or roll back files.
+The implementer inspects current source and may request a scoped
+[Git restore](git-access.md) or repair the file directly, preserving earlier user edits.
+Three consecutive recovery turns with unchanged diagnostics, source and attached
+artifacts stop as `NO_PROGRESS`; changed state resets that counter. Stage/time/context
+budgets, explicit Stop and configured provider-quota stops remain authoritative.
+Source or Git integrity violations and unavailable session identity cannot be
+silently recovered. Required work without a permitted solution remains a precise gap.
 
 Ordinary Goal and Acceptance criteria may require local lint, syntax and test
 commands. Assign that work to a task; `runtime` is a deferral outcome reserved for

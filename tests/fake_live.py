@@ -108,6 +108,10 @@ if mode == "scenario":
     sys.exit(0)
 root = Path(context["roots"]["project"])
 target = root / ("Jenkinsfile" if mode == "jenkins" else "hello.py")
+if mode in {"native-partial", "native-partial-dirty"} and role == "implementer":
+    from fake_native_recovery import interrupted_writer
+
+    interrupted_writer(run, root, target, record, prompt, mode, print)
 if mode == "report-repair":
     report_result(context, prompt, header, print)
     sys.exit(0)
@@ -428,6 +432,9 @@ else:
         mode == "review-repair" and role == "reviewer" and "marker" not in target.read_text()
     ) or (mode == "plan-repair" and role == "plan-reviewer" and not context.get("feedback"))
     reject = reject or (mode == "integration-reject" and role == "reviewer")
+    reject = reject or (
+        mode in {"write-unresolved", "write-mismatch-unresolved"} and role == "reviewer"
+    )
     value = dict(
         status="REQUEST_CHANGES" if reject else "APPROVE",
         summary="review",
@@ -566,7 +573,7 @@ if role == "planner" and header["permission"]["edit"].get(str(plan)) == "allow":
         unread = False
     if not plan_broken and not unread:
         if mode in {"plan-unread", "plan-alias-unread"}:
-            assert "in THIS session" in prompt
+            assert "final result was rejected" in prompt
             plan.read_text()
         plan.write_text(plan_text(value, context))
         if mode == "plan-alias-recovered":
@@ -597,7 +604,7 @@ if mode.startswith("artifact-mismatch") and role != "implementer":
         plan.write_text(draft)
     else:
         failing_turn = 1 if role == "planner" else 0
-        if turn_number == failing_turn or mode == "artifact-mismatch-repeated":
+        if turn_number == failing_turn:
             file_event(print, own, "edit", "error", EDIT_MISMATCH)
             response = json.dumps(
                 dict(
@@ -609,8 +616,7 @@ if mode.startswith("artifact-mismatch") and role != "implementer":
                 )
             )
         else:
-            assert "exact current text" in prompt
-            assert "do not restart research" in prompt
+            assert "Git request:" in prompt
             file_event(print, own, "read", "completed", own.read_text())
             file_event(print, own, "write", "completed", "File written successfully")
     if mode == "artifact-mismatch-scope" and role == "plan-reviewer":
