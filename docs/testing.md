@@ -52,6 +52,12 @@ a cited plan defect, replans, obtains approval, implements, checks and reviews t
 result. Executor continuations retain the exact stage; proposal evidence cannot become
 completion evidence or cross into final review.
 
+Review recovery regressions cover aborted artifact writes followed by an observed
+read and successful rewrite at both review stages, unresolved aborts, duplicate
+missing citation windows, and scope rejection before source reads. Contract tests
+also check the server-generated blocked plan shape and preservation of deferred
+checks and requirement bindings in model input projections.
+
 Integration correction regressions use real disposable Git worktrees and scripted
 model output to verify fresh planning, independent checks/review, commit receipts,
 combined acceptance, inherited gates, bounded retries and stopped-writer barriers.

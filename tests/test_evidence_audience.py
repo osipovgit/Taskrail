@@ -108,6 +108,22 @@ class EvidenceAudienceTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             citation_review.validate(claims[5:], records, self.context)
 
+    def test_shared_citations_do_not_starve_other_missing_windows(self):
+        claims = [
+            dict(id=f"E{number}", path=str(self.path), line_start=1, line_end=1)
+            for number in range(11)
+        ]
+        claims.append(dict(id="E12", path=str(self.path), line_start=2, line_end=2))
+        with self.assertRaises(ValueError) as rejected:
+            citation_review.validate(claims, [], dict(self.context, deliver_lines=True))
+        feedback = str(rejected.exception)
+        self.assertEqual(feedback.count("1: value_1 = 1"), 1)
+        self.assertIn("2: value_2 = 2", feedback)
+        evidence_delivery.confirm(self.run, self.folder, feedback, self.outcome)
+        records = evidence_delivery.session_records(self.context)
+        proofs = citation_review.validate(claims, records, self.context)
+        self.assertEqual([proof["claim_id"] for proof in proofs], [row["id"] for row in claims])
+
     def test_unsent_failed_and_wrong_session_corrections_grant_nothing(self):
         for mode in ("unsent", "truncated", "failed", "incomplete", "different-session"):
             with self.subTest(mode=mode):

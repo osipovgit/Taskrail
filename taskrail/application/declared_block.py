@@ -20,6 +20,7 @@ def stop_result(payload, context):
     stopped.update(
         schema_version=1,
         status="BLOCKED",
+        decision="blocked",
         summary="Agent reported blocking gaps. Draft claims and proposed changes were not validated. "
         + " ".join(gaps),
         blocking_gaps=gaps,

@@ -59,3 +59,19 @@ def event(emit, target, tool, status, output):
     identity = "source-" + tool + "-" + status
     part = dict(id=identity, callID=identity, tool=tool, state=state)
     emit(json.dumps(dict(type="tool_use", part=part)))
+
+
+def review_abort(target, content, emit):
+    """A partial result write is read and replaced before the reviewer finishes."""
+    target.write_text("Summary: interrupted\n")
+    event(emit, target, "write", "error", "Tool execution aborted")
+    event(emit, target, "read", "completed", target.read_text())
+    target.write_text(content)
+    event(emit, target, "write", "completed", "File written successfully")
+
+
+def empty_abort(emit):
+    """The reported provider event: an aborted edit without a target or arguments."""
+    state = dict(status="error", input={}, error="Tool execution aborted")
+    part = dict(id="empty-abort", callID="empty-abort", tool="edit", state=state)
+    emit(json.dumps(dict(type="tool_use", part=part)))

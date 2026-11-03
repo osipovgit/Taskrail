@@ -7,7 +7,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from taskrail.application import instruction_sources
+from taskrail.application import declared_block, instruction_sources
 from taskrail.core import json_response, schema
 
 BASE = Path(__file__).resolve().parents[1]
@@ -49,6 +49,20 @@ class ResponseContractTests(unittest.TestCase):
         ):
             with self.subTest(response=response), self.assertRaises(ValueError):
                 decoded(response)
+
+    def test_server_blocked_result_keeps_the_declared_planner_schema(self):
+        with tempfile.TemporaryDirectory() as directory:
+            context = dict(folder=Path(directory), requirements=[dict(id="R1")])
+            draft = self.payload()
+            draft.update(decision="single", steps=[dict(id="T1")])
+            stopped = declared_block.stop_result(draft, context)
+            schema.validate(stopped, schema.SCHEMAS["planner"])
+            self.assertEqual(stopped["decision"], "blocked")
+            self.assertEqual(stopped["steps"], [])
+            self.assertEqual(stopped["coverage"][0]["outcome"], "not_evaluated")
+            self.assertEqual(
+                json.loads((Path(directory) / "blocked-draft.json").read_text()), draft
+            )
 
     def test_roles_fail_before_model_launch_and_bundled_roles_pass(self):
         for role in instruction_sources.ROLES:

@@ -109,7 +109,8 @@ parentheses does not add citations; text or extra citations after that explanati
 remain invalid. Quoted paths may contain spaces and parentheses.
 
 During plan review only, `planned` and `fails` may cite the current `plan.md` or the
-accepted planner's `result.json`. The current and archived plan copies must match,
+accepted planner's `result.json`, named explicitly by `Context.plan_result`. Earlier
+results and review feedback may describe a superseded proposal. The current and archived plan copies must match,
 and the result must match the proposal the workflow is reviewing. These lines still
 need observation in the active session. A plan defect in a runtime check requests
 replanning without claiming that the check ran. Plan artifacts never prove `done`,
@@ -160,8 +161,9 @@ the relevant source again or read it itself.
 Only current, canonical source inside declared roots is eligible. The packet shares bytes, never another role's
 conclusions, so independent semantic review remains necessary. The server keeps its
 version/handle registry separately from model-visible input. Approved plan context
-contains decisions and task contracts, omitting repeated coverage, read lists and
-prior verdicts. Empty optional context fields are omitted.
+contains decisions, task contracts and deferred checks, omitting repeated coverage,
+read lists and prior verdicts. Check bindings use the same `R<n>` labels as the
+task; stored results retain stable requirement IDs. Empty optional context fields are omitted.
 Operator notes, interrupted-writer instructions and actionable earlier feedback
 remain available when a run continues. A split task's first request also carries
 `outside_changes`: the files changed outside the split's tasks before it started.
@@ -180,7 +182,24 @@ unresolved proof remains a blocking gap. The same-session correction limit is th
 a still-invalid plan or review gets one complete attempt with tools. Implementers
 never receive a blind replay. Citation corrections deliver only bounded current
 source windows; accepted evidence must be attributable to the receiving session.
+Repeated citations of one missing window share one correction entry. Exhausted
+corrections retain exact path/range failures for the fresh attempt. Source scope is
+checked before reading a citation or converting an unconfirmed review claim to a gap.
 An explicit blocker prevents progression even if the model claims approval.
+
+A native `Tool execution aborted` on an approved file remains an error unless the
+same session subsequently reads and successfully writes that exact file before its
+final answer. This applies to plan and review artifacts as well as implementation
+files. The server records the failed call and recovery proof as a warning; it never
+replays the writer itself. Permission failures, unknown errors and unfinished
+recovery remain failures. Result validation, source guards and independent review
+still apply.
+An aborted native edit with empty arguments may be a warning when the stage can
+write only its attached artifacts and subsequently finishes its response. This
+includes planning and both review stages, and proves no successful edit. Source
+changes still fail the integrity guard, and an invalid plan or review still needs
+correction; implementation stages with source access do not get
+this exception.
 Raw responses and rejected drafts remain diagnostic artifacts.
 
 Transport retry, context handoff, budgets and output delivery are described in

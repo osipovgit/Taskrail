@@ -105,10 +105,15 @@ class SessionBudgetTests(unittest.TestCase):
             ),
             runtime=dict(debug=False, profile_suffix="test"),
         )
-        for role in ("planner", "implementer", "reviewer"):
-            with self.subTest(role=role):
-                files = [str(self.root / "source.py")]
-                active = (self.root, dict(role=role, stage=role, writable_files=files))
+        for stage, role, artifact in (
+            ("planner", "planner", "plan.md"),
+            ("implementer", "implementer", "source.py"),
+            ("plan-reviewer", "reviewer", "review.md"),
+            ("reviewer", "reviewer", "review.md"),
+        ):
+            with self.subTest(stage=stage):
+                files = [str(self.root / artifact)]
+                active = (self.root, dict(role=role, stage=stage, writable_files=files))
                 launch = launch_options(workflow, active, 100000)
                 self.assertIs(launch["runtime"]["autocompact"], False)
                 self.assertEqual(launch["runtime"]["context_budget"], 86016)
@@ -116,8 +121,7 @@ class SessionBudgetTests(unittest.TestCase):
                 plan_file = str(self.root / "plan.md")
                 expected = plan_file if role == "planner" else None
                 self.assertEqual(launch["runtime"]["plan_file"], expected)
-                writable = files if role == "implementer" else ()
-                self.assertEqual(launch["runtime"]["writable_files"], writable)
+                self.assertEqual(launch["runtime"]["writable_files"], files)
 
     def test_context_uses_latest_input_and_both_cache_categories(self):
         telemetry = Telemetry()

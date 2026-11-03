@@ -57,8 +57,11 @@ class Review:
             return
         index = int(entry[LABEL][1:]) - 1
         known = 0 <= index < len(self.requirements)
-        if not known or entry[LABEL] in self.rows:
-            self.problems.append("line {line}: {label} is unknown or repeated".format(**entry))
+        if not known:
+            self.problems.append("line {line}: {label} is unknown".format(**entry))
+            return
+        if entry[LABEL] in self.rows:
+            self.problems.append(prompt_texts.text("review.repeated", **entry))
             return
         self.decide(entry, self.requirements[index])
 
