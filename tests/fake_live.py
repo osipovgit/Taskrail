@@ -9,7 +9,7 @@ import uuid
 from pathlib import Path
 
 from fake_contract import attempt, earlier_invalid, enrich, plan_text, review_text
-from fake_file_writes import empty_abort, implement, plan_mismatches, review_abort
+from fake_file_writes import empty_abort, implement, plan_alias, plan_mismatches, review_abort
 from fake_file_writes import event as file_event
 from fake_planning_paths import plan as isolated_plan
 from fake_report_repair import executor_result, report_result
@@ -530,17 +530,22 @@ if role in ("plan-reviewer", "reviewer"):
             (run / "review.md").write_text("Summary: incomplete review\n")
     response = "DONE"
 plan_broken = mode in ("invalid-once", "timeout-then-invalid") and not (continued or rebuilt)
+plan_broken = plan_broken or (mode == "plan-alias-recovered" and not continued)
 if mode == "prose-block" and role == "planner":
     value.update(status="BLOCKED", blocking_gaps=["Mandatory local commands unavailable"])
 plan = run / "plan.md"
 if role == "planner" and header["permission"]["edit"].get(str(plan)) == "allow":
     assert "PLAN FILE:" in prompt or continued
-    unread = mode in {"plan-unread", "plan-unread-resolved"} and not continued
+    unread = mode in {"plan-unread", "plan-unread-resolved", "plan-alias-unread"} and not continued
+    unread = unread or mode == "plan-alias-unresolved"
     if unread:
+        rejected = (
+            str(plan.parent / "00-input" / ".." / plan.name) if "alias" in mode else str(plan)
+        )
         failure = dict(
             status="error",
-            input=dict(filePath=str(plan), content="must not be written"),
-            error=f"You must read file {plan} before overwriting it. Use the Read tool first",
+            input=dict(filePath=rejected, content="must not be written"),
+            error=f"You must read file {rejected} before overwriting it. Use the Read tool first",
         )
         print(
             json.dumps(dict(type="tool_use", part=dict(id="unread", tool="write", state=failure)))
@@ -552,10 +557,12 @@ if role == "planner" and header["permission"]["edit"].get(str(plan)) == "allow":
             print(json.dumps(dict(type="tool_use", part=part)))
         unread = False
     if not plan_broken and not unread:
-        if mode == "plan-unread":
+        if mode in {"plan-unread", "plan-alias-unread"}:
             assert "in THIS session" in prompt
             plan.read_text()
         plan.write_text(plan_text(value, context))
+        if mode == "plan-alias-recovered":
+            plan_alias(plan, plan_text(value, context), print)
         if mode == "plan-empty-abort":
             empty_abort(print)
         if mode == "plan-mismatches":

@@ -234,7 +234,7 @@ class StrictPlanTests(unittest.TestCase):
         failure = dict(
             tool="write",
             input=dict(filePath=str(run / "plan.md")),
-            error="Must read before writing",
+            error=f"You must read file {run / 'plan.md'} before overwriting it. Use the Read tool first",
         )
         outcome = dict(status="TOOL_ERROR", tool_errors=[failure], errors=[failure["error"]])
         self.assertIn("in THIS session", plan_write.read_before_write(outcome, run))
