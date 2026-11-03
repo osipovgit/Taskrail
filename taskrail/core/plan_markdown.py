@@ -8,7 +8,7 @@ session can fix that line instead of writing the plan again.
 import re
 
 from taskrail.core.plan_checks import SELECTIONS
-from taskrail.core.plan_keys import CONTINUED, EXTRA, LISTS, NOTES, key_line, stored
+from taskrail.core.plan_keys import CONTINUED, ENTRY_LINES, EXTRA, LISTS, NOTES, key_line, stored
 from taskrail.core.prompt_texts import text
 
 BULLET = re.compile(r"^(?:[-*+]|\d+[.)])\s+(.*)$")
@@ -104,6 +104,9 @@ class Reader:
             self.document[PROBLEMS].append(f"line {number}: duplicate {key} field")
             return
         self.target()[key] = stored(key, text, number)
+        if key in LISTS:
+            entry_lines = self.target().setdefault(ENTRY_LINES, {})
+            entry_lines[key] = [number] if text else []
         self.key = key if key in CONTINUED else None
 
     def extend(self, number, line):
@@ -116,6 +119,7 @@ class Reader:
         if self.key in LISTS and BULLET.match(line):
             bullets = self.target()[self.key][0]
             bullets.append(unbullet(line))
+            self.target()[ENTRY_LINES][self.key].append(number)
         elif self.key == NOTES:
             note, start = self.target()[NOTES]
             self.target()[NOTES] = (f"{note} {line}".strip(), start)

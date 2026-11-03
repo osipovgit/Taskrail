@@ -16,7 +16,6 @@ from taskrail.core.plan_ownership import problems as ownership_problems
 from taskrail.core.task_graph import order
 
 IDENTIFIER = "id"
-NEW_FILE = re.compile(r"\s*\((?:new|new file)\)\s*$", re.IGNORECASE)
 NONE_WORDS = frozenset(("", "none", "-", "n/a", "no"))
 DEPENDENCY = re.compile(r"(?:T|Task\s*)(\d+)", re.IGNORECASE)
 SEPARATOR = re.compile(r"\s*(?:[,;]|\band\b)\s*", re.IGNORECASE)
@@ -43,7 +42,7 @@ def steps(document, coverage):
     """Every task section as a plan step, in the plan's order."""
     planned = []
     for task in document[TASKS]:
-        coverage.problems.extend(plan_files.of_task(task[FIELDS], task[LINE]))
+        coverage.problems.extend(plan_files.of_task(task[FIELDS]))
         try:
             planned.append(step(task, coverage))
         except ValueError as error:
@@ -82,7 +81,7 @@ def listed(task, key):
         entries = [entry for entry in entries if entry.casefold() not in NONE_WORDS]
     if key == "files":
         entries = [name.strip() for entry in entries for name in entry.split(",")]
-        entries = map(uncode, (NEW_FILE.sub("", name) for name in entries))
+        entries = map(uncode, (plan_files.NEW_FILE.sub("", name) for name in entries))
     return [entry for entry in entries if entry and not PLACEHOLDER.match(entry)]
 
 

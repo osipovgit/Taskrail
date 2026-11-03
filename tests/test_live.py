@@ -1035,6 +1035,30 @@ class LiveTests(LiveFixture, unittest.TestCase):
 
         self.assertEqual(source_roots(state), [{"alias": "project", "path": str(self.root)}])
 
+    def test_isolated_planner_repairs_prose_then_uses_source_targets_without_another_retry(self):
+        self.isolated_repository()
+        self.task.write_text(self.task.read_text().replace("Return 2", f"Return 2 in {self.root}"))
+        original = self.task.read_bytes()
+        run, status, state = self.run_mode(
+            "isolated-plan-paths", worktree_base=str(self.base / "worktrees")
+        )
+        self.assertEqual(status, "READY_FOR_REVIEW", state.get("summary"))
+        worktree = Path(state["roots"]["project"])
+        planner = state["stages"][0]
+        self.assertEqual((planner["session_turns"], planner["result_corrections"]), (2, 1))
+        saved = json.loads((run / "01-plan/result.json").read_text())
+        self.assertEqual(saved["proposed_change_files"], [str(worktree / "hello.py")])
+        self.assertEqual(saved["steps"][0]["read"], [f"{worktree}/hello.py:1-3"])
+        self.assertIn(f"Files: {self.root}/hello.py", (run / "01-plan/plan.md").read_text())
+        self.assertEqual((run / "00-input/task.md").read_bytes(), original)
+        for stage in state["stages"]:
+            if stage["stage"] != "check":
+                request = (run / stage["directory"] / "request.md").read_text()
+                context = json.loads(request.split("Context:\n", 1)[1])
+                self.assertEqual(context["workspace_paths"], {str(self.root): str(worktree)})
+        self.assertIn("return 1", (self.root / "hello.py").read_text())
+        self.assertIn("return 2", (worktree / "hello.py").read_text())
+
     def test_isolated_run_continues_in_its_worktree(self):
         self.isolated_repository()
         run, status, state = self.run_mode(
