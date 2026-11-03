@@ -424,7 +424,8 @@ class LiveTests(LiveFixture, unittest.TestCase):
         self.assertNotIn("ACTION_REQUEST", formats)
         self.assertNotIn("findings", formats)
         planning = (run / "01-plan/request.md").read_text()
-        self.assertIn(f"PLAN FILE: edit the Markdown file {run / 'plan.md'}", planning)
+        self.assertIn(f"PLAN FILE: edit {run / 'plan.md'}", planning)
+        self.assertIn("DONE submits a draft for validation, not approval", planning)
         self.assertIn("[R1]\nReturn 2", planning)
         self.assertEqual(planning.count("Return 2"), 1)
         requests = planning.split("Formats:\n", 1)[1].split("\nContext:")[0]
