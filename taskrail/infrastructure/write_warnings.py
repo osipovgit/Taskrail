@@ -86,7 +86,7 @@ class FileWrites:
         for failure in outcome["tool_errors"]:
             same = failure.get("session_id") == session_id
             prior = failure[EVENT_LINE] < final_line
-            resolution = artifact_noop(failure, self.artifacts)
+            resolution = artifact_noop(failure, self.targets)
             if same and prior and resolution and failure[ERROR] in outcome[ERRORS]:
                 failure.update(resolution=resolution)
                 outcome["warnings"].append(dict(failure))

@@ -34,6 +34,11 @@ class PlanWarningTests(unittest.TestCase):
                     self.assertIn("proves no write", warning["resolution"])
             self.assertTrue(self.parse(events, None, (PLAN,))["errors"])
             self.assertTrue(self.parse(events, None, (PLAN, "/repo/source.py"), (PLAN,))["errors"])
+            self.assertTrue(
+                self.parse(events, None, ("/run/task/review.md",), (PLAN, "/run/task/review.md"))[
+                    "errors"
+                ]
+            )
 
     def test_identical_edit_requires_exact_diagnostic_arguments_session_and_order(self):
         cases = []
