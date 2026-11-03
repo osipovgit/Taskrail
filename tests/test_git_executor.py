@@ -102,6 +102,14 @@ class GitExecutorTests(unittest.TestCase):
         self.assertEqual(unrelated.read_text(), "User staged content\n")
         self.assertEqual(before, process.checked(self.root, ["ls-files", "--stage"]))
         self.assertEqual(head, process.checked(self.root, ["rev-parse", "HEAD"]))
+        repeated = self.execute(
+            ["restore", "--worktree", "--", "value.txt"], "implementer", [restored]
+        )
+        self.assertEqual(repeated["status"], "SUCCEEDED", repeated)
+        replayed = self.execute(
+            ["restore", "--worktree", "--", "value.txt"], "implementer", [restored, repeated]
+        )
+        self.assertEqual(replayed["status"], "REJECTED", replayed)
         self.file.write_text("different partial edit\n")
         second = self.execute(
             ["restore", "--worktree", "--", "value.txt"], "implementer", [restored]

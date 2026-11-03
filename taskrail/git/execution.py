@@ -86,7 +86,9 @@ def prepare(root, entry, previous, environment):
     repo = scope.repository(root)
     entry[REPOSITORY] = str(repo)
     history_outcome.prepare(repo, entry)
-    entry[FINGERPRINT] = index_ownership.fingerprint(repo, root, payload[ARGV])
+    entry[FINGERPRINT] = (
+        worktree_restore if payload[ARGV][0] == "restore" else index_ownership
+    ).fingerprint(repo, root, payload[ARGV])
     acted_on = [record.get(FINGERPRINT) for record in same]
     require(entry[FINGERPRINT] not in acted_on, prompt_texts.text("git.replay"))
     context = dict(

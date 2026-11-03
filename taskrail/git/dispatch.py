@@ -5,7 +5,7 @@ import json
 from taskrail.application.artifacts import finish_stage, save_run
 from taskrail.core import control
 from taskrail.core.files import atomic_json, changed
-from taskrail.git import execution, requests, scope
+from taskrail.git import execution, requests, source_scope
 
 LEDGER = "git-execution.json"
 
@@ -55,7 +55,7 @@ def checkpoint(run, after, metadata):
 def verify_effects(entry, after, metadata, environment):
     """Unexpected changes keep the RUNNING journal and cannot silently become baseline."""
     if entry.get("mutation") and environment["allowed_paths"]:
-        scope.check_paths(environment["allowed_paths"], environment["allowed_paths"])
+        source_scope.check_paths(environment["allowed_paths"], environment["allowed_paths"])
     control.check_delta(
         changed(environment["expected"], after),
         environment["allowed"] if entry.get("mutation") else [],

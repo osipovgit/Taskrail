@@ -5,7 +5,7 @@ from pathlib import Path
 
 from taskrail.core.files import digest
 from taskrail.core.schema import require
-from taskrail.git import index_ownership, process, scope, staging_receipt
+from taskrail.git import index_ownership, process, source_scope, staging_receipt
 
 ERROR = "Git restore did not preserve its approved index and source identity"
 
@@ -14,8 +14,8 @@ def prepare(root, argv, context, staged):
     """Restore exact authorized regular files to index entries, never a whole checkout."""
     repo = context["repository"]
     paths = [root / name for name in argv[3:]]
-    scope.check_paths(paths, context["allowed"])
-    scope.original_clean(repo, paths, context["baseline"])
+    source_scope.check_paths(paths, context["allowed"])
+    source_scope.original_clean(repo, paths, context["baseline"])
     selected = [path for path in staged if path in paths]
     require(
         index_ownership.belongs(repo, selected, context["owned"]),

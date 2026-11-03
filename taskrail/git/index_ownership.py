@@ -11,7 +11,7 @@ from pathlib import Path
 
 from taskrail.core.files import digest
 from taskrail.core.schema import require
-from taskrail.git import process, staging_receipt, worktree_restore
+from taskrail.git import process, staging_receipt
 
 ADD = "add"
 SUCCEEDED = "SUCCEEDED"
@@ -62,8 +62,6 @@ def fingerprint(repo, root, argv):
 
     Repeating the same request is a replay only while this is unchanged.
     """
-    if argv[0] == "restore":
-        return worktree_restore.fingerprint(repo, root, argv)
     if argv[0] == ADD:
         paths = [root / name for name in argv[2:]]
         return {str(path): file_digest(path) for path in paths}

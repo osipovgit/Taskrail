@@ -39,6 +39,10 @@ validation, confirmation) is driven by the managed service from `web/`; CLI auto
 commands use the same launcher and records. No plugins, message bus, service container or database are used. New
 entry points must call the existing workflow instead of adding an execution path.
 
+Within `git/`, `execution` dispatches fingerprints and `scope` owns mutation preflight.
+Restore receipts depend on index ownership, never the reverse; shared scope checks
+live in `source_scope`, independent of command routing and restore receipts.
+
 Run artifacts: `00-input/`, numbered stage directories, `run.json`, `checkpoint.json`,
 the report and the diff. Declared roots, allowed writes, Git metadata checks and the
 run locks enforce task boundaries. Each run locks its run directory and its source
