@@ -184,26 +184,39 @@ class SourcePacketTests(unittest.TestCase):
             )
         ]
         selection = dict(recipe_id="selected", criteria=["R-owned"])
+        requirements = [dict(id="R-fixed"), dict(id="R-owned")]
+        self.config["task_spec"]["requirements"] = requirements
+        deferred = ["Server check: confirm the remote service after delivery"]
         plan = dict(
-            decision="single", steps=[], proposed_change_files=[], check_selections=[selection]
+            decision="single",
+            steps=[],
+            proposed_change_files=[],
+            check_selections=[selection],
+            unverified=deferred,
         )
         state = dict(
             run_format=2,
             roots=dict(repo=str(self.root)),
-            requirements=[],
+            requirements=requirements,
             checks=[],
             preimages={},
         )
         context = context_projection.request_context(
             self.config, ("plan-reviewer", plan, [], None), state, self.run
         )
-        self.assertEqual(context["plan"]["check_selections"], [selection])
+        self.assertEqual(
+            context["plan"]["check_selections"],
+            [dict(recipe_id="selected", criteria=["R2"])],
+        )
+        self.assertEqual(context["plan"]["unverified"], deferred)
+        self.assertEqual(selection["criteria"], ["R-owned"])
+        self.assertEqual(self.config["check_specs"][0]["criteria"], ["R-fixed"])
         self.assertEqual(
             {entry["id"] for entry in context["check_catalog"]}, {"selected", "configured"}
         )
         self.assertEqual(
             context["configured_checks"],
-            [dict(id="fixed", recipe_id="configured", criteria=["R-fixed"])],
+            [dict(id="fixed", recipe_id="configured", criteria=["R1"])],
         )
         self.assertTrue(
             all(entry["description"] == recipe["description"] for entry in context["check_catalog"])

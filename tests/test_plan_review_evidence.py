@@ -135,7 +135,7 @@ class PlanReviewEvidenceTests(unittest.TestCase):
             self.review(f"fails: {self.plan_file}:1 (required check is skipped).")["status"],
             "REQUEST_CHANGES",
         )
-        with self.assertRaisesRegex(ValueError, "matching current CheckResult"):
+        with self.assertRaisesRegex(ValueError, "only planned work or a plan defect"):
             self.review(f"done: {self.plan_file}:1.")
         self.context["stage"] = "reviewer"
         self.observe(self.source)

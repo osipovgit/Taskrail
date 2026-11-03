@@ -36,6 +36,9 @@ def request_context(config, execution, state, run):
         workspace_paths=public_mapping(config),
         task_file=str(run / "00-input/task.md"),
         plan=plan_projection.plan_context(tool_paths(plan, roots), state.get("requirements", [])),
+        plan_result=str(run / state["results"]["plan"])
+        if state.get("results", {}).get("plan")
+        else None,
         imported_draft=instruction_sources.imported_draft(run, execution[0]),
         allowed_files=tool_paths(execution[2], roots) if execution[0] == "implementer" else [],
         feedback=feedback_context(execution[3], roots),

@@ -621,6 +621,47 @@ class LiveTests(LiveFixture, unittest.TestCase):
         self.assertEqual(state["stages"][1]["stage"], "plan-reviewer")
         self.assertEqual(state["stages"][-1]["stage"], "reviewer")
 
+    def test_both_review_stages_accept_a_proven_rewrite_after_an_aborted_write(self):
+        _run, status, state = self.run_mode("review-abort-recovered")
+        self.assertEqual(status, "READY_FOR_REVIEW", state.get("summary"))
+        reviews = [row for row in state["stages"] if row.get("role") == "reviewer"]
+        self.assertEqual([row["stage"] for row in reviews], ["plan-reviewer", "reviewer"])
+        for review in reviews:
+            self.assertEqual(review["session_turns"], 1)
+            self.assertEqual(review["status"], "RESULT_VALID")
+            self.assertEqual(review["errors"], [])
+            warning = review["warnings"][0]
+            self.assertEqual(warning["error"], "Tool execution aborted")
+            self.assertIn("read", warning["recovered_by"])
+
+    def test_empty_aborted_plan_edit_keeps_a_valid_plan_and_independent_review(self):
+        _, status, state = self.run_mode("plan-empty-abort")
+        self.assertEqual(status, "READY_FOR_REVIEW", state.get("summary"))
+        planner = state["stages"][0]
+        self.assertEqual(planner["session_turns"], 1)
+        self.assertEqual(planner["status"], "RESULT_VALID")
+        self.assertEqual(planner["errors"], [])
+        self.assertNotIn("recovered_by", planner["warnings"][0])
+        self.assertEqual(state["stages"][1]["stage"], "plan-reviewer")
+        self.assertEqual(state["stages"][-1]["stage"], "reviewer")
+
+    def test_empty_aborted_review_edit_keeps_a_valid_review(self):
+        _, status, state = self.run_mode("review-empty-abort")
+        self.assertEqual(status, "READY_FOR_REVIEW", state.get("summary"))
+        self.assertTrue(state["stages"][1]["warnings"])
+
+    def test_empty_aborted_review_edit_cannot_hide_an_invalid_result(self):
+        _, status, state = self.run_mode("review-empty-abort-invalid")
+        self.assertEqual(status, "INVALID_RESULT", state.get("summary"))
+        self.assertTrue(state["stages"][1]["warnings"])
+
+    def test_empty_aborted_review_edit_cannot_hide_changed_source(self):
+        _, status, state = self.run_mode("review-empty-abort-scope")
+        self.assertEqual(status, "BLOCKED", state.get("summary"))
+        self.assertEqual(state["attempts"][-1]["status"], "SCOPE_VIOLATION")
+        self.assertTrue(state["attempts"][-1]["warnings"])
+        self.assertFalse(any(row["stage"] == "implementer" for row in state["stages"]))
+
     def test_permission_denied_retains_tool_input_after_operator_declines(self):
         run, status, _state = self.run_mode("denied", read_retries=0, timeout_seconds=1)
         self.assertEqual(status, "TIMEOUT")
@@ -1145,9 +1186,9 @@ class LiveTests(LiveFixture, unittest.TestCase):
         review = [stage for stage in state["stages"] if stage["stage"] == "plan-reviewer"]
         self.assertEqual([stage["mode"] for stage in review], ["model", "research-recovery"])
         self.assertEqual(review[0]["session_turns"], MAX_RESULT_CORRECTIONS + 1)
-        self.assertIn("never reached this session", review[0]["contract_error"])
+        self.assertIn("range outside source", review[0]["contract_error"])
         prompt = (run / review[1]["directory"] / "request.md").read_text()
-        self.assertIn("never reached this session", prompt)
+        self.assertIn("range outside source", prompt)
 
     def test_markup_request_gets_the_json_format_in_the_same_session(self):
         run, status, state = self.run_mode("markup-request")

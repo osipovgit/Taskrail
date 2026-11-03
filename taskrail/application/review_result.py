@@ -53,14 +53,17 @@ def downgraded(record, records, context):
     failing = refuted(record["evidence"], records, context)
     if not failing:
         return record
-    unproven = [row for row in record["coverage"] if failing.intersection(row["evidence_ids"])]
+    unproven = []
+    for row in record["coverage"]:
+        if set(row["evidence_ids"]).intersection(failing):
+            unproven.append(row)
     if not context.get("rebuilt"):
-        named = review_lines.labels(unproven)
-        raise ValueError(prompt_texts.text("review.unproven", labels=named))
-    suffix = " ({})".format(prompt_texts.text("review.unconfirmed"))
+        summary = prompt_texts.text("review.unproven", labels=review_lines.labels(unproven))
+        detail = citation_review.feedback(list(failing.values()))
+        raise ValueError(f"{summary}\n{detail}")
     for row in unproven:
         row.update(outcome=GAP, evidence_ids=[])
-        row["explanation"] += suffix
+        row["explanation"] += " ({})".format(prompt_texts.text("review.unconfirmed"))
     return recounted(record, failing)
 
 
@@ -82,11 +85,13 @@ def still_failed(record):
 
 
 def refuted(claims, records, context):
-    """IDs of the citations that fail their source check."""
-    failing = set()
+    """Keep exact source failures so a fresh attempt can repair the named windows."""
+    failing = {}
+    views = {}
     for claim in claims:
         try:
             citation_review.checked(claim, records, context)
-        except ValueError:
-            failing.add(claim["id"])
+        except ValueError as error:
+            detail = citation_review.guidance(claim, context, str(error), views)
+            failing[claim["id"]] = detail
     return failing

@@ -32,7 +32,6 @@ def plan_review(flow, state, verdict, limit):
             flow["plan_repairs"] += 1
         return
     flow[ALLOWED] = flow["plan"]["proposed_change_files"]
-    state["no_changes_needed"] = not bool(flow[ALLOWED])
     state["review_outcome"] = review_outcome.describe(verdict, state.get("changed_files", []))
     if plan_contract.splits(flow["plan"], state.get("decompose")):
         state.update(status="TASKS_READY", summary=verdict[SUMMARY])
