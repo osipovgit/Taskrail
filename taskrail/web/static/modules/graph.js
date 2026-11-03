@@ -1,7 +1,7 @@
 // The tasks of a split and the phases of a delivery as one dependency graph.
 // Columns follow depends_on depth, then the phases run left to right. A node opens its
 // run inside the parent card; earlier attempts collapse into one expandable line.
-import { badge, el, statuses } from './dom.js';
+import { badge, el, statusLabel } from './dom.js';
 
 const SVG = 'http://www.w3.org/2000/svg';
 const NODE_WIDTH = 200;
@@ -262,7 +262,7 @@ export function attemptsLine(node, focus, pick) {
   const box = el('details', undefined, 'attempts');
   box.csKey = 'attempts:' + node.key;
   const parts = node.attempts.map(
-    (attempt, index) => '#' + (index + 1) + ' ' + (statuses[attempt.status] || attempt.status),
+    (attempt, index) => '#' + (index + 1) + ' ' + statusLabel(attempt.status),
   );
   const noun = count === 1 ? ' earlier attempt · ' : ' earlier attempts · ';
   box.append(el('summary', count + noun + parts.join(' · ')));

@@ -108,7 +108,12 @@ class PlanDocumentTests(unittest.TestCase):
             "project/a:1, missing",
             "project/a:1 junk project/b:2",
             "project/a:1 (unclosed",
-            "project/a:1 (note), project/b:2 (hidden)",
+            "project/a:1 (note), project/b:2 (unclosed",
+            "project/a:1 (note),",
+            "project/a:1 (note) project/b:2",
+            "project/a:1 (note) (another note)",
+            "`project/a`:1-bad",
+            "`project/a:1`, R3 and R4 evidence above",
             "project/a:1 (note). project/b:2",
             "project/a:1. project/b:2",
         ):
@@ -118,6 +123,64 @@ class PlanDocumentTests(unittest.TestCase):
                     REQUIREMENTS,
                     ROOTS,
                 )
+
+    def test_each_citation_can_have_a_reason_with_both_backtick_styles(self):
+        for separator in (", ", "; "):
+            for citation in (
+                "project/README.md:1-20",
+                "`project/README.md`:1-20",
+                "`project/README.md:1-20`",
+            ):
+                with self.subTest(separator=separator, citation=citation):
+                    detail = separator.join(
+                        (
+                            citation + " (repo instructions)",
+                            "`project/.ansible-lint`:1-15 (skip_list and warn_list (unchanged))",
+                            "`project/file (with spaces);v2.yml:2-3`,5 (index mentions ignored:99).",
+                        )
+                    )
+                    plan = payload(
+                        PLAN.replace("project/README.md:12-18, roles/x.yml:3", detail),
+                        REQUIREMENTS,
+                        ROOTS,
+                    )
+                    self.assertEqual(
+                        [
+                            (row["path"], row["line_start"], row["line_end"])
+                            for row in plan["evidence"]
+                        ],
+                        [
+                            ("/repo/README.md", 1, 20),
+                            ("/repo/.ansible-lint", 1, 15),
+                            ("/repo/file (with spaces);v2.yml", 2, 3),
+                            ("/repo/file (with spaces);v2.yml", 5, 5),
+                        ],
+                    )
+
+    def test_a_later_annotated_citation_still_needs_observed_lines(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / "snapshot.txt"
+            source.write_text("one\ntwo\nthree\n")
+            plan = payload(
+                PLAN.replace(
+                    "project/README.md:12-18, roles/x.yml:3",
+                    f"`{source}`:1 (observed); `{source}:3` (must not be dropped)",
+                ),
+                REQUIREMENTS,
+                ROOTS,
+            )
+            records = [
+                dict(
+                    input=dict(filePath=str(source)),
+                    output="1:one",
+                    source_sha256=digest(source.read_bytes()),
+                    source_event="read.jsonl",
+                    event_line=1,
+                )
+            ]
+            source_claims.validate_claim(plan["evidence"][0], records)
+            with self.assertRaisesRegex(ValueError, "offset=3, limit=1"):
+                source_claims.validate_claim(plan["evidence"][1], records)
 
     def test_sentence_period_and_single_line_ranges_preserve_exact_citations(self):
         for detail in (

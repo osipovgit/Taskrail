@@ -104,9 +104,11 @@ override observed changes, granted scope, check records or the derived verdict.
 Executor claims need exact snapshot lines too; a prose summary alone is not proof.
 
 Single lines (`:41` or `:41-41`), multiple citations separated by commas or semicolons,
-and a final period after a citation or parenthesized explanation are valid. Prose in
-parentheses does not add citations; text or extra citations after that explanation
-remain invalid. Quoted paths may contain spaces and parentheses.
+and a final period are valid. Each citation may have a parenthesized explanation:
+`source.py:1-3 (first reason), other.py:4 (second reason)`. Every explicit range is
+validated; references inside explanations remain prose. Bare prose between citations
+or unbalanced parentheses are rejected. Backticks may enclose the whole citation or
+only its path; quoted paths may contain spaces and parentheses.
 
 During plan review only, `planned` and `fails` may cite the current `plan.md` or the
 accepted planner's `result.json`, named explicitly by `Context.plan_result`. Earlier
@@ -250,11 +252,10 @@ Notes: optional pointers for the implementer
 - Server check: run ansible-playbook --check site.yml on the controller
 ```
 
-A `done:` or `contradicted:` outcome starts with an explicit citation list, then an
-optional explanation in parentheses. Separate files with commas or semicolons;
+A `done:` or `contradicted:` outcome uses the citation syntax described above for
+review lines, including optional explanations after each citation.
 `/exact/read/path:7-42,43-156,157-169` cites all three ranges of the same file.
-Backtick-quote the whole citation for paths containing spaces. References inside
-the explanation are prose, not additional evidence. `Read:` accepts only citation
+Requirement labels do not substitute for source ranges. `Read:` accepts only citation
 lists, without explanations. Paths are absolute, root-alias-relative, or relative
 to the only declared root; basenames are never searched for or guessed. Every
 explicit range still needs matching observed current lines. A diff alone does not

@@ -156,6 +156,19 @@ class DecisionContractTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "R1 needs its reason"):
             self.review(f"- R1: fails: {self.path}:1")
 
+    def test_review_preserves_each_annotated_citation_and_failure_reason(self):
+        result = self.review(
+            f"- R1: fails: `{self.path}`:1 (wrong value), "
+            f"`{self.path}:1` (also violates the contract (Return two))."
+        )
+        self.assertEqual(result["status"], "REQUEST_CHANGES")
+        self.assertEqual(len(result["evidence"]), 2)
+        self.assertEqual(result["coverage"][0]["evidence_ids"], ["E1", "E2"])
+        self.assertEqual(
+            result["findings"][0]["evidence"],
+            "wrong value; also violates the contract (Return two) (E1, E2)",
+        )
+
     def test_a_gap_blocks_with_its_reason(self):
         result = self.review("- R1: gap: The API contract is missing")
         self.assertEqual(result["status"], "BLOCKED")
