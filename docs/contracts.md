@@ -194,6 +194,12 @@ files. The server records the failed call and recovery proof as a warning; it ne
 replays the writer itself. Permission failures, unknown errors and unfinished
 recovery remain failures. Result validation, source guards and independent review
 still apply.
+Recovery compares absolute paths by their approved canonical identity: `.` and
+`..` spellings may identify the same file, but relative paths, different targets
+and symlinks whose resolution changes that identity do not. Original event paths
+and error messages remain unchanged. A still-unresolved native read-before-write
+rejection for the plan receives bounded same-session guidance with the canonical
+path; the server neither repeats the write nor approves the plan itself.
 An aborted native edit with empty arguments may be a warning when the stage can
 write only its attached artifacts and subsequently finishes its response. This
 includes planning and both review stages, and proves no successful edit. Source

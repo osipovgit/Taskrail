@@ -57,6 +57,10 @@ read and successful rewrite at both review stages, unresolved aborts, duplicate
 missing citation windows, and scope rejection before source reads. Contract tests
 also check the server-generated blocked plan shape and preservation of deferred
 checks and requirement bindings in model input projections.
+Path-alias regressions reproduce a rejected `../plan.md` edit followed by a
+canonical read/write, including a prior result correction and subsequent independent
+review. They reject different files and symlink traversal, preserve raw diagnostics,
+and bound unresolved plan-edit recovery within the same session.
 
 Integration correction regressions use real disposable Git worktrees and scripted
 model output to verify fresh planning, independent checks/review, commit receipts,

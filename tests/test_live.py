@@ -610,6 +610,40 @@ class LiveTests(LiveFixture, unittest.TestCase):
             (run / "report.md").read_text(),
         )
 
+    def test_plan_alias_recovery_keeps_the_corrected_plan_and_current_review(self):
+        run, status, state = self.run_mode("plan-alias-recovered")
+        self.assertEqual(status, "READY_FOR_REVIEW", state.get("summary"))
+        planner = state["stages"][0]
+        self.assertEqual(planner["session_turns"], 2)
+        self.assertEqual(planner["result_corrections"], 1)
+        self.assertEqual(planner["status"], "RESULT_VALID")
+        self.assertEqual(planner["errors"], [])
+        warning = planner["warnings"][0]
+        self.assertIn("00-input/../plan.md", warning["input"]["filePath"])
+        self.assertIn("read", warning["recovered_by"])
+        self.assertEqual((run / "plan.md").read_bytes(), (run / "01-plan/plan.md").read_bytes())
+        self.assertEqual(
+            [entry["stage"] for entry in state["stages"]],
+            ["planner", "plan-reviewer", "implementer", "check", "reviewer"],
+        )
+
+    def test_unresolved_plan_alias_gets_same_session_guidance_with_canonical_path(self):
+        run, status, state = self.run_mode("plan-alias-unread")
+        self.assertEqual(status, "READY_FOR_REVIEW", state.get("summary"))
+        self.assertEqual(state["stages"][0]["session_turns"], 2)
+        self.assertEqual([row["stage"] for row in state["attempts"]].count("planner"), 1)
+        feedback = (run / "01-plan/tool-result.md").read_text()
+        self.assertIn(str(run / "plan.md"), feedback)
+        self.assertNotIn("00-input/../plan.md", feedback)
+
+    def test_repeated_unresolved_plan_alias_stops_at_the_correction_limit(self):
+        _, status, state = self.run_mode("plan-alias-unresolved")
+        self.assertEqual(status, "TOOL_ERROR", state.get("summary"))
+        self.assertEqual(state["stages"][0]["session_turns"], MAX_RESULT_CORRECTIONS + 1)
+        self.assertEqual(len(state["stages"]), 1)
+        self.assertEqual(len(state["attempts"]), 1)
+        self.assertNotIn("recovered_by", state["attempts"][0]["tool_errors"][0])
+
     def test_plan_mismatches_recover_without_research_or_format_retry(self):
         _run, status, state = self.run_mode("plan-mismatches")
         self.assertEqual(status, "READY_FOR_REVIEW", state.get("summary"))

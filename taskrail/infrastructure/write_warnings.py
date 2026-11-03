@@ -8,7 +8,8 @@ proof.
 
 from itertools import pairwise
 
-REJECTION = "You must read file {0} before overwriting it. Use the Read tool first"
+from taskrail.infrastructure import write_targets
+
 EDIT_MISMATCH = "Could not find oldString in the file. It must match exactly, including whitespace, indentation, and line endings."
 NOTE_RESOLUTION = "A rejected overwrite of an orchestrator run file is not a failure: the file is a note, never evidence. Result validation and independent review still apply."
 RESOLUTION = "An actual read and a later successful write of the same approved file in the same session resolved the rejected change. Failed exact-match edits do not invalidate that read. Result validation and independent review still apply."
@@ -19,7 +20,6 @@ PROVENANCE = ("event_line", "call_id", "part_id")
 EVENT_LINE = "event_line"
 TOOL = "tool"
 INPUT = "input"
-FILE_PATH = "filePath"
 ERROR = "error"
 ERRORS = "errors"
 
@@ -44,8 +44,8 @@ class FileWrites:
         identity = call_identity(event, part)
         if not all(identity) or identity in self.seen:
             return
-        target = state.get(INPUT, {}).get(FILE_PATH)
-        if target not in self.targets or part.get(TOOL) not in TOOLS:
+        target = write_targets.from_call(state, self.targets)
+        if target is None or part.get(TOOL) not in TOOLS:
             return
         if state.get("status") != "completed":
             return
@@ -94,8 +94,8 @@ class FileWrites:
     def excuse_notes(self, outcome):
         """A known rejection of an orchestrator run file never fails the turn."""
         for failure in outcome["tool_errors"]:
-            target = failure.get(INPUT, {}).get(FILE_PATH)
-            if target not in self.notes or not unread(failure, target):
+            target = write_targets.from_call(failure, self.notes)
+            if not write_targets.unread(failure, target):
                 continue
             if failure[ERROR] in outcome[ERRORS]:
                 failure.update(resolution=NOTE_RESOLUTION)
@@ -104,21 +104,21 @@ class FileWrites:
 
     def recovery(self, failure, session_id, final_line):
         """Only the known rejection in the completed session can use an observed proof."""
-        target = failure.get(INPUT, {}).get(FILE_PATH)
-        if target not in self.targets or failure.get("session_id") != session_id:
+        target = write_targets.from_call(failure, self.targets)
+        if target is None or failure.get("session_id") != session_id:
             return None
-        known = unread(failure, target) or edit_mismatch(failure) or aborted(failure)
+        known = write_targets.unread(failure, target) or edit_mismatch(failure) or aborted(failure)
         if not known:
             return None
-        return self.proof(failure, session_id, final_line)
+        return self.proof(failure, session_id, final_line, target)
 
-    def proof(self, failure, session_id, final_line):
+    def proof(self, failure, session_id, final_line, target):
         """A no-match edit preserves a prior read until the next successful mutation."""
         observed = [
             call
             for call in self.calls
             if call["session_id"] == session_id
-            and call["target"] == failure[INPUT][FILE_PATH]
+            and call["target"] == target
             and call[EVENT_LINE] < final_line
         ]
         for read, write in pairwise(observed):
@@ -138,16 +138,6 @@ def call_identity(event, part):
 def provenance(call):
     """Only public event identifiers are needed to locate the successful operation."""
     return {key: call[key] for key in PROVENANCE}
-
-
-def unread(failure, target):
-    """Match the exact native rejection and exact approved path, never prose claims."""
-    message = REJECTION.format(target)
-    return (
-        failure.get(TOOL) in WRITERS
-        and failure.get(INPUT, {}).get(FILE_PATH) == target
-        and failure.get(ERROR) in {message, f"Error: {message}"}
-    )
 
 
 def edit_mismatch(failure):
