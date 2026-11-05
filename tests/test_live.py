@@ -602,7 +602,13 @@ class LiveTests(LiveFixture, unittest.TestCase):
     def test_no_change_requires_independent_approval(self):
         _run, status, state = self.run_mode("no-change-rejected")
         self.assertEqual(status, "BLOCKED")
-        self.assertEqual([a["stage"] for a in state["attempts"]], ["planner", "plan-reviewer"])
+        self.assertEqual(
+            [attempt["stage"] for attempt in state["attempts"]],
+            ["planner", "plan-reviewer", "planner", "plan-reviewer"],
+        )
+        self.assertEqual(
+            state["review_limits"][-1]["blocking_gaps"], state["review_limits"][0]["blocking_gaps"]
+        )
         self.assertIn("return 1", (self.root / "hello.py").read_text())
 
     def test_parent_search_once_continues_same_session_without_widening_permissions(self):
@@ -1226,6 +1232,73 @@ class LiveTests(LiveFixture, unittest.TestCase):
         from taskrail.application.worktree_isolation import source_roots
 
         self.assertEqual(source_roots(state), [{"alias": "project", "path": str(self.root)}])
+
+    def test_original_index_and_working_edits_are_visible_and_selectively_committed(self):
+        from types import SimpleNamespace
+
+        from taskrail.application import execution_context, original_checkout
+
+        git = self.isolated_repository()
+        self.allow_all_actions()
+        target = self.root / "hello.py"
+        staged = "# selected edit\n" + target.read_text()
+        target.write_text(staged)
+        git.checked(self.root, ["add", "--", target.name])
+        target.write_text(staged + "# working copy only\n")
+        for index in range(66):
+            (self.root / f"new-{index}.txt").write_text(str(index))
+        nested = Path("roles/example/tasks/main.yaml")
+        (self.root / nested.parent).mkdir(parents=True)
+        (self.root / "new-65.txt").rename(self.root / nested)
+        hardlink = self.root / "new-64.txt"
+        hardlink.unlink()
+        hardlink.hardlink_to(self.task)
+        (self.root / ".env").write_text("protected")
+        (self.root / "link").symlink_to(self.base / "settings.json")
+        before = git.checked(self.root, ["status", "--porcelain", "-uall"])
+        run, status, state = self.run_mode(
+            "import-original", worktree_base=str(self.base / "worktrees"), timeout_seconds=30
+        )
+        self.assertEqual(status, "READY_FOR_REVIEW", state.get("summary"))
+        source = Path(original_checkout.status_path(run))
+        header, *records = map(json.loads, source.read_text().splitlines())
+        self.assertEqual(header["changed_entries"], 69)
+        rows = {row["path"]: row for row in records}
+        self.assertEqual(rows["hello.py"]["xy"], "MM")
+        self.assertEqual((source.parent / rows["hello.py"]["index"]).read_text(), staged)
+        self.assertEqual(
+            (source.parent / rows["hello.py"]["working"]).read_text(), target.read_text()
+        )
+        self.assertEqual((source.parent / rows[str(nested)]["working"]).read_text(), "65")
+        self.assertEqual(rows["new-64.txt"]["working"], {"unavailable": "hard-linked file"})
+        self.assertIn("unavailable", rows[".env"])
+        self.assertIn("unavailable", rows["link"]["working"])
+        self.assertFalse((source.parent / "project/working/.env").exists())
+        status_output = Path(state["git_jobs"][0]["output_file"]).read_text()
+        self.assertIn(str(source), status_output)
+        self.assertIn("69 changed entries", status_output)
+        worktree = Path(state["roots"]["project"])
+        self.assertEqual(
+            git.checked(worktree, ["show", "HEAD:hello.py"]), staged.replace("return 1", "return 2")
+        )
+        self.assertFalse((worktree / nested).exists())
+        self.assertEqual(git.checked(self.root, ["status", "--porcelain", "-uall"]), before)
+        self.assertEqual(git.checked(self.root, ["show", ":hello.py"]), staged)
+        self.assertEqual(target.read_text(), staged + "# working copy only\n")
+        target.write_text("changed after launch")
+        child = self.base / "child"
+        (child / "00-input").mkdir(parents=True)
+        child_config = dict(roots={"project": worktree})
+        child_workflow = SimpleNamespace(
+            run=child, config=child_config, state=dict(roots=state["roots"])
+        )
+        execution_context.adopt(child_workflow, run, state)
+        inherited = Path(original_checkout.status_path(child))
+        self.assertEqual(inherited.read_bytes(), source.read_bytes())
+        self.assertEqual(
+            (inherited.parent / rows["hello.py"]["working"]).read_text(),
+            staged + "# working copy only\n",
+        )
 
     def test_isolated_planner_repairs_prose_then_uses_source_targets_without_another_retry(self):
         self.isolated_repository()

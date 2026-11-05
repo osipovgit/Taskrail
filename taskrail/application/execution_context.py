@@ -3,7 +3,7 @@
 import json
 from pathlib import Path
 
-from taskrail.application import reviewed_artifacts, run_state
+from taskrail.application import original_checkout, reviewed_artifacts, run_state
 from taskrail.core.files import atomic_json, digest
 from taskrail.core.schema import require
 from taskrail.git import reviewed_commit
@@ -58,6 +58,7 @@ def apply(config, payload):
 def adopt(workflow, parent, state):
     """Call only after the parent assignment or delivery phase has been authenticated."""
     apply(workflow.config, frozen(parent, state))
+    original_checkout.inherit(parent, workflow.run)
     capture(workflow.run, workflow.config, workflow.state)
 
 

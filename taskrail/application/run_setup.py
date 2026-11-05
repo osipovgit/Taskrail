@@ -10,6 +10,7 @@ from taskrail.application import (
     child_inputs,
     execution_context,
     inherited_settings,
+    original_checkout,
     run_state,
     run_store,
 )
@@ -87,7 +88,9 @@ def open_state(config, run, request, ready):
         return state
     if ready:
         isolate(config, run.name)
-    return new_state(run, config, request)
+    state = new_state(run, config, request)
+    original_checkout.capture(run, config)
+    return state
 
 
 def stored_index(location):

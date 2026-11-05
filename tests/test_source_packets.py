@@ -158,7 +158,7 @@ class SourcePacketTests(unittest.TestCase):
         context = context_projection.request_context(
             self.config, ("plan-reviewer", plan, [], None), state, self.run
         )
-        self.assertNotIn("check_catalog", context)
+        self.assertEqual(context["check_catalog"], [])
         self.assertNotIn("files_read", context["plan"])
         self.assertEqual(context["source_packet"][0]["path"], str(self.path))
         self.assertNotIn("source_sha256", context["source_packet"][0])

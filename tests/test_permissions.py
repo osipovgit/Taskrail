@@ -157,7 +157,12 @@ class AccessManifestTests(unittest.TestCase):
             role.write_text("role")
             paths = model_inputs(run, stage)
             exposed = manifest(run, stage, {"project": str(root / "repo")})
-            self.assertEqual(exposed["readable_artifacts"], list(map(str, paths)))
+            self.assertEqual(
+                exposed["readable_artifacts"],
+                [str(path) for path in paths if path.exists() or path.parent == stage],
+            )
+            self.assertNotIn(str(task.parent / "checks"), exposed["readable_artifacts"])
+            self.assertIn(task.parent / "checks", paths)
             access = dict(roots=[], readable=paths, writable=[])
             profile, _ = make_profile(role, root / "profiles", "test", access)
             permissions = json.loads(profile.read_text().split("---")[1])["permission"]

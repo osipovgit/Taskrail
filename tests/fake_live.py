@@ -108,6 +108,26 @@ if mode == "scenario":
     sys.exit(0)
 root = Path(context["roots"]["project"])
 target = root / ("Jenkinsfile" if mode == "jenkins" else "hello.py")
+if mode == "import-original" and not continued and role in {"planner", "implementer"}:
+    status_path = Path(context["original_status"])
+    if role == "planner":
+        operation = dict(status="GIT_REQUEST", root=str(root), argv=["status", "--short"])
+    else:
+        rows = map(json.loads, status_path.read_text().splitlines())
+        selected = next(row for row in rows if row.get("path") == "hello.py")
+        operation = dict(
+            status="LOCAL_REQUEST",
+            cwd=str(root),
+            argv=["cp", "--", str(status_path.parent / selected["index"]), str(target)],
+        )
+    operation.update(schema_version=1, reason="Inspect or import the selected staged edit")
+    for event, part in (
+        ("text", dict(text=json.dumps(operation))),
+        ("step_finish", dict(reason="stop", tokens={"input": 10, "output": 2})),
+    ):
+        part.update(messageID="msg1", id=event)
+        print(json.dumps(dict(type=event, part=part, sessionID="ses1")))
+    sys.exit(0)
 if mode in {"native-partial", "native-partial-dirty"} and role == "implementer":
     from fake_native_recovery import interrupted_writer
 
