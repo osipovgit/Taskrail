@@ -2,7 +2,7 @@
 
 import os
 import stat
-from contextlib import ExitStack
+from contextlib import ExitStack, contextmanager
 from pathlib import Path
 
 from taskrail.core.schema import require
@@ -19,26 +19,32 @@ MODES = frozenset(("100644", "100755"))
 def working(root, relative, limit):
     """Pin every directory descriptor, even if the source checkout changes concurrently."""
     with ExitStack() as stack:
-        directory = os.open(root, DIRECTORY)
-        stack.callback(os.close, directory)
+        directory = stack.enter_context(opened(root, DIRECTORY))
         for component in relative.parts[:-1]:
-            directory = os.open(component, DIRECTORY, dir_fd=directory)
-            stack.callback(os.close, directory)
-        stream = stack.enter_context(open_regular(directory, relative.name))
-        return read_regular(stream, limit)
+            directory = stack.enter_context(opened(component, DIRECTORY, directory))
+        descriptor = stack.enter_context(opened(relative.name, REGULAR, directory))
+        with os.fdopen(descriptor, "rb", closefd=False) as stream:
+            return read_regular(stream, limit)
 
 
-def open_regular(directory, name):
-    mode = os.stat(name, dir_fd=directory, follow_symlinks=False).st_mode
-    require(stat.S_ISREG(mode), "not a regular file")
-    descriptor = os.open(name, REGULAR, dir_fd=directory)
-    return os.fdopen(descriptor, "rb")
+@contextmanager
+def opened(name, flags, parent=None):
+    """Keep each descriptor paired with its close, including on a partial traversal."""
+    if flags == REGULAR:
+        mode = os.stat(name, dir_fd=parent, follow_symlinks=False).st_mode
+        require(stat.S_ISREG(mode), "not a regular file")
+    descriptor = os.open(name, flags, dir_fd=parent)
+    try:
+        yield descriptor
+    finally:
+        os.close(descriptor)
 
 
 def read_regular(stream, limit):
     """Reject special, oversized or concurrently modified files."""
     before = os.fstat(stream.fileno())
     require(stat.S_ISREG(before.st_mode), "not a regular file")
+    require(before.st_nlink == 1, "hard-linked file")
     require(before.st_size <= limit, "snapshot size limit")
     source_bytes = stream.read(limit + 1)
     after = os.fstat(stream.fileno())

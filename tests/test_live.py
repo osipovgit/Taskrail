@@ -1247,6 +1247,9 @@ class LiveTests(LiveFixture, unittest.TestCase):
         target.write_text(staged + "# working copy only\n")
         for index in range(66):
             (self.root / f"new-{index}.txt").write_text(str(index))
+        hardlink = self.root / "new-64.txt"
+        hardlink.unlink()
+        hardlink.hardlink_to(self.task)
         (self.root / ".env").write_text("protected")
         (self.root / "link").symlink_to(self.base / "settings.json")
         before = git.checked(self.root, ["status", "--porcelain", "-uall"])
@@ -1264,6 +1267,7 @@ class LiveTests(LiveFixture, unittest.TestCase):
             (source.parent / rows["hello.py"]["working"]).read_text(), target.read_text()
         )
         self.assertEqual((source.parent / rows["new-65.txt"]["working"]).read_text(), "65")
+        self.assertEqual(rows["new-64.txt"]["working"], {"unavailable": "hard-linked file"})
         self.assertIn("unavailable", rows[".env"])
         self.assertIn("unavailable", rows["link"]["working"])
         self.assertFalse((source.parent / "project/working/.env").exists())

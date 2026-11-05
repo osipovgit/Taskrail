@@ -163,7 +163,7 @@ planning, Taskrail records the original checkout's Git status in
 status (Git XY), and available versions relative to that snapshot directory.
 Staged content is under `index` and unstaged or new content under `working`.
 A deletion has no file for the deleted side. Protected paths, conflicts,
-nonregular files and capture failures are identified explicitly. Copies are
+links, nonregular files and capture failures are identified explicitly. Copies are
 limited to 8 MiB per version and 128 MiB per run.
 
 When the task requests existing edits, review the applicable rows against the
