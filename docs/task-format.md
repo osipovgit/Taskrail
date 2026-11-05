@@ -157,8 +157,21 @@ designs, delivery checks and other roots work in place. With
 `"isolation": "worktree"` every root must be such a top level, otherwise the run
 stops. Before planning, the run creates one linked worktree per root from its current
 `HEAD` on a new branch `taskrail/<run>`, under `worktree_base` (default:
-`~/.local/share/taskrail-worktrees`, separate from application state). Uncommitted changes in the source checkout
-are not included. The whole run, including Continue, works in the worktrees; the
+`~/.local/share/taskrail-worktrees`, separate from application state). The branch starts at the committed revision. Before
+planning, Taskrail records the original checkout's Git status in
+`00-input/original/status.jsonl`. Each row names the path, the index/worktree
+status (Git XY), and available versions relative to that snapshot directory.
+Staged content is under `index` and unstaged or new content under `working`.
+A deletion has no file for the deleted side. Protected paths, conflicts,
+nonregular files and capture failures are identified explicitly. Copies are
+limited to 8 MiB per version and 128 MiB per run.
+
+When the task requests existing edits, review the applicable rows against the
+isolated files. Port selected hunks with normal edits, or copy a selected
+version using `LOCAL_REQUEST` after checking for earlier changes at the
+destination. Preserve executable mode where relevant. Verify the resulting
+diff and use the normal reviewed commit flow. The local sandbox exposes the
+snapshot read-only. Split tasks inherit the launch snapshot. The whole run, including Continue, works in the worktrees; the
 source checkout and its other branches may change meanwhile without stopping the
 run. Clear **Isolated Git worktree** in the browser form, or pass
 `taskrail submit --in-place`, to edit the roots themselves.

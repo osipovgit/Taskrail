@@ -161,6 +161,7 @@ def evidence_roots(workflow):
         inputs / "checks",
         inputs / "source-views",
         inputs / "preimages",
+        inputs / "original",
         *review_paths(run, workflow.flow[STAGE], reference),
     ]
 

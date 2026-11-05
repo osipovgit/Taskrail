@@ -36,6 +36,26 @@ class WorkflowTransitionTests(unittest.TestCase):
                 self.assertNotIn("effect", execution)
                 self.assertEqual(state["results"], {})
 
+    def test_a_disputed_plan_review_gap_returns_to_planning_once_within_budget(self):
+        blocked = dict(verdict("BLOCKED"), blocking_gaps=["Original changes need inspection"])
+        execution = flow("plan-reviewer", [])
+        state = dict(status="RUNNING", results={})
+        transitions.advance(execution, state, blocked, "02-plan-review/result.json", 3)
+        self.assertEqual((execution["stage"], execution["plan_repairs"]), ("planner", 1))
+        self.assertEqual(execution["feedback"], blocked)
+        self.assertFalse(execution["allowed"])
+        plan = dict(execution["plan"], **verdict("PLAN_READY"))
+        transitions.advance(execution, state, plan, "03-plan/result.json", 3)
+        self.assertEqual(execution["stage"], "plan-reviewer")
+        transitions.advance(execution, state, blocked, "04-plan-review/result.json", 3)
+        self.assertEqual(state["status"], "BLOCKED")
+        self.assertNotIn("effect", execution)
+        exhausted = dict(status="RUNNING", results={})
+        transitions.advance(
+            flow("plan-reviewer", []), exhausted, blocked, "02-plan-review/result.json", 0
+        )
+        self.assertEqual(exhausted["status"], "BLOCKED")
+
     def test_plans_with_and_without_changes_always_get_independent_plan_review(self):
         for files in ([], ["project/app.py"]):
             with self.subTest(files=files):

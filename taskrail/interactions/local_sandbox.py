@@ -44,4 +44,6 @@ def launch(argv, payload, context):
     policy = dict(
         protected=protected_paths.patterns(config), network=config.get("sandbox_network") is True
     )
+    if context.get("run"):
+        policy["original"] = context["run"] / "00-input/original"
     return sandbox.command(argv, payload["cwd"], context["roots"], writes, policy)

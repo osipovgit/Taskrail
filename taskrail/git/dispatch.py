@@ -2,6 +2,7 @@
 
 import json
 
+from taskrail.application import original_checkout
 from taskrail.application.artifacts import finish_stage, save_run
 from taskrail.core import control
 from taskrail.core.files import atomic_json, changed
@@ -69,6 +70,7 @@ def save_output(run, folder, entry):
     directory.mkdir(parents=True, exist_ok=True)
     count = len(requests.history(run))
     output = directory / f"{folder.name}-{count}.txt"
+    note = original_checkout.status_note(run, entry["request"])
     output.write_text(
         "Git request: "
         + json.dumps(entry["request"])
@@ -76,6 +78,7 @@ def save_output(run, folder, entry):
         + entry["status"]
         + "\nExit code: "
         + str(entry.get("exit_code", "not executed"))
+        + note
         + "\nSTDOUT:\n"
         + entry.pop("stdout", "")
         + "\nSTDERR:\n"
