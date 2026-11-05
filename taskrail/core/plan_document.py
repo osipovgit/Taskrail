@@ -21,7 +21,9 @@ from taskrail.core.plan_tasks import check, steps
 
 NONE = "none"
 # "None. No Jenkins jobs ..." under After the change means there is no check.
-NO_CHECKS = re.compile(r"(?:none|n/a)\b", re.IGNORECASE)
+NO_CHECKS = re.compile(
+    r"(?:none|n/a)\b|(?:server|jenkins) check:\s*(?:none|n/a)(?:\s*\([^()]*\))?\.?$", re.IGNORECASE
+)
 DECISIONS = MappingProxyType(
     {
         "split": "split",

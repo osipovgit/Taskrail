@@ -17,15 +17,14 @@ SEPARATOR = re.compile(r"\s*([,;])\s*")
 
 def parts(text, explanation=True):
     """Keep every explicit citation and explanation, including notes between citations."""
-    found, remaining = citation(text.strip())
+    found, remaining = citation(text.strip(), explanation)
     details = []
     while remaining.strip():
-        note = explanation_prefix(remaining) if explanation else None
+        note = explanation_prefix(remaining.removeprefix(",")) if explanation else None
         if note is not None:
             details.append(note[0])
             remaining = note[1]
-        if explanation and remaining.strip() in {"", "."}:
-            break
+            continue
         entries, remaining = following(remaining, found[-1][0])
         found.extend(entries)
     return found, "; ".join(filter(None, details))
@@ -66,8 +65,11 @@ def following(text, previous):
     return citation(remaining)
 
 
-def citation(text):
+def citation(text, sentence_period=False):
     """Read one complete citation, including paths with spaces when backtick-quoted."""
+    if sentence_period:
+        text = text.removesuffix(".")
+    text = re.sub(r"^` ([^`\n]+) `", r"`\1`", text)
     match = CITATION.match(text)
     if match is None:
         raise ValueError(prompt_texts.diagnostic("validation.plan_citations"))

@@ -2,6 +2,8 @@
 
 import json
 
+from taskrail.application import review_outcome
+
 BULLET = "- {0}"
 CHECK = "- {file}: {status} — {detail}"
 WORKTREE = "- {0}: `{worktree}` on branch `{branch}`, created from `{source}` at {base}"
@@ -48,7 +50,7 @@ def not_verified(state):
         "- Only explicitly recorded checks/actions were executed; other runtime criteria remain unverified.",
     ]
     lines += [BULLET.format(text) for text in dict.fromkeys(state["unverified"])]
-    for limit in state.get("review_limits", []):
+    for limit in review_outcome.unresolved_limits(state):
         if not limit["unverified"] and not limit["blocking_gaps"]:
             continue
         lines += ["", "### Review limitations: {}".format(limit["stage"]), ""]

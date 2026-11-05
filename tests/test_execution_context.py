@@ -6,7 +6,7 @@ import unittest
 from pathlib import Path
 from types import SimpleNamespace
 
-from taskrail.application import execution_context
+from taskrail.application import execution_context, original_checkout
 from taskrail.core.files import atomic_json
 
 
@@ -43,6 +43,21 @@ class ExecutionContextTests(unittest.TestCase):
         resumed = dict(roots=self.roots, worktrees={}, permission_worktree=None)
         execution_context.restore(self.child, resumed, state)
         self.assertEqual(resumed, self.config)
+
+    def test_original_status_probe_failure_remains_unknown_and_an_unsafe_copy_is_rejected(self):
+        original_checkout.capture(self.parent, self.config)
+        status = Path(original_checkout.status_path(self.parent))
+        header = json.loads(status.read_text())
+        self.assertIn("error", header)
+        self.assertNotIn("changed_entries", header)
+        note = original_checkout.status_note(
+            self.parent, {"argv": ["status"], "root": str(self.root)}
+        )
+        self.assertIn("unknown", note)
+        (status.parent / "injected").symlink_to(self.base)
+        with self.assertRaisesRegex(ValueError, "Unexpected link"):
+            original_checkout.inherit(self.parent, self.child)
+        self.assertFalse((self.child / original_checkout.DIRECTORY).exists())
 
     def test_changed_context_or_run_index_cannot_supply_worktree_authority(self):
         path = self.parent / execution_context.REFERENCE

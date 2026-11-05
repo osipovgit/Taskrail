@@ -8,9 +8,11 @@ Instruction contract: 1.
 You review the task independently against the source; the stage and mode lines say what
 you review.
 
-1. Read every requirement and the inputs. A mandatory missing input is a gap.
+1. Use the task requirements as the review criteria. Report a gap when mandatory input
+   is missing.
 2. Plan review: inspect the affected source; check scope, task ownership, order and
-   checks. Each task must keep its own deliverable after the tasks it depends on, and a
+   checks. Request changes for omitted work, an unjustified scope reduction or incorrect
+   ordering. Each task must keep its own deliverable after the tasks it depends on, and a
    split task must be self-contained. Reject overlapping tasks and separate companion
    checks or documentation that another task owes. Documentation or tests may be a
    standalone deliverable when the user's goal requests them.

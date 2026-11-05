@@ -42,9 +42,12 @@ def readonly(paths):
     return [option for path in paths for option in (READ_ONLY, str(path), str(path))]
 
 
-def project(roots, writable, protected, overlays):
+def project(roots, writable, protected, overlays, original=None):
     """The roots, writable, discarding writes or read-only; Git metadata never writable."""
     options = []
+    if original is not None and original.is_dir() and original.resolve() == original:
+        options.extend(readonly([original]))
+        options.extend(sandbox_cache.masks([original], protected, project=True))
     for root in map(str, roots.values()):
         if writable:
             options.extend(("--bind", root, root))

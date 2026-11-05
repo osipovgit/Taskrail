@@ -12,6 +12,7 @@ PLANNER = "planner"
 ALLOWED = "allowed"
 IMPLEMENTER = "implementer"
 REPAIRS = "repair_count"
+PLAN_REPAIRS = "plan_repairs"
 REVIEWER = "reviewer"
 CHECKS = "checks"
 
@@ -25,11 +26,11 @@ def plan_review(flow, state, verdict, limit):
     """Approve scope or return bounded feedback to planning."""
     state["plan_review"] = verdict
     if verdict[STATUS] == "REQUEST_CHANGES":
-        if flow["plan_repairs"] >= limit:
+        if flow[PLAN_REPAIRS] >= limit:
             state.update(status="PLAN_REJECTED", summary=verdict[SUMMARY])
         else:
             flow.update(feedback=verdict, stage=PLANNER)
-            flow["plan_repairs"] += 1
+            flow[PLAN_REPAIRS] += 1
         return
     flow[ALLOWED] = flow["plan"]["proposed_change_files"]
     state["review_outcome"] = review_outcome.describe(verdict, state.get("changed_files", []))
@@ -93,10 +94,26 @@ def advance(flow, state, verdict, reference, limit):
             )
         )
     if verdict[STATUS] == "BLOCKED":
+        if stage == PLAN_REVIEW and revisit_gap(flow, state, verdict, limit):
+            return
         state.update(status="BLOCKED", summary=verdict[SUMMARY])
         return
     state["results"][RESULT_KEYS[stage]] = reference
     HANDLERS[stage](flow, state, verdict, limit)
+
+
+def revisit_gap(flow, state, verdict, limit):
+    """Let the planner resolve one disputed plan-review gap within its repair budget."""
+    state["plan_review"] = verdict
+    limits = state["review_limits"]
+    if not verdict["blocking_gaps"] or flow[PLAN_REPAIRS] >= limit:
+        return False
+    if any(entry["blocking_gaps"] for entry in limits[:-1]):
+        return False
+    limits[-1]["returned_to_planning"] = True
+    flow.update(feedback=verdict, stage=PLANNER)
+    flow[PLAN_REPAIRS] += 1
+    return True
 
 
 def checked(flow, state, limit):

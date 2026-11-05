@@ -67,7 +67,8 @@ source checks, checkpoints and file operations:
 | Checks: failed | Authorized implementation repair within budget; otherwise `CHECK_FAILED`; unchanged repeated failures stop |
 | Result review: changes requested | Authorized implementation repair within budget; read-only phases or an exhausted budget become `CHANGES_REQUESTED` |
 | Result review: approved | Final status and, on a task branch, a controlled commit of reviewed changes |
-| Any model stage: blocked | Stop without advancing or granting writes |
+| Plan review: blocking gap | Send the first gap back to planning once within the plan-repair budget. A revised plan requires independent approval. A repeated gap or exhausted budget stops the run. |
+| Other model stage: blocked | Stop without advancing or granting writes |
 
 Executor requests and result corrections stay in the same stage and session, including
 the distinction between plan review and result review. An authenticated split child

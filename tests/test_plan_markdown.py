@@ -83,8 +83,8 @@ class PlanDocumentTests(unittest.TestCase):
     def test_explicit_ranges_are_evidence_but_parenthetical_prose_is_not(self):
         detail = (
             "/runs/task/00-input/git/01-plan-2.txt:7-42,43-156,157-169; "
-            "`project/file with spaces.yml:2-3` "
-            "(diff mentions v100.yaml:165-166 and 01-plan-2.txt:165-166)"
+            "` project/file with spaces.yml:2-3 ` "
+            "(diff mentions v100.yaml:165-166 and 01-plan-2.txt:165-166), (final note)"
         )
         plan = payload(
             PLAN.replace("project/README.md:12-18, roles/x.yml:3", detail), REQUIREMENTS, ROOTS
@@ -110,6 +110,7 @@ class PlanDocumentTests(unittest.TestCase):
             "project/a:1 (unclosed",
             "project/a:1 (note), project/b:2 (unclosed",
             "project/a:1 (note),",
+            "project/a:1 (note), (extra) garbage",
             "project/a:1 (note) project/b:2",
             "project/a:1 (note) (another note)",
             "`project/a`:1-bad",
@@ -278,10 +279,10 @@ class PlanDocumentTests(unittest.TestCase):
 
     def test_after_the_change_written_as_a_task_or_as_none_lists_no_check(self):
         text = PLAN.replace("## After the change", "## T3: After the change (deferred checks)")
-        text += "None. No remote checks.\n"
+        text += "None. No remote checks.\nServer check: none (local task)\nJenkins check: none (no CI)\n"
         plan = payload(text, REQUIREMENTS, ROOTS)
         self.assertEqual([step["id"] for step in plan["steps"]], ["T1", "T2"])
-        self.assertNotIn("None. No remote checks.", plan["unverified"])
+        self.assertEqual(plan["unverified"], payload(PLAN, REQUIREMENTS, ROOTS)["unverified"])
 
     def test_read_ranges_keep_quoted_paths_and_skip_prose(self):
         text = PLAN.replace("Done when:", "Read: `project/a file.yml:1-2`,3-4\nDone when:", 1)

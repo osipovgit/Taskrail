@@ -17,3 +17,11 @@ def describe(verdict, changed):
         unverified=verdict.get("unverified", []),
         blocking_gaps=verdict.get("blocking_gaps", []),
     )
+
+
+def unresolved_limits(state):
+    """An approved revision supersedes the gap that prompted its replan."""
+    limits = state.get("review_limits", [])
+    if state.get("plan_review", {}).get("status") == "APPROVE":
+        return [entry for entry in limits if not entry.get("returned_to_planning")]
+    return limits

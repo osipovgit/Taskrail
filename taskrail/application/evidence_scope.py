@@ -6,5 +6,6 @@ def roots(run, path, declared):
     if run not in path.parents:
         return declared
     return {
-        name: run / "00-input" / name for name in ("git", "ssh", "local", "checks", "preimages")
+        name: run / "00-input" / name
+        for name in ("git", "ssh", "local", "checks", "preimages", "original")
     }

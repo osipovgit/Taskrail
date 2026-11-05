@@ -117,7 +117,9 @@ def command(argv, cwd, roots, writable, policy=None):
         *sandbox_mounts.private(),
         *sandbox_mounts.home(),
         *sandbox_mounts.installation(argv[0]),
-        *sandbox_mounts.project(roots, writable, protected, overlays()),
+        *sandbox_mounts.project(
+            roots, writable, protected, overlays(), (policy or {}).get("original")
+        ),
         *sandbox_mounts.credentials(argv[0], protected),
         *(sandbox_mounts.RESOLVER if network else ()),
         *UNSET_DESKTOP,

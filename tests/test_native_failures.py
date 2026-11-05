@@ -57,6 +57,20 @@ class NativeFailureTests(unittest.TestCase):
                     self.assertNotIn("recovered_by", outcome["warnings"][0])
                     self.assertEqual(final_status("OK", 1, outcome), "PROCESS_ERROR")
 
+    def test_ruleset_dump_is_short_in_activity_with_the_path_and_recovery_intact(self):
+        from taskrail.observability.telemetry_parts import ToolCalls
+
+        error = 'PermissionDeniedError({"ruleset":[{"pattern":"/private/index","action":"deny"}]})'
+        event = self.failure("read", error)
+        outcome = self.parse([event, *self.final()])
+        trace = ToolCalls().observe(event["part"], 0)
+        self.assertEqual(final_status("OK", 0, outcome), "OK")
+        self.assertIn("Permission denied", trace["error"])
+        self.assertNotIn("ruleset", trace["error"])
+        self.assertIn("/repo/file", trace["input"])
+        self.assertEqual(outcome["warnings"][0]["error"], trace["error"])
+        self.assertEqual(event["part"]["state"]["error"], error)
+
     def test_completed_invalid_sentinel_remains_a_diagnostic_error(self):
         from taskrail.observability.telemetry_parts import ToolCalls
 

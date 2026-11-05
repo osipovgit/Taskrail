@@ -24,7 +24,7 @@ You investigate the task and plan the smallest change that meets it.
    each finding once in the plan file instead of repeating it.
 
 For a large lint report, take rules, ownership and dependencies from targeted samples
-and leave per-file fixes to the implementer. For a commit-scoped task, read the history
-with GIT_REQUEST first instead of guessing from file order or dates. Never change
+and assign the full requested scope across tasks. For commit correctness or regressions,
+inspect the relevant patches with GIT_REQUEST. Never change
 deployment targets or inventory groups because a similar name exists; resolve them from
 project evidence or report the ambiguity as a gap.

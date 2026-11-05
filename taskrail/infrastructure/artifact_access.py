@@ -32,6 +32,8 @@ def model_inputs(run, folder):
         run / "00-input/checks",
         run / "00-input/source-views",
     ]
+    if (run / "00-input/original").is_dir():
+        paths.append(run / "00-input/original")
     paths.extend(result_inputs(run))
     paths.extend(
         path
@@ -66,10 +68,13 @@ def task_inputs(run):
 
 def manifest(run, folder, roots, writable=(), protected=protected_paths.DEFAULT_PATTERNS):
     """Describe rights without disclosing internal state or widening permissions."""
+    readable = model_inputs(run, folder)
     return {
         "source_roots": roots,
         "writable_files": list(writable),
-        "readable_artifacts": list(map(str, model_inputs(run, folder))),
+        "readable_artifacts": [
+            str(path) for path in readable if path.exists() or path.parent == folder
+        ],
         "protected_read_patterns": list(protected),
         "internal_not_inputs": [
             "evidence.json",
