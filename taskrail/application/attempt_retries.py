@@ -82,10 +82,10 @@ def context_notes(retries, outcome):
     if retries.stage != IMPLEMENTER:
         context = note(prompt_texts.text("recovery.context"))
         folder = workflow.run / workflow.state["stages"][-1]["directory"]
-        return context, overflow_outputs(workflow), plan_recovery.feedback(outcome, folder)
+        return [context, overflow_outputs(workflow), plan_recovery.feedback(outcome, folder)]
     changed = context_handoff.changed_paths(workflow, workflow.state["changed_files"])
     handoff = prompt_texts.text("recovery.handoff", files=changed)
-    return note(handoff), overflow_outputs(workflow)
+    return [note(handoff), overflow_outputs(workflow)]
 
 
 def overflow_outputs(workflow):
