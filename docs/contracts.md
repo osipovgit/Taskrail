@@ -180,9 +180,9 @@ review remains necessary. Only server records prove executed checks. The exact
 schema is supplied in each request; do not copy it into custom roles.
 
 Recovery never upgrades a failed or partial read to source evidence. Required
-unresolved proof remains a blocking gap. The same-session correction limit is three;
-a still-invalid plan or review gets one complete attempt with tools. Implementers
-never receive a blind replay. Citation corrections deliver only bounded current
+unresolved proof remains a blocking gap. The session receives the complete validation feedback. Repeated failures on
+unchanged work lead to a fresh session with the recorded evidence and diagnostics.
+A writer inspects partial edits before proceeding. Citation corrections deliver only bounded current
 source windows; accepted evidence must be attributable to the receiving session.
 Repeated citations of one missing window share one correction entry. Exhausted
 corrections retain exact path/range failures for the fresh attempt. Source scope is
@@ -201,9 +201,8 @@ If the process or provider interrupts a turn, the server returns bounded diagnos
 to the same uniquely identified session. It does not replay tools or roll back files.
 The implementer inspects current source and may request a scoped
 [Git restore](git-access.md) or repair the file directly, preserving earlier user edits.
-Three consecutive recovery turns with unchanged diagnostics, source and attached
-artifacts stop as `NO_PROGRESS`; changed state resets that counter. Stage/time/context
-budgets, explicit Stop and configured provider-quota stops remain authoritative.
+Repeated interruptions with unchanged diagnostics and work trigger a change of
+session. A persistently unchanged failure pauses for steering.
 Source or Git integrity violations and unavailable session identity cannot be
 silently recovered. Required work without a permitted solution remains a precise gap.
 
@@ -215,7 +214,7 @@ checkable plan scope, coverage and task-contract defects are reported together
 before citation source bytes are read. A `DONE` message submits a draft; a completed
 correction event only records delivery of rejection feedback, never plan approval.
 
-Transport retry, context handoff, budgets and output delivery are described in
+Transport retry, context handoff, timeouts and output delivery are described in
 [monitoring](monitoring.md) and [deployment](deployment.md#context-limits).
 
 ## Plan file
@@ -223,6 +222,7 @@ Transport retry, context handoff, budgets and output delivery are described in
 The planner writes `<run>/plan.md`, attached at every turn. It survives interruption.
 A ready proposal recovered after a context stop still passes complete validation and
 independent plan review. The server labels requirement blocks with `R<n>`.
+The planner and the next reviewer receive the same complete findings file. Address each finding or document an evidence-backed disagreement for the reviewer to resolve. Long strings use lossless `text_chunks` and the file can be read by line ranges.
 Read ranges identify evidence, never edit coordinates. Use freshly read content for
 edits. The format:
 
@@ -310,8 +310,7 @@ with `bash -c` when it uses shell syntax, and a missing or relative `cwd` resolv
 inside the single root or the named root alias. The command policy, the sandbox and any
 approval see the resulting argv and cwd. A request that still has a wrong shape (a wrong
 version, a non-list command, a wrong status, a wrapped Git write) runs nothing: the same
-session is told what to fix, at most three times in a row (a valid request resets the
-count), and after that the turn ends as an invalid result. Multiple objects, duplicate
+session is told what to fix, with the same progress detection as result validation. Multiple objects, duplicate
 keys and malformed JSON are not requests. `cwd` must end up a declared root or an
 existing directory inside one. Planner and reviewer stages cannot request `--fix`,
 `--write`, in-place or `sed -i` options; such a request is rejected before approval.

@@ -79,17 +79,11 @@ def resume_command(argv):
     parser.add_argument("run_dir", type=Path)
     parser.add_argument(SETTINGS_OPTION)
     parser.add_argument(
-        "--extend-budget",
-        action="store_true",
-        help="Grant two more launches and one attempt timeout to the stopped stage; keep consumed usage",
-    )
-    parser.add_argument(
         "--note",
         help="Note for the agents, e.g. that a missing tool is now installed; the task still applies",
     )
     args = parser.parse_args(argv)
-    resume = "extend" if args.extend_budget else True
-    options = dict(run_dir=args.run_dir, resume=resume, note=args.note)
+    options = dict(run_dir=args.run_dir, resume=True, note=args.note)
     task = args.run_dir / "00-input/task.md"
     return guarded(functools.partial(run_task, task, args.settings, **options))
 

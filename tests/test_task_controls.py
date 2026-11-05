@@ -15,7 +15,7 @@ from taskrail.application import delivery_confirmation, execution_context, mode_
 from taskrail.application.live import execute_task
 from taskrail.application.source_guard import SourceGuard
 from taskrail.core.files import atomic_json
-from taskrail.web import delivery_launch, requests, submissions, task_form
+from taskrail.web import delivery_launch, delivery_state, requests, submissions, task_form
 from taskrail.web.history import HISTORY, TaskDraft, conversation, previous_messages, task_draft
 from taskrail.web.lifecycle import trash_run
 from taskrail.web.run_list import list_runs
@@ -54,6 +54,7 @@ class TaskControlTests(unittest.TestCase):
                         status="READY_FOR_REVIEW",
                         roots={"project": str(self.repo)},
                         summary="Previous conclusion",
+                        jenkins_configured=True,
                         results={"plan": "plan.json"},
                         stages=[],
                     )
@@ -71,7 +72,7 @@ class TaskControlTests(unittest.TestCase):
             current_run(dict(expected=guard.expected, git_before=guard.git_before)),
         )
         self.settings = self.base / "settings.json"
-        atomic_json(self.run / "00-input/settings.json", dict(max_repairs=0))
+        atomic_json(self.run / "00-input/settings.json", dict(max_integration_corrections=0))
         self.configure("ok")
         self.launcher = TaskLauncher(self.runs, self.settings)
 
@@ -90,7 +91,7 @@ class TaskControlTests(unittest.TestCase):
                     agent_source=str(BASE / "taskrail/agents"),
                     agent_directory=str(self.base / "profiles"),
                     timeout_seconds=30,
-                    max_read_retries=0,
+                    max_transport_retries=0,
                 )
             )
         )
@@ -278,7 +279,9 @@ class TaskControlTests(unittest.TestCase):
         )
         execution_context.capture(epic, dict(roots={"project": self.repo}, worktrees={}), index)
         (epic / "run.json").write_text(json.dumps(current_run(index)))
-        (epic / "00-input/settings.json").write_text(json.dumps(dict(max_repairs=0)))
+        (epic / "00-input/settings.json").write_text(
+            json.dumps(dict(max_integration_corrections=0))
+        )
         return epic
 
     def launching(self, name):
@@ -299,9 +302,12 @@ class TaskControlTests(unittest.TestCase):
             status=status,
             summary=f"{name} summary",
             changed_files=["/repo/hello.py"],
+            jenkins_configured=True,
             roots={"project": str(self.repo)},
         )
-        (child / "00-input/settings.json").write_text(json.dumps(dict(max_repairs=0)))
+        (child / "00-input/settings.json").write_text(
+            json.dumps(dict(max_integration_corrections=0))
+        )
         (child / "run.json").write_text(json.dumps(current_run(state)))
 
     def test_task_split_starts_tasks_in_order_with_a_brief(self):
@@ -408,7 +414,9 @@ class TaskControlTests(unittest.TestCase):
         (child / "00-input").mkdir(parents=True)
         (child / "00-input/task.md").write_text(first)
         state = dict(status="RUNNING", summary="", roots={"project": str(self.repo)}, stages=[])
-        (child / "00-input/settings.json").write_text(json.dumps(dict(max_repairs=0)))
+        (child / "00-input/settings.json").write_text(
+            json.dumps(dict(max_integration_corrections=0))
+        )
         (child / "run.json").write_text(json.dumps(current_run(state)))
         request = dict(status="LOCAL_REQUEST", argv=["make"], cwd=str(self.repo))
         atomic_json(child / "pending-approval.json", dict(ticket="t1", request=request))
@@ -582,6 +590,14 @@ class TaskControlTests(unittest.TestCase):
         self.assertEqual(list(record["tasks"]), ["S-1"])
         self.assertEqual(record["pause_before"], ["S-2"])
 
+    def test_unconfigured_jenkins_has_no_phase_when_implementation_needs_attention(self):
+        state = json.loads((self.run / "run.json").read_text())
+        state.update(jenkins_configured=False, status="TIMEOUT")
+        (self.run / "plan.json").write_text(json.dumps(dict(unverified=["Jenkins check: build"])))
+        delivery = delivery_state.view(self.run, state)
+        self.assertEqual(delivery["checks"]["jenkins"], [])
+        self.assertNotIn("validation", delivery["phases"])
+
     def test_delivery_validates_waits_for_confirmation_then_checks_servers(self):
         unverified = [
             "Jenkins check: ci/shop-tests: passes",
@@ -597,6 +613,7 @@ class TaskControlTests(unittest.TestCase):
                     dict(
                         json.loads((self.run / "run.json").read_text()),
                         changed_files=["/repo/hello.py"],
+                        jenkins_configured=True,
                     )
                 )
             )
@@ -660,7 +677,9 @@ class TaskControlTests(unittest.TestCase):
         (child / "00-input/task.md").write_text(task)
         state = dict(status=status, summary=f"{name} failed\ndetails", phase=phase, stages=[])
         state["roots"] = header["roots"]
-        (child / "00-input/settings.json").write_text(json.dumps(dict(max_repairs=0)))
+        (child / "00-input/settings.json").write_text(
+            json.dumps(dict(max_integration_corrections=0))
+        )
         (child / "run.json").write_text(json.dumps(current_run(state)))
 
     def test_a_restarted_phase_stays_in_its_delivery_with_earlier_attempts(self):

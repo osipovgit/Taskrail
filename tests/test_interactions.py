@@ -24,11 +24,11 @@ from taskrail.interactions import (
     local_request,
     local_route,
     read_only,
-    request_routes,
     transcripts,
 )
 from taskrail.interactions.clock import StageClock
 from taskrail.interactions.session import StageSession
+from taskrail.interactions.turn_recovery import MAX_STALLS
 
 
 class InteractionTests(unittest.TestCase):
@@ -353,9 +353,7 @@ class InteractionTests(unittest.TestCase):
                     (folder / "events.jsonl").touch()
                     prompt = folder / "request.md"
                     prompt.write_text("Initial task")
-                    record = dict(
-                        stage=role, role=role, directory=folder.name, budget=dict(timeout=60)
-                    )
+                    record = dict(stage=role, role=role, directory=folder.name, timeout_seconds=60)
                     state = dict(stages=[record])
                     environment = dict(
                         self.context,
@@ -436,7 +434,7 @@ class InteractionTests(unittest.TestCase):
                     stage="implementer",
                     role="implementer",
                     directory=folder.name,
-                    budget=dict(timeout=60),
+                    timeout_seconds=60,
                 )
                 environment = dict(
                     self.context,
@@ -503,9 +501,7 @@ class InteractionTests(unittest.TestCase):
         (folder / "events.jsonl").touch()
         prompt = folder / "request.md"
         prompt.write_text("Initial task")
-        record = dict(
-            stage="planner", role="planner", directory=folder.name, budget=dict(timeout=60)
-        )
+        record = dict(stage="planner", role="planner", directory=folder.name, timeout_seconds=60)
         environment = dict(
             self.context,
             expected={},
@@ -517,7 +513,7 @@ class InteractionTests(unittest.TestCase):
         near_miss = dict(
             status="LOCAL", cwd=str(self.root), argv=["ansible-lint", "."], reason="Lint"
         )
-        attempts = request_routes.MAX_CORRECTIONS + 1
+        attempts = MAX_STALLS + 1
         responses = [f"LOCAL_REQUEST\n{json.dumps(near_miss)}"] * attempts + ["{}"]
         prompts = []
 

@@ -44,7 +44,7 @@ def run_checks(workflow):
     workflow.guard.verify(
         "Source/Git changed during checks; verification commands must not write inside declared roots"
     )
-    transitions.checked(workflow.flow, state, workflow.config["max_repairs"])
+    transitions.checked(workflow.flow, state, workflow.work_version())
 
 
 def collect(workflow, folder):

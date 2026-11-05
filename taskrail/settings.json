@@ -5,10 +5,6 @@
   "agent_source": "agents",
   "models": {},
   "timeout_seconds": 3600,
-  "max_repairs": 3,
-  "read_retries": 3,
-  "stop_on_provider_limit": false,
-  "max_observed_tokens": 0,
-  "max_stage_attempts": 6,
-  "stage_timeout_seconds": 14400
+  "transport_retries": 3,
+  "max_integration_corrections": 3
 }

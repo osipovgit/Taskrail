@@ -127,3 +127,8 @@ automatically. An interrupted action journal remains authoritative; a new launch
 cannot silently replay the action. Running tasks keep their frozen instructions. A
 task that forbids Git also forbids history inspection; the server never rewrites the
 user's task text.
+
+On an owned task branch, the writer may adopt additional safe project files.
+Before each Git request the server refreshes the exact changed paths and their
+preimages. The same session can stage and commit these paths. Direct-checkout
+writers remain limited to the approved files, and Git still verifies index ownership.

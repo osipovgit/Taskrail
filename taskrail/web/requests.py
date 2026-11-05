@@ -26,7 +26,7 @@ HEADER_OPTIONS = MappingProxyType(
         DECOMPOSE: '"decompose": true',
     }
 )
-RESUMES = frozenset(("resume", "resume_budget"))
+RESUME = "resume"
 ACTION = "action"
 PHASE = "phase"
 TASK = "task"
@@ -58,7 +58,7 @@ RECORDED = (
     | TASK_ACTIONS
 )
 TASK_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,63}")
-ACTIONS = RESUMES | RECORDED | {"restart", "stop", "delete"}
+ACTIONS = RECORDED | {RESUME, "restart", "stop", "delete"}
 ROOTS_KEY = '"roots":'
 
 
@@ -192,7 +192,7 @@ def validate_action(payload):
     if not isinstance(payload, dict) or payload.get(ACTION) not in ACTIONS:
         raise ValueError("Expected id and a supported task action")
     fields = set(payload)
-    if payload[ACTION] in RESUMES:
+    if payload[ACTION] == RESUME:
         fields.discard("note")
     if payload[ACTION] in TASK_ACTIONS:
         fields.discard(check_task(payload))

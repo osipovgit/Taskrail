@@ -6,10 +6,10 @@ from taskrail.application import context_windows, result_context, stage_artifact
 from taskrail.application.attempt_launch import agent_name
 from taskrail.application.git_state import git_metadata
 from taskrail.application.plan_validation import canonical_plan, validate_plan
+from taskrail.application.planned_paths import git_files
 from taskrail.application.task_branch import KEY as TASK_BRANCH
 from taskrail.application.task_branch import extend as extend_beyond_plan
 from taskrail.observability.progress import clock, say
-from taskrail.observability.telemetry import inspect_events
 
 ROOTS = "roots"
 INVALID = "INVALID_RESULT"
@@ -22,19 +22,7 @@ def announce(record):
     say("[{}] [{:02d}] {} model={}".format(now, record["number"], record["directory"], model))
 
 
-def token_allowance(workflow):
-    """Remaining observed tokens, or None without a configured budget."""
-    budget = workflow.config["max_observed_tokens"]
-    if not budget:
-        return None
-    logs = [
-        workflow.run / stage["directory"] / "events.jsonl" for stage in workflow.state["stages"]
-    ]
-    observed = sum(inspect_events(log)["tokens"]["total"] for log in logs)
-    return budget - observed
-
-
-def session_environment(workflow, profile, files, check_result):
+def session_environment(workflow, profile, check_result):
     """What the stage session needs to keep scope and integrity guards between turns.
 
     On a task branch the writer's changes beyond the plan are adopted before each check.
@@ -49,17 +37,23 @@ def session_environment(workflow, profile, files, check_result):
         roots=workflow.config[ROOTS],
         profile=profile,
         allowed=workflow.flow["allowed"],
-        allowed_paths=files,
+        allowed_paths=git_files(workflow),
         expected=guard.expected,
         original_sources=guard.before,
         git_before=guard.git_before,
         scan=guard.scan,
         git_metadata=git_metadata,
-        beyond_plan=partial(extend_beyond_plan, workflow) if adopts else None,
+        beyond_plan=partial(refresh_git_files, workflow) if adopts else None,
     )
 
 
-def launch_options(workflow, active, allowance):
+def refresh_git_files(workflow):
+    """Adopt actual safe edits before a Git request in the same session."""
+    extend_beyond_plan(workflow)
+    return git_files(workflow)
+
+
+def launch_options(workflow, active):
     """The opencode invocation of one attempt."""
     folder, record = active
     config = workflow.config
@@ -74,7 +68,6 @@ def launch_options(workflow, active, allowance):
         debug=workflow.runtime["debug"],
         progress=True,
         runtime=dict(
-            token_budget=allowance,
             context_budget=context_windows.role_capacity(config, record["role"]),
             env_allow=config["agent_env_allow"],
             autocompact=False,

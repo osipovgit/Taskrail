@@ -47,7 +47,7 @@ class IntegrationCorrectionTests(IsolatedSplitFixture, unittest.TestCase):
         self.provider = "fake_live.py"
         command = dict(cwd=str(self.root), argv=[sys.executable, "-c", "print('mandatory gate')"])
         self.split_settings = dict(
-            max_repairs=limit,
+            max_integration_corrections=limit,
             check_recipes=dict(
                 health=dict(kind="local", phase="check", request=command, adapter="exit-code"),
                 audit=dict(
@@ -102,6 +102,9 @@ class IntegrationCorrectionTests(IsolatedSplitFixture, unittest.TestCase):
         reviewed, status, outcome = launcher.completed[-1]
         self.assertEqual(status, "NO_CHANGES_REQUIRED", outcome.get("summary"))
         self.assertEqual(outcome["required_local_checks"], ["health", "audit"])
+        findings = reviewed / "00-input/findings.json"
+        self.assertIn(str(findings), next(reviewed.glob("*-review/request.md")).read_text())
+        self.assertTrue(json.loads(findings.read_text())[0]["findings"]["findings"])
         self.assertEqual(state["required_local_checks"], ["health"])
         self.assertTrue(
             any(

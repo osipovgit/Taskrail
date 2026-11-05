@@ -16,7 +16,7 @@ from taskrail.application.planned_paths import safe_file
 from taskrail.application.task_config import configuration
 from taskrail.core.paths import tool_paths
 from taskrail.infrastructure.runner import run_agent as real_run_agent
-from taskrail.interactions.session import MAX_RESULT_CORRECTIONS
+from taskrail.interactions.turn_recovery import MAX_STALLS
 
 
 class LiveTests(LiveFixture, unittest.TestCase):
@@ -122,9 +122,11 @@ class LiveTests(LiveFixture, unittest.TestCase):
         self.allow_all_actions()
         code = "import sys; print('LOCAL_CHECK_FAILED'); sys.exit(3)"
         run, status, state = self.run_mode(
-            "artifact-mismatch", verify_commands=[self.verify_command(code)], max_repairs=0
+            "artifact-mismatch",
+            verify_commands=[self.verify_command(code)],
+            max_integration_corrections=0,
         )
-        self.assertEqual(status, "CHECK_FAILED", state.get("summary"))
+        self.assertEqual(status, "NO_PROGRESS", state.get("summary"))
         self.assertEqual(state["checks"][-1]["status"], "FAIL")
         self.assertIn("LOCAL_CHECK_FAILED", next(run.glob("*-check/verify-01.log")).read_text())
         self.assertFalse(any(row["stage"] == "reviewer" for row in state["stages"]))
@@ -160,6 +162,17 @@ class LiveTests(LiveFixture, unittest.TestCase):
         rejected = json.loads((run / "02-plan-review/result.json").read_text())
         self.assertEqual(rejected["status"], "REQUEST_CHANGES")
         self.assertEqual(rejected["findings"][0]["file"], str(run / "plan.md"))
+        feedback = run / "02-plan-review/findings.json"
+        self.assertEqual(json.loads(feedback.read_text())["findings"], rejected["findings"])
+        for stage in ("03-plan", "04-plan-review"):
+            ctx = json.JSONDecoder().raw_decode(
+                (run / stage / "request.md").read_text().split("Context:\n")[1]
+            )[0]
+            self.assertEqual(ctx["feedback"]["findings_file"], str(feedback))
+            self.assertIn(
+                str(feedback),
+                json.loads((run / stage / "access.json").read_text())["readable_artifacts"],
+            )
         self.assertIn("return 2", (self.root / "hello.py").read_text())
 
     def test_clipped_executor_json_repairs_in_same_session_without_reexecuting_command(self):
@@ -266,14 +279,14 @@ class LiveTests(LiveFixture, unittest.TestCase):
         for mode in ("write-unresolved", "write-mismatch-unresolved", "write-scope"):
             with self.subTest(mode=mode):
                 self.setUp()
-                _, status, state = self.run_mode(mode, max_repairs=0)
+                _, status, state = self.run_mode(mode, max_integration_corrections=0)
                 self.assertEqual(
                     status,
-                    "BLOCKED" if mode == "write-scope" else "CHANGES_REQUESTED",
+                    "BLOCKED" if mode == "write-scope" else "NO_PROGRESS",
                     state.get("summary"),
                 )
                 writer = [entry for entry in state["stages"] if entry["stage"] == "implementer"]
-                self.assertEqual(len(writer), 1)
+                self.assertEqual(len(writer), 1 if mode == "write-scope" else 3)
                 self.assertEqual(writer[0]["session_turns"], 1)
                 if mode == "write-scope":
                     self.assertIn("Scope violation", state["summary"])
@@ -543,7 +556,7 @@ class LiveTests(LiveFixture, unittest.TestCase):
 
     def test_incomplete_review_cannot_start_writer(self):
         run, status, state = self.run_mode("incomplete-review")
-        self.assertEqual(status, "BLOCKED")
+        self.assertEqual(status, "NO_PROGRESS")
         self.assertNotIn("implementer", [a["stage"] for a in state["attempts"]])
         self.assertEqual(state["stages"][1]["status"], "RESULT_VALID")
         self.assertEqual(state["stages"][1]["verdict"], "BLOCKED")
@@ -601,10 +614,10 @@ class LiveTests(LiveFixture, unittest.TestCase):
 
     def test_no_change_requires_independent_approval(self):
         _run, status, state = self.run_mode("no-change-rejected")
-        self.assertEqual(status, "BLOCKED")
+        self.assertEqual(status, "NO_PROGRESS")
         self.assertEqual(
             [attempt["stage"] for attempt in state["attempts"]],
-            ["planner", "plan-reviewer", "planner", "plan-reviewer"],
+            ["planner", "plan-reviewer"] * 3,
         )
         self.assertEqual(
             state["review_limits"][-1]["blocking_gaps"], state["review_limits"][0]["blocking_gaps"]
@@ -621,9 +634,11 @@ class LiveTests(LiveFixture, unittest.TestCase):
         self.assertIn("PermissionDeniedError", (run / "02-plan-review/tool-result.md").read_text())
 
     def test_repeated_denied_search_obeys_stage_time_without_writer(self):
-        _run, status, state = self.run_mode("parent-twice", read_retries=0, timeout_seconds=5)
-        self.assertEqual(status, "NO_PROGRESS")
-        self.assertEqual([a["stage"] for a in state["attempts"]], ["planner", "plan-reviewer"])
+        _run, status, state = self.run_mode("parent-twice", transport_retries=0, timeout_seconds=5)
+        self.assertEqual(status, "NO_PROGRESS", state.get("summary"))
+        self.assertEqual(
+            [a["stage"] for a in state["attempts"]], ["planner", "plan-reviewer", "plan-reviewer"]
+        )
         self.assertIn("return 1", (self.root / "hello.py").read_text())
 
     def test_missing_read_does_not_block_valid_result_or_independent_review(self):
@@ -645,7 +660,10 @@ class LiveTests(LiveFixture, unittest.TestCase):
         self.assertEqual(state["attempts"][1]["stage"], "plan-reviewer")
 
     def test_timeout_passes_attributed_read_evidence_to_retry(self):
-        run, status, state = self.run_mode("timeout-evidence")
+        run, status, _ = self.run_mode("timeout-evidence")
+        self.assertEqual(status, "TIMEOUT")
+        _, status = execute_task(run / "00-input/task.md", self.settings, run_dir=run, resume=True)
+        state = json.loads((run / "run.json").read_text())
         self.assertEqual(status, "READY_FOR_REVIEW")
         self.assertEqual(state["stages"][1]["mode"], "research-recovery")
         self.assertEqual(state["stages"][1]["inputs"]["recovery"], "02-plan/recovery.md")
@@ -655,7 +673,10 @@ class LiveTests(LiveFixture, unittest.TestCase):
         self.assertIn("original_chars", evidence)
 
     def test_timeout_retry_corrects_the_plan_in_its_session(self):
-        run, status, state = self.run_mode("timeout-then-invalid")
+        run, status, _ = self.run_mode("timeout-then-invalid")
+        self.assertEqual(status, "TIMEOUT")
+        _, status = execute_task(run / "00-input/task.md", self.settings, run_dir=run, resume=True)
+        state = json.loads((run / "run.json").read_text())
         self.assertEqual(status, "READY_FOR_REVIEW", state.get("summary"))
         self.assertEqual([a["status"] for a in state["attempts"][:2]], ["TIMEOUT", "OK"])
         self.assertEqual(state["stages"][1]["session_turns"], 2)
@@ -757,9 +778,9 @@ class LiveTests(LiveFixture, unittest.TestCase):
     def test_repeated_unresolved_plan_alias_stops_at_the_correction_limit(self):
         _, status, state = self.run_mode("plan-alias-unresolved")
         self.assertEqual(status, "INVALID_RESULT", state.get("summary"))
-        self.assertEqual(state["stages"][0]["session_turns"], MAX_RESULT_CORRECTIONS + 1)
-        self.assertEqual(len(state["stages"]), 1)
-        self.assertEqual(len(state["attempts"]), 1)
+        self.assertEqual(state["stages"][0]["session_turns"], MAX_STALLS + 1)
+        self.assertEqual(len(state["stages"]), 2)
+        self.assertEqual(len(state["attempts"]), 2)
         self.assertNotIn("recovered_by", state["attempts"][0]["tool_errors"][0])
 
     def test_plan_mismatches_recover_without_research_or_format_retry(self):
@@ -848,7 +869,6 @@ class LiveTests(LiveFixture, unittest.TestCase):
                 "evidence.json",
                 "observations.json",
                 "local-preflight.json",
-                "budgets.json",
                 "plan.md",
                 "progress.md",
                 "review.md",
@@ -919,23 +939,9 @@ class LiveTests(LiveFixture, unittest.TestCase):
         _run, status, state = self.run_mode("many-calls")
         self.assertEqual(status, "READY_FOR_REVIEW")
         self.assertEqual(state["stages"][0]["mode"], "model")
-        self.assertNotIn("tools", state["stages"][0]["budget"])
+        self.assertGreater(state["stages"][0]["timeout_seconds"], 0)
         self.assertEqual(state["attempts"][1]["stage"], "plan-reviewer")
         self.assertGreater(state["attempts"][0]["tool_calls"], 300)
-
-    def test_budget_stop_continues_with_explicit_grant(self):
-        run, status, state = self.run_mode("read-retry", max_stage_attempts=1)
-        self.assertEqual(status, "STAGE_BUDGET_EXCEEDED")
-        self.assertEqual(len(state["stages"]), 2)
-        settings = json.loads(self.settings.read_text())
-        settings["max_stage_attempts"] = 6
-        self.settings.write_text(json.dumps(settings))
-        _, status = execute_task(self.task, self.settings, run_dir=run, resume="extend")
-        self.assertEqual(status, "READY_FOR_REVIEW", (run / "report.md").read_text())
-        ledger = json.loads((run / "budgets.json").read_text())
-        self.assertEqual(len(ledger["grants"]), 1)
-        self.assertIn("01-plan", ledger["attempts"])
-        self.assertIn("return 2", (self.root / "hello.py").read_text())
 
     def test_git_metadata_read_does_not_authorize_edit(self):
         plan = dict(
@@ -959,7 +965,7 @@ class LiveTests(LiveFixture, unittest.TestCase):
     def test_a_provider_quota_is_retried_by_default(self):
         _run, _status, state = self.run_mode("provider-quota")
         reviews = [entry for entry in state["attempts"] if entry["stage"] == "plan-reviewer"]
-        self.assertEqual(len(reviews), 1, state["attempts"])
+        self.assertEqual(len(reviews), 2, state["attempts"])
         self.assertEqual(state["stages"][-1]["session_turns"], 4)
         self.assertEqual(reviews[0]["status"], "NO_PROGRESS")
 
@@ -980,14 +986,6 @@ class LiveTests(LiveFixture, unittest.TestCase):
         note = (run / implementer["directory"] / "tool-result.md").read_text()
         self.assertIn("The previous turn was interrupted", note)
         self.assertIn("Retries exhausted", note)
-
-    def test_stop_on_provider_limit_ends_the_stage_without_retries(self):
-        _run, status, state = self.run_mode("provider-quota", stop_on_provider_limit=True)
-        reviews = [entry for entry in state["attempts"] if entry["stage"] == "plan-reviewer"]
-        self.assertEqual(len(reviews), 1, state["attempts"])
-        self.assertEqual(reviews[0]["status"], "PROCESS_ERROR")
-        self.assertIn("Free usage limit reached", state["summary"])
-        self.assertNotEqual(status, "READY_FOR_REVIEW")
 
     def test_read_retry(self):
         _, status, state = self.run_mode("read-retry")
@@ -1016,6 +1014,8 @@ class LiveTests(LiveFixture, unittest.TestCase):
         self.assertEqual((planner["status"], planner["session_turns"]), ("RESULT_VALID", 2))
         self.assertEqual(sum(entry["stage"] == "planner" for entry in state["attempts"]), 1)
         feedback = (run / "01-plan/tool-result.md").read_text()
+        self.assertIn("validation.json", feedback)
+        feedback = "".join(json.loads((run / "01-plan/validation.json").read_text())["text_chunks"])
         self.assertIn("R1: Path outside", feedback)
         self.assertIn("Changing the attempt number", feedback)
         self.assertIn("all tasks", feedback)
@@ -1058,7 +1058,7 @@ class LiveTests(LiveFixture, unittest.TestCase):
         self.assertIn("-    return 1", (run / "changes.diff").read_text())
 
     def test_resume_final_review_does_not_repeat_implementation(self):
-        run, status, state = self.run_mode("review-timeout", read_retries=0)
+        run, status, state = self.run_mode("review-timeout", transport_retries=0)
         self.assertEqual(status, "TIMEOUT")
         old_steps = len(state["stages"])
         _, status = self.continue_with_ok_model(run)
@@ -1079,7 +1079,7 @@ class LiveTests(LiveFixture, unittest.TestCase):
         from taskrail.application.checkpoints import resume_available
 
         run, status, state = self.run_mode(
-            "review-denied-always", read_retries=0, timeout_seconds=5
+            "review-denied-always", transport_retries=0, timeout_seconds=5
         )
         self.assertEqual(status, "NO_PROGRESS")
         self.assertTrue(resume_available(run, state)[0])
@@ -1092,7 +1092,9 @@ class LiveTests(LiveFixture, unittest.TestCase):
         self.assertEqual((self.root / "hello.py").read_bytes(), before)
 
     def test_permission_resume_still_rejects_source_changes(self):
-        run, _, state = self.run_mode("review-denied-always", read_retries=0, timeout_seconds=1)
+        run, _, state = self.run_mode(
+            "review-denied-always", transport_retries=0, timeout_seconds=1
+        )
         old_steps = len(state["stages"])
         (self.root / "unrelated.txt").write_text("new user work")
         _, status = self.continue_with_ok_model(run)
@@ -1110,7 +1112,7 @@ class LiveTests(LiveFixture, unittest.TestCase):
         self.assertEqual(len(json.loads((run / "run.json").read_text())["stages"]), old_steps)
 
     def test_missing_checkpoint_cannot_continue(self):
-        run, status, _state = self.run_mode("planner-timeout", read_retries=0)
+        run, status, _state = self.run_mode("planner-timeout", transport_retries=0)
         self.assertEqual(status, "TIMEOUT")
         (run / "checkpoint.json").unlink()
         _, status = self.continue_with_ok_model(run)
@@ -1150,10 +1152,10 @@ class LiveTests(LiveFixture, unittest.TestCase):
 
     def test_a_repair_that_leaves_the_same_failure_stops_at_once(self):
         _, status, state = self.run_mode("syntax-stuck")
-        self.assertEqual(status, "CHECK_FAILED")
-        self.assertIn("same checks failing", state["summary"])
+        self.assertEqual(status, "NO_PROGRESS")
+        self.assertIn("same work and unresolved findings", state["summary"])
         writers = [entry for entry in state["attempts"] if entry["stage"] == "implementer"]
-        self.assertEqual(len(writers), 2, state["attempts"])
+        self.assertEqual(len(writers), 3, state["attempts"])
 
     def verify_command(self, code, **options):
         return dict(cwd=str(self.root), argv=[sys.executable, "-c", code], **options)
@@ -1178,9 +1180,11 @@ class LiveTests(LiveFixture, unittest.TestCase):
     def test_failed_verify_command_returns_output_to_bounded_repair(self):
         self.allow_all_actions()
         failing = self.verify_command("import sys; print('boom'); sys.exit(3)")
-        run, status, state = self.run_mode("ok", verify_commands=[failing], max_repairs=1)
-        self.assertEqual(status, "CHECK_FAILED")
-        self.assertEqual(len(list(run.glob("*-check"))), 2)
+        run, status, state = self.run_mode(
+            "ok", verify_commands=[failing], max_integration_corrections=1
+        )
+        self.assertEqual(status, "NO_PROGRESS")
+        self.assertEqual(len(list(run.glob("*-check"))), 3)
         self.assertIn("exit 3", state["checks"][-1]["detail"])
         self.assertIn("boom", state["checks"][-1]["detail"])
 
@@ -1207,6 +1211,20 @@ class LiveTests(LiveFixture, unittest.TestCase):
         header = {"roots": {"project": str(self.root)}, "isolation": "worktree"}
         self.task.write_text(f"```taskrail-task\n{json.dumps(header)}\n```\nReturn 2")
         return process
+
+    def test_writer_can_stage_and_commit_adopted_files_in_the_current_session(self):
+        process = self.isolated_repository()
+        _, status, state = self.run_mode(
+            "git-batch", worktree_base=str(self.base / "worktrees"), timeout_seconds=30
+        )
+        self.assertEqual(status, "READY_FOR_REVIEW", state.get("summary"))
+        batch, commit = state["git_jobs"][:2]
+        self.assertEqual((batch["status"], commit["status"]), ("SUCCEEDED", "SUCCEEDED"))
+        self.assertEqual(batch["stage"], commit["stage"])
+        worktree = Path(state["roots"]["project"])
+        files = process.checked(worktree, ["show", "--pretty=format:", "--name-only", "HEAD~1"])
+        self.assertEqual(set(files.splitlines()), {f"Feature{n}.java" for n in range(69)})
+        self.assertFalse(list(self.root.glob("Feature*.java")))
 
     def test_worktree_isolation_leaves_the_source_checkout_untouched(self):
         process = self.isolated_repository()
@@ -1327,7 +1345,7 @@ class LiveTests(LiveFixture, unittest.TestCase):
     def test_isolated_run_continues_in_its_worktree(self):
         self.isolated_repository()
         run, status, state = self.run_mode(
-            "review-timeout", read_retries=0, worktree_base=str(self.base / "wt")
+            "review-timeout", transport_retries=0, worktree_base=str(self.base / "wt")
         )
         self.assertEqual(status, "TIMEOUT")
         _, status = self.continue_with_ok_model(run)
@@ -1409,7 +1427,7 @@ class LiveTests(LiveFixture, unittest.TestCase):
         self.assertEqual(status, "READY_FOR_REVIEW", state.get("summary"))
         review = [stage for stage in state["stages"] if stage["stage"] == "plan-reviewer"]
         self.assertEqual([stage["mode"] for stage in review], ["model", "research-recovery"])
-        self.assertEqual(review[0]["session_turns"], MAX_RESULT_CORRECTIONS + 1)
+        self.assertEqual(review[0]["session_turns"], MAX_STALLS + 1)
         self.assertIn("range outside source", review[0]["contract_error"])
         prompt = (run / review[1]["directory"] / "request.md").read_text()
         self.assertIn("range outside source", prompt)
@@ -1475,7 +1493,7 @@ class LiveTests(LiveFixture, unittest.TestCase):
         self.assertEqual((run / "design.md").read_text(), "Current source already returns 2\n")
         self.assertIn("[Design document](design.md)", (run / "report.md").read_text())
         frozen = json.loads((run / "00-input/settings.json").read_text())
-        self.assertIn("max_repairs", frozen)
+        self.assertIn("max_integration_corrections", frozen)
 
     def test_question_report_and_index_carry_the_reviewed_answer(self):
         header = {"roots": {"project": str(self.root)}, "read_only": True}
@@ -1506,8 +1524,24 @@ class LiveTests(LiveFixture, unittest.TestCase):
         evidence = (run / planner[1]["directory"] / "recovery.md").read_text().splitlines()
         self.assertEqual(evidence[index_end : index_end + 2], ["", "## Tool result 1"])
 
+    def test_context_handoff_saves_public_notes_before_a_fresh_plan_review(self):
+        run, status, state = self.run_mode("handoff-review", transport_retries=0)
+        self.assertEqual(status, "READY_FOR_REVIEW", state.get("summary"))
+        first, fresh = [row for row in state["stages"] if row["stage"] == "plan-reviewer"]
+        handoff = run / first["directory"] / "handoff.md"
+        saved = json.loads(handoff.read_text())
+        self.assertEqual(saved["session_notes"], "Outstanding: verify Java source.")
+        self.assertIn("review.md", str(saved["server_response"]))
+        self.assertIn(str(handoff), (run / fresh["directory"] / "request.md").read_text())
+
+    def test_finished_review_is_validated_after_provider_context_failure(self):
+        _, status, state = self.run_mode("completed-review-overflow", transport_retries=0)
+        self.assertEqual(status, "READY_FOR_REVIEW", state.get("summary"))
+        self.assertEqual(state["stages"][-1]["plan_recovery"]["status"], "validated")
+        self.assertEqual(state["attempts"][-1]["status"], "CONTEXT_EXCEEDED")
+
     def test_completed_plan_survives_context_stop_and_still_receives_independent_review(self):
-        run, status, state = self.run_mode("planned-overflow", read_retries=0)
+        run, status, state = self.run_mode("planned-overflow", transport_retries=0)
         self.assertEqual(status, "READY_FOR_REVIEW", state.get("summary"))
         stages = state["stages"]
         self.assertEqual(
@@ -1523,9 +1557,9 @@ class LiveTests(LiveFixture, unittest.TestCase):
 
     def test_context_stopped_plan_cannot_claim_unobserved_source(self):
         self.root.joinpath("unread.py").write_text("value = 2\n")
-        _, status, state = self.run_mode("unobserved-planned-overflow", read_retries=0)
+        _, status, state = self.run_mode("unobserved-planned-overflow", transport_retries=0)
         self.assertEqual(status, "CONTEXT_EXCEEDED", state.get("summary"))
-        self.assertEqual(len(state["stages"]), 1)
+        self.assertEqual(len(state["stages"]), 2)
         failure = state["stages"][0]["plan_recovery"]
         self.assertEqual(failure["status"], "rejected")
         self.assertIn("no matching observed read", failure["reason"])
@@ -1563,9 +1597,9 @@ class LiveTests(LiveFixture, unittest.TestCase):
     def test_forbidden_plan(self):
         _, status, state = self.run_mode("badpath")
         self.assertEqual(status, "INVALID_RESULT")
-        self.assertEqual(len(state["attempts"]), 1)
-        self.assertEqual(state["stages"][0]["session_turns"], MAX_RESULT_CORRECTIONS + 1)
-        self.assertEqual(len(state["attempts"][0]["validation_errors"]), MAX_RESULT_CORRECTIONS)
+        self.assertEqual(len(state["attempts"]), 2)
+        self.assertEqual(state["stages"][0]["session_turns"], MAX_STALLS + 1)
+        self.assertEqual(len(state["attempts"][0]["validation_errors"]), MAX_STALLS)
         self.assertIn("return 1", (self.root / "hello.py").read_text())
 
     def test_symlink_and_metadata_paths_rejected(self):
@@ -1582,7 +1616,7 @@ class LiveTests(LiveFixture, unittest.TestCase):
         self.assertEqual(config["roots"], {"project": self.root})
 
     def test_unknown_run_format_cannot_continue(self):
-        run, status, state = self.run_mode("review-timeout", read_retries=0)
+        run, status, state = self.run_mode("review-timeout", transport_retries=0)
         self.assertEqual(status, "TIMEOUT")
         state["run_format"] = 1
         (run / "run.json").write_text(json.dumps(current_run(state)))

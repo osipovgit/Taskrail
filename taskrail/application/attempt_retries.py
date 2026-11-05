@@ -1,15 +1,11 @@
-"""Bounded retry policy of one stage: a full attempt for an invalid result and
-transport recovery."""
+"""Progress-aware handoff and transport recovery for one stage."""
 
-from taskrail.application import context_handoff, evidence, plan_recovery
+from taskrail.application import context_handoff, evidence, feedback_files, plan_recovery
 from taskrail.core import prompt_texts
 from taskrail.infrastructure import context_overflow
-from taskrail.observability.progress import say
 
 IMPLEMENTER = "implementer"
-TRANSPORT = frozenset(("TIMEOUT", "INCOMPLETE", "PROCESS_ERROR"))
-TRANSPORT_KEY = "transport"
-RESULT_KEY = "result"
+TRANSPORT = frozenset(("LAUNCH_ERROR", "INCOMPLETE", "PROCESS_ERROR", "TURN_ERROR"))
 CONTRACT_ERROR = "contract_error"
 LARGE_OUTPUT = 10000
 NAMED_OUTPUTS = 5
@@ -22,8 +18,9 @@ class Retries:
         """Track bounded context and result recovery for the current stage."""
         self.attempts = attempts
         self.stage = attempts.workflow.flow["stage"]
-        self.counts = {TRANSPORT_KEY: 0, RESULT_KEY: 0}
-        self.repair = {}
+        self.crashes = 0
+        self.original = attempts.request
+        self.repair = False
         self.handoffs = set()
 
     def mode(self):
@@ -34,71 +31,49 @@ class Retries:
 
     def allowed(self, outcome):
         """Return True after preparing the next attempt, False to stop the stage."""
-        if final(self.stage, outcome, self.attempts.workflow.config):
-            return False
         status = outcome["status"]
-        if status == "INVALID_RESULT":
-            return self.result_repair(outcome)
-        if status == context_overflow.STATUS:
-            return self.handoff(outcome)
-        return status in TRANSPORT and self.transport_retry()
+        if status in TRANSPORT:
+            if self.crashes >= self.attempts.workflow.config["transport_retries"]:
+                return False
+            self.crashes += 1
+        elif status not in {"INVALID_RESULT", "NO_PROGRESS", context_overflow.STATUS}:
+            return False
+        return self.handoff(outcome)
 
     def handoff(self, outcome):
-        """Do not spend another fresh session repeating an unchanged context failure."""
-        signature = context_handoff.signature(self.attempts.workflow)
-        if signature in self.handoffs:
+        """Carry the work into a fresh session once per distinct failure and work state."""
+        workflow = self.attempts.workflow
+        status = outcome["status"]
+        reason = outcome.get(CONTRACT_ERROR) or outcome.get("errors", [])
+        signature = (status, str(reason), context_handoff.signature(workflow))
+        # Context diagnostics contain changing token counts; occupancy alone is not progress.
+        if status == context_overflow.STATUS:
+            signature = (status, signature[-1])
+        if signature in self.handoffs and status not in TRANSPORT:
             return False
         self.handoffs.add(signature)
-        return self.transport_retry(*context_notes(self, outcome), handoff=True)
-
-    def result_repair(self, outcome):
-        """One full attempt with tools corrects the plan or review file.
-
-        The implementer's final word was already corrected in its session; it gets none.
-        """
-        if self.counts[RESULT_KEY] >= 1 or self.stage == IMPLEMENTER:
-            return False
-        self.counts[RESULT_KEY] += 1
-        self.repair = dict(request=self.attempts.request, error=outcome[CONTRACT_ERROR])
-        return full_attempt(self)
-
-    def transport_retry(self, *notes, handoff=False):
-        """Read-only stages retry interrupted transports in a new session with recorded evidence.
-
-        A writer that filled its context hands off to a fresh session the same way; it
-        uses same-session turn recovery for other interruptions.
-        """
-        workflow = self.attempts.workflow
-        limit = workflow.config["read_retries"]
-        if self.stage == IMPLEMENTER and not handoff:
-            limit = 0
-        if self.counts[TRANSPORT_KEY] >= limit:
-            return False
-        self.counts[TRANSPORT_KEY] += 1
-        for note in notes:
-            if note not in self.attempts.request:
-                self.attempts.request += note
+        self.repair = status == "INVALID_RESULT"
+        self.attempts.request = self.original + note(self.guidance(outcome, reason))
         self.attempts.recovery = evidence.load_index(workflow.run)
         return True
 
-
-def final(stage, outcome, config):
-    """Do not repeat an already repaired planner error or a configured provider limit."""
-    if outcome.get("provider_limit") and config.get("stop_on_provider_limit"):
-        say("  Provider quota or billing limit reached; no retry until it resets")
-        return True
-    repaired = stage == "planner" and outcome["status"] == "INVALID_RESULT"
-    repaired = repaired and outcome.get(CONTRACT_ERROR) in outcome.get("validation_errors", [])
-    return repaired
-
-
-def full_attempt(retries):
-    """One attempt with tools and the recorded evidence, given the invalid result's error."""
-    attempts = retries.attempts
-    rebuild = note(prompt_texts.text("recovery.rebuild", error=retries.repair["error"]))
-    attempts.request = "{}{}".format(retries.repair["request"], rebuild)
-    attempts.recovery = evidence.load_index(attempts.workflow.run)
-    return True
+    def guidance(self, outcome, reason):
+        """Return the handoff route and only the current unresolved work."""
+        workflow = self.attempts.workflow
+        status = outcome["status"]
+        notes = [prompt_texts.text("recovery.strategy")]
+        if status == context_overflow.STATUS:
+            notes.extend(context_notes(self, outcome))
+        elif reason:
+            folder = workflow.run / workflow.state["stages"][-1]["directory"]
+            notes.append(
+                prompt_texts.text(
+                    "recovery.rebuild", error=feedback_files.validation(folder, str(reason))
+                )
+            )
+        if self.stage == IMPLEMENTER:
+            notes.append(prompt_texts.text("note.interrupted_writer"))
+        return "\n".join(notes)
 
 
 def context_notes(retries, outcome):
@@ -106,9 +81,9 @@ def context_notes(retries, outcome):
     workflow = retries.attempts.workflow
     if retries.stage != IMPLEMENTER:
         context = note(prompt_texts.text("recovery.context"))
-        return context, overflow_outputs(workflow), plan_recovery.feedback(outcome)
-    names = workflow.state.get("changed_files") or []
-    changed = context_handoff.changed_paths(workflow, names)
+        folder = workflow.run / workflow.state["stages"][-1]["directory"]
+        return context, overflow_outputs(workflow), plan_recovery.feedback(outcome, folder)
+    changed = context_handoff.changed_paths(workflow, workflow.state["changed_files"])
     handoff = prompt_texts.text("recovery.handoff", files=changed)
     return note(handoff), overflow_outputs(workflow)
 

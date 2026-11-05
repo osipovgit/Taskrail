@@ -777,7 +777,7 @@ class GitExecutorTests(unittest.TestCase):
             stage="planner",
             role="planner",
             status="RUNNING",
-            budget=dict(timeout=3600),
+            timeout_seconds=3600,
         )
         state = dict(attempts=[], stages=[record], roots={"project": str(self.root)})
         (self.run / "checkpoint.json").write_text(

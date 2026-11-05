@@ -284,7 +284,7 @@ class DeploymentImportPreflightTests(unittest.TestCase):
     def test_invalid_runtime_settings_and_empty_role_tree_fail_before_stop(self):
         roles = self.home / "empty-roles"
         roles.mkdir()
-        for options in (dict(max_repairs="invalid"), dict(agent_source=str(roles))):
+        for options in (dict(max_integration_corrections="invalid"), dict(agent_source=str(roles))):
             with self.subTest(options=options):
                 self.imported.write_text(json.dumps(dict(command=self.command, **options)))
                 self.assert_preserved(self.install_fresh())

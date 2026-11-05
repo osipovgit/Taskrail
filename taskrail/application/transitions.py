@@ -2,7 +2,7 @@
 
 from types import MappingProxyType
 
-from taskrail.application import check_repeats, review_outcome
+from taskrail.application import repair_feedback, review_outcome
 from taskrail.core import plan_contract
 
 PLAN_REVIEW = "plan-reviewer"
@@ -11,28 +11,22 @@ SUMMARY = "summary"
 PLANNER = "planner"
 ALLOWED = "allowed"
 IMPLEMENTER = "implementer"
-REPAIRS = "repair_count"
-PLAN_REPAIRS = "plan_repairs"
 REVIEWER = "reviewer"
 CHECKS = "checks"
 
 
-def planning(flow, state, verdict, limit):
+def planning(flow, state, verdict, version):
     """Send every plan, including no-change plans, to independent review."""
     flow.update(plan=verdict, stage=PLAN_REVIEW)
 
 
-def plan_review(flow, state, verdict, limit):
+def plan_review(flow, state, verdict, version):
     """Approve scope or return bounded feedback to planning."""
     state["plan_review"] = verdict
-    if verdict[STATUS] == "REQUEST_CHANGES":
-        if flow[PLAN_REPAIRS] >= limit:
-            state.update(status="PLAN_REJECTED", summary=verdict[SUMMARY])
-        else:
-            flow.update(feedback=verdict, stage=PLANNER)
-            flow[PLAN_REPAIRS] += 1
+    if verdict[STATUS] in {"REQUEST_CHANGES", "BLOCKED"}:
+        repair_feedback.route(flow, state, PLANNER, verdict, version)
         return
-    flow[ALLOWED] = flow["plan"]["proposed_change_files"]
+    flow[ALLOWED] = list(flow["plan"]["proposed_change_files"])
     state["review_outcome"] = review_outcome.describe(verdict, state.get("changed_files", []))
     if plan_contract.splits(flow["plan"], state.get("decompose")):
         state.update(status="TASKS_READY", summary=verdict[SUMMARY])
@@ -42,12 +36,12 @@ def plan_review(flow, state, verdict, limit):
         state.update(status=review_outcome.accepted_status(flow, state), summary=verdict[SUMMARY])
 
 
-def implementation(flow, state, verdict, limit):
+def implementation(flow, state, verdict, version):
     """Check actual edits before independent result review."""
     flow.update(stage="check", effect="write_diff")
 
 
-def result_review(flow, state, verdict, limit):
+def result_review(flow, state, verdict, version):
     """Stop on approval, or return the findings to the implementer while repairs remain.
 
     A run without approved files (an integration review or a delivery check) has no
@@ -57,11 +51,10 @@ def result_review(flow, state, verdict, limit):
     if verdict[STATUS] == "APPROVE":
         state.update(status=review_outcome.accepted_status(flow, state), summary=verdict[SUMMARY])
         flow["effect"] = "commit" if flow[ALLOWED] else None
-    elif not flow[ALLOWED] or flow[REPAIRS] >= limit:
-        state.update(status="CHANGES_REQUESTED", summary=verdict[SUMMARY])
+    elif flow[ALLOWED]:
+        repair_feedback.route(flow, state, IMPLEMENTER, verdict, version)
     else:
-        flow.update(feedback=verdict, stage=IMPLEMENTER)
-        flow[REPAIRS] += 1
+        state.update(status="CHANGES_REQUESTED", summary=verdict[SUMMARY])
 
 
 HANDLERS = MappingProxyType(
@@ -82,7 +75,7 @@ RESULT_KEYS = MappingProxyType(
 )
 
 
-def advance(flow, state, verdict, reference, limit):
+def advance(flow, state, verdict, reference, version):
     """Choose a transition; the engine retains source integrity and write effects."""
     stage = flow["stage"]
     if stage in {PLAN_REVIEW, REVIEWER}:
@@ -94,42 +87,27 @@ def advance(flow, state, verdict, reference, limit):
             )
         )
     if verdict[STATUS] == "BLOCKED":
-        if stage == PLAN_REVIEW and revisit_gap(flow, state, verdict, limit):
+        if stage == PLAN_REVIEW and verdict["blocking_gaps"]:
+            plan_review(flow, state, verdict, version)
+            state["review_limits"][-1]["returned_to_planning"] = flow["stage"] == PLANNER
+            return
+        if stage == REVIEWER and verdict["blocking_gaps"] and flow[ALLOWED]:
+            result_review(flow, state, verdict, version)
             return
         state.update(status="BLOCKED", summary=verdict[SUMMARY])
         return
     state["results"][RESULT_KEYS[stage]] = reference
-    HANDLERS[stage](flow, state, verdict, limit)
+    HANDLERS[stage](flow, state, verdict, version)
 
 
-def revisit_gap(flow, state, verdict, limit):
-    """Let the planner resolve one disputed plan-review gap within its repair budget."""
-    state["plan_review"] = verdict
-    limits = state["review_limits"]
-    if not verdict["blocking_gaps"] or flow[PLAN_REPAIRS] >= limit:
-        return False
-    if any(entry["blocking_gaps"] for entry in limits[:-1]):
-        return False
-    limits[-1]["returned_to_planning"] = True
-    flow.update(feedback=verdict, stage=PLANNER)
-    flow[PLAN_REPAIRS] += 1
-    return True
-
-
-def checked(flow, state, limit):
+def checked(flow, state, version):
     """Route failed built-in checks to bounded repair, never to approval."""
     checks = state[CHECKS]
     failed = any(check[STATUS] == "FAIL" for check in checks)
     if failed:
-        if not flow[ALLOWED] or flow[REPAIRS] >= limit:
-            state.update(status="CHECK_FAILED", summary="Checks failed after the last repair")
-        elif check_repeats.repeated(flow.get("feedback"), checks):
-            state.update(
-                status="CHECK_FAILED",
-                summary="The repair left the same checks failing; another would repeat it",
-            )
+        if flow[ALLOWED]:
+            repair_feedback.route(flow, state, IMPLEMENTER, {CHECKS: checks}, version)
         else:
-            flow.update(stage=IMPLEMENTER, feedback={CHECKS: checks})
-            flow[REPAIRS] += 1
+            state.update(status="CHECK_FAILED", summary="Checks failed with no approved writer")
     else:
         flow["stage"] = REVIEWER

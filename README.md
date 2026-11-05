@@ -49,14 +49,15 @@ See [deployment](docs/deployment.md) before changing existing installations.
 Planning as decomposition → independent plan review → scoped implementation →
 built-in syntax checks and your [verification commands](docs/deployment.md#verification-commands)
 → independent result review → combined integration review after a split →
-Jenkins validation, when the plan names Jenkins checks →
+Jenkins validation for selected recipes or planned checks on a configured Jenkins →
 your confirmation → server checks, only after it. The planner writes its plan as a
 Markdown file; it chooses one atomic task or splits into independent tasks, one run per task, in
 dependency order ([delivery](docs/task-controls.md#delivery-of-a-code-change)).
-A change larger than the configured limit waits for your decision first. A reviewed no-change plan ends without implementation; **Design
+A reviewed no-change plan ends without implementation; **Design
 discussion** turns produce a reviewed design document instead of code.
-Failed checks/review may request bounded repairs. Interrupted writers are never
-replayed automatically. Partial changes remain available for inspection. A task can
+Failed checks and review findings return to the writer while the work progresses.
+An interrupted writer inspects partial edits before continuing. A steering timeout
+pauses the current stage for an optional note and checkpoint continuation. A task can
 run in [isolated Git worktrees](docs/task-format.md#worktree-isolation) on a new
 branch, the default in the browser, leaving the source checkout untouched: there each
 approved task is finalized with verified commits and may change files beyond its plan. Tasks on different projects run in
@@ -98,12 +99,12 @@ python3 -m taskrail serve --settings taskrail/settings.json
 - [Task format and example](docs/task-format.md)
 - [Controls, continuation and history](docs/task-controls.md)
 - [Configuration, deployment and file locations](docs/deployment.md)
-- [Metrics, budgets and diagnostics](docs/monitoring.md)
+- [Metrics, recovery and diagnostics](docs/monitoring.md)
 - [Contracts and instruction ownership](docs/contracts.md)
 - [Architecture](docs/architecture.md) · [Development](docs/development.md)
 
 For a failure, share `run.json`, `report.md`, and the affected stage's `stage.json`,
-`request.md`, `response.raw.txt`, `events.jsonl`, `stderr.log`. Include `budgets.json`
+`request.md`, `response.raw.txt`, `events.jsonl`, `stderr.log`. Include the saved checkpoint
 and `evidence.json` for recovery issues. Inspect source snippets and redact secrets.
 
 For a deliberate clean reinstall use

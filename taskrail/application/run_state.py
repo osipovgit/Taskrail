@@ -5,7 +5,6 @@ from taskrail.core.runtime import SOFTWARE_VERSION
 from taskrail.observability.progress import clock
 
 ROOTS = "roots"
-TOKENS = "max_observed_tokens"
 
 
 def initial_state(config):
@@ -24,7 +23,6 @@ def initial_state(config):
         roots=stored_roots(config[ROOTS]),
         task=str(config["task"]),
         started_at=clock(),
-        monitoring={TOKENS: config[TOKENS]},
         stages=[],
         attempts=[],
         changed_files=[],

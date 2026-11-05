@@ -43,7 +43,7 @@ class ScenarioFixture:
                 ],
                 agent_directory=str(self.base / "profiles"),
                 timeout_seconds=10,
-                max_repairs=0,
+                max_integration_corrections=0,
             ),
         )
 

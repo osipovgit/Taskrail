@@ -78,6 +78,22 @@ attached = [args[index + 1] for index, item in enumerate(args) if item == "--fil
 owned = dict(planner="plan.md", implementer="progress.md", reviewer="review.md")
 owned["plan-reviewer"] = "review.md"
 own = run / owned[role] if role in owned else None
+if "Context handoff. Reply now" in prompt:
+    assert not attached and "--session" in args
+    print(
+        json.dumps(
+            dict(type="text", part=dict(messageID="last", text="Outstanding: verify Java source."))
+        )
+    )
+    print(
+        json.dumps(
+            dict(
+                type="step_finish",
+                part=dict(messageID="last", reason="stop", tokens=dict(input=100001)),
+            )
+        )
+    )
+    sys.exit(0)
 assert attached == ([] if own is None else [str(own)]), attached
 continued = "--session" in args
 rebuilt = earlier_invalid(run, record)
@@ -138,17 +154,25 @@ if mode == "report-repair":
 if mode == "executor-repair":
     executor_result(context, prompt, print)
     sys.exit(0)
-if mode in {"git-actions", "git-denied"}:
+if mode in {"git-actions", "git-denied", "git-batch"}:
     journal = Path(context["task_file"]).parent.parent / "git-execution.json"
     git_jobs = json.loads(journal.read_text()) if journal.exists() else []
     request_args = None
-    if role == "planner" and not git_jobs:
+    if role == "planner" and not git_jobs and mode != "git-batch":
         request_args = ["log", "-3", "--format=%H %s", "--", "."]
         if mode == "git-denied":
             request_args = ["log", "--output=/tmp/must-not-write"]
     if role == "implementer" and mode == "git-actions" and len(git_jobs) == 1:
         revision = (root / ".git/refs/heads/main").read_text().strip()
         request_args = ["revert", "--no-edit", revision]
+    if role == "implementer" and mode == "git-batch":
+        batch = [f"Feature{number}.java" for number in range(69)]
+        if not git_jobs:
+            for number, path in enumerate(batch):
+                (root / path).write_text(f"class Feature{number} {{}}\n")
+            request_args = ["add", "--", *batch]
+        elif len(git_jobs) == 1:
+            request_args = ["commit", "-m", "Add reviewed Java files"]
     if request_args:
         request = dict(
             schema_version=1,
@@ -692,6 +716,21 @@ if mode == "provider-quota" and role == "plan-reviewer":
     quota = dict(type="provider.quota", message="Free usage limit reached.", status=429)
     print(json.dumps(dict(type="error", error=quota, sessionID="ses1")))
     sys.exit(1)
+if mode == "handoff-review" and role == "plan-reviewer" and record["mode"] == "model":
+    (run / "review.md").write_text("Summary: partial\n")
+    print(json.dumps(dict(type="text", part=dict(messageID="last", text="DONE"))))
+    print(
+        json.dumps(
+            dict(
+                type="step_finish",
+                part=dict(messageID="last", reason="stop", tokens=dict(input=100000)),
+            )
+        )
+    )
+    sys.exit(0)
+if mode == "completed-review-overflow" and role == "reviewer":
+    print(json.dumps(dict(type="error", error=dict(message="context_length_exceeded"))))
+    sys.exit(0)
 if mode in {"planned-overflow", "unobserved-planned-overflow"} and role == "planner":
     if mode == "unobserved-planned-overflow":
         plan.write_text(
@@ -700,7 +739,6 @@ if mode in {"planned-overflow", "unobserved-planned-overflow"} and role == "plan
         )
     finish = dict(reason="tool-calls", tokens=dict(input=100000, output=2))
     print(json.dumps(dict(type="step_finish", part=finish)), flush=True)
-    time.sleep(5)
     sys.exit(0)
 if mode == "failed-read" and role == "planner":
     failed = dict(

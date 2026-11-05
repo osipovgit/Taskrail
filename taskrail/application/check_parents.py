@@ -66,11 +66,11 @@ def adopt(workflow, resume=False):
         selected = corrective_gates(parent, selected, workflow.config, workflow.run.name)
         workflow.config[step_checks.KEY] = selected
         workflow.state[step_checks.KEY] = selected
-    workflow.state[SEAL] = receipt(workflow)
     if workflow.config[PHASE] == INTEGRATION:
         integration_changes.capture(workflow, parent)
         if check_stage.required(workflow):
             workflow.flow["stage"] = "check"
+    workflow.state[SEAL] = receipt(workflow)
 
 
 def restored(workflow):
@@ -94,6 +94,11 @@ def receipt(workflow):
         specs=workflow.config.get(SPECS, []),
         required_checks=workflow.config.get(step_checks.KEY, []),
     )
+    findings = workflow.run / "00-input/findings.json"
+    if payload["phase"] == INTEGRATION and findings.is_file():
+        payload["findings"] = digest(
+            reviewed_artifacts.read(workflow.run, "00-input/findings.json")
+        )
     return digest(json.dumps(payload, sort_keys=True).encode())
 
 

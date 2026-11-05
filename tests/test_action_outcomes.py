@@ -1,6 +1,5 @@
 """Actions retain authority and outcome across interruption and repeated model requests."""
 
-import json
 import sys
 import tempfile
 import unittest
@@ -87,37 +86,33 @@ class RequestLimitTests(unittest.TestCase):
         self.run = Path(self.temporary.name)
         self.session = SimpleNamespace(
             active=(self.run / "01-plan", {"stage": "planner"}),
+            launch={},
             environment={"run": self.run, "expected": {}},
         )
 
     def request(self, number=0):
         payload = dict(status="LOCAL_REQUEST", argv=["ls"], cwd="/repo", reason=str(number))
-        return dict(status="OK", final_text=json.dumps(payload))
+        return payload
 
     def test_repeated_requests_stop_before_execution_and_survive_session_recreation(self):
         for number in range(request_limits.MAX_DUPLICATES):
-            self.assertFalse(request_limits.check(self.session, self.request(number)))
+            self.assertFalse(request_limits.check(self.session, {}, self.request(number)))
         self.session = SimpleNamespace(**vars(self.session))
-        outcome = self.request(99)
-        self.assertTrue(request_limits.check(self.session, outcome))
+        outcome = {}
+        self.assertTrue(request_limits.check(self.session, outcome, self.request(99)))
         self.assertEqual(outcome["status"], "NO_PROGRESS")
 
     def test_a_new_stage_round_or_continue_counts_afresh(self):
         for number in range(request_limits.MAX_DUPLICATES):
-            request_limits.check(self.session, self.request(number))
+            request_limits.check(self.session, {}, self.request(number))
         request_limits.reset(self.run, "planner")
-        self.assertFalse(request_limits.check(self.session, self.request(99)))
+        self.assertFalse(request_limits.check(self.session, {}, self.request(99)))
 
     def test_changed_source_allows_a_new_check(self):
         for _ in range(request_limits.MAX_DUPLICATES):
-            request_limits.check(self.session, self.request())
+            request_limits.check(self.session, {}, self.request())
         self.session.environment["expected"] = {"project/a.py": "new"}
-        self.assertFalse(request_limits.check(self.session, self.request()))
-
-    def test_final_result_is_not_counted_as_an_action(self):
-        outcome = dict(status="OK", final_text='{"status":"APPROVE"}')
-        self.assertFalse(request_limits.check(self.session, outcome))
-        self.assertFalse((self.run / request_limits.NAME).exists())
+        self.assertFalse(request_limits.check(self.session, {}, self.request()))
 
 
 class IntegrationAcceptanceTests(unittest.TestCase):

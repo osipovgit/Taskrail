@@ -89,7 +89,7 @@ class TelemetryTests(unittest.TestCase):
         t.observe(json.dumps(dict(type="tool_use", timestamp=1, part=part)))
         self.assertTrue(t.summary()["timeline"][0]["host"])
 
-    def test_observed_budget_stops_run_and_keeps_usage(self):
+    def test_large_usage_remains_diagnostic(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             script = root / "fake.py"
@@ -97,9 +97,7 @@ class TelemetryTests(unittest.TestCase):
                 type="step_finish",
                 part=dict(id="usage", tokens=dict(total=100, input=80, output=20)),
             )
-            script.write_text(
-                "import time\nprint(" + repr(json.dumps(event)) + ", flush=True)\ntime.sleep(10)\n"
-            )
+            script.write_text("import time\nprint(" + repr(json.dumps(event)) + ", flush=True)\n")
             prompt = root / "task.md"
             prompt.write_text("Test")
             value = run_agent(
@@ -111,9 +109,8 @@ class TelemetryTests(unittest.TestCase):
                     prompt=prompt,
                     attempt=root / "attempt",
                     timeout=20,
-                    runtime=dict(token_budget=50),
                 )
             )
-            self.assertEqual(value["status"], "TOKEN_BUDGET_EXCEEDED")
+            self.assertEqual(value["status"], "INCOMPLETE")
             self.assertEqual(value["tokens"]["total"], 100)
             self.assertTrue((root / "attempt/telemetry.json").exists())

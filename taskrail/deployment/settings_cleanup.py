@@ -7,7 +7,18 @@ import sys
 DIGEST_LENGTH = 16
 PRIVATE_FILE = 0o600
 
-OBSOLETE = frozenset(("max_change_lines", "max_change_files"))
+OBSOLETE = frozenset(
+    (
+        "max_change_lines",
+        "max_change_files",
+        "max_repairs",
+        "read_retries",
+        "max_stage_attempts",
+        "stage_timeout_seconds",
+        "stop_on_provider_limit",
+        "max_observed_tokens",
+    )
+)
 
 
 def clean(path):

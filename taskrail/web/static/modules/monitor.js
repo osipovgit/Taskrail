@@ -74,8 +74,6 @@ export function renderMonitor(data) {
     'Tokens in failed attempts',
     fmt(failed.reduce((n, r) => n + r.telemetry.tokens.total, 0)),
   );
-  const limit = data.monitoring?.max_observed_tokens || 0;
-  metric('Observed-token limit', limit ? fmt(limit) : 'Not set');
   if (repeats > 2)
     panel.append(
       el(

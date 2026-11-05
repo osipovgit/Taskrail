@@ -14,8 +14,6 @@ RESUMABLE = frozenset(
         "LAUNCH_ERROR",
         "SESSION_ERROR",
         "RUNNING",
-        "TOKEN_BUDGET_EXCEEDED",
-        "STAGE_BUDGET_EXCEEDED",
         "BLOCKED",
         "INVALID_RESULT",
         "TURN_ERROR",
@@ -37,18 +35,10 @@ def load_checkpoint(run, state):
 
 def resume_available(run, state):
     """Whether Continue is offered, with the reason shown to the operator."""
-    if state.get(STATUS) not in RESUMABLE and not budget_paused(state):
+    if state.get(STATUS) not in RESUMABLE:
         return False, "This status does not support continuation."
     try:
         load_checkpoint(run, state)
     except (OSError, ValueError, KeyError) as error:
         return False, str(error)
     return True, "Source and Git integrity will be checked before continuing."
-
-
-def budget_paused(state):
-    """Identify engine budget stops, for time, attempts or tokens."""
-    return state.get(STATUS) in {
-        "TOKEN_BUDGET_EXCEEDED",
-        "STAGE_BUDGET_EXCEEDED",
-    }

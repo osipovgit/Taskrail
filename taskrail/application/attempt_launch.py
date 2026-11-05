@@ -1,8 +1,8 @@
 """Prepare one model attempt: record, prompt, closed permission profile and allowance."""
 
-from taskrail.application import attempt_context, result_context, stage_artifacts
+from taskrail.application import attempt_context, context_handoff, result_context, stage_artifacts
 from taskrail.application.artifacts import new_stage
-from taskrail.application.planned_paths import safe_file
+from taskrail.application.planned_paths import git_files
 from taskrail.application.recovery import write_evidence
 from taskrail.core import prompt_texts, protected_paths
 from taskrail.infrastructure import artifact_access, opencode_api
@@ -20,7 +20,7 @@ def role_of(stage):
 
 
 def open_record(workflow, mode):
-    """Create the numbered stage record and reserve its durable budget."""
+    """Create the numbered stage record with its remaining active time."""
     stage = workflow.flow["stage"]
     role = role_of(stage)
     details = dict(role=role, mode=mode)
@@ -28,14 +28,14 @@ def open_record(workflow, mode):
     active = new_stage(workflow.run, workflow.state, stage, details)
     workflow.open_record(active)
     attempt_context.prepare(workflow.run, active[1], workflow.config, workflow.state)
+    active[1]["timeout_seconds"] = attempt_context.remaining(workflow, stage)
     return active
 
 
 def planned_files(workflow):
     """Approved files the current stage may write; on a task branch, its whole roots."""
-    protected = protected_paths.patterns(workflow.config)
-    roots = workflow.config[ROOTS]
-    files = [safe_file(name, roots, protected) for name in workflow.writable()]
+    roots = workflow.config["roots"]
+    files = git_files(workflow)
     if files and workflow.config.get("task_branch"):
         files.extend(roots.values())
     return files
@@ -44,6 +44,7 @@ def planned_files(workflow):
 def attempt_prompt(workflow, active, request, recovery):
     """Add execution history and, for research recovery, the recorded evidence file."""
     history = result_context.execution_context(workflow.run, workflow.state)
+    history += context_handoff.prior_handoff(workflow.state["stages"], workflow.run)
     if not recovery:
         return f"{request}{history}"
     folder, record = active

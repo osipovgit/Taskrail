@@ -69,7 +69,7 @@ class DeliveryApprovalTests(unittest.TestCase):
             requirements=[],
             auto_approve=True,
         )
-        atomic_json(run / "00-input/settings.json", dict(max_repairs=0))
+        atomic_json(run / "00-input/settings.json", dict(max_integration_corrections=0))
         atomic_json(run / "run.json", current_run(state))
         atomic_json(run / "plan.json", dict(unverified=["Server check: inspect the service"]))
         boundary = SourceGuard({"project": self.repo})

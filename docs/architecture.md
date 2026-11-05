@@ -10,7 +10,7 @@ UI updates read the ordered stage index and public event stream.
 |---|---|
 | `taskrail/cli.py`, `__main__.py` | CLI parsing and module entry point |
 | `cli_api.py`, `cli_requests.py`, `cli_runs.py` | Automation commands (`submit`, `decide`, `action`, `status`) through the browser's launcher |
-| `application/` | Workflow, stage artifacts, checkpoints, budgets, prompts and research recovery |
+| `application/` | Workflow, stage artifacts, checkpoints, recovery, prompts and research recovery |
 | `interactions/` | Same-session executor turns: one request parser (`request_envelope.py`), routing (`request_routes.py`, `local_route.py`), exact-command approvals, adopted command effects, active clock |
 | `git/` | Controlled Git grammar, scope checks, isolated process execution and output snapshots |
 | `core/` | Result contract, schema validation, the prompt text catalog (`prompt-texts.json`), requirement labels, file/path utilities and stop/read-only guards |
@@ -61,13 +61,14 @@ source checks, checkpoints and file operations:
 | Completed stage | Next boundary |
 |---|---|
 | Planning | Independent plan review, including no-change proposals |
-| Plan review: changes requested | Planning again within the plan-repair budget; otherwise `PLAN_REJECTED` |
+| Plan review: changes requested | Return the complete findings to planning, then review the revised plan |
 | Plan review: approved | Implementation with captured preimages; a split becomes `TASKS_READY`; a no-change proposal finishes or runs applicable checks and result review |
 | Implementation | Built-in/configured checks, then independent result review |
-| Checks: failed | Authorized implementation repair within budget; otherwise `CHECK_FAILED`; unchanged repeated failures stop |
-| Result review: changes requested | Authorized implementation repair within budget; read-only phases or an exhausted budget become `CHANGES_REQUESTED` |
+| Checks: failed | Return failing checks to the authorized writer. Read-only failure ends as `CHECK_FAILED` |
+| Result review: changes requested | Return all findings to the authorized writer. Read-only phases end as `CHANGES_REQUESTED` |
 | Result review: approved | Final status and, on a task branch, a controlled commit of reviewed changes |
-| Plan review: blocking gap | Send the first gap back to planning once within the plan-repair budget. A revised plan requires independent approval. A repeated gap or exhausted budget stops the run. |
+| Result review: blocking gap | Return the missing evidence to the authorized writer. A read-only phase reports the gap to the operator. |
+| Plan review: blocking gap | Return all gaps to planning. Compare the full plan and outstanding set across reviews; unchanged cycles end as `NO_PROGRESS`. |
 | Other model stage: blocked | Stop without advancing or granting writes |
 
 Executor requests and result corrections stay in the same stage and session, including
@@ -102,7 +103,7 @@ the planner's stored shape and executor request contracts. Run storage uses a se
 `run_format: 2` gate. Unsupported runs require a new task; Continue requires identical
 application code and instructions. Same-format runs from another release may Restart.
 Application helpers compose prompts, bind source evidence, freeze instructions and
-account for durable budgets. The engine owns requirement IDs and the actual
+record attempt telemetry. The engine owns requirement IDs and the actual
 changed-file and check records; a model cannot claim successful execution by
 returning a status alone. See [contracts](contracts.md).
 
@@ -171,10 +172,10 @@ unreachable or empty executor advertises neither capability. All roles run with 
 Request, role and attachment byte counts are diagnostics, not admission
 limits. Context enforcement uses the latest provider-reported input including cache,
 explicit overflow errors and compaction events. Missing usage stays unknown.
-A session ends at a measured boundary between 90 and 95
-percent of its model's window; the next attempt starts a fresh session instead of
-compacting. Read-only recovery starts it from recorded evidence while retaining the
-plan file; a writer continues from its kept edits and `progress.md`. Native tool
+At the measured boundary the active turn may finish. If it needs more work, the
+server requests a handoff while the session can still respond. A fresh session receives
+public notes and observed evidence. Saved plans and reviews undergo normal validation;
+writers inspect the current edits and progress file. Native tool
 errors stay in opencode. Interrupted turns with a known session resume there through
 `interactions/turn_recovery.py`, with diagnostic feedback and a no-progress bound. Every turn of a stage runs on one private opencode server
 (`opencode_serve.py` for 1.x, the adapter for 2.x), so reads of earlier turns stay
