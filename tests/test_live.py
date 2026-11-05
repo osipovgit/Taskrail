@@ -1247,6 +1247,9 @@ class LiveTests(LiveFixture, unittest.TestCase):
         target.write_text(staged + "# working copy only\n")
         for index in range(66):
             (self.root / f"new-{index}.txt").write_text(str(index))
+        nested = Path("roles/example/tasks/main.yaml")
+        (self.root / nested.parent).mkdir(parents=True)
+        (self.root / "new-65.txt").rename(self.root / nested)
         hardlink = self.root / "new-64.txt"
         hardlink.unlink()
         hardlink.hardlink_to(self.task)
@@ -1266,7 +1269,7 @@ class LiveTests(LiveFixture, unittest.TestCase):
         self.assertEqual(
             (source.parent / rows["hello.py"]["working"]).read_text(), target.read_text()
         )
-        self.assertEqual((source.parent / rows["new-65.txt"]["working"]).read_text(), "65")
+        self.assertEqual((source.parent / rows[str(nested)]["working"]).read_text(), "65")
         self.assertEqual(rows["new-64.txt"]["working"], {"unavailable": "hard-linked file"})
         self.assertIn("unavailable", rows[".env"])
         self.assertIn("unavailable", rows["link"]["working"])
@@ -1278,7 +1281,7 @@ class LiveTests(LiveFixture, unittest.TestCase):
         self.assertEqual(
             git.checked(worktree, ["show", "HEAD:hello.py"]), staged.replace("return 1", "return 2")
         )
-        self.assertFalse((worktree / "new-65.txt").exists())
+        self.assertFalse((worktree / nested).exists())
         self.assertEqual(git.checked(self.root, ["status", "--porcelain", "-uall"]), before)
         self.assertEqual(git.checked(self.root, ["show", ":hello.py"]), staged)
         self.assertEqual(target.read_text(), staged + "# working copy only\n")

@@ -2,7 +2,7 @@
 
 import os
 import stat
-from contextlib import ExitStack, contextmanager
+from contextlib import contextmanager
 from pathlib import Path
 
 from taskrail.core.schema import require
@@ -17,13 +17,16 @@ MODES = frozenset(("100644", "100755"))
 
 
 def working(root, relative, limit):
-    """Pin every directory descriptor, even if the source checkout changes concurrently."""
-    with ExitStack() as stack:
-        directory = stack.enter_context(opened(root, DIRECTORY))
+    """Walk from a pinned root, keeping just the current directory open."""
+    with opened(root, DIRECTORY) as directory:
         for component in relative.parts[:-1]:
-            directory = stack.enter_context(opened(component, DIRECTORY, directory))
-        descriptor = stack.enter_context(opened(relative.name, REGULAR, directory))
-        with os.fdopen(descriptor, "rb", closefd=False) as stream:
+            with opened(component, DIRECTORY, directory) as child:
+                # Advance the pinned parent without retaining one descriptor per ancestor.
+                os.dup2(child, directory, inheritable=False)
+        with (
+            opened(relative.name, REGULAR, directory) as descriptor,
+            os.fdopen(descriptor, "rb", closefd=False) as stream,
+        ):
             return read_regular(stream, limit)
 
 
