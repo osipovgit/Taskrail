@@ -154,7 +154,8 @@ with a private backup; task headers containing it are rejected.
 The branches appear immediately in the shared repositories; original checkouts never
 switch branches. Storage is `worktree_base` (default `~/.local/share/taskrail-worktrees`,
 outside application state). Authenticated split children and delivery phases reuse the
-parent's worktrees. Continue uses the same branch; Restart creates a new branch from
+parent's worktrees. Follow-up ownership and locks remain valid if the old parent
+checkout is moved or removed. Continue uses the same branch; Restart creates a new branch from
 the original checkout. A task without edits leaves an empty branch for the operator to
 remove; Taskrail never merges it or removes it automatically.
 

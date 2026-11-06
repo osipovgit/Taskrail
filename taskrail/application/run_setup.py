@@ -71,7 +71,7 @@ def source_roots(config, request):
     index = stored_index(request[RUN_DIRECTORY])
     worktrees = index.get(WORKTREES) or {}
     if worktrees:
-        return [entry["source"] for entry in worktrees.values()]
+        return [entry.get("original_source", entry["source"]) for entry in worktrees.values()]
     return list(index[ROOTS].values())
 
 

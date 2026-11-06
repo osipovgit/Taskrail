@@ -35,7 +35,7 @@ def detect(roots, records):
 
 def on_branch(root, record):
     """Check the recorded directory, branch and shared repository, never a name prefix."""
-    source = Path(record["source"])
+    source = Path(record.get("original_source", record["source"]))
     located = root == Path(record["worktree"]) and source != root
     if not located or not top_level(root):
         return False

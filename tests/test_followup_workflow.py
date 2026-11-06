@@ -6,9 +6,11 @@ from pathlib import Path
 
 from live_fixture import LiveFixture
 
+from taskrail.application import run_setup, task_branch
 from taskrail.application.live import execute_task
 from taskrail.git import process
 from taskrail.web.history import task_draft
+from taskrail.web.run_activity import run_sources
 
 
 class FollowupWorkflowTests(LiveFixture, unittest.TestCase):
@@ -55,7 +57,14 @@ class FollowupWorkflowTests(LiveFixture, unittest.TestCase):
         self.assertEqual((current / "pending.bin").read_bytes(), b"\x00pending\xff")
         self.assertEqual(task_draft(child)["roots"][0]["path"], str(self.original_root))
 
-        request = (child / "01-plan/request.md").read_text()
+        planner = next(stage for stage in after["stages"] if stage["stage"] == "planner")
+        request = (child / planner["directory"] / "request.md").read_text()
         mapping = json.loads(request.split("Context:\n", 1)[1])["workspace_paths"]
         self.assertEqual(mapping[str(previous)], str(current))
         self.assertEqual(mapping[str(self.original_root)], str(current))
+
+        previous.rename(self.base / "archived-parent-checkout")
+        self.assertTrue(task_branch.detect({"project": current}, after["worktrees"]))
+        resumed_sources = run_setup.source_roots({}, dict(resume=True, run_dir=child))
+        self.assertEqual(resumed_sources, [str(self.original_root)])
+        self.assertEqual(run_sources(child), [str(self.original_root)])
