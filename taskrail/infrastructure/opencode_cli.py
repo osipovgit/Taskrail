@@ -38,7 +38,10 @@ def role_models(configured):
         raise ValueError(MODELS_ERROR)
     if "" in configured.values():
         raise ValueError(MODELS_ERROR)
-    return dict(configured)
+    models = dict(configured)
+    if "understanding" not in models and "planner" in models:
+        models["understanding"] = models["planner"]
+    return models
 
 
 def permission_error(message):

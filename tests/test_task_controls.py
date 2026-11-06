@@ -840,7 +840,7 @@ class TaskControlTests(unittest.TestCase):
         self.configure("planner-timeout")
         result = self.launcher.submit(self.payload)
         run = self.runs / result["id"]
-        self.wait_for(lambda: (run / "01-plan/stderr.log").exists())
+        self.wait_for(lambda: (run / "01-understand/stderr.log").exists())
         stopped = self.launcher.action(dict(id=run.name, action="stop"))
         self.assertEqual(stopped["status"], "STOP_REQUESTED")
         self.launcher.workers[run][0].wait(timeout=10)
@@ -882,4 +882,6 @@ class TaskControlTests(unittest.TestCase):
         run, status = execute_task(task, self.settings, run_dir=self.runs / "answer")
         self.assertEqual(status, "NO_CHANGES_REQUIRED")
         stages = json.loads((run / "run.json").read_text())["stages"]
-        self.assertEqual([stage["stage"] for stage in stages], ["planner", "plan-reviewer"])
+        self.assertEqual(
+            [stage["stage"] for stage in stages], ["understanding", "planner", "plan-reviewer"]
+        )

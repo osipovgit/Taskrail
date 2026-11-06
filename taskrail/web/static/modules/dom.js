@@ -1,4 +1,5 @@
 export const names = {
+  understanding: 'Task understanding',
   planner: 'Planning',
   'plan-reviewer': 'Plan review',
   implementer: 'Implementation',
@@ -15,6 +16,8 @@ export const statuses = {
   TASKS_READY: 'Tasks ready',
   READY_FOR_REVIEW: 'Ready for your review',
   RESULT_VALID: 'Result validated',
+  UNDERSTOOD: 'Task understood',
+  REINTERPRET_TASK: 'Understanding correction required',
   PLAN_READY: 'Plan ready',
   APPROVE: 'Approved',
   IMPLEMENTED: 'Changes implemented',

@@ -2,8 +2,8 @@
 
 from types import MappingProxyType
 
-from taskrail.application import repair_feedback, review_outcome
-from taskrail.core import plan_contract
+from taskrail.application import input_revision, repair_feedback, review_outcome
+from taskrail.core import plan_contract, prompt_texts
 
 PLAN_REVIEW = "plan-reviewer"
 STATUS = "status"
@@ -13,6 +13,20 @@ ALLOWED = "allowed"
 IMPLEMENTER = "implementer"
 REVIEWER = "reviewer"
 CHECKS = "checks"
+
+
+def understood(flow, state, verdict, version):
+    """Planning uses the accepted interpretation and rechecks any existing draft."""
+    state["requirements"] = verdict["requirements"]
+    feedback = (
+        dict(summary=prompt_texts.text("understanding.replanned")) if flow["feedback"] else None
+    )
+    flow.update(
+        stage=PLANNER,
+        plan=None,
+        feedback=feedback,
+        effect="understood",
+    )
 
 
 def planning(flow, state, verdict, version):
@@ -59,6 +73,7 @@ def result_review(flow, state, verdict, version):
 
 HANDLERS = MappingProxyType(
     {
+        "understanding": understood,
         PLANNER: planning,
         PLAN_REVIEW: plan_review,
         IMPLEMENTER: implementation,
@@ -67,6 +82,7 @@ HANDLERS = MappingProxyType(
 )
 RESULT_KEYS = MappingProxyType(
     {
+        "understanding": "understanding",
         PLANNER: "plan",
         PLAN_REVIEW: "plan-review",
         IMPLEMENTER: "implementation",
@@ -78,6 +94,9 @@ RESULT_KEYS = MappingProxyType(
 def advance(flow, state, verdict, reference, version):
     """Choose a transition; the engine retains source integrity and write effects."""
     stage = flow["stage"]
+    if verdict[STATUS] == input_revision.STATUS:
+        input_revision.route(flow, state, verdict, version)
+        return
     if stage in {PLAN_REVIEW, REVIEWER}:
         state.setdefault("review_limits", []).append(
             dict(

@@ -216,7 +216,7 @@ class SessionBudgetTests(unittest.TestCase):
         self.assertEqual(status, "READY_FOR_REVIEW", state.get("summary"))
         self.assertIn("return 2", source.read_text())
         first = state["stages"][0]
-        self.assertEqual(first["role"], "planner")
+        self.assertEqual(first["role"], "understanding")
         self.assertGreater(first["context_budget"]["request_bytes"], capacity)
         self.assertNotEqual(first["status"], "CONTEXT_EXCEEDED")
         self.assertGreater(first["elapsed_seconds"], 0)

@@ -31,7 +31,7 @@ class CheckSchedulingTests(LiveFixture, unittest.TestCase):
         self.assertEqual(status, "NO_CHANGES_REQUIRED", state.get("summary"))
         self.assertEqual(
             [entry["stage"] for entry in state["stages"]],
-            ["planner", "plan-reviewer", "check", "reviewer"],
+            ["understanding", "planner", "plan-reviewer", "check", "reviewer"],
         )
         self.assertEqual(state["checks"][0]["status"], "PASS")
 
@@ -43,7 +43,8 @@ class CheckSchedulingTests(LiveFixture, unittest.TestCase):
                 _, status, state = self.execute(read_only=True, design=design)
                 self.assertEqual(status, "NO_CHANGES_REQUIRED", state.get("summary"))
                 self.assertEqual(
-                    [entry["stage"] for entry in state["stages"]], ["planner", "plan-reviewer"]
+                    [entry["stage"] for entry in state["stages"]],
+                    ["understanding", "planner", "plan-reviewer"],
                 )
                 self.assertEqual(state["checks"], [])
 
