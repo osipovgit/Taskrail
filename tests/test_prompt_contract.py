@@ -13,6 +13,7 @@ from taskrail.application import (
     citation_review,
     execution_requests,
     execution_wait,
+    feedback_files,
     instruction_sources,
     prompts,
     recovery,
@@ -36,6 +37,22 @@ CAPABILITIES = {
     },
 }
 STABLE_ID = re.compile(r"R-[0-9a-f]{12}")
+
+
+class FeedbackFileTests(unittest.TestCase):
+    def test_all_findings_are_pageable_and_losslessly_delivered_to_both_roles(self):
+        text = 'λ"\0\n' * 2000
+        rows = [dict(id=f"F{n}", evidence=text if n == 20 else str(n)) for n in range(1100)]
+        with tempfile.TemporaryDirectory() as temp:
+            folder = Path(temp)
+            feedback = feedback_files.findings(folder, dict(findings=rows))
+            payload = Path(feedback["findings_file"]).read_text()
+            decoded = json.loads(payload)["findings"]
+            self.assertEqual(feedback["lines"], len(payload.splitlines()))
+            self.assertLess(max(len(line.encode()) for line in payload.splitlines()), 1000)
+            self.assertEqual(len(decoded), len(rows))
+            self.assertEqual("".join(decoded[20]["evidence"]["text_chunks"]), text)
+            self.assertEqual(decoded[-1], rows[-1])
 
 
 class LabelTests(unittest.TestCase):

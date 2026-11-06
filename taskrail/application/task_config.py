@@ -8,7 +8,7 @@ from taskrail.application.input_config import input_configuration
 from taskrail.application.task_roots import ROOTS, declared_access
 from taskrail.application.verify_settings import parse_commands
 from taskrail.application.worktree_isolation import isolation_settings
-from taskrail.core import input_header, task_markdown
+from taskrail.core import corrections, input_header, task_markdown
 from taskrail.core.runtime import DEFAULT_TIMEOUT, run_storage, settings_path
 from taskrail.infrastructure.agent_sync import launch_settings
 
@@ -115,7 +115,7 @@ def permission_worktree(options):
 
 
 def limits(options):
-    """Clamp numeric settings to their supported ranges; read the retry and host policy.
+    """Validate numeric settings; read the retry and host policy.
 
     host_commands `auto` runs local commands outside the sandbox at once; `ask` waits for
     the operator.
@@ -125,13 +125,9 @@ def limits(options):
         raise ValueError("host_commands must be auto or ask")
     return dict(
         **context_windows.settings(options),
-        stage_seconds=max(1, int(options.get("stage_timeout_seconds", DEFAULT_TIMEOUT * 4))),
-        stage_attempts=max(1, int(options.get("max_stage_attempts", 6))),
-        max_observed_tokens=max(0, int(options.get("max_observed_tokens", 0))),
-        timeout=max(1, int(options.get("timeout_seconds", DEFAULT_TIMEOUT))),
-        max_repairs=max(0, min(5, int(options.get("max_repairs", 3)))),
-        read_retries=max(0, min(3, int(options.get("read_retries", 3)))),
-        stop_on_provider_limit=options.get("stop_on_provider_limit") is True,
+        timeout=corrections.setting(options, "timeout_seconds", DEFAULT_TIMEOUT, 1),
+        max_integration_corrections=corrections.setting(options, "max_integration_corrections", 3),
+        transport_retries=corrections.setting(options, "transport_retries", 3),
         host_commands=host,
         sandbox_network=options.get("sandbox_network") is True,
     )

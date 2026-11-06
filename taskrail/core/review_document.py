@@ -11,7 +11,6 @@ from taskrail.core import plan_citations, prompt_texts, review_lines
 from taskrail.core.plan_markdown import requirement_entry
 
 SUMMARY = "summary:"
-PROBLEM_LIMIT = 12
 EVIDENCE = "evidence"
 GAPS = "blocking_gaps"
 LABEL = "label"
@@ -126,7 +125,7 @@ class Review:
         if missing:
             self.problems.append(prompt_texts.text("review.missing", labels=missing))
         if self.problems:
-            listed = "; ".join(self.problems[:PROBLEM_LIMIT])
+            listed = "; ".join(self.problems)
             raise ValueError(f"review.md: {listed}")
         rows = [row for row in self.rows.values() if row]
         return stored(rows, self.found, self.summary)

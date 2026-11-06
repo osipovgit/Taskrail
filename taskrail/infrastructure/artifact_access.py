@@ -12,10 +12,10 @@ def result_inputs(run):
     for directory in sorted(run.iterdir()):
         if directory.is_symlink() or not re.fullmatch(r"\d+-[a-z-]+", directory.name):
             continue
-        candidate = directory / "result.json"
-        if candidate.is_file() and not candidate.is_symlink():
+        for name in ("result.json", "handoff.md", "findings.json", "validation.json"):
+            candidate = directory / name
             paths.append(candidate)
-    return paths
+    return [path for path in paths if path.is_file() and not path.is_symlink()]
 
 
 def model_inputs(run, folder):
@@ -23,6 +23,7 @@ def model_inputs(run, folder):
     paths = [
         folder / "request.md",
         folder / "tool-result.md",
+        folder / "validation.json",
         folder / "access.json",
         *task_inputs(run),
         run / "00-input/preimages",
@@ -41,6 +42,7 @@ def model_inputs(run, folder):
         if path.is_file() and not path.is_symlink()
     )
     optional_files = (
+        run / "00-input/findings.json",
         run / "plan.md",
         run / "00-input/parent-task.md",
         run / "00-input/reviewed-plan.json",

@@ -6,8 +6,6 @@ export const names = {
   reviewer: 'Result review',
 };
 export const statuses = {
-  TOKEN_BUDGET_EXCEEDED: 'Token budget reached',
-  STAGE_BUDGET_EXCEEDED: 'Stage allowance exhausted',
   STARTING: 'Starting',
   LAUNCH_ERROR: 'Launch error',
   INTERRUPTED: 'Interrupted',

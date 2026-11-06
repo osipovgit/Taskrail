@@ -1,16 +1,14 @@
-"""Separate cumulative usage limits from the latest provider context occupancy."""
+"""Detect provider context exhaustion and unexpected compaction."""
 
 from taskrail.infrastructure.context_overflow import STATUS
 
 
-def exceeded(telemetry, token_budget, context_budget=None, completed=False):
+def exceeded(telemetry, context_budget=None, completed=False):
     """Provider reporting may arrive after a token threshold has been crossed."""
     if completed:
         context_budget = None
     if context_reason(telemetry, context_budget):
         return STATUS
-    if token_budget is not None and telemetry.tokens["total"] >= token_budget:
-        return "TOKEN_BUDGET_EXCEEDED"
     return "OK"
 
 

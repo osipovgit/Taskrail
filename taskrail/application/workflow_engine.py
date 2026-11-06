@@ -3,10 +3,10 @@
 import subprocess
 
 from taskrail.application import (
-    attempt_context,
     check_batches,
     check_parents,
     planned_checks,
+    repair_feedback,
     reviewed_artifacts,
     run_setup,
     transitions,
@@ -52,7 +52,7 @@ def supervise(workflow, resume):
     except KeyboardInterrupt:
         interrupted(workflow)
     except FAILURES as error:
-        workflow.state.update(status=attempt_context.failure_status(error), summary=str(error))
+        workflow.state.update(status="BLOCKED", summary=str(error))
     finally:
         close(workflow)
 
@@ -86,9 +86,9 @@ def model_stage(workflow):
         return
     verdict, record = outcome
     reference = "{}/result.json".format(record["directory"])
-    transitions.advance(
-        workflow.flow, workflow.state, verdict, reference, workflow.config["max_repairs"]
-    )
+    transitions.advance(workflow.flow, workflow.state, verdict, reference, workflow.work_version())
+    if workflow.state[STATUS] == RUNNING:
+        repair_feedback.attach(workflow.flow, record)
     if record["stage"] == "plan-reviewer":
         planned_checks.activate(workflow)
         reviewed_artifacts.seal(workflow)

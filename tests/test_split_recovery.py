@@ -195,13 +195,19 @@ class ReviewOutcomeTests(unittest.TestCase):
     def test_findings_without_a_writer_end_the_run_instead_of_repeating_the_review(self):
         flow = dict(allowed=[], repair_count=0, stage="reviewer")
         state = dict(phase="integration")
-        verdict = dict(status="REQUEST_CHANGES", summary="T2 broke T1", unverified=[])
+        verdict = dict(
+            status="REQUEST_CHANGES",
+            summary="T2 broke T1",
+            unverified=[],
+            findings=["Regression"],
+            blocking_gaps=[],
+        )
         transitions.result_review(flow, state, verdict, 3)
         self.assertEqual(state["status"], "CHANGES_REQUESTED")
         self.assertEqual(flow["repair_count"], 0)
         writer = dict(allowed=["project/a.py"], repair_count=0, stage="reviewer")
         transitions.result_review(writer, {}, verdict, 3)
-        self.assertEqual((writer["stage"], writer["repair_count"]), ("implementer", 1))
+        self.assertEqual(writer["stage"], "implementer")
 
 
 if __name__ == "__main__":

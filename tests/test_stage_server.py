@@ -106,7 +106,7 @@ class WriterHandoffTests(unittest.TestCase):
             stages=[dict(directory="03-implement")],
             changed_files=["project/hello.py"],
         )
-        config = dict(read_retries=retries, roots={"project": Path("/repo")})
+        config = dict(transport_retries=retries, roots={"project": Path("/repo")})
         workflow = SimpleNamespace(
             run=run,
             state=state,

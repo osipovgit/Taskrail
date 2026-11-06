@@ -9,8 +9,6 @@ from unittest.mock import patch
 from run_fixture import current_run
 
 from taskrail.application import (
-    budget_extensions,
-    budgets,
     instruction_modules,
     transitions,
 )
@@ -30,39 +28,14 @@ class StageBoundaryTests(unittest.TestCase):
         self.addCleanup(temporary.cleanup)
         self.run = Path(temporary.name)
 
-    def test_explicit_grant_keeps_consumption_and_survives_reload(self):
-        limits = dict(timeout=10, seconds=10, attempts=1)
-        first = dict(directory="01-plan", stage="planner", mode="model")
-        budgets.reserve(self.run, first, limits)
-        budgets.settle(self.run, "01-plan", dict(status="TIMEOUT", elapsed_seconds=10))
-        with self.assertRaises(budgets.BudgetExceeded):
-            budgets.reserve(self.run, dict(first, directory="02-plan"), limits)
-        budget_extensions.grant(
-            self.run,
-            "planner",
-            dict(timeout=10, stage_seconds=10, stage_attempts=1),
-        )
-        allowance = budgets.reserve(self.run, dict(first, directory="02-plan"), limits)
-        self.assertEqual(allowance["timeout"], 10)
-        self.assertEqual(allowance["attempts_remaining"], 1)
-        self.assertNotIn("tools", allowance)
-        ledger = budgets.load(self.run)
-        self.assertEqual(ledger["attempts"]["01-plan"]["elapsed"], 10)
-        self.assertEqual(len(ledger["grants"]), 1)
-        other = budgets.reserve(
-            self.run, dict(first, directory="03-review", stage="reviewer"), limits
-        )
-        self.assertEqual(other["timeout"], 10)
-
     def test_budget_blocked_has_continue_and_delete_but_busy_run_does_not(self):
-        state = current_run(dict(status="STAGE_BUDGET_EXCEEDED", stages=[dict(mode="model")]))
+        state = current_run(dict(status="TIMEOUT", stages=[dict(mode="model")]))
         (self.run / "run.json").write_text(json.dumps(current_run(state)))
         (self.run / "checkpoint.json").write_text(json.dumps(current_run(dict(stage="planner"))))
         controls = actions(self.run, state, IDLE)
-        self.assertTrue(controls["resume_budget"])
+        self.assertTrue(controls["resume"])
         self.assertTrue(controls["delete"])
-        self.assertTrue(controls["budget_paused"])
-        self.assertFalse(actions(self.run, state, HELD)["resume_budget"])
+        self.assertFalse(actions(self.run, state, HELD)["resume"])
         self.assertFalse(actions(self.run, state, HELD)["delete"])
         state["status"] = "BLOCKED"
         self.assertTrue(actions(self.run, state, IDLE)["resume"])
@@ -82,7 +55,7 @@ class StageBoundaryTests(unittest.TestCase):
         (self.run / "run.json").write_text(json.dumps(current_run(state)))
         (self.run / "checkpoint.json").write_text(json.dumps(current_run(dict(stage="planner"))))
         controls = actions(self.run, state, WAITING)
-        self.assertFalse(controls["resume"] or controls["resume_budget"] or controls["followup"])
+        self.assertFalse(controls["resume"] or controls["followup"])
         self.assertEqual(controls["waiting_for"], "Another task is running on /project")
         for usable in ("restart", "done", "delete"):
             self.assertTrue(controls[usable], usable)
@@ -93,11 +66,9 @@ class StageBoundaryTests(unittest.TestCase):
         self.assertTrue(actions(self.run, phase, IDLE)["restart"])
 
     def test_worker_budget_flag_is_explicit(self):
-        normal = worker_command(self.run, self.run, self.run / "missing", True, False)
-        extended = worker_command(self.run, self.run, self.run / "missing", True, True)
+        normal = worker_command(self.run, self.run, self.run / "missing", True)
+        self.assertIn("--resume", normal)
         self.assertNotIn("--extend-budget", normal)
-        self.assertIn("--extend-budget", extended)
-        self.assertIn("--resume", extended)
 
     def test_modules_are_selected_frozen_and_tamper_checked(self):
         state = {}
@@ -158,6 +129,9 @@ class StageBoundaryTests(unittest.TestCase):
         flow = dict(stage="check", repair_count=0, allowed=["project/example.py"])
         transitions.checked(flow, state, 1)
         self.assertEqual(flow["stage"], "implementer")
-        self.assertEqual(flow["repair_count"], 1)
+        flow["stage"] = "check"
         transitions.checked(flow, state, 1)
-        self.assertEqual(state["status"], "CHECK_FAILED")
+        self.assertIn("strategy", flow["feedback"])
+        flow["stage"] = "check"
+        transitions.checked(flow, state, 1)
+        self.assertEqual(state["status"], "NO_PROGRESS")

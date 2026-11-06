@@ -1,6 +1,6 @@
 """Validate recovery inputs and preserve observations without replaying a writer."""
 
-from taskrail.application import budget_extensions, evidence, instruction_sources
+from taskrail.application import evidence, instruction_sources
 from taskrail.application.artifacts import finish_stage
 
 
@@ -39,8 +39,3 @@ def interrupt_open_records(run, state):
             errors = ["Previous process stopped before finishing this stage."]
             outcome = dict(status="INTERRUPTED", diagnostics={"errors": errors})
             finish_stage(run, state, (run / record["directory"], record), outcome)
-
-
-def extend_budget(run, stage, config):
-    """Grant only after checkpoint integrity validation under the execution lock."""
-    budget_extensions.grant(run, stage, config)

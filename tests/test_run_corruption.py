@@ -90,5 +90,5 @@ class CorruptRunTests(unittest.TestCase):
         (run / "run.json").write_text(
             json.dumps(current_run(dict(status="BLOCKED", roots={}, results={})))
         )
-        (run / "00-input/settings.json").write_text(json.dumps(dict(max_repairs=0)))
+        (run / "00-input/settings.json").write_text(json.dumps(dict(max_integration_corrections=0)))
         return run

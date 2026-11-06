@@ -31,7 +31,7 @@ def start(workflow, resume):
     """
     instruction_sources.adopt_texts(workflow.run)
     if resume:
-        restore(workflow, validated_checkpoint(workflow), resume)
+        restore(workflow, validated_checkpoint(workflow))
     else:
         begin(workflow)
     workflow.state[approval_policy.AUTO_APPROVE] = approval_policy.at_start(
@@ -89,7 +89,7 @@ def checkpoint_source_error(config):
     )
 
 
-def restore(workflow, checkpoint, mode):
+def restore(workflow, checkpoint):
     """Continue the recorded stage; an interrupted writer inspects before editing."""
     flow = workflow.flow
     flow.update((key, checkpoint[key]) for key in FLOW_KEYS)
@@ -100,8 +100,6 @@ def restore(workflow, checkpoint, mode):
     workflow.runtime["recovery"] = resume_inputs.observations(
         workflow.run, workflow.state, stage, workflow.config["roots"]
     )
-    if mode == "extend":
-        resume_inputs.extend_budget(workflow.run, stage, workflow.config)
     reopen(workflow)
 
 
@@ -127,7 +125,6 @@ def reopen(workflow):
     state.update(
         status="RUNNING",
         summary="Continuing from validated checkpoint",
-        monitoring=dict(max_observed_tokens=workflow.config["max_observed_tokens"]),
     )
     state.pop("finished_at", None)
     save_run(workflow.run, state)

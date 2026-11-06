@@ -95,10 +95,10 @@ class ServiceTests(unittest.TestCase):
         self.settings.write_text(json.dumps(settings))
         self.assertEqual(configuration(task, self.settings)["timeout"], 3600)
         self.assertNotIn("stage_tools", configuration(task, self.settings))
-        self.assertEqual(configuration(task, self.settings)["read_retries"], 3)
-        self.assertEqual(configuration(task, self.settings)["max_repairs"], 3)
-        self.assertEqual(configuration(task, self.settings)["stage_attempts"], 6)
-        self.assertEqual(configuration(task, self.settings)["stage_seconds"], 14400)
+        self.assertEqual(configuration(task, self.settings)["transport_retries"], 3)
+        self.assertEqual(configuration(task, self.settings)["max_integration_corrections"], 3)
+        self.assertNotIn("stage_attempts", configuration(task, self.settings))
+        self.assertNotIn("stage_seconds", configuration(task, self.settings))
         settings["timeout_seconds"] = 42
         self.settings.write_text(json.dumps(settings))
         self.assertEqual(configuration(task, self.settings)["timeout"], 42)
@@ -211,7 +211,7 @@ class ServiceTests(unittest.TestCase):
         agents = Path(options["agent_source"])
         custom = "Instruction contract: 1.\nUser-owned instructions"
         (agents / "planner.md").write_text(custom)
-        options["max_repairs"] = 1
+        options["max_integration_corrections"] = 1
         config.write_text(json.dumps(options))
         before = config.read_bytes()
         run = self.home / ".local/state/taskrail/runs/preserved"

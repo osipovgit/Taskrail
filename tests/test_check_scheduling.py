@@ -17,7 +17,7 @@ class CheckSchedulingTests(LiveFixture, unittest.TestCase):
         )
         self.task.write_text(f"```taskrail-task\n{json.dumps(header)}\n```\nReturn 2")
         command = dict(cwd=str(self.root), argv=[sys.executable, "-c", code])
-        return self.run_mode("no-change", verify_commands=[command], max_repairs=0)
+        return self.run_mode("no-change", verify_commands=[command], max_integration_corrections=0)
 
     def test_no_change_engineering_result_cannot_skip_a_failed_mandatory_gate(self):
         _, status, state = self.execute()

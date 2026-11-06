@@ -23,9 +23,9 @@ from taskrail.application.attempt_session import (
     invalid,
     launch_options,
     session_environment,
-    token_allowance,
     validated,
 )
+from taskrail.application.changes import write_diff
 from taskrail.application.plan_review_evidence import paths as review_paths
 from taskrail.application.result_context import git_directory
 from taskrail.application.task_branch import KEY as TASK_BRANCH
@@ -67,6 +67,10 @@ class StageAttempts:
 
     def retry(self, record, outcome):
         """Prepare the next attempt, or record why the stage stops."""
+        if self.workflow.writable():
+            write_diff(
+                self.workflow.run, self.workflow.config["roots"], self.workflow.state["preimages"]
+            )
         if not self.retries.allowed(outcome):
             fail(self.workflow.state, record, outcome)
 
@@ -83,24 +87,17 @@ class StageAttempts:
         return folder, record
 
     def launch(self, active):
-        """Run the stage session unless the observed token budget is spent."""
+        """Launch the session with its model window and steering timeout."""
         workflow = self.workflow
         files = planned_files(workflow)
         profile = install_profile(workflow, active, files)
         session_budget.capture(workflow.config, active)
         announce(active[1])
-        allowance = token_allowance(workflow)
-        if allowance is not None and allowance <= 0:
-            workflow.state.update(
-                status="TOKEN_BUDGET_EXCEEDED",
-                summary="Observed token budget reached. Increase the server budget before continuing.",
-            )
-            return None
         outcome = run_stage(
             active,
             workflow.state,
-            session_environment(workflow, profile, files, checker(workflow, active)),
-            launch_options(workflow, active, allowance),
+            session_environment(workflow, profile, checker(workflow, active)),
+            launch_options(workflow, active),
         )
         self.settle(active, outcome)
         return outcome
@@ -109,6 +106,10 @@ class StageAttempts:
         """Record usage, adopt executor effects and check the source delta."""
         workflow = self.workflow
         guard = workflow.guard
+        elapsed = workflow.runtime["stage_elapsed"]
+        elapsed[self.retries.stage] = (
+            elapsed.get(self.retries.stage, 0) + outcome["elapsed_seconds"]
+        )
         attempt_context.record_outcome(workflow.run, workflow.state, active[1], outcome)
         prior = (guard.expected, guard.git_before)
         guard.adopt(*workflow.state.pop("source_effect", prior))

@@ -75,7 +75,7 @@ class TurnWatch:
             check_stop(self.attempt.parent)
             status = turn_status(
                 self.telemetry,
-                self.turn.budgets,
+                dict(context_budget=None),
                 self.read(),
                 self.telemetry.steps.reason == "stop",
             )

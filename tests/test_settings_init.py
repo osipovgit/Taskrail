@@ -112,11 +112,13 @@ class SettingsInitTests(unittest.TestCase):
 
     def test_updates_preserve_existing_settings_and_service_environment(self):
         target = self.config / "settings.json"
-        target.write_text('{"command": ["custom"], "max_repairs": 1}')
+        target.write_text('{"command": ["custom"], "max_integration_corrections": 1}')
         environment = self.config / "service.env"
         environment.write_text("PATH=/kept\n")
         self.initialize(str(self.home / "missing.json"))
-        self.assertEqual(target.read_text(), '{"command": ["custom"], "max_repairs": 1}')
+        self.assertEqual(
+            target.read_text(), '{"command": ["custom"], "max_integration_corrections": 1}'
+        )
         self.assertEqual(environment.read_text(), "PATH=/kept\n")
         target.write_text("{")
         with self.assertRaises(json.JSONDecodeError):

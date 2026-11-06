@@ -18,7 +18,7 @@ class TurnIO:
     def __init__(self, attempt, runtime):
         options = runtime or {}
         self.session_id = options.get("session_id")
-        self.budgets = {key: options.get(key) for key in ("token_budget", "context_budget")}
+        self.budgets = dict(context_budget=options.get("context_budget"))
         self._allow = options.get("env_allow", ())
         self._compact = options.get("autocompact", False)
         self._attachment = options.get("attachment", {})
@@ -46,7 +46,7 @@ class TurnIO:
         return self.path.open("ab" if self.session_id else "wb")
 
     def telemetry(self):
-        """The run-wide token cap includes earlier turns once."""
+        """Retain context observations across turns of the same session."""
         telemetry = Telemetry()
         for line in self.previous.splitlines():
             telemetry.observe(line)

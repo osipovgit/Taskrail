@@ -1,8 +1,8 @@
 """Continue executor turns through an explicit opencode session inside one stage."""
 
 from taskrail.application import (
-    budgets,
     evidence_delivery,
+    feedback_files,
     response_format,
 )
 from taskrail.application.artifacts import save_run
@@ -10,13 +10,14 @@ from taskrail.core import control
 from taskrail.core.files import atomic_json, changed
 from taskrail.infrastructure import opencode_api
 from taskrail.infrastructure.runner import run_agent
-from taskrail.interactions import events, request_limits, turn_recovery
+from taskrail.interactions import context_summary, events, turn_recovery
 from taskrail.interactions.actions import Actions
 from taskrail.interactions.clock import StageClock
 
+STATUS = "status"
+OK = "OK"
 SESSION_ID = "session_id"
 TOKENS = "tokens"
-MAX_RESULT_CORRECTIONS = 3
 ROLE = "role"
 RESULT_CORRECTIONS = "result_corrections"
 VALIDATION_ERRORS = "validation_errors"
@@ -33,9 +34,8 @@ class StageSession:
         if active[1][ROLE] != "implementer":
             self.environment["allowed"] = []
         self.launch = dict(launch)
-        self.clock = StageClock(active[1]["budget"]["timeout"])
+        self.clock = StageClock(active[1]["timeout_seconds"])
         self.context = dict(session_id=None, turns=0, tokens={}, attachment={})
-        self.context["corrections"] = 0
         self.context[RESULT_CORRECTIONS] = 0
         self.context[VALIDATION_ERRORS] = []
 
@@ -65,12 +65,11 @@ class StageSession:
         """Only intermediate responses continue; final validation stays independent."""
         while self.clock.remaining() > 0:
             outcome = self.turn()
-            if request_limits.check(self, outcome):
-                return self.finished(outcome)
-            response = Actions(self).route(outcome) or result_feedback(self, outcome)
-            response = response or turn_recovery.response(self, outcome)
+            response = next_response(self, outcome)
             if response is None:
                 return self.finished(outcome)
+            if outcome.get("context_boundary") and outcome[STATUS] == OK:
+                return self.finished(context_summary.handoff(self, outcome, response))
             if not self.continue_context(outcome, response):
                 outcome.update(
                     status="SESSION_ERROR",
@@ -101,7 +100,7 @@ class StageSession:
             self.check_sources()
         except ValueError as error:
             outcome.update(status="SCOPE_VIOLATION", errors=[str(error)])
-        if outcome["status"] == "OK":
+        if outcome[STATUS] == OK:
             self.context.pop("turn_recovery", None)
         return outcome
 
@@ -109,7 +108,7 @@ class StageSession:
         """Keep source and Git guards before any command can execute."""
         env = self.environment
         if env.get("beyond_plan"):
-            env["beyond_plan"]()
+            env["allowed_paths"] = env["beyond_plan"]()
         current = env["scan"]()
         control.check_delta(
             changed(env["expected"], current),
@@ -118,7 +117,7 @@ class StageSession:
         )
         env["expected"] = current
 
-    def continue_context(self, outcome, response):
+    def continue_context(self, outcome, response, handoff=False):
         """Never infer or continue an unrelated global latest session."""
         sessions = outcome.get("sessions", [])
         if len(sessions) != 1:
@@ -129,7 +128,9 @@ class StageSession:
         folder, record = self.active
         prompt = folder / "tool-result.md"
         prompt.write_text(
-            response + response_format.continuation(record["stage"], folder / "request.md")
+            response
+            if handoff
+            else response + response_format.continuation(record["stage"], folder / "request.md")
         )
         self.launch["prompt"] = prompt
         record.update(
@@ -144,6 +145,7 @@ class StageSession:
 
     def finished(self, outcome):
         """Charge all turns once and exclude the operator's waiting time."""
+        context_summary.preserve(self.active[0], outcome)
         elapsed = round(self.clock.elapsed(), 3)
         outcome.update(elapsed_seconds=elapsed, tokens=self.context[TOKENS])
         outcome[VALIDATION_ERRORS] = self.context[VALIDATION_ERRORS]
@@ -154,6 +156,12 @@ class StageSession:
         return outcome
 
 
+def next_response(session, outcome):
+    """Only validated or correctable intermediate responses continue."""
+    feedback = Actions(session).route(outcome) or result_feedback(session, outcome)
+    return feedback or turn_recovery.response(session, outcome)
+
+
 def received_turn(session, options):
     """Keep prepared evidence pending until its receiving session completed the turn."""
     run = session.environment[RUN]
@@ -161,29 +169,29 @@ def received_turn(session, options):
     outcome = run_agent(options)
     expected = session.context[SESSION_ID]
     unexpected = expected and outcome.get("sessions") != [expected]
-    if unexpected and outcome["status"] == "OK":
+    if unexpected and outcome[STATUS] == OK:
         outcome.update(status="SESSION_ERROR", errors=["Unexpected opencode session identity"])
     evidence_delivery.confirm(run, session.active[0], prompt, outcome, expected)
     return outcome
 
 
 def result_feedback(session, outcome):
-    """Return a final result that fails validation to the same session, three times per stage.
-
-    The session still has its context and tools; a later full attempt starts without them.
-    """
+    """Return all outstanding failures while the artifact or diagnostics change."""
     check = session.environment.get("check_result")
     context = session.context
-    if check is None or outcome["status"] != "OK":
-        return None
-    if context[RESULT_CORRECTIONS] >= MAX_RESULT_CORRECTIONS:
+    if check is None or outcome[STATUS] != OK:
         return None
     error = check(outcome)
     if error is None:
         return None
+    if turn_recovery.repeated_feedback(session, "result", error):
+        return None
     context[RESULT_CORRECTIONS] += 1
     context[VALIDATION_ERRORS].append(error)
-    feedback = response_format.correction(session.active[1][ROLE], error)
+    message = feedback_files.validation(session.active[0], error)
+    feedback = response_format.correction(session.active[1][ROLE], message)
+    if message != error:
+        feedback += evidence_delivery.pending_text(session.active[0])
     events.correction(session, "result", "final result", feedback)
     return feedback
 
@@ -203,6 +211,4 @@ def record_interruption(session):
     folder, record = session.active
     outcome = session.finished(dict(status="INTERRUPTED"))
     record.update(elapsed_seconds=outcome["elapsed_seconds"], tokens=outcome[TOKENS])
-    if (folder.parent / budgets.BUDGET_FILE).exists():
-        budgets.settle(folder.parent, folder.name, outcome)
     atomic_json(folder / "stage.json", record)

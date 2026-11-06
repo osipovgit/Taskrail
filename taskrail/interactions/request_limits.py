@@ -2,31 +2,21 @@
 
 import json
 
-from taskrail.core import json_response, schema
 from taskrail.core.files import atomic_json, digest
-from taskrail.interactions import local_intake
+from taskrail.interactions import turn_recovery
 
 NAME = "request-counts.json"
-STATUS = "status"
-MAX_ACTIONS = 100
 MAX_DUPLICATES = 3
-REQUESTS = frozenset(("LOCAL_REQUEST", "GIT_REQUEST", "ACTION_REQUEST", "JENKINS_REQUEST"))
 
 
-def check(session, outcome):
+def check(session, outcome, payload):
     """Return a typed stop before routing the request that would exceed its limit."""
-    if outcome[STATUS] != "OK":
-        return False
-    payload = extract(outcome["final_text"])
-    if payload is None:
-        return False
-    total, duplicates = record(session, payload)
-    exceeded = total > MAX_ACTIONS or repeated(payload, duplicates)
+    exceeded = record(session, payload) > MAX_DUPLICATES
     if exceeded:
         outcome.update(
             status="NO_PROGRESS",
             errors=[
-                "Intermediate request limit reached; inspect completed actions before continuing."
+                "Repeated unchanged executor request; inspect its previous result and use a different approach."
             ],
         )
     return exceeded
@@ -44,27 +34,14 @@ def reset(run, stage):
 
 def record(session, payload):
     """Keep counters across the retries of one stage round."""
-    run = session.environment["run"]
-    path = run / NAME
+    path = session.environment["run"] / NAME
     counts = json.loads(path.read_text()) if path.exists() else {}
     entries = counts.setdefault(session.active[1]["stage"], {})
-    identity = fingerprint(payload, session.environment.get("expected", {}))
-    entries[identity] = 1 + entries.get(identity, 0)
+    identity = fingerprint(payload, turn_recovery.progress(session))
+    count = 1 + entries.get(identity, 0)
+    counts[session.active[1]["stage"]] = {identity: count}
     atomic_json(path, counts)
-    return sum(entries.values()), entries[identity]
-
-
-def extract(text):
-    """Recognize only advertised executable requests; final results retain their validator."""
-    try:
-        payload = json_response.extract(text, schema.unique_fields)
-    except ValueError:
-        return None
-    if local_intake.looks_like(payload) or payload.get(STATUS) == local_intake.STATUS:
-        return local_intake.normalized(payload)
-    if payload.get(STATUS) in REQUESTS:
-        return payload
-    return None
+    return count
 
 
 def fingerprint(payload, snapshot):
@@ -72,9 +49,3 @@ def fingerprint(payload, snapshot):
     operation = {key: entry for key, entry in payload.items() if key != "reason"}
     encoded = json.dumps([operation, snapshot], sort_keys=True).encode()
     return digest(encoded)
-
-
-def repeated(payload, count):
-    """Live remote observations can change independently of local source files."""
-    live = payload[STATUS] in {"JENKINS_REQUEST", "ACTION_REQUEST"}
-    return not live and count > MAX_DUPLICATES

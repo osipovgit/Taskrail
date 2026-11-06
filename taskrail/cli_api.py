@@ -36,7 +36,7 @@ def decide_command(argv):
 
 
 def action_command(argv):
-    """Run a lifecycle action: stop, resume, resume_budget, confirm, epic_next and others."""
+    """Run a lifecycle action: stop, resume, confirm, epic_next and others."""
     parser = parser_for("action", action_command.__doc__)
     parser.add_argument("run")
     parser.add_argument("action")

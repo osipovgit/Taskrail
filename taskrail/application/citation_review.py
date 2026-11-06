@@ -27,7 +27,7 @@ def validate(claims, records, context):
         except ValueError as error:
             errors[window(claim)] = guidance(claim, context, str(error), views)
     if errors:
-        raise ValueError(feedback(list(errors.values())))
+        raise ValueError(feedback(errors.values()))
     return proofs
 
 
@@ -51,10 +51,8 @@ def delivery(error, context, preceding):
 
 
 def feedback(errors):
-    """Cap the correction payload while disclosing any remaining failed claims."""
-    omitted = len(errors) - ERROR_LIMIT
-    suffix = prompt_texts.text("citation.remaining", count=omitted) if omitted > 0 else ""
-    return "\n".join(errors[:ERROR_LIMIT]) + suffix
+    """Every failed claim is included in the pageable correction."""
+    return "\n".join(errors)
 
 
 def checked(claim, records, context):

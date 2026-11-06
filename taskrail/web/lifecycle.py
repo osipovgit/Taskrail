@@ -3,7 +3,7 @@
 import json
 
 from taskrail.application import run_locks, run_store
-from taskrail.application.checkpoints import budget_paused, resume_available
+from taskrail.application.checkpoints import resume_available
 from taskrail.core.files import atomic_json
 from taskrail.interactions import approval_policy, approvals
 from taskrail.web import run_groups, start_controls
@@ -112,7 +112,6 @@ def actions(run, state, activity):
         stop=running and not requested,
         stop_requested=requested,
         delete=stopped and state.get(STATUS) != "STARTING" and not activity.family,
-        budget_paused=budget_paused(state),
         done=stopped and not run_groups.marked(run, state),
         reopen=run_groups.marked(run, state),
         revoke_auto_approve=approval_policy.active(run, state),

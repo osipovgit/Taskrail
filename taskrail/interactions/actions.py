@@ -12,6 +12,7 @@ from taskrail.interactions import (
     local_request,
     request_routes,
     transcripts,
+    turn_recovery,
 )
 from taskrail.interactions.clock import ApprovalPause
 
@@ -19,7 +20,6 @@ PUSH_NOTICE = (
     "Pushes the current commit to a remote repository. Allow all actions does not cover pushes."
 )
 REQUEST_NAME = re.compile(r"(?:GIT|LOCAL|ACTION|JENKINS)_REQUEST")
-CORRECTIONS = "corrections"
 
 
 class Actions:
@@ -37,7 +37,7 @@ class Actions:
         if outcome["status"] != "OK":
             return None
         routed = request_routes.route(self, outcome)
-        return routed or incomplete_request(self, outcome["final_text"])
+        return routed or incomplete_request(self, outcome) if outcome["status"] == "OK" else None
 
     def git_action(self, outcome):
         """Use the existing policy and checkpointed Git executor."""
@@ -78,23 +78,23 @@ class Actions:
         return transcripts.local_snapshot(self.run, self.folder, payload, answer)
 
 
-def incomplete_request(actions, text):
+def incomplete_request(actions, outcome):
     """Return a near-miss request or bare narration to the same session, a few times in a row.
 
     A turn that only describes its next step, or writes a request as XML or tool-call
     markup, would otherwise fail validation and end the session. Every role answers in
     prose and its run file, so only request markup counts as narration.
     """
-    context = actions.session.context
-    if context[CORRECTIONS] >= request_routes.MAX_CORRECTIONS:
-        return None
+    text = outcome["final_text"]
     if local_request.incomplete(text):
         feedback = local_request.correction(text)
     elif not_json(text) and narrated(text):
         feedback = prompt_texts.text("feedback.narration", request=actions.folder / "request.md")
     else:
         return None
-    context[CORRECTIONS] += 1
+    if turn_recovery.repeated_feedback(actions.session, "request", feedback):
+        outcome.update(status="INVALID_RESULT", contract_error=feedback)
+        return None
     events.correction(actions.session, "request", text, feedback)
     return feedback
 

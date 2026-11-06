@@ -15,7 +15,7 @@ from taskrail.application import (
     run_store,
 )
 from taskrail.application.artifacts import save_run
-from taskrail.application.checkpoints import RESUMABLE, budget_paused
+from taskrail.application.checkpoints import RESUMABLE
 from taskrail.application.task_config import configuration
 from taskrail.application.worktree_isolation import isolate
 from taskrail.core.files import atomic_json
@@ -27,18 +27,13 @@ RUN_INDEX = "run.json"
 STATUS = "status"
 ROOTS = "roots"
 WORKTREES = "worktrees"
-TOKENS = "max_observed_tokens"
 RUN_DIRECTORY = "run_dir"
 SETTINGS_SNAPSHOT = (
     "opencode_version",
     "models",
     "timeout",
-    "stage_seconds",
-    "stage_attempts",
-    "read_retries",
-    "stop_on_provider_limit",
-    "max_repairs",
-    TOKENS,
+    "transport_retries",
+    "max_integration_corrections",
     "model_context_tokens",
     "context_reserve_tokens",
     "verify_commands",
@@ -118,7 +113,7 @@ def resumed_state(run, config, request):
         raise ValueError("Cannot combine resume with plan import")
     state = run_store.read(run)
     run_store.continuing(state)
-    if state[STATUS] not in RESUMABLE and not budget_paused(state):
+    if state[STATUS] not in RESUMABLE:
         raise ValueError("This run is not interrupted; use Restart instead")
     if state[ROOTS] != run_state.stored_roots(config[ROOTS]):
         raise ValueError("Project roots changed; cannot continue")

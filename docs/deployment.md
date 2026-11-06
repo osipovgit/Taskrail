@@ -128,7 +128,7 @@ reset directories.
 | `opencode_server` | `true` | `false` runs each 1.x turn as its own process instead of on the stage's private server |
 | `sandbox_network` | `false` | `true` keeps the network for agents' sandboxed commands (package installs, collection downloads); every credential mask stays |
 | `host_commands` | `auto` | `auto` runs local commands outside the sandbox at once, highlighted in the stage log; `ask` makes each wait for your approval |
-| `stop_on_provider_limit` | `false` | `true` stops a stage at the first exhausted provider quota or billing limit instead of spending its retries ([contracts](contracts.md)) |
+
 | `protected_paths` | credentials list | Patterns models never read or edit, besides `.env` files; setting it replaces the defaults ([access](access.md#protected-paths)) |
 
 opencode 1.x is called as `opencode run --session --dir --agent --format json --file`
@@ -188,32 +188,14 @@ and an approved source file may be read only in small ranges. Repeated prompts,
 provider framing and future tool output also prevent byte totals from measuring
 context occupancy.
 
-Runtime monitoring stops only when the latest provider-reported input, including cache
-read/write tokens, reaches the reserved capacity, the provider reports an explicit
-context overflow, or a compaction marker appears. Missing usage is unknown and does
-not imply that capacity was exceeded. These checks also cover continuation startup
-and the final event drain. Reports may arrive after the provider has consumed tokens;
-the configured reserve cannot guarantee that every later tool result will fit.
-
-An observed boundary or overflow is `CONTEXT_EXCEEDED`. A session that reaches the
-boundary is not compacted: the stage continues in a fresh session, up to `read_retries`
-times. A reading stage starts it from recorded evidence; the implementer keeps its edits
-and continues from `progress.md` (Done, Remaining), told to read the files it already
-changed before editing them. Nothing is rolled back, and a writer interrupted any other
-way is never replayed. Before a fresh session starts, its attached progress notes are
-bounded to 8 KiB. Growth during an active session never itself exhausts context.
-Oversized notes are preserved verbatim under `00-input/progress-archive/`, and the next session receives
-bounded beginning/end excerpts with an exact archive reference. Only those archive
-files become readable. Another overflow without changed source or working notes
-stops instead of repeating the same handoff. When fresh sessions do not suffice, replan into smaller atomic
-tasks or deliberately correct the model limit. `max_observed_tokens` remains a separate cumulative cost cap.
-
-After a planner context stop, the server first validates its saved `plan.md` against
-the same source evidence, requirement coverage, scope and dependency contracts.
-A valid ready proposal proceeds to independent plan review without another planner
-call; the original context-stop diagnostics remain recorded. An invalid proposal
-gets exact validation errors in its bounded recovery attempt. Permission failures,
-source violations and interrupted writers never use this path.
+When reported input reaches the reserved boundary, an active process may finish
+its work. A completed plan or review still goes through full validation. If the
+session needs another turn, Taskrail asks the same session for a final public
+handoff, saves it, then opens a fresh session. An explicit provider overflow or
+compaction ends the session immediately. Source reads, partial edits, public
+messages and saved artifacts remain available for recovery. Handoff text is working
+context; citations still require evidence. A repeated overflow on unchanged work
+pauses for steering. Model-specific window settings govern each fresh session.
 
 ## Local command sandbox
 
@@ -282,17 +264,15 @@ runs only for runs whose declared roots include its `cwd`; in a
 as the service user, with the filtered environment and the local command policy (no
 Git, SSH or privilege commands). `timeout_seconds` defaults to 600 (at most 3600).
 Output is kept in `verify-NN.log` of the check stage; a nonzero exit is a failed
-check whose output tail goes back to the implementer, within `max_repairs`. When a
-repair leaves exactly the same checks failing (run-specific evidence paths and
-durations aside), the run stops with `CHECK_FAILED` instead of repeating it; a timed-out
-check is always repaired again. Commands
+check whose output tail goes back to the implementer, with every unresolved check. Unchanged source and repeated failures trigger a
+different repair strategy, then a no-progress pause. Commands
 must not write inside declared roots (generated folders such as `__pycache__`,
 `node_modules` or `.pytest_cache` are ignored): any other change stops the run.
 
 ## Configuration changes
 
 New tasks read current settings and roles. Continue retains frozen task, role and
-policy snapshots; explicit allowance increases are recorded separately. The service
+policy snapshots. The service
 watches settings/role changes and logs them without revealing contents. A change
 to `run_base`, the port or environment requires a service restart.
 
