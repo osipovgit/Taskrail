@@ -29,7 +29,12 @@ def records(epic):
 
 def limit(settings):
     """Validate the frozen automatic writer budget."""
-    count = settings["max_repairs"]
-    valid = isinstance(count, int) and not isinstance(count, bool)
-    require(valid and 0 <= count <= 5, "Invalid correction budget")
-    return count
+    return setting(settings, "max_integration_corrections", 0)
+
+
+def setting(options, key, default, minimum=0):
+    """Reject invalid limits explicitly instead of silently changing them."""
+    amount = options.get(key, default)
+    if not isinstance(amount, int) or isinstance(amount, bool) or amount < minimum:
+        raise ValueError(f"{key} must be an integer of at least {minimum}")
+    return amount

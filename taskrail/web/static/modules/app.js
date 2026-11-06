@@ -236,7 +236,6 @@ export function addRoot(alias = '', path = '') {
 const ACTIONS = [
   ['restart', 'Restart from scratch'],
   ['resume', 'Continue from checkpoint'],
-  ['resume_budget', 'Continue with extra budget'],
   ['stop', 'Stop task'],
   ['done', 'Mark as done'],
   ['reopen', 'Move back from Done'],
@@ -244,7 +243,6 @@ const ACTIONS = [
   ['delete', 'Delete from history'],
 ];
 const ACTION_TITLES = {
-  resume_budget: 'Adds two attempts and one attempt timeout. Existing usage is retained.',
   restart: 'Edit the task before starting a new run. No rollback.',
   stop: 'Stop the worker and save a checkpoint. Partial edits are preserved.',
   done: 'Move this run to Done. Nothing in the project changes.',
@@ -470,8 +468,6 @@ export async function refresh() {
 
 const CONFIRMATIONS = {
   delete: 'Move this run and its logs to local trash? Project files will not be changed.',
-  resume_budget:
-    'Grant two extra attempts and one attempt timeout, then continue? Token caps and permissions are unchanged.',
 };
 
 export async function runAction(action, extra = {}, runId = state.selected) {

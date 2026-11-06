@@ -3,7 +3,7 @@
 import hashlib
 import sys
 
-from taskrail.application import budgets, source_packet
+from taskrail.application import source_packet
 from taskrail.application.artifacts import save_run
 from taskrail.core import prompt_texts, protected_paths
 from taskrail.core.files import atomic_json
@@ -15,22 +15,22 @@ STAGE = "stage"
 
 def prepare(run, record, config, state):
     """Reserve durable resources and disclose the effective instruction source."""
-    limits = {
-        "timeout": config["timeout"],
-        "seconds": config["stage_seconds"],
-        "attempts": config["stage_attempts"],
-    }
-    allowance = budgets.reserve(run, record, limits)
     role = record["role"]
     role_directory = state["agent_source_directory"]
     record.update(
-        budget=allowance,
+        timeout_seconds=config["timeout"],
         contract_version=1,
         agent_source=f"{role_directory}/{role}.md",
         contract_sha256=hashlib.sha256((run / "00-input/contract.json").read_bytes()).hexdigest(),
         agent_sha256=state["agent_sources"][role],
     )
     return record
+
+
+def remaining(workflow, stage):
+    """Automatic retries and repairs share a steering deadline; Continue starts fresh."""
+    spent = workflow.runtime.setdefault("stage_elapsed", {})
+    return max(0, workflow.config["timeout"] - spent.get(stage, 0))
 
 
 def save_request(folder, record, request, workflow):
@@ -56,14 +56,8 @@ def save_request(folder, record, request, workflow):
     save_run(folder.parent, state)
 
 
-def failure_status(error):
-    """Keep budget exhaustion distinguishable from an integrity/configuration stop."""
-    return "STAGE_BUDGET_EXCEEDED" if isinstance(error, budgets.BudgetExceeded) else "BLOCKED"
-
-
 def record_outcome(run, state, record, outcome):
     """Settle durable consumption and index the process outcome before validation."""
-    budgets.settle(run, record["directory"], outcome)
     status = "AGENT_COMPLETED" if outcome["status"] == "OK" else outcome["status"]
     elapsed = outcome["elapsed_seconds"]
     record.update(elapsed_seconds=elapsed, tokens=outcome.get("tokens", {}))

@@ -1,7 +1,7 @@
 """Native rejected writes and content-matched recovery for subprocess workflow tests."""
 
 import json
-import time
+import sys
 
 EDIT_MISMATCH = "Error: Could not find oldString in the file. It must match exactly, including whitespace, indentation, and line endings."
 
@@ -49,7 +49,7 @@ def implement(target, mode, emit):
             ),
             flush=True,
         )
-        time.sleep(1)
+        sys.exit(0)
 
 
 def event(emit, target, tool, status, output):

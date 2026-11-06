@@ -1,10 +1,9 @@
 """Authenticate a fresh corrective writer without inheriting approval to write."""
 
-import json
-
 from taskrail.application import (
     check_parents,
     delivery_confirmation,
+    feedback_files,
     integration_changes,
     reviewed_artifacts,
     reviewed_input,
@@ -74,8 +73,11 @@ def settled(parent, current):
 def freeze_input(workflow, state, review):
     """Only original task input and authenticated findings enter the corrective brief."""
     spec = dict(state["task_spec"])
+    reference = feedback_files.findings(workflow.run / "00-input", review)
+    target = reviewed_input.FINDINGS
+    spec["findings_sha256"] = digest(reviewed_artifacts.read(workflow.run, target))
     context = prompt_texts.text(
-        "correction.findings", findings=json.dumps(review, ensure_ascii=False)
+        "correction.findings", path=reference["findings_file"], lines=reference["lines"]
     )
     spec.update(
         requirements=state["requirements"],

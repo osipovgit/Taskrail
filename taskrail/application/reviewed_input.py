@@ -6,6 +6,7 @@ from taskrail.application import child_brief, reviewed_artifacts
 from taskrail.core import prompt_texts, schema, task_spec
 from taskrail.core.files import atomic_json, digest
 
+FINDINGS = "00-input/findings.json"
 REFERENCE = "00-input/reviewed-task-spec.json"
 SIGNATURE = "reviewed_input_sha256"
 REQUIREMENTS = "requirements"
@@ -80,6 +81,12 @@ def restore(workflow):
     )
     spec = json.loads(encoded)
     validate(spec, workflow)
+    expected = spec.get("findings_sha256")
+    if expected is not None:
+        schema.require(
+            digest(reviewed_artifacts.read(workflow.run, FINDINGS)) == expected,
+            "Corrective findings changed; continuation refused",
+        )
     workflow.config[SPEC] = spec
     workflow.config[CANONICAL] = True
     workflow.state[SPEC] = spec

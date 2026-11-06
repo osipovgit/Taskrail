@@ -1,6 +1,6 @@
 """Run-wide state shared by the stage loop and its attempts."""
 
-from taskrail.application import run_store
+from taskrail.application import context_handoff, run_store
 from taskrail.application.artifacts import finish_stage
 from taskrail.application.source_guard import SourceGuard
 from taskrail.core import control
@@ -10,7 +10,7 @@ STAGE = "stage"
 ALLOWED = "allowed"
 ACTIVE = "active"
 PROFILE_SUFFIX = 8
-FLOW_KEYS = (STAGE, "plan", "feedback", ALLOWED, "plan_repairs", "repair_count")
+FLOW_KEYS = (STAGE, "plan", "feedback", ALLOWED)
 
 
 class Workflow:
@@ -23,7 +23,7 @@ class Workflow:
         self.state = state
         self.guard = SourceGuard(config["roots"])
         self.flow = dict.fromkeys(FLOW_KEYS)
-        self.flow.update(stage="planner", allowed=[], plan_repairs=0, repair_count=0)
+        self.flow.update(stage="planner", allowed=[])
         self.runtime = dict(
             debug=request["debug"],
             resumed=bool(request["resume"]),
@@ -47,6 +47,10 @@ class Workflow:
                 task_hash=digest(self.config["task_text"].encode()),
             ),
         )
+
+    def work_version(self):
+        """Work whose checks or independent review can return findings."""
+        return context_handoff.work_version(self)
 
     def writable(self):
         """Only the implementer may change approved files."""

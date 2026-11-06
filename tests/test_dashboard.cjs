@@ -293,7 +293,7 @@ async function main() {
       agent_sha256: 'role-hash',
       contract_sha256: 'contract-hash',
       instruction_sha256: 'request-hash',
-      budget: { attempts_remaining: 1, timeout: 3600 },
+      timeout_seconds: 3600,
       telemetry,
       result: {
         summary: 'Validated',
@@ -615,10 +615,10 @@ async function main() {
   globalThis.scrollTo = () => {};
   app.render({
     id: 'paused',
-    status: 'STAGE_BUDGET_EXCEEDED',
+    status: 'TIMEOUT',
     auto_approve: true,
     draft: { decompose: true, roots: [] },
-    actions: { resume: true, resume_budget: true, delete: true },
+    actions: { resume: true, delete: true },
     task: { text: 'Task' },
     roots: {},
     stages: [],
@@ -626,18 +626,14 @@ async function main() {
     report: { text: '' },
   });
   const buttons = all(nodes.chat).filter((node) => node.tagName === 'button');
-  for (const label of [
-    'Continue from checkpoint',
-    'Continue with extra budget',
-    'Delete from history',
-  ]) {
+  for (const label of ['Continue from checkpoint', 'Delete from history']) {
     assert.equal(buttons.find((node) => node.textContent === label).disabled, false);
   }
   assert.equal(buttons.find((node) => node.textContent === 'Stop task').disabled, true);
   assert.ok(all(nodes.chat).some((node) => node.className === 'resume-note'));
   assert.ok(all(nodes.chat).some((node) => node.textContent === 'All actions allowed'));
   assert.ok(all(nodes.chat).some((node) => node.textContent === 'Mode: Split into tasks'));
-  console.log('Budget continuation and deletion controls passed.');
+  console.log('Checkpoint continuation and deletion controls passed.');
 
   const assigned = {
     ...state.currentRun,
@@ -924,7 +920,7 @@ async function main() {
         role: 'planner',
         status: 'RUNNING',
         started_at: '2026-10-15T00:00:00Z',
-        budget: { timeout: 3600 },
+        timeout_seconds: 3600,
       },
       Date.parse('2026-10-15T00:05:05Z'),
     ),
@@ -998,7 +994,7 @@ async function main() {
       role: 'planner',
       status: 'RESULT_VALID',
       elapsed_seconds: 305,
-      budget: { timeout: 3600 },
+      timeout_seconds: 3600,
     }),
     'planner · 5 min 5 s / 1 h',
   );
@@ -1054,7 +1050,7 @@ async function main() {
     status: 'WAITING_APPROVAL',
     elapsed_seconds: 50,
     paused_seconds: 7200,
-    budget: { timeout: 3600 },
+    timeout_seconds: 3600,
   };
   assert.equal(
     stages.stageClockLabel(waitingStage, Date.now()),

@@ -3,6 +3,7 @@
 from datetime import datetime, timezone
 from types import MappingProxyType
 
+from taskrail.application import feedback_files
 from taskrail.application.stage_console import announce
 from taskrail.core.files import atomic_json
 from taskrail.core.paths import tool_paths
@@ -88,6 +89,10 @@ def finish_stage(run, state, active, outcome):
     announce(record, verdict)
     if verdict is not None:
         atomic_json(path / "result.json", verdict)
+        if record["role"] == "reviewer" and (
+            verdict.get("findings") or verdict.get("blocking_gaps")
+        ):
+            record["review_feedback"] = feedback_files.findings(path, verdict)
     files = [entry.name for entry in path.iterdir() if entry.is_file()]
     record["files"] = sorted(files)
     atomic_json(path / "stage.json", record)

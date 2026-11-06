@@ -20,7 +20,6 @@ def arguments():
     parser.add_argument("run", type=Path)
     parser.add_argument("--settings")
     parser.add_argument("--resume", action="store_true")
-    parser.add_argument("--extend-budget", action="store_true")
     parser.add_argument("--note-file", type=Path)
     return parser.parse_args()
 
@@ -49,7 +48,7 @@ def run_task(args):
     task = args.run / "00-input/task.md" if args.resume else args.submission / "task.md"
     note = args.note_file.read_text(encoding="utf-8") if args.note_file else None
     options = dict(run_dir=args.run, note=note)
-    options["resume"] = "extend" if args.extend_budget else args.resume
+    options["resume"] = args.resume
     status = execute_task(task, args.settings, **options)[1]
     return dict(status=status, summary="Task finished. See the run report.")
 

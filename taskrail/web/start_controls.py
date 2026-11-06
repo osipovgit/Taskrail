@@ -20,7 +20,6 @@ def starts(run, state, activity):
         followup=free and follow_up,
         restart=restart(run, state, activity),
         resume=can_resume and free,
-        resume_budget=can_resume and free,
         resume_reason=reason,
         waiting_for=activity.waiting if blocked else None,
     )

@@ -78,36 +78,46 @@ class EvidenceRepairTests(unittest.TestCase):
         config["task_spec"]["fields"][0]["text"] = "The report.json should be considered."
         self.assertEqual(source_guidance.inputs(config, None, self.run), [])
 
-    def test_repeated_planner_error_does_not_start_fresh_research(self):
-        workflow = SimpleNamespace(flow=dict(stage="planner"), state=dict(stages=[]), config={})
-        retries = Retries(SimpleNamespace(workflow=workflow))
-        outcome = dict(status="INVALID_RESULT", contract_error="Missing evidence")
-        with patch.object(retries, "result_repair", return_value=True) as repair:
-            self.assertTrue(retries.allowed(outcome))
-            repair.assert_called_once()
-            outcome["validation_errors"] = ["Missing evidence"]
-            repair.reset_mock()
-            self.assertFalse(retries.allowed(outcome))
-            repair.assert_not_called()
-            outcome["contract_error"] = "Different defect"
-            self.assertTrue(retries.allowed(outcome))
-
-    def test_an_invalid_review_gets_one_full_attempt_and_the_implementer_none(self):
-        error = "review.md: line 5: R1 needs its reason"
-        for stage, repaired in (("reviewer", True), ("implementer", False)):
+    def test_handoff_tracks_work_and_failure_for_every_role(self):
+        for stage in ("planner", "plan-reviewer", "implementer", "reviewer"):
             with self.subTest(stage=stage):
                 workflow = SimpleNamespace(
                     run=self.run,
                     flow=dict(stage=stage),
-                    state=dict(stages=[dict(directory="01-review")], requirements=[]),
+                    guard=SimpleNamespace(expected={}),
+                    state=dict(stages=[dict(directory="01-stage")]),
                     config={},
                 )
                 attempts = SimpleNamespace(workflow=workflow, request="Original task")
                 retries = Retries(attempts)
-                outcome = dict(status="INVALID_RESULT", contract_error=error, final_text="DONE")
-                self.assertEqual(retries.allowed(outcome), repaired)
-                self.assertEqual(error in attempts.request, repaired)
+                outcome = dict(status="INVALID_RESULT", contract_error="Missing evidence")
+                self.assertTrue(retries.allowed(outcome))
+                self.assertIn("Missing evidence", attempts.request)
                 self.assertFalse(retries.allowed(outcome))
+                workflow.guard.expected["project/Main.java"] = "edited"
+                self.assertTrue(retries.allowed(outcome))
+                outcome["contract_error"] = "Different defect"
+                self.assertTrue(retries.allowed(outcome))
+
+    def test_context_rotation_tracks_new_source_windows_without_spending_transport_retries(self):
+        workflow = SimpleNamespace(
+            run=self.run,
+            flow=dict(stage="reviewer"),
+            guard=SimpleNamespace(expected={}),
+            config=dict(transport_retries=0),
+            state=dict(stages=[dict(directory="02-review")]),
+        )
+        attempts = SimpleNamespace(workflow=workflow, request="Review")
+        retries = Retries(attempts)
+        overflow = dict(status="CONTEXT_EXCEEDED")
+        record = dict(input=dict(filePath=str(self.source)), source_sha256="hash", tool="read")
+        for line in range(1, 11):
+            record["output"] = f"{line}: confirmed source"
+            with patch.object(evidence, "validation_records", return_value=[record]):
+                self.assertTrue(retries.allowed(overflow))
+        with patch.object(evidence, "validation_records", return_value=[record]):
+            self.assertFalse(retries.allowed(overflow))
+        self.assertFalse(retries.allowed(dict(status="PROCESS_ERROR")))
 
     def test_repeated_ranges_prepare_each_source_view_once(self):
         second = self.root / "other.json"

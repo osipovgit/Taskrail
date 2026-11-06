@@ -105,15 +105,10 @@ class NativeFailureTests(unittest.TestCase):
             permission=True,
             tool_errors=[dict(tool="write", error="PermissionDeniedError")],
         )
-        self.assertTrue(turn_recovery.eligible(outcome, {}))
+        self.assertTrue(turn_recovery.eligible(outcome))
         for status in ("OK", "SCOPE_VIOLATION", "TIMEOUT", "CONTEXT_EXCEEDED", "SESSION_ERROR"):
-            self.assertFalse(turn_recovery.eligible(dict(outcome, status=status), {}))
-        self.assertFalse(turn_recovery.eligible(dict(outcome, sessions=[]), {}))
-        self.assertFalse(
-            turn_recovery.eligible(
-                dict(outcome, provider_limit=True), dict(stop_on_provider_limit=True)
-            )
-        )
+            self.assertFalse(turn_recovery.eligible(dict(outcome, status=status)))
+        self.assertFalse(turn_recovery.eligible(dict(outcome, sessions=[])))
 
     def test_repeated_interruptions_are_bounded_but_artifact_progress_can_continue(self):
         with tempfile.TemporaryDirectory() as temporary:

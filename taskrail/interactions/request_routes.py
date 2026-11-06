@@ -4,11 +4,16 @@ from types import MappingProxyType
 
 from taskrail.core import prompt_texts
 from taskrail.git.deadline import Deadline
-from taskrail.interactions import events, jenkins, local_route, remote, request_envelope
+from taskrail.interactions import (
+    events,
+    jenkins,
+    local_route,
+    remote,
+    request_envelope,
+    request_limits,
+    turn_recovery,
+)
 
-# Corrections in a row; a valid request resets the count.
-MAX_CORRECTIONS = 3
-CORRECTIONS = "corrections"
 RESPONSE = "final_text"
 
 
@@ -22,7 +27,10 @@ def route(actions, outcome):
         payload = request_envelope.parsed(kind, text)
     except ValueError as error:
         return rejected_request(actions, outcome, kind, error)
-    actions.session.context[CORRECTIONS] = 0
+    if kind in {request_envelope.LOCAL, request_envelope.GIT} and request_limits.check(
+        actions.session, outcome, payload
+    ):
+        return None
     return ROUTES[kind](actions, outcome, payload)
 
 
@@ -65,11 +73,9 @@ def rejected_request(actions, outcome, kind, error):
     After MAX_CORRECTIONS in a row the turn ends as an invalid result, like any other
     unusable response.
     """
-    context = actions.session.context
-    if context[CORRECTIONS] >= MAX_CORRECTIONS:
+    if turn_recovery.repeated_feedback(actions.session, kind, str(error)):
         outcome.update(status="INVALID_RESULT", contract_error=f"{kind} rejected: {error}")
         return None
-    context[CORRECTIONS] += 1
     feedback = prompt_texts.text("feedback.rejected_request", status=kind, error=error)
     events.correction(actions.session, "request", outcome[RESPONSE], feedback)
     return feedback

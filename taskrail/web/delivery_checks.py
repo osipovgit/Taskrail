@@ -9,6 +9,7 @@ import json
 import re
 from types import MappingProxyType
 
+from taskrail.core.plan_document import NO_CHECKS
 from taskrail.web.history import read_artifact
 
 PREFIX = re.compile(r"\s*(jenkins|server)\s+check\s*:\s*(.+)", re.IGNORECASE | re.DOTALL)
@@ -31,9 +32,10 @@ def written(run, state):
     found = dict(jenkins=[], server=[])
     for entry in planned(run, state):
         match = PREFIX.fullmatch(entry)
-        if match:
+        if match and not NO_CHECKS.match(entry):
             kind, check = match.groups()
-            found[kind.lower()].append(check.strip())
+            if kind.lower() != "jenkins" or state.get("jenkins_configured"):
+                found[kind.lower()].append(check.strip())
     found["server"].extend(runtime_checks(state))
     return found
 

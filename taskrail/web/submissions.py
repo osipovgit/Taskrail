@@ -93,7 +93,7 @@ class TaskLauncher:
         if action in run_records.ACTIONS:
             return run_records.record(self, run, payload)
         lifecycle.require_resumable(run)
-        launch = continuation(run, action == "resume_budget", payload.get("note"))
+        launch = continuation(run, payload.get("note"))
         return self.launch(launch, run_sources(run))
 
     def delete(self, run):
@@ -120,18 +120,17 @@ class TaskLauncher:
             folder, manifest = create_submission(self.base, launch)
             announce(folder, manifest, launch.get("before_start"))
             run = self.base / manifest[ID]
-            extended = bool(launch.get("extend_budget"))
-            process = start_worker(folder, manifest, run, (self.settings, extended))
+            process = start_worker(folder, manifest, run, self.settings)
             if process is not None:
                 self.workers[run] = (process, [str(source) for source in sources])
             return dict(id=manifest[ID], status=manifest["status"])
 
 
-def continuation(run, extended, note):
+def continuation(run, note):
     """A launch that continues an existing run from its checkpoint."""
     text = (run / "00-input/task.md").read_text(encoding="utf-8")
     title = history.TaskDraft(text).title(run.name)
-    return dict(text=text, title=title, resume_run=run, extend_budget=extended, note=note)
+    return dict(text=text, title=title, resume_run=run, note=note)
 
 
 def create_submission(base, launch):
@@ -163,10 +162,9 @@ def create_submission(base, launch):
     return folder, manifest
 
 
-def start_worker(folder, manifest, run, options):
+def start_worker(folder, manifest, run, settings):
     """The worker process, or None after recording a launch error."""
-    settings, extended = options
-    argv = worker_command(folder, run, settings, manifest["resume"], extended)
+    argv = worker_command(folder, run, settings, manifest["resume"])
     try:
         with folder.joinpath("console.log").open("wb") as output:
             process = subprocess.Popen(
@@ -194,13 +192,11 @@ def worker_environment():
     return environment
 
 
-def worker_command(folder, run, settings, resumed, extended):
+def worker_command(folder, run, settings, resumed):
     """Build trusted flags; neither task text nor model output controls commands."""
     argv = [sys.executable, "-m", "taskrail.web.worker", str(folder), str(run)]
     if resumed:
         argv.append("--resume")
-    if extended:
-        argv.append("--extend-budget")
     if (folder / "note.md").is_file():
         argv.extend(["--note-file", str(folder / "note.md")])
     if settings.exists():

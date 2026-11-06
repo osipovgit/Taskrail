@@ -54,7 +54,7 @@ class RecoveryPathTests(unittest.TestCase):
         inputs = self.run / "00-input"
         inputs.mkdir()
         settings = inputs / "settings.json"
-        settings.write_text(json.dumps(dict(max_repairs=2)))
+        settings.write_text(json.dumps(dict(max_integration_corrections=2)))
         self.assertEqual(correction_state.budget(self.run), 2)
         settings.unlink()
         settings.symlink_to(self.outside / "missing.json")
@@ -63,7 +63,7 @@ class RecoveryPathTests(unittest.TestCase):
 
     def test_correction_budget_rejects_intermediate_authority_aliases(self):
         settings = self.outside / "settings.json"
-        settings.write_text(json.dumps(dict(max_repairs=5)))
+        settings.write_text(json.dumps(dict(max_integration_corrections=5)))
         (self.run / "00-input").symlink_to(self.outside, target_is_directory=True)
         with self.assertRaises(ValueError):
             correction_state.budget(self.run)
@@ -71,7 +71,7 @@ class RecoveryPathTests(unittest.TestCase):
     def test_correction_budget_rejects_in_run_settings_aliases(self):
         local = self.run / "saved-inputs"
         local.mkdir()
-        (local / "settings.json").write_text(json.dumps(dict(max_repairs=5)))
+        (local / "settings.json").write_text(json.dumps(dict(max_integration_corrections=5)))
         (self.run / "00-input").symlink_to(local, target_is_directory=True)
         with self.assertRaises(ValueError):
             correction_state.budget(self.run)

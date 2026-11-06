@@ -94,7 +94,6 @@ def index_view(state, stages):
         started_at=state.get(STARTED) or first_stage,
         finished_at=state.get("finished_at"),
         server_time=clock(),
-        monitoring=state.get("monitoring", {}),
         execution_jobs=state.get("execution_jobs", []),
         requirements=state.get("requirements", []),
         status=state.get("status"),

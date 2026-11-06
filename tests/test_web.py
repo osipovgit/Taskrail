@@ -30,7 +30,9 @@ class DashboardTests(unittest.TestCase):
             )
         )
         self.index.write_text(json.dumps(state))
-        (self.run / "00-input/settings.json").write_text(json.dumps(dict(max_repairs=0)))
+        (self.run / "00-input/settings.json").write_text(
+            json.dumps(dict(max_integration_corrections=0))
+        )
         self.events = self.run / "01-plan/events.jsonl"
         self.events.write_text(
             json.dumps(dict(type="text", part=dict(id="one", text="Reading files"))) + '\n{"type":'

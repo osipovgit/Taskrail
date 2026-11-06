@@ -114,10 +114,9 @@ class SessionBudgetTests(unittest.TestCase):
             with self.subTest(stage=stage):
                 files = [str(self.root / artifact)]
                 active = (self.root, dict(role=role, stage=stage, writable_files=files))
-                launch = launch_options(workflow, active, 100000)
+                launch = launch_options(workflow, active)
                 self.assertIs(launch["runtime"]["autocompact"], False)
                 self.assertEqual(launch["runtime"]["context_budget"], 86016)
-                self.assertEqual(launch["runtime"]["token_budget"], 100000)
                 plan_file = str(self.root / "plan.md")
                 expected = plan_file if role == "planner" else None
                 self.assertEqual(launch["runtime"]["plan_file"], expected)
@@ -127,28 +126,24 @@ class SessionBudgetTests(unittest.TestCase):
         telemetry = Telemetry()
         telemetry.observe(json.dumps(usage("first", 600, total=2000)))
         telemetry.observe(json.dumps(usage("second", 700, total=2000)))
-        self.assertEqual(usage_limits.exceeded(telemetry, None, 1000), "OK")
-        self.assertEqual(usage_limits.exceeded(telemetry, 4000, 1000), "TOKEN_BUDGET_EXCEEDED")
+        self.assertEqual(usage_limits.exceeded(telemetry, 1000), "OK")
         latest = usage("third", 700, cached=200)
         latest["part"]["tokens"]["cache"]["write"] = 100
         telemetry.observe(json.dumps(latest))
         self.assertEqual(telemetry.summary()["last_input"], 1000)
-        self.assertEqual(usage_limits.exceeded(telemetry, None, 1000), "CONTEXT_EXCEEDED")
+        self.assertEqual(usage_limits.exceeded(telemetry, 1000), "CONTEXT_EXCEEDED")
 
     def test_unreported_usage_does_not_claim_zero_input(self):
         telemetry = Telemetry()
         telemetry.observe(json.dumps(dict(type="step_finish", part=dict(id="unknown"))))
         self.assertIsNone(telemetry.summary()["last_input"])
-        self.assertEqual(usage_limits.exceeded(telemetry, None, 1000), "OK")
+        self.assertEqual(usage_limits.exceeded(telemetry, 1000), "OK")
 
     def test_completion_exempts_only_context_reserve_not_total_budget(self):
         telemetry = Telemetry()
         telemetry.observe(json.dumps(usage("last", 1000, total=2000)))
-        self.assertEqual(usage_limits.exceeded(telemetry, None, 1000, completed=True), "OK")
-        self.assertEqual(
-            usage_limits.exceeded(telemetry, 2000, 1000, completed=True), "TOKEN_BUDGET_EXCEEDED"
-        )
-        self.assertEqual(usage_limits.exceeded(telemetry, None, 1000), "CONTEXT_EXCEEDED")
+        self.assertEqual(usage_limits.exceeded(telemetry, 1000, completed=True), "OK")
+        self.assertEqual(usage_limits.exceeded(telemetry, 1000), "CONTEXT_EXCEEDED")
 
     def test_compaction_markers_stop_even_without_provider_usage(self):
         for event in (
@@ -161,11 +156,11 @@ class SessionBudgetTests(unittest.TestCase):
                 telemetry.observe(json.dumps(event))
                 self.assertEqual(usage_limits.exceeded(telemetry, None), "CONTEXT_EXCEEDED")
 
-    def test_runtime_stops_before_reserve_is_spent(self):
+    def test_running_turn_can_finish_after_crossing_the_reserve(self):
         outcome = self.run_script(usage("occupied", 700, cached=300), pause=True)
         self.assertEqual(outcome["status"], "CONTEXT_EXCEEDED")
         self.assertIn("1000 reported input tokens", outcome["errors"][0])
-        self.assertLess(outcome["elapsed_seconds"], 5)
+        self.assertTrue((self.root / "finished").is_file())
 
     def test_final_partial_event_is_checked_after_clean_exit(self):
         for index, event in enumerate(
@@ -252,7 +247,8 @@ class SessionBudgetTests(unittest.TestCase):
         script.write_text(
             "import sys, time\n"
             f"sys.stdout.write({json.dumps(event) + ending!r})\n"
-            "sys.stdout.flush()\n" + ("time.sleep(10)\n" if pause else "")
+            "sys.stdout.flush()\n"
+            + ("time.sleep(0.5)\nopen('finished', 'w').close()\n" if pause else "")
         )
         prompt = self.root / "task.md"
         prompt.write_text("Test")

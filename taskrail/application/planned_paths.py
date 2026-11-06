@@ -58,3 +58,9 @@ def check_target(path, name):
         raise ValueError(f"Planned path is not a regular file: {name}")
     if path.exists() and path.stat().st_nlink != 1:
         raise ValueError(f"Hard-linked files cannot be edited: {name}")
+
+
+def git_files(workflow):
+    """Exact, currently authorized files; native directory grants never authorize Git."""
+    protected = protected_paths.patterns(workflow.config)
+    return [safe_file(name, workflow.config["roots"], protected) for name in workflow.writable()]

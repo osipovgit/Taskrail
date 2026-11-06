@@ -7,7 +7,6 @@ from taskrail.infrastructure import (
     context_overflow,
     native_tools,
     opencode_cli,
-    provider_limits,
     turn_io,
 )
 
@@ -132,7 +131,6 @@ class EventSummary:
             errors=self.failures[ERRORS],
             tool_errors=self.failures["tool_errors"],
             permission=self.failures["permission"],
-            provider_limit=provider_limits.reached(self.failures[ERRORS]),
             provider_context_exceeded=context_overflow.exceeded(
                 [entry[ERROR] for entry in self.failures["session"]]
             ),

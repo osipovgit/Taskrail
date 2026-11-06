@@ -1,8 +1,8 @@
-# Monitoring and budgets
+# Monitoring and recovery
 
 The UI shows public messages, tool calls, conclusions, source evidence and per-stage
 usage. It does not expose hidden reasoning. The right sidebar summarizes elapsed
-time and observed tokens; stage cards show time allowances and instruction provenance.
+time and observed tokens; stage cards show steering timeouts and instruction provenance.
 
 | Metric | Meaning |
 |---|---|
@@ -16,44 +16,21 @@ time and observed tokens; stage cards show time allowances and instruction prove
 
 Missing usage means **unknown**, not zero. The stage context percentage compares
 provider-reported input with the configured reserved capacity; no byte estimate or
-cumulative spend supplies a missing observation. Cost currency/rates are not
-verified. Provider quotas, not these counters, enforce billing limits.
+cumulative usage supplies a missing observation. Duration, launches, token usage and
+tool calls remain available for diagnostics.
 
-A provider-completed answer is validated even when its last input crosses the reserved
-boundary. The reserve prevents another generation in that session; it does not discard
-an already completed plan or review. Unfinished steps still stop at the boundary.
-Provider context errors, compaction, permission denials and total token limits remain
-hard stops. A completion event alone never approves the saved artifact.
+## Recovery settings
 
-## Server settings
+| Setting | Default | Effect |
+|---|---:|---|
+| `timeout_seconds` | 3600 | Active model-stage time before pausing for steering. Operator approval waits pause its clock. |
+| `transport_retries` | 3 | Fresh sessions after broken transport. Context rotation and corrections have independent progress checks. |
+| `max_integration_corrections` | 3 | New full-cycle correction tasks for one rejected integration. Zero disables them. |
+| `model_context_tokens`, `context_reserve_tokens` | 94208, 8192 | Per-model window and headroom. See [context limits](deployment.md#context-limits). |
 
-Edit `~/.config/taskrail/settings.json` (or the explicit `--settings` file). The
-opencode command, models and profile directory are described in
-[deployment](deployment.md#opencode). Budget settings:
-
-```json
-{
-  "timeout_seconds": 3600,
-  "stage_timeout_seconds": 14400,
-  "max_stage_attempts": 6,
-  "read_retries": 3,
-  "max_repairs": 3,
-  "max_observed_tokens": 0
-}
-```
-
-`timeout_seconds` bounds one attempt. `stage_timeout_seconds` and
-`max_stage_attempts` bound one stage; its active time and launches are shared across
-retries, repair and Continue. The run token limit is separate; zero disables
-that limit. `budgets.json` reserves launches before spawning and records measured
-elapsed time afterward. A hard crash without a duration retains the reserved time
-conservatively. Explicit setting increases and UI continuation grants are recorded; Continue never
-resets usage. **Continue with extra budget** adds a stage allowance after confirmation,
-without increasing the run token cap. See [task controls](task-controls.md).
-
-An interrupted writer is never automatically replayed. A source-compatible
-checkpoint can be continued explicitly after reviewing the reason and allowances.
-Cumulative usage has no warning threshold. Counters are for comparison, not context occupancy.
+After a timeout use **Continue from checkpoint**. The operator can add a note, and
+the failed stage receives fresh time and retry counters. Previously accepted stages
+and verified file changes are retained. See [task controls](task-controls.md).
 
 ## Analytics
 
@@ -78,7 +55,7 @@ usage is reported as zero tokens, so compare models only on runs with telemetry.
 | `plan.md`, `NN-plan/plan.md` | The planner's plan file, and the copy each planning attempt accepted |
 | `00-input/project-map.md` | Files, landmarks and requirement hints the server wrote before planning |
 | `evidence.json`, `recovery.md` | Source-versioned recovery data; clipping stays explicit |
-| `budgets.json` | Durable reservations, consumption and allowance changes |
+| `findings.json`, `validation.json`, `handoff.md` | Pageable review feedback, long validation errors and saved public session notes |
 | `changes.diff`, `report.md` | Actual edits and human review report |
 | `NN-check/verify-NN.log` | Output of a settings verification command |
 
@@ -87,16 +64,10 @@ keeps bounded source reads (up to 60 records / 240,000 characters); clipped data
 not complete evidence. Current source hashes invalidate obsolete records. The UI
 shows the latest 300 public events; raw JSONL retains the complete captured stream.
 
-For diagnostics, share the run index/report and affected stage, plus budgets and
-evidence for retry issues. Redact secrets and sensitive source before sharing.
-
-`max_repairs` (default 3, at most 5) limits plan repairs after plan review and repair
-cycles after failed checks or result review; an invalid plan or review gets at most one
-full attempt. A split also uses its frozen `max_repairs` as the total number of fresh
-integration correction tasks. Their individual attempts remain subject to ordinary
-stage budgets. The delivery graph shows each correction and the remaining count;
-an unfinished writer or exhausted count stops automatic correction.
-`read_retries` (default 3, at most 3) limits read-only research retries. Tool calls remain diagnostic metrics.
+For diagnostics, share the affected stage, run report and evidence for the failed
+claim. A repair returns all outstanding findings together. A changed plan, changed
+source or changed set of findings merits another review. When the same work and set
+recur, the writer receives different-strategy guidance before a no-progress stop.
 
 Polling continues while text is selected, but DOM updates pause during a pointer
 drag or a nonempty text selection. Clear the selection to display fresh data on
@@ -135,8 +106,7 @@ Without a report, the card shows `Context unknown` and its capacity. Reports arr
 at step ends, so a running step retains the latest measured value until another
 report arrives. Repeated turns can increase cumulative usage without increasing the
 latest input by the same amount; cumulative totals and source bytes never determine
-this percentage or a context stop. Historical byte-based estimates are ignored. The launch
-counter is retained internally for recovery control but is not displayed in stage cards.
+this percentage or a context stop. Historical byte-based estimates are ignored. Launch counts are diagnostic.
 
 Git/local executor operations appear in the activity log as tool calls. They retain
 one stage ID, session ID and cumulative active-time limit. Operator approval pauses

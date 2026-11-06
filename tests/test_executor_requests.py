@@ -20,6 +20,7 @@ from taskrail.interactions import (
     request_envelope,
     request_routes,
 )
+from taskrail.interactions.turn_recovery import MAX_STALLS
 
 ACTION = dict(targets=["web"], script="uptime\n", files={}, reason="Check", timeout_seconds=30)
 
@@ -50,11 +51,16 @@ class RequestEnvelopeTests(unittest.TestCase):
 
 
 class InspectingStageTests(unittest.TestCase):
-    def test_corrections_are_counted_in_a_row_and_a_valid_request_resets_them(self):
+    def test_only_changed_work_resets_feedback_for_the_same_invalid_request(self):
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
         folder = Path(temporary.name)
-        session = SimpleNamespace(context=dict(corrections=0), active=(folder, {}))
+        session = SimpleNamespace(
+            context=dict(corrections=0),
+            active=(folder, {"stage": "planner"}),
+            environment=dict(expected={}, run=folder),
+            launch={},
+        )
         router = SimpleNamespace(session=session, folder=folder)
         bad = dict(status="OK", final_text='{"schema_version":1,"status":"GIT_REQUEST"}')
         valid = dict(
@@ -62,16 +68,17 @@ class InspectingStageTests(unittest.TestCase):
         )
         good = dict(status="OK", final_text=json.dumps(valid))
         with patch.object(request_routes, "ROUTES", {request_envelope.GIT: lambda *_: "ran"}):
-            for _ in range(request_routes.MAX_CORRECTIONS):
+            for _ in range(MAX_STALLS):
                 self.assertIn("rejected before anything ran", request_routes.route(router, bad))
             self.assertEqual(request_routes.route(router, good), "ran")
+            session.environment["expected"]["project/Main.java"] = "updated"
             self.assertIn("rejected before anything ran", request_routes.route(router, bad))
-            for _ in range(request_routes.MAX_CORRECTIONS - 1):
+            for _ in range(MAX_STALLS - 1):
                 request_routes.route(router, bad)
             self.assertIsNone(request_routes.route(router, bad))
         self.assertEqual(bad["status"], "INVALID_RESULT")
         reasons = session.context["rejections"]
-        self.assertEqual(len(reasons), 2 * request_routes.MAX_CORRECTIONS)
+        self.assertEqual(len(reasons), 2 * MAX_STALLS)
         self.assertEqual(reasons[0]["kind"], "request")
         self.assertIn("rejected before anything ran", reasons[0]["reason"])
 

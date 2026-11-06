@@ -56,15 +56,17 @@ class RepeatedFailureTests(unittest.TestCase):
     def test_run_specific_output_does_not_make_failures_differ(self):
         earlier = self.failing("exit 1; evidence /r/1.json; output tail:\n1 failed in 0.53s")
         now = self.failing("exit 1; evidence /r/2.json; output tail:\n1 failed in 0.61s")
-        self.assertTrue(check_repeats.repeated(dict(checks=earlier), now))
+        self.assertEqual(check_repeats.failures(earlier), check_repeats.failures(now))
 
     def test_a_different_failure_a_timeout_or_review_feedback_keeps_repairing(self):
         earlier = self.failing("line 3: invalid syntax")
-        self.assertFalse(check_repeats.repeated(dict(checks=earlier), self.failing("line 4")))
+        self.assertNotEqual(
+            check_repeats.failures(earlier), check_repeats.failures(self.failing("line 4"))
+        )
         timeout = self.failing("Local command timed out; inspect effects before retry")
-        self.assertFalse(check_repeats.repeated(dict(checks=timeout), timeout))
-        self.assertFalse(check_repeats.repeated(dict(findings=[]), earlier))
-        self.assertFalse(check_repeats.repeated(None, earlier))
+        self.assertNotEqual(
+            check_repeats.failures(timeout + earlier), check_repeats.failures(timeout)
+        )
 
 
 if __name__ == "__main__":

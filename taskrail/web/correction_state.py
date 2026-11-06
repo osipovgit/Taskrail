@@ -39,7 +39,7 @@ def entry(run, record, number):
 def attach(delivery, run, epic):
     """An unresolved corrective writer blocks new corrections but remains resumable."""
     completed = delivery[corrections.KEY]
-    remaining = max(0, budget(run) - len(completed))
+    remaining = remaining_corrections(run, delivery)
     delivery["corrections_remaining"] = remaining
     review = delivery["phases"].get("integration", {})
     settled = all(entry[STATUS] in epic_tasks.FINISHED for entry in completed)
@@ -50,6 +50,13 @@ def attach(delivery, run, epic):
         and review.get(STATUS) == "CHANGES_REQUESTED"
         and review.get("run") not in handled
     )
+
+
+def remaining_corrections(run, delivery):
+    """Standalone deliveries cannot create integration corrections."""
+    if "tasks" not in delivery:
+        return 0
+    return max(0, budget(run) - len(delivery[corrections.KEY]))
 
 
 def step(delivery):

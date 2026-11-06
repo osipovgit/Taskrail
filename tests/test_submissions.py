@@ -255,7 +255,7 @@ class ApprovalHttpTests(unittest.TestCase):
         )
         (run / "00-input").mkdir()
         (run / "00-input/task.md").write_text("# Approval task\nInspect Python version")
-        (run / "00-input/settings.json").write_text(json.dumps(dict(max_repairs=0)))
+        (run / "00-input/settings.json").write_text(json.dumps(dict(max_integration_corrections=0)))
         pending = dict(ticket="exact-ticket", request=dict(argv=["python3", "--version"]))
         (run / "pending-approval.json").write_text(json.dumps(pending))
         url, headers = self.start_server()

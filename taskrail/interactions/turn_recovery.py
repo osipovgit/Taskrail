@@ -4,6 +4,7 @@ import json
 import time
 from pathlib import Path
 
+from taskrail.application.context_handoff import research
 from taskrail.core import control, prompt_texts
 from taskrail.core.files import digest, stream_digest
 from taskrail.interactions import events
@@ -16,7 +17,7 @@ INTERRUPTED = frozenset(("TURN_ERROR", "PROCESS_ERROR", "INCOMPLETE"))
 
 def response(session, outcome):
     """Native tools recover inside opencode; only a broken turn needs another message."""
-    if not eligible(outcome, session.environment.get("config", {})):
+    if not eligible(outcome):
         return None
     diagnostics = details(outcome)
     count = stalled_turns(session, diagnostics)
@@ -36,11 +37,10 @@ def response(session, outcome):
     return feedback
 
 
-def eligible(outcome, config):
+def eligible(outcome):
     """A unique existing session can inspect its changes; authority and budgets persist."""
-    stopped = outcome.get("provider_limit") and config.get("stop_on_provider_limit")
     sessions = outcome.get("sessions", [])
-    return outcome["status"] in INTERRUPTED and not stopped and len(sessions) == 1
+    return outcome["status"] in INTERRUPTED and len(sessions) == 1
 
 
 def details(outcome):
@@ -78,6 +78,16 @@ def progress(session):
         if path.is_file():
             snapshot[str(path)] = stream_digest(path)
     return snapshot
+
+
+def repeated_feedback(session, kind, error):
+    """Only identical feedback on the same artifact and source consumes a repeat."""
+    observed = research(session.environment["run"])
+    details = (kind, error, progress(session), observed)
+    signature = digest(json.dumps(details, sort_keys=True).encode())
+    repeated = session.context.setdefault("feedback_repeats", {})
+    repeated[signature] = repeated.get(signature, 0) + 1
+    return repeated[signature] > MAX_STALLS
 
 
 def stalled_turns(session, diagnostics):

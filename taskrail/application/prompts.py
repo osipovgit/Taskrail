@@ -6,7 +6,6 @@ and response format) and the Context JSON. Every model-facing text comes from th
 frozen policy and prompt catalog.
 """
 
-import json
 from pathlib import Path
 
 from taskrail.application import (
@@ -20,32 +19,13 @@ from taskrail.application import (
     workspace_paths,
 )
 from taskrail.application.context_projection import request_context, task_text
+from taskrail.application.feedback_files import context_json
 from taskrail.core import prompt_texts
 from taskrail.git import requests as git_requests
 from taskrail.interactions import local
 
-CONTEXT_LINE_LIMIT = 800
-CHUNK_SIZE = 500
 POLICY = Path(__file__).with_name("policy.md").read_text()
 INSTRUCTIONS_HEADING = "# Orchestrator instructions"
-
-
-def readable_context(payload):
-    """Preserve complete text without exceeding opencode's per-line read limit."""
-    if isinstance(payload, str) and len(payload) > CONTEXT_LINE_LIMIT:
-        offsets = range(0, len(payload), CHUNK_SIZE)
-        chunks = [payload[offset : offset + CHUNK_SIZE] for offset in offsets]
-        return {"text_chunks": chunks}
-    if isinstance(payload, dict):
-        return {key: readable_context(entry) for key, entry in payload.items()}
-    if isinstance(payload, list):
-        return [readable_context(entry) for entry in payload]
-    return payload
-
-
-def context_json(payload):
-    """Context as JSON with one-space indentation: one value per line, few spaces."""
-    return json.dumps(readable_context(payload), ensure_ascii=False, indent=1)
 
 
 def make_request(config, execution, state, run):
@@ -54,6 +34,8 @@ def make_request(config, execution, state, run):
     frozen = instruction_sources.freeze_contract(run, POLICY, state)
     stage = execution[0]
     catalog = execution_requests.available()
+    if not catalog.get("unavailable"):
+        state["jenkins_configured"] = bool(catalog.get("jenkins"))
     task = task_text(config, run, state.get("requirements", []))
     parts = (
         policy_sections.for_stage(frozen["policy"], stage),

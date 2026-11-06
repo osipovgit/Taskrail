@@ -56,6 +56,9 @@ def summarize(watch, process, options):
     outcome = parse_events(turn.path, len(turn.previous.splitlines()))
     if status == context_overflow.STATUS:
         usage_limits.explain(outcome, watch.telemetry, turn.budgets["context_budget"])
+    outcome["context_boundary"] = bool(
+        usage_limits.context_reason(watch.telemetry, turn.budgets["context_budget"])
+    )
     stderr = turn.error_text()
     if code != 0 and stderr.strip():
         outcome["errors"].append(stderr[-STDERR_LIMIT:])

@@ -84,7 +84,7 @@ export function stageProvenance(parent, stage) {
   );
 }
 export function stageClockLabel(stage, now = Date.now()) {
-  const limit = stage.budget?.timeout;
+  const limit = stage.timeout_seconds;
   const running = stage.status === 'RUNNING';
   const started = new Date(stage.started_at).getTime();
   const elapsed =

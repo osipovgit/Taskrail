@@ -56,3 +56,9 @@ def confirm(run, folder, prompt, outcome, expected=None):
     index = evidence.load_index(run, evidence.OBSERVATIONS)
     index[evidence.RECORDS].extend(records)
     atomic_json(run / evidence.OBSERVATIONS, index)
+
+
+def pending_text(folder):
+    """Forward only prepared source packets alongside a pageable validation report."""
+    records = evidence.load_index(folder, PENDING)[evidence.RECORDS]
+    return "\n".join(entry["text"] for entry in records)

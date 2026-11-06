@@ -7,10 +7,9 @@
 | Restart from scratch (standalone run) | Stopped run | Open the prefilled task form; submit explicitly to create a new run once no run is active on its projects |
 | Restart reviewed task (split child) | Latest attempt of the next unfinished task; no active writer | Start a linked attempt from the approved parent plan, directly at implementation; preserve previous edits and original preimages |
 | Restart this phase (integration review, Jenkins validation, server checks) | Latest stopped attempt of the phase | Start the phase again under the same delivery; the earlier run stays one of its attempts |
-| Correct integration findings | Rejected integration, no unfinished correction, remaining repair budget | Start a fresh linked task with planning, plan review, implementation, local checks and result review; owned isolated branches also receive a verified commit |
+| Correct integration findings | Rejected integration, no unfinished correction, remaining integration corrections | Start a fresh linked task with planning, plan review, implementation, local checks and result review; owned isolated branches also receive a verified commit |
 | Stop task | Running | Write a stop request; the worker cleans up opencode and saves an interruption checkpoint |
-| Continue with extra budget | Eligible checkpoint; explicit confirmation | Add two attempts and one attempt timeout to the interrupted stage; retain consumption |
-| Continue interrupted run | Eligible checkpoint, unchanged source, no active run on its projects | Append new attempts to the same run, starting at the interrupted stage; a stage that reported **Blocked** can continue too, with your note answering its question; an interrupted or blocked implementer first inspects its existing edits |
+| Continue from checkpoint | Eligible checkpoint, unchanged source, no active run on its projects | Append new attempts to the same run, starting at the interrupted stage; a stage that reported **Blocked** can continue too, with your note answering its question; an interrupted or blocked implementer first inspects its existing edits |
 | Send a follow-up Goal | Previous standalone run stopped, no active run on its projects | Snapshot prior public evidence and start a new run from planning; a task or phase run has no follow-up, use Continue with a note or a follow-up of its parent |
 | Answer only | New or follow-up submission | Research and independent review, no implementation; the reviewed answer opens the report and is the `answer` of `taskrail status` |
 | Design discussion | New or follow-up submission | Like Answer only, but the reviewed summary is a design document, saved as `design.md`; follow-ups refine it, a **Develop** follow-up implements it |
@@ -47,12 +46,12 @@ for plan and review rules, [task format](task-format.md#worktree-isolation) for 
 and file scope, and [checks](checks.md) for executable acceptance.
 
 Rejected integration may start one correction per rejected review, bounded by the
-parent's frozen `max_repairs`. A correction plans, receives plan review, implements,
+parent's frozen `max_integration_corrections`. A correction plans, receives plan review, implements,
 checks and receives result review; owned task branches also get verified commits.
 Success starts another integration review. Auto-continue controls both automatic
 correction and repeat review. Failed or interrupted corrections require inspection:
 eligible Continue is available, but corrective writers cannot Restart. Unresolved
-Git writes block delivery. Exhausted repair budget requires operator attention.
+Git writes block delivery. After the configured number of integration corrections, the delivery waits for the operator.
 New local catalog checks are allowed; new remote bindings require parent replanning.
 
 Planned Jenkins validation follows integration. Planned server checks wait for
@@ -114,9 +113,7 @@ history part is larger than 24,000 bytes, stage prompts show the current task, t
 latest earlier turn's goal and summary (each clipped to 2,000 characters, marked) and
 the path of `00-input/history.md`. That file starts with an index of the turns and
 the line ranges of their goal, summary, task, conclusions and diff, so the model reads
-only the sections it needs. Smaller histories stay inline unchanged. Usage
-monitoring applies to the selected run; each new turn starts a fresh configured
-budget, unlike checkpoint continuation.
+only the sections it needs. Smaller histories stay inline unchanged. Usage is recorded per run.
 
 For a question, choose the **Answer only** mode. This sets server-generated `read_only`
 metadata as well as instructions. Nonempty steps or proposed change paths are
@@ -142,9 +139,7 @@ A child turn retains its snapshotted context even if its ancestor is removed.
 
 Same-origin and CSRF-token checks apply to every mutation (`POST /api/tasks`,
 `/api/actions`, `/api/decision`). `/api/actions` accepts
-`{"id":"run-id","action":"restart|resume|resume_budget|stop|delete"}`, and a
-continuation may add `"note"`; `resume_budget`
-is **Continue with extra budget**. Restart returns a `draft` for a standalone run,
+`{"id":"run-id","action":"restart|resume|stop|delete"}`, and a continuation may add `"note"`. Restart returns a `draft` for a standalone run,
 launches a linked attempt for an eligible split child, integration, validation or server phase,
 and refuses corrective writers. `/api/tasks` accepts the task fields plus the booleans `read_only`,
 `worktree`, `design` and `auto_approve`, and optionally `parent_run` with `submission_mode`
@@ -194,26 +189,13 @@ Git and approved local requests resume the same provider session; a missing or c
 session ID stops continuation. `local-actions.json` records argv, approval, source
 snapshot and environment identity before execution. UNKNOWN actions cannot run again
 merely because their reason changed or the task continued.
-Intermediate requests are bounded to 100 per stage round and three identical
-local/Git requests against unchanged source. NO_PROGRESS stops before another request.
-Review/check feedback starts another round; explicit Continue also resets its count.
+A repeated identical local/Git request on unchanged work prompts a change of
+strategy before another execution. Live remote observations can change independently.
+Review feedback and explicit Continue start a fresh stage round.
 
-## Exhausted allowances
+## Continuing after a pause
 
-After an interrupted or budget-limited stage, use **Continue with extra budget**
-when the normal allowance has been exhausted. The server first checks the saved
-checkpoint and source integrity. The grant is recorded in `budgets.json`; it applies
-only to that stage and never clears consumed tokens or calls. The run-wide token
-cap stays unchanged. If that cap stopped the run, deliberately increase it in
-settings before continuing. Ordinary Continue grants no additional allowance.
-
-A genuine blocked task or unsafe checkpoint is not converted into an automatic retry.
-A terminal task can be deleted even if an old launcher record still says RUNNING;
-the run and project locks and current worker checks continue to protect active tasks.
-Deleting history moves artifacts to local trash and never changes project files.
-
-CLI equivalent:
-
-```sh
-taskrail resume /absolute/path/to/run --extend-budget
-```
+Choose **Continue from checkpoint** or run `taskrail resume /absolute/path/to/run`.
+Add a steering note to clarify the remaining work. The worker checks source, Git and
+frozen inputs before resuming the interrupted stage. Each explicit continuation
+starts fresh timeout and retry counters; usage history is retained.

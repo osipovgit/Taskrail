@@ -427,7 +427,7 @@ class CheckRecipesTest(unittest.TestCase):
 
     def test_selected_recipe_labels_are_shown_but_never_become_written_checks(self):
         spec = dict(self.spec, phase="validation")
-        state = dict(self.state, check_specs=[spec])
+        state = dict(self.state, check_specs=[spec], jenkins_configured=True)
         planned = ["Jenkins check: ci/job: passes", "Server check: health returns 200"]
         with patch("taskrail.web.delivery_checks.planned", return_value=planned):
             shown = delivery_checks.checks(self.run, state)
