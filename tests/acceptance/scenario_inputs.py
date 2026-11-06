@@ -61,8 +61,8 @@ class ScenarioInputs(unittest.TestCase):
                 before = snapshot(roots)
                 text, _ = submission(fields(case, roots), base / "runs")
                 meta = json.loads(text.split("\n", 1)[1].split("\n```", 1)[0])
-                resolved = task_spec.resolve(text, meta)
-                shown = project_map.render(roots, resolved["requirements"])
+                task_spec.resolve(text, meta)
+                shown = project_map.render(roots)
                 self.assertNotIn("FIXTURE_ONLY", shown)
                 self.assertNotIn("/.env", shown)
                 for alias in roots:
