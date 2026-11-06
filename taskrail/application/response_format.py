@@ -23,6 +23,7 @@ EXAMPLES = MappingProxyType({"git": "example.git", "local": "example.local"})
 
 FINISHES = MappingProxyType(
     {
+        "understanding": "format.understanding_finish",
         PLANNER: "format.plan_finish",
         IMPLEMENTER: "format.done_finish",
         "plan-reviewer": "format.review_finish",

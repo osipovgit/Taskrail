@@ -36,7 +36,7 @@ The run list groups runs by what they need:
 
 ## Delivery of a code change
 
-Every Develop task follows planning, independent plan review, implementation,
+Every top-level Develop task follows task understanding, planning, independent plan review, implementation,
 checks and result review. A split dispatches authenticated children in dependency
 order, followed by independent integration review over the combined original and
 corrective diff. Each child receives its complete assignment, prerequisite outcomes

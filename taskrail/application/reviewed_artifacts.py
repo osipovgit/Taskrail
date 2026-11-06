@@ -68,6 +68,12 @@ def parent(base, name):
 
 def typed_requirements(state):
     """Every task requirement names its field, so global constraints can be inherited."""
-    entries = [entry for entry in state["requirements"] if entry["kind"] == "task"]
-    fields = [entry.get("source", {}).get("field") for entry in entries]
-    return all(field in task_spec.OBLIGATIONS for field in fields)
+    entries = [entry for entry in state["requirements"] if entry["kind"] != "runtime"]
+    sources = []
+    for entry in entries:
+        references = entry.get("sources") or [entry.get("source", {})]
+        sources.append(references)
+    return all(
+        references and all(source.get("field") in task_spec.FIELDS for source in references)
+        for references in sources
+    )

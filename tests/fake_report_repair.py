@@ -77,7 +77,7 @@ def executor_result(context, prompt, emit):
     """Run one real local read, cite its clipped JSON, then repair to the exact sidecar."""
     root = Path(context["roots"]["project"])
     run = Path(context["task_file"]).parent.parent
-    snapshot = run / "00-input/local/01-plan-0.json"
+    snapshot = next((run / "00-input/local").glob("*-plan-0.json"), run / "missing.json")
     stream = snapshot.with_suffix(".stdout.txt")
     if not snapshot.exists():
         response = json.dumps(

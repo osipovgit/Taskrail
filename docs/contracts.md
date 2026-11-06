@@ -21,19 +21,38 @@ there is no adoption of old wording or missing-key compatibility.
 
 The executor catalog advertises only configured, stage-permitted routes; the
 implementer never receives SSH actions. Prompt-budget tests cover capability and
-mode combinations: 10,500 instruction bytes for planning/review, 9,000 for
+mode combinations: 5,000 instruction bytes for task understanding, 10,500 for planning/review, 9,000 for
 implementation/result review. Variable user input and source data are additional.
 
-A request has three parts: `# Task` with the task fields under readable headings and a
-label before each requirement block (`[R1]`, `[R2 runtime]`, `[R3 constraint]`, placed at
-the requirement's own field and offset), the stage's instructions, and a compact Context
-JSON. Stable requirement IDs stay server-side; the model uses labels.
+A request has three parts: `# Task`, stage instructions and a compact Context JSON.
+Understanding receives the original fields once in `Context.task_fields`; later stages
+read them under the task headings. After interpretation, requirements
+use labels such as `[R1]`, `[R2 runtime]` and `[R3 constraint]`. Exact source text may be
+labelled in place; an interpreted obligation appears separately from the original input.
+Stable requirement IDs stay server-side; the model uses labels.
 
-No role writes a JSON result. The planner writes `plan.md` and a reviewer `review.md`,
+Task understanding writes `understanding.json`, a resumable draft containing a summary
+and obligations with `text`, `kind` (`task` or `constraint`) and exact source quotes.
+Each source names an input field and a verbatim quote, plus a one-based occurrence when
+the quote repeats. The server checks those references, resolves character spans and
+assigns IDs. These checks prove provenance, not semantic completeness: the planner and
+independent reviewer also compare the complete original task. Background does not become
+an obligation merely because it occupies a paragraph. Conditions, ordering and conflicting
+instructions must survive extraction. Explicit runtime check identities stay server-owned.
+The understanding role uses the planner's configured model unless `models.understanding`
+is set.
+
+An input interpretation defect in planning or plan review returns as `REINTERPRET_TASK`
+with a summary and original source quotes. It returns automatically to understanding;
+unchanged obligations retain IDs, and the saved plan must pass validation and independent
+review again. It cannot alter an authenticated child's assignment. Continue retains
+the accepted requirement list and resumes its checkpointed stage.
+
+The planner writes `plan.md` and a reviewer `review.md`,
 both in the run directory and attached to every turn, and each ends with `DONE`; the
 implementer ends with `DONE:` or `BLOCKED:`. The server derives the canonical stored
-result, version 1, from them. Executor requests are the only JSON responses and keep
-version 1. Unknown wire versions and unsupported run or checkpoint versions are
+result, version 1, from them. Executor requests keep version 1; an input-correction
+message is a workflow transition and executes no command. Unknown wire versions and unsupported run or checkpoint versions are
 rejected. Continuations and validation feedback retain the stage's original format.
 The request parser also accepts one unambiguous object surrounded by prose or
 Markdown; the surrounding text is neither evidence nor instructions.
@@ -41,14 +60,11 @@ Multiple objects, incomplete JSON, unknown fields and duplicate keys are invalid
 All result and tool paths are canonical absolute paths. Root aliases in task
 metadata are labels; the engine resolves them.
 
-Every stored final result contains status, summary, coverage, evidence, unverified
-and blocking_gaps. Requirement IDs belong to substantive task blocks and are
-assigned by the server. Titles, section headings, single label lines ending with
-`:`, current behavior and known entry points remain context rather than separate
-acceptance obligations.
-The prompt shows the task once, with labels before its requirement blocks;
-the original task snapshot remains verbatim. Typed fields provide the requirement
-boundaries; their Markdown headings cannot change authority. Only authenticated
+Execution and review results contain status, summary, coverage, evidence, unverified
+and blocking_gaps. The understanding result records its accepted requirements instead
+of claiming source evidence or completion. The original task snapshot remains verbatim.
+Typed fields preserve input boundaries; their Markdown headings cannot change authority.
+Only authenticated
 server context supplies workflow instructions. A reviewed child receives its sealed
 task projection, while untrusted original task and history files remain archival
 artifacts outside the model's readable inputs. Each ID needs one outcome: satisfied, planned, contradicted, gap,

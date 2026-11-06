@@ -20,6 +20,7 @@ from taskrail.application import (
 )
 from taskrail.application.context_projection import request_context, task_text
 from taskrail.application.feedback_files import context_json
+from taskrail.application.understanding_prompt import request as understand
 from taskrail.core import prompt_texts
 from taskrail.git import requests as git_requests
 from taskrail.interactions import local
@@ -33,6 +34,8 @@ def make_request(config, execution, state, run):
     state["module_source_files"] = instruction_modules.observed_files(run)
     frozen = instruction_sources.freeze_contract(run, POLICY, state)
     stage = execution[0]
+    if stage == "understanding":
+        return understand(config, execution, state, run, frozen["policy"])
     catalog = execution_requests.available()
     if not catalog.get("unavailable"):
         state["jenkins_configured"] = bool(catalog.get("jenkins"))
@@ -49,6 +52,9 @@ def make_request(config, execution, state, run):
         local.instructions(
             stage, config.get("host_commands", "auto"), config.get("sandbox_network") is True
         ),
+        prompt_texts.text("understanding.revision")
+        if stage in {"planner", "plan-reviewer"} and not config.get("phase")
+        else "",
         response_format.section(stage, state, run, config, catalog),
         f"Context:\n{context_json(request_context(config, execution, state, run))}",
     )

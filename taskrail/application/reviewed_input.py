@@ -3,7 +3,7 @@
 import json
 
 from taskrail.application import child_brief, reviewed_artifacts
-from taskrail.core import prompt_texts, schema, task_spec
+from taskrail.core import prompt_texts, requirements, schema, task_spec
 from taskrail.core.files import atomic_json, digest
 
 FINDINGS = "00-input/findings.json"
@@ -55,8 +55,8 @@ def fields(step, requirements):
 
 
 def global_constraint(entry):
-    """Global scope comes from the authenticated parent's original field boundary."""
-    return entry.get("source", {}).get("field") == "constraints"
+    """The authenticated interpretation retains constraints even inside narrative input."""
+    return requirements.constraint(entry)
 
 
 def criterion(entry):

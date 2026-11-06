@@ -109,8 +109,8 @@ source templates. See [instruction contracts](contracts.md).
 An imported settings file without `agent_source` selects bundled roles, as in
 `taskrail init`. Only an explicit `agent_source` imports a custom directory; relative
 paths resolve beside the supplied settings file. Before a fresh reset, the installer
-checks runtime settings, the agent executable/version, service environment and all three
-custom role contracts, then prepares their installable copies. Invalid or incomplete
+checks runtime settings, the agent executable/version, service environment and every
+custom role contract, then prepares their installable copies. Invalid or incomplete
 roles stop the update; `--agents=bundled` explicitly selects the incoming bundled roles.
 Keep supplied settings, imported roles and their symlink targets outside all
 reset directories.

@@ -427,7 +427,7 @@ class PlanFileTests(unittest.TestCase):
             instructions = plan_file.instructions(run, dict(project=source), REQUIREMENTS)
             self.assertIn(f"PROJECT MAP: {run / '00-input/project-map.md'}", instructions)
             self.assertIn(f"PLAN FILE: edit {target}", instructions)
-            self.assertIn("DONE submits a draft for validation, not approval", instructions)
+            self.assertIn("DONE submits for validation, not approval", instructions)
             self.assertIn("R6 → all tasks", instructions)
 
     def test_messages_name_requirements_by_label(self):

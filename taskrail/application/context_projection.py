@@ -95,6 +95,7 @@ def feedback_context(feedback, roots=None):
         "interrupted",
         "instruction",
         "outside_changes",
+        "input_correction",
     )
     projected = {key: feedback[key] for key in needed if key in feedback}
     projected = tool_paths(projected, roots or {})

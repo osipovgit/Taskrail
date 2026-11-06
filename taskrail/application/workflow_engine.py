@@ -5,20 +5,16 @@ import subprocess
 from taskrail.application import (
     check_batches,
     check_parents,
-    planned_checks,
     repair_feedback,
-    reviewed_artifacts,
     run_setup,
+    stage_effects,
     transitions,
     workflow_start,
 )
-from taskrail.application.changes import capture_preimages, write_diff
 from taskrail.application.check_stage import run_checks
-from taskrail.application.correction_start import refresh as refresh_correction
 from taskrail.application.run_locks import run_locks
 from taskrail.application.run_report import report
 from taskrail.application.stage_attempts import StageAttempts
-from taskrail.application.task_commit import commit
 from taskrail.application.workflow_finish import close, interrupted
 from taskrail.application.workflow_state import STAGE, Workflow
 from taskrail.core import control
@@ -26,7 +22,6 @@ from taskrail.core import control
 FAILURES = (ValueError, OSError, KeyError, subprocess.TimeoutExpired)
 RUNNING = "RUNNING"
 STATUS = "status"
-PREIMAGES = "preimages"
 
 
 def execute(request):
@@ -89,22 +84,4 @@ def model_stage(workflow):
     transitions.advance(workflow.flow, workflow.state, verdict, reference, workflow.work_version())
     if workflow.state[STATUS] == RUNNING:
         repair_feedback.attach(workflow.flow, record)
-    if record["stage"] == "plan-reviewer":
-        planned_checks.activate(workflow)
-        reviewed_artifacts.seal(workflow)
-        refresh_correction(workflow)
-    effect = workflow.flow.pop("effect", None)
-    if effect == "commit":
-        commit(workflow)
-    elif workflow.state[STATUS] == RUNNING:
-        apply_effect(workflow, effect)
-
-
-def apply_effect(workflow, effect):
-    """Capture preimages before implementation; refresh the diff after it."""
-    roots = workflow.config["roots"]
-    preimages = workflow.state[PREIMAGES]
-    if effect == "capture_preimages":
-        capture_preimages(workflow.run, roots, workflow.flow["allowed"], preimages)
-    elif effect == "write_diff":
-        write_diff(workflow.run, roots, preimages)
+    stage_effects.apply(workflow, record, verdict)

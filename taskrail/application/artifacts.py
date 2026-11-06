@@ -10,6 +10,7 @@ from taskrail.core.paths import tool_paths
 
 PHASES = MappingProxyType(
     {
+        "understanding": "understand",
         "planner": "plan",
         "plan-reviewer": "plan-review",
         "implementer": "implement",
@@ -85,7 +86,8 @@ def finish_stage(run, state, active, outcome):
     record.update(status=outcome[STATUS], finished_at=now())
     diagnostics = outcome.get("diagnostics") or {}
     record.update({key: diagnostics[key] for key in DIAGNOSTICS if key in diagnostics})
-    verdict = tool_paths(outcome.get("result"), state.get("roots", {}))
+    verdict = outcome.get("result")
+    verdict = rendered(verdict, state.get("roots", {}))
     announce(record, verdict)
     if verdict is not None:
         atomic_json(path / "result.json", verdict)
@@ -102,3 +104,10 @@ def finish_stage(run, state, active, outcome):
 def now():
     """UTC timestamp of stage records."""
     return datetime.now(timezone.utc).isoformat()
+
+
+def rendered(verdict, roots):
+    """Original input references are never rewritten as workspace paths."""
+    if isinstance(verdict, dict) and verdict.get(STATUS) in {"UNDERSTOOD", "REINTERPRET_TASK"}:
+        return verdict
+    return tool_paths(verdict, roots)
