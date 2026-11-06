@@ -124,7 +124,7 @@ class RunLockTests(unittest.TestCase):
         (root / ".git").mkdir()
         (root / "hello.py").write_text("def hello():\n    return 1\n")
         task = self.base / "task.md"
-        header = json.dumps({"roots": {"project": str(root)}, "isolation": "worktree"})
+        header = json.dumps({"roots": {"project": str(root)}})
         task.write_text(f"```taskrail-task\n{header}\n```\nReturn 2")
         settings = self.base / "settings.json"
         command = [sys.executable, str(BASE / "tests/fake_live.py"), "--profiles"]

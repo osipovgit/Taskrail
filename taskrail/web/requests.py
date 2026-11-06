@@ -12,12 +12,9 @@ DESIGN = "design"
 CONTINUING = ("followup", "answer", DESIGN)
 MODES = ("new", "restart", *CONTINUING)
 READ_ONLY = "read_only"
-WORKTREE = "worktree"
 AUTO_APPROVE = "auto_approve"
 DECOMPOSE = "decompose"
 FLAGS = (READ_ONLY, DESIGN, AUTO_APPROVE, DECOMPOSE)
-# Without the worktree choice a run stays in place; with it, isolation is the default.
-IN_PLACE = '"isolation": "in_place"'
 HEADER_OPTIONS = MappingProxyType(
     {
         READ_ONLY: '"read_only": true',
@@ -70,8 +67,7 @@ class Submission:
         if not isinstance(payload, dict):
             raise ValueError("The request must be a JSON object")
         self.fields = dict(payload)
-        flags = (*FLAGS, WORKTREE)
-        self.flags = {flag: self.fields.pop(flag, False) for flag in flags}
+        self.flags = {flag: self.fields.pop(flag, False) for flag in FLAGS}
         self.parent = self.fields.pop("parent_run", None)
         self.mode = self.fields.pop("submission_mode", "new")
         context = split_context(self.fields.pop("split_context", ""))
@@ -93,17 +89,10 @@ class Submission:
         if self.previous:
             self.inherit_worktrees(run_store.read(self.previous))
 
-    @property
-    def worktree(self):
-        """Run in new isolated worktrees."""
-        return self.flags[WORKTREE]
-
     def validate(self):
         """Reject ambiguous intent and unexpected metadata types."""
         if not all(isinstance(flag, bool) for flag in self.flags.values()):
-            raise ValueError(
-                "read_only, worktree, design, auto_approve and decompose must be boolean"
-            )
+            raise ValueError("read_only, design, auto_approve and decompose must be boolean")
         if self.mode not in MODES:
             raise ValueError("Invalid submission mode")
         if (self.mode == "new") == bool(self.parent):
@@ -134,11 +123,10 @@ class Submission:
             raise ValueError("Split into tasks is a separate mode for a new or restarted task")
 
     def inherit_worktrees(self, index):
-        """A follow-up of an isolated run continues in its worktrees; Restart starts anew."""
+        """A follow-up starts from its parent checkout; Restart starts from the original roots."""
         restarts.require_standalone(self.previous, self.mode, index)
         if self.mode in CONTINUING and index.get("worktrees"):
             self.fields["roots"] = worktree_isolation.root_entries(index["roots"])
-            self.flags[WORKTREE] = False
             self.delivery["execution_parent"] = self.parent
 
     def decorate(self, text):
@@ -147,8 +135,6 @@ class Submission:
         The mode's instructions come from the header flags at prompt time (mode_rules).
         """
         options = [HEADER_OPTIONS[flag] for flag in FLAGS if self.flags[flag]]
-        if not self.flags[WORKTREE]:
-            options.append(IN_PLACE)
         if self.flags[DESIGN] and not self.flags[READ_ONLY]:
             options.append(HEADER_OPTIONS[READ_ONLY])
         for name in (PHASE, CHANGE, check_parents.PARENT):

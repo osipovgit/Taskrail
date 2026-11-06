@@ -1,9 +1,10 @@
 # Controlled Git access
 
 All roles can inspect Git history, commits, diffs, branches, tags and working-tree
-status. A declared root may be a subdirectory of a Git repository. Scope history
-with `-- .` when the task concerns only that project. Original project files remain
-in place; the executor does not create project copies.
+status. Each declared root must be a Git repository top level with an existing commit.
+Standalone tasks use linked worktrees; child tasks use their parent branch. Scope
+history with `-- <project>` when only a subdirectory is relevant. The original checkout
+remains unchanged.
 
 The model submits one strict `GIT_REQUEST` object instead of a final result:
 

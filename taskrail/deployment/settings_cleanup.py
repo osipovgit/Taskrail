@@ -9,6 +9,7 @@ PRIVATE_FILE = 0o600
 
 OBSOLETE = frozenset(
     (
+        "isolation",
         "max_change_lines",
         "max_change_files",
         "max_repairs",

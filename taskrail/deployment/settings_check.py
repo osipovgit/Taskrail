@@ -24,7 +24,7 @@ def validate(options, base, roles):
 def validate_storage(options, base):
     """Paths use the runtime's validators and must be parseable before installation."""
     task_config.permission_worktree(options)
-    worktree_isolation.isolation_settings({}, options, base / "runs")
+    worktree_isolation.isolation_settings({}, options)
     for key in ("agent_directory", "run_base"):
         Path(options.get(key, base)).expanduser()
 

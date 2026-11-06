@@ -17,17 +17,7 @@ from taskrail.web import epic_launch, epic_tasks, integration_review, submission
 
 
 class IsolatedSplitFixture(ReviewedFixture):
-    def repository(self):
-        (self.root / ".git/HEAD").unlink()
-        (self.root / ".git").rmdir()
-        process.checked(self.root, ["init", "-b", "main"])
-        process.checked(self.root, ["config", "user.name", "Fixture"])
-        process.checked(self.root, ["config", "user.email", "fixture@example.invalid"])
-        process.checked(self.root, ["add", "."])
-        process.checked(self.root, ["commit", "-m", "Initial"])
-
     def split(self):
-        self.repository()
         self.settings_extra = dict(
             worktree_base=str(self.base / "worktrees"),
             verify_commands=[
@@ -48,7 +38,6 @@ class IsolatedSplitFixture(ReviewedFixture):
             goal="Return 2 and add the new module",
             criteria="Both outputs work",
             auto_approve=True,
-            worktree=True,
             roots=[dict(alias="project", path=str(self.root))],
         )
         if getattr(self, "bound_checks", False):
@@ -114,8 +103,8 @@ class IsolatedSplitFixture(ReviewedFixture):
         self.assertEqual(accepted["worktrees"], state["worktrees"])
         self.assertIn("-    return 1", (review / "changes.diff").read_text())
         self.assertIn("new.py", (review / "changes.diff").read_text())
-        self.assertIn("return 1", (self.root / "hello.py").read_text())
-        self.assertFalse((self.root / "new.py").exists())
+        self.assertIn("return 1", (self.original_root / "hello.py").read_text())
+        self.assertFalse((self.original_root / "new.py").exists())
         self.assertEqual(process.checked(worktree, ["status", "--porcelain"]), "")
         commits = process.checked(worktree, ["rev-list", "--count", record["base"] + "..HEAD"])
         self.assertEqual(commits.strip(), "2")
@@ -166,9 +155,9 @@ class IsolatedSplitTests(IsolatedSplitFixture, unittest.TestCase):
         self.assert_checks(finished, worktree)
         self.assertEqual(process.checked(worktree, ["status", "--porcelain"]), "")
         self.assertIn("extra.txt", process.checked(worktree, ["show", "--stat", "HEAD"]))
-        self.assertIn("return 1", (self.root / "hello.py").read_text())
+        self.assertIn("return 1", (self.original_root / "hello.py").read_text())
 
-    def test_server_followup_reuses_sealed_worktree_with_a_fresh_reviewed_plan(self):
+    def test_server_followup_forks_worktree_with_a_fresh_reviewed_plan(self):
         self.provider = "fake_live.py"
         parent, state = self.split()
         payload = dict(
@@ -193,12 +182,13 @@ class IsolatedSplitTests(IsolatedSplitFixture, unittest.TestCase):
         )
         finished = json.loads((run / "run.json").read_text())
         self.assertEqual(status, "READY_FOR_REVIEW", finished.get("summary"))
-        self.assertEqual(finished["worktrees"], state["worktrees"])
+        self.assertNotEqual(finished["roots"], state["roots"])
+        self.assertEqual(finished["worktrees"]["project"]["source"], state["roots"]["project"])
         self.assertEqual(len(finished["commits"]), 1)
         self.assertEqual(finished["attempts"][0]["stage"], "planner")
         self.assertNotIn("contract_start", finished)
-        self.assert_checks(finished, Path(state["roots"]["project"]))
-        self.assertIn("return 1", (self.root / "hello.py").read_text())
+        self.assert_checks(finished, Path(finished["roots"]["project"]))
+        self.assertIn("return 1", (self.original_root / "hello.py").read_text())
 
 
 if __name__ == "__main__":

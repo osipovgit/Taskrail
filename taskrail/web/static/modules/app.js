@@ -167,7 +167,7 @@ export function approvalCard(pending, runId = state.selected) {
   return card;
 }
 
-const CHECKBOXES = new Set(['worktree', 'auto_approve']);
+const CHECKBOXES = new Set(['auto_approve']);
 
 const MODE_LABELS = {
   develop: 'Develop',
@@ -192,7 +192,6 @@ export function openComposer(draft = null, context = {}) {
       if (input && !CHECKBOXES.has(key)) input.value = value;
     }
     document.getElementById('task-mode').value = draftMode(draft);
-    document.getElementById('task-worktree').checked = !!draft.worktree;
     document.getElementById('task-auto-approve').checked = !!draft.auto_approve;
     draft.roots.forEach((root) => addRoot(root.alias, root.path));
   } else addRoot();
@@ -512,7 +511,6 @@ export async function submitTask(event) {
     const mode = document.getElementById('task-mode').value;
     payload.read_only = mode === 'answer';
     payload.design = mode === 'design';
-    payload.worktree = document.getElementById('task-worktree').checked;
     payload.auto_approve = document.getElementById('task-auto-approve').checked;
     Object.assign(payload, state.composerContext);
     payload.roots = [...document.querySelectorAll('.root-row')].map((row) => ({

@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from taskrail.application import check_recipes, check_specs, step_checks
+from taskrail.application import check_recipes, check_specs, step_checks, worktree_default
 from taskrail.core.schema import require
 from taskrail.executor import protocol
 
@@ -29,7 +29,8 @@ def command_roots(config):
     roots = [str(root) for root in config["roots"].values()]
     locations = {root: root for root in roots}
     for entry in config.get("worktrees", {}).values():
-        locations[entry["source"]] = entry["worktree"]
+        for origin in worktree_default.origins(entry):
+            locations[str(origin)] = entry["worktree"]
     return locations
 
 

@@ -24,6 +24,13 @@ def execute(context, role, args, emit):
         value.update(status="PLAN_READY", files_read=[str(target)], proposed_change_files=planned)
     elif role == "implementer":
         value["status"] = "IMPLEMENTED"
+    if role == "reviewer" and context["stage"] == "reviewer" and case.get("fault") == "scope":
+        target = path("service/notes.txt", roots)
+        value.update(
+            status="REQUEST_CHANGES",
+            summary="Unrelated notes were damaged",
+            findings=[dict(file=str(target), evidence="Unexpected alteration to unrelated notes")],
+        )
     value = enrich(value, context, target, role)
     run = Path(context["task_file"]).parent.parent
     if role == "planner":
