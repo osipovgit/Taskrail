@@ -40,6 +40,10 @@ class CheckSchedulingTests(LiveFixture, unittest.TestCase):
             with self.subTest(design=design):
                 self.base = self.base / ("design" if design else "answer")
                 self.base.mkdir()
+                self.root = self.base / "repo"
+                self.root.mkdir()
+                (self.root / "hello.py").write_text("def hello():\n    return 2\n")
+                self.real_repository()
                 _, status, state = self.execute(read_only=True, design=design)
                 self.assertEqual(status, "NO_CHANGES_REQUIRED", state.get("summary"))
                 self.assertEqual(

@@ -8,6 +8,8 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
+from git_fixture import repository
+
 from taskrail.application import context_windows, session_budget
 from taskrail.application.attempt_session import launch_options
 from taskrail.application.live import execute_task
@@ -202,6 +204,7 @@ class SessionBudgetTests(unittest.TestCase):
         source = project / "hello.py"
         original = "def hello():\n    return 1\n"
         source.write_text(original)
+        repository(project)
         task = self.root / "task.md"
         header = json.dumps(dict(roots=dict(project=str(project))))
         options = self.workflow_settings()
@@ -214,7 +217,9 @@ class SessionBudgetTests(unittest.TestCase):
         run, status = execute_task(task, settings, run_dir=self.root / "result")
         state = json.loads(run.joinpath("run.json").read_text())
         self.assertEqual(status, "READY_FOR_REVIEW", state.get("summary"))
-        self.assertIn("return 2", source.read_text())
+        effective = Path(state["roots"]["project"]) / "hello.py"
+        self.assertIn("return 2", effective.read_text())
+        self.assertEqual(source.read_text(), original)
         first = state["stages"][0]
         self.assertEqual(first["role"], "planner")
         self.assertGreater(first["context_budget"]["request_bytes"], capacity)

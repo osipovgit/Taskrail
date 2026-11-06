@@ -7,6 +7,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from corpus import fields, materialize, snapshot, submission
+from git_fixture import repository
 
 from taskrail.application.live import execute_task
 from taskrail.core.files import atomic_json
@@ -23,6 +24,9 @@ class ScenarioFixture:
         self.case = case
         self.roots = materialize(self.base, case)
         self.originals = snapshot(self.roots)
+        self.source_roots = dict(self.roots)
+        for root in self.roots.values():
+            repository(root)
         self.runs = self.base / "runs"
         self.runs.mkdir()
         scenario = self.base / "scenario.json"
@@ -42,6 +46,7 @@ class ScenarioFixture:
                     str(scenario),
                 ],
                 agent_directory=str(self.base / "profiles"),
+                worktree_base=str(self.base / "worktrees"),
                 timeout_seconds=10,
                 max_integration_corrections=0,
             ),
@@ -60,9 +65,11 @@ class ScenarioFixture:
         ):
             run, status = execute_task(task, self.settings, run_dir=self.runs / name)
         state = json.loads((run / "run.json").read_text())
+        self.roots = {alias: Path(root) for alias, root in state["roots"].items()}
         return run, status, state
 
     def assert_preserved(self, changed):
+        self.assertEqual(snapshot(self.source_roots), self.originals)
         actual = snapshot(self.roots)
         expected = dict(self.originals)
         expected.update({name: content.encode() for name, content in changed.items()})

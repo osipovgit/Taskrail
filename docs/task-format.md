@@ -66,8 +66,7 @@ the agents' input.
 {
   "roots": {"project": "~/src/my-project"},
   "verification": ["Run the scenario twice in the target environment and verify the expected result"],
-  "read_only": false,
-  "isolation": "in_place"
+  "read_only": false
 }
 ```
 
@@ -81,7 +80,6 @@ the agents' input.
 | `task_scope` | Required for server-generated `task` phases: exact reviewed file paths; child planning cannot widen them or create another split |
 | `design` | `true` for a design discussion (the browser's **Design discussion**); implies `read_only` |
 | `auto_approve` | `true` approves local commands and read access of this run without asking (the browser's **Allow all actions**); SSH keeps its root-only approval |
-| `isolation` | `auto` (default) isolates a code change whose roots are all Git repository top levels with a commit; `worktree` always edits new linked Git worktrees and commits each approved task there; `in_place` edits the roots (the browser's cleared **Isolated Git worktree**, `taskrail submit --in-place`), see below |
 | `task_spec` | Generated typed input: version 1, literal named fields, a display integrity reference and optional child context/requirement lineage; do not edit only its Markdown display |
 | `assigned_contract` | Generated child reference (`parent_run`, `task_id`); the workflow authenticates it against the sealed reviewed parent before skipping child planning |
 | `check_specs` | Selected server recipe IDs and runtime criterion IDs; commands and approval policy remain server-owned |
@@ -149,15 +147,23 @@ the original task/plan text are never rewritten; the accepted result records the
 effective targets. Unknown checkouts, noncanonical paths and symlinks do not gain
 access through this mapping, and normal target and scope checks still apply.
 
-A code change runs in worktrees by default: with `"isolation": "auto"` (or no
-`isolation`) when every root is the top level of a Git repository with a commit.
-Authenticated children and browser follow-ups reuse their parent's worktrees;
-a standalone submission does not infer ownership from a branch name. Answers,
-designs, delivery checks and other roots work in place. With
-`"isolation": "worktree"` every root must be such a top level, otherwise the run
-stops. Before planning, the run creates one linked worktree per root from its current
-`HEAD` on a new branch `taskrail/<run>`, under `worktree_base` (default:
-`~/.local/share/taskrail-worktrees`, separate from application state). The branch starts at the committed revision. Before
+Every standalone task, including answers and designs, requires repository top-level
+roots with an existing commit. Taskrail validates all roots before creating one linked
+worktree per root on the server-named branch `taskrail/<run>`. There is no in-place mode. The installer removes the retired `isolation` setting
+with a private backup; task headers containing it are rejected.
+The branches appear immediately in the shared repositories; original checkouts never
+switch branches. Storage is `worktree_base` (default `~/.local/share/taskrail-worktrees`,
+outside application state). Authenticated split children and delivery phases reuse the
+parent's worktrees. Follow-up ownership and locks remain valid if the old parent
+checkout is moved or removed. Continue uses the same branch; Restart creates a new branch from
+the original checkout. A task without edits leaves an empty branch for the operator to
+remove; Taskrail never merges it or removes it automatically.
+
+A Follow-up creates a new branch from the previous task's HEAD and copies its staged,
+unstaged and nonignored untracked changes, including deletions, binary files, executable
+modes and symlinks. The previous checkout and index remain unchanged. A capture failure
+or concurrent source change stops initialization instead of silently dropping files.
+For an ordinary new task, the branch starts at HEAD; before
 planning, Taskrail records the original checkout's Git status in
 `00-input/original/status.jsonl`. Each row names the path, the index/worktree
 status (Git XY), and available versions relative to that snapshot directory.
@@ -173,8 +179,7 @@ destination. Preserve executable mode where relevant. Verify the resulting
 diff and use the normal reviewed commit flow. The local sandbox exposes the
 snapshot read-only. Split tasks inherit the launch snapshot. The whole run, including Continue, works in the worktrees; the
 source checkout and its other branches may change meanwhile without stopping the
-run. Clear **Isolated Git worktree** in the browser form, or pass
-`taskrail submit --in-place`, to edit the roots themselves.
+run.
 
 The server seals the effective roots, source-to-worktree mapping and permission
 base in `00-input/execution-context.json`. A split child inherits them only after
@@ -190,8 +195,7 @@ An authenticated isolated task is a unit of change rather than a list of files:
   any other file of the roots, except Git metadata and protected files, when its task
   cannot be complete and valid without it; such a file gets its preimage from the
   branch's last commit, appears in the diff, is judged by the reviewer and is listed
-  under **Changed beyond the plan** in the report. In place, the plan still limits the
-  files.
+  under **Changed beyond the plan** in the report.
 - Automatic finalization creates at most one new commit per changed repository,
   with the implementer's summary and a `Taskrail-Run:` trailer. The controlled
   executor verifies the reviewed content and refuses unrelated staged or
@@ -205,13 +209,13 @@ Without approval, automatic finalization leaves changes uncommitted. Explicit
 task-requested Git operations can already have created commits before review;
 those commits are preserved, never squashed or rolled back automatically. You
 review and merge each branch and finally `git worktree remove` it yourself. A browser
-follow-up continues in the same worktrees; a standalone restart starts from the
-source checkouts in new worktrees. Restarting a reviewed split child keeps the
+follow-up starts in new worktrees with the prior result; a standalone restart starts
+from the original source checkouts in new worktrees. Restarting a reviewed split child keeps the
 parent's effective roots, including its existing worktrees.
 
 ## Execution boundaries
 
-Models and timeouts belong in server-side settings. The workflow edits original
+Models and timeouts belong in server-side settings. The workflow edits isolated
 sources, preserves existing work, allows controlled Git operations and never rolls
 back automatically. It runs built-in syntax checks, the operator's
 [verification commands](deployment.md#verification-commands) and static review.

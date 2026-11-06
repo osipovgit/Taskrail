@@ -102,9 +102,9 @@ class ScenarioWorkflows(ScenarioFixture, unittest.TestCase):
         case = next(case for case in CORPUS["tasks"] if case["id"] == "PERCENT-DISCOUNT")
         self.prepare(dict(case, fault="scope"))
         _, status, state = self.execute()
-        self.assertEqual(status, "BLOCKED", state.get("summary"))
-        self.assertIn("Scope violation", state["summary"])
-        self.assertNotIn("reviewer", [stage["stage"] for stage in state["attempts"]])
+        self.assertEqual(status, "NO_PROGRESS", state.get("summary"))
+        self.assertEqual(state["stages"][-1]["verdict"], "REQUEST_CHANGES")
+        self.assertIn("reviewer", [stage["stage"] for stage in state["attempts"]])
 
     def test_independent_oracles_reject_the_unfixed_seed_projects(self):
         for name, oracle in (("PERCENT-DISCOUNT", pricing), ("IMAGE-CACHE", docker)):

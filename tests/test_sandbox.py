@@ -419,7 +419,7 @@ class SandboxedRunTests(LiveFixture, unittest.TestCase):
 
     def test_a_planner_command_runs_without_a_decision_and_leaves_no_trace(self):
         self.real_repository()
-        header = {"roots": {"project": str(self.root)}, "isolation": "in_place"}
+        header = {"roots": {"project": str(self.root)}}
         self.task.write_text(f"```taskrail-task\n{json.dumps(header)}\n```\nReturn 2")
         self.configure_mode("local-effects")
         with patch("taskrail.interactions.approvals.wait") as asked:

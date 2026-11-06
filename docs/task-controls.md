@@ -142,7 +142,7 @@ Same-origin and CSRF-token checks apply to every mutation (`POST /api/tasks`,
 `{"id":"run-id","action":"restart|resume|stop|delete"}`, and a continuation may add `"note"`. Restart returns a `draft` for a standalone run,
 launches a linked attempt for an eligible split child, integration, validation or server phase,
 and refuses corrective writers. `/api/tasks` accepts the task fields plus the booleans `read_only`,
-`worktree`, `design` and `auto_approve`, and optionally `parent_run` with `submission_mode`
+`design`, `decompose` and `auto_approve`, and optionally `parent_run` with `submission_mode`
 `restart`, `followup`, `answer` or `design`; without a parent the mode is `new`. `/api/decision` answers one pending approval ticket with
 `allow`, `deny` or `alternative`; an `allow` may add `"allow_all": true`. Commands and settings stay server-owned. Reads use
 `GET /api/session`, `/api/runs`, `/api/run` and `/api/analytics`. `/api/actions` also
@@ -164,8 +164,8 @@ taskrail action RUN resume --note "python3 is installed now"
 taskrail submit --json payload.json       # the fields of POST /api/tasks
 ```
 
-`--mode` is `develop` (the default), `answer`, `design` or `split`; a code change runs in
-[isolated worktrees](task-format.md#worktree-isolation) unless `--in-place` is given.
+`--mode` is `develop` (the default), `answer`, `design` or `split`; every top-level task runs in
+[isolated worktrees](task-format.md#worktree-isolation).
 `--followup RUN` and `--restart RUN` continue a conversation; a text option may name a file as `@FILE`. `action` accepts the
 `/api/actions` actions. For a standalone run, `action RUN restart` prints the saved
 `draft`; submit the edited fields with `parent_run` and `submission_mode: "restart"`

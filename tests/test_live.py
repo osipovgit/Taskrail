@@ -7,6 +7,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+from git_fixture import repository
 from live_fixture import BASE, LiveFixture
 from run_fixture import current_run
 
@@ -21,18 +22,16 @@ from taskrail.interactions.turn_recovery import MAX_STALLS
 
 class LiveTests(LiveFixture, unittest.TestCase):
     def test_interrupted_source_write_is_inspected_restored_and_reviewed(self):
-        for mode in ("native-partial", "native-partial-dirty"):
-            with self.subTest(mode=mode):
+        for pending_original in (False, True):
+            with self.subTest(pending_original=pending_original):
                 self.setUp()
-                self.real_repository()
-                header = {"roots": {"project": str(self.root)}, "isolation": "in_place"}
-                self.task.write_text(f"```taskrail-task\n{json.dumps(header)}\n```\nReturn 2")
                 target = self.root / "hello.py"
-                if mode.endswith("dirty"):
-                    target.write_text("# earlier user work\n" + target.read_text())
+                baseline = target.read_text()
+                if pending_original:
+                    target.write_text("# earlier user work\n" + baseline)
                 original = target.read_text()
                 (self.root / "unrelated.txt").write_text("New unrelated user edits\n")
-                self.configure_mode(mode, timeout_seconds=20)
+                self.configure_mode("native-partial", timeout_seconds=20)
                 with patch("taskrail.interactions.approvals.wait") as approval:
                     run, status = execute_task(
                         self.task, self.settings, run_dir=self.base / "result"
@@ -40,7 +39,11 @@ class LiveTests(LiveFixture, unittest.TestCase):
                 approval.assert_not_called()
                 state = json.loads((run / "run.json").read_text())
                 self.assertEqual(status, "READY_FOR_REVIEW", state.get("summary"))
-                self.assertEqual(target.read_text(), original.replace("return 1", "return 2"))
+                effective = Path(state["roots"]["project"])
+                self.assertEqual(
+                    (effective / target.name).read_text(), baseline.replace("return 1", "return 2")
+                )
+                self.assertEqual(target.read_text(), original)
                 self.assertEqual(
                     (self.root / "unrelated.txt").read_text(), "New unrelated user edits\n"
                 )
@@ -49,10 +52,10 @@ class LiveTests(LiveFixture, unittest.TestCase):
                 self.assertEqual(writers[0]["session_turns"], 4)
                 self.assertEqual(writers[0]["rejections"][0]["kind"], "turn")
                 jobs = json.loads((run / "git-execution.json").read_text())
-                self.assertEqual([row["request"]["argv"][0] for row in jobs], ["diff", "restore"])
                 self.assertEqual(
-                    jobs[-1]["status"], "REJECTED" if mode.endswith("dirty") else "SUCCEEDED"
+                    [row["request"]["argv"][0] for row in jobs[:2]], ["diff", "restore"]
                 )
+                self.assertEqual(jobs[1]["status"], "SUCCEEDED")
                 self.assertEqual(state["stages"][-1]["stage"], "reviewer")
                 self.assertEqual(state["stages"][-1]["status"], "RESULT_VALID")
 
@@ -112,7 +115,7 @@ class LiveTests(LiveFixture, unittest.TestCase):
             self.assertEqual(review["session_turns"], 2)
             self.assertEqual(review["status"], "RESULT_VALID")
             self.assertEqual(review["rejections"], [])
-        self.assertEqual(len(state["git_jobs"]), 3)
+        self.assertEqual(len(state["git_jobs"]), 5)
         self.assertEqual((run / "01-plan/plan.md").read_bytes(), (run / "plan.md").read_bytes())
         self.assertTrue(all(entry["kind"] == "task" for entry in state["requirements"]))
         self.assertEqual(state["checks"][-1]["status"], "PASS")
@@ -180,6 +183,7 @@ class LiveTests(LiveFixture, unittest.TestCase):
             self.task.read_text().replace("Return 2", "Report recorded tool versions")
         )
         (self.root / "versions.txt").write_text("ansible-lint 26.9.0\n" + "details\n" * 1000)
+        self.real_repository()
         run, status, state = self.run_mode("executor-repair")
         self.assertEqual(status, "NO_CHANGES_REQUIRED", state.get("summary"))
         planners = [entry for entry in state["stages"] if entry["stage"] == "planner"]
@@ -208,6 +212,7 @@ class LiveTests(LiveFixture, unittest.TestCase):
         report = self.root / "report.json"
         report.write_text(json.dumps([dict(rule="test", line=number) for number in range(300)]))
         original = report.read_bytes()
+        self.real_repository()
         run, status, state = self.run_mode("report-repair")
         self.assertEqual(status, "NO_CHANGES_REQUIRED", state.get("summary"))
         planner = [entry for entry in state["stages"] if entry["stage"] == "planner"]
@@ -220,7 +225,7 @@ class LiveTests(LiveFixture, unittest.TestCase):
         self.assertIn("source-views", correction)
         proofs = json.loads((run / "01-plan/evidence-bindings.json").read_text())
         self.assertGreater(len(proofs[0]["observations"]), 1)
-        self.assertEqual(proofs[1]["source_view"]["source_path"], str(report))
+        self.assertEqual(proofs[1]["source_view"]["source_path"], str(self.root / report.name))
         self.assertEqual(report.read_bytes(), original)
 
     def test_git_history_and_revert_complete_the_workflow(self):
@@ -234,9 +239,9 @@ class LiveTests(LiveFixture, unittest.TestCase):
                 f"# user comment\ndef hello():\n    return {number}\n"
             )
             process.checked(self.root, ["add", "."])
-            process.checked(self.root, ["commit", "-m", f"Change {number}"])
+            process.checked(self.root, ["commit", "--allow-empty", "-m", f"Change {number}"])
         head = process.checked(self.root, ["rev-parse", "HEAD"]).strip()
-        header = {"roots": {"project": str(self.root)}, "isolation": "in_place"}
+        header = {"roots": {"project": str(self.root)}}
         self.task.write_text(f"```taskrail-task\n{json.dumps(header)}\n```\nReturn 2")
         run, status, state = self.run_mode("git-actions")
         self.assertEqual(status, "READY_FOR_REVIEW", state.get("summary"))
@@ -258,9 +263,13 @@ class LiveTests(LiveFixture, unittest.TestCase):
         source = self.root / "hello.py"
         original = "# inserted before the function\n\n" + source.read_text()
         source.write_text(original)
+        self.real_repository()
         run, status, state = self.run_mode("write-recovered")
         self.assertEqual(status, "READY_FOR_REVIEW", state.get("summary"))
-        self.assertEqual(source.read_text(), original.replace("return 1", "return 2"))
+        self.assertEqual(
+            (self.root / source.name).read_text(), original.replace("return 1", "return 2")
+        )
+        self.assertEqual(source.read_text(), original)
         self.assertEqual((self.root / "unrelated.txt").read_text(), "user dirty work\n")
         writer = [entry for entry in state["attempts"] if entry["stage"] == "implementer"]
         self.assertEqual(len(writer), 1)
@@ -275,25 +284,17 @@ class LiveTests(LiveFixture, unittest.TestCase):
             (run / "report.md").read_text(),
         )
 
-    def test_native_write_failures_do_not_skip_independent_review_or_scope_guards(self):
-        for mode in ("write-unresolved", "write-mismatch-unresolved", "write-scope"):
+    def test_native_write_failures_do_not_skip_independent_review(self):
+        for mode in ("write-unresolved", "write-mismatch-unresolved"):
             with self.subTest(mode=mode):
                 self.setUp()
                 _, status, state = self.run_mode(mode, max_integration_corrections=0)
-                self.assertEqual(
-                    status,
-                    "BLOCKED" if mode == "write-scope" else "NO_PROGRESS",
-                    state.get("summary"),
-                )
-                writer = [entry for entry in state["stages"] if entry["stage"] == "implementer"]
-                self.assertEqual(len(writer), 1 if mode == "write-scope" else 3)
-                self.assertEqual(writer[0]["session_turns"], 1)
-                if mode == "write-scope":
-                    self.assertIn("Scope violation", state["summary"])
-                    self.assertNotIn("reviewer", [entry["stage"] for entry in state["stages"]])
-                else:
-                    self.assertIn("return 1", (self.root / "hello.py").read_text())
-                    self.assertEqual(state["stages"][-1]["verdict"], "REQUEST_CHANGES")
+                self.assertEqual(status, "NO_PROGRESS", state.get("summary"))
+                writers = [entry for entry in state["stages"] if entry["stage"] == "implementer"]
+                self.assertEqual(len(writers), 3)
+                self.assertEqual(writers[0]["session_turns"], 1)
+                self.assertIn("return 1", (self.root / "hello.py").read_text())
+                self.assertEqual(state["stages"][-1]["verdict"], "REQUEST_CHANGES")
 
     def test_a_writer_that_fills_its_context_continues_in_a_fresh_session(self):
         run, status, state = self.run_mode("write-context")
@@ -368,7 +369,7 @@ class LiveTests(LiveFixture, unittest.TestCase):
         self.assertIn("# user comment", (self.root / "hello.py").read_text())
         self.assertEqual(list(state["preimages"]), ["project/hello.py"])
         self.assertFalse((run / "workspace").exists())
-        self.assertEqual((self.root / ".git/HEAD").read_text(), "ref: refs/heads/main\n")
+        self.assertEqual((self.original_root / ".git/HEAD").read_text(), "ref: refs/heads/main\n")
         self.assertIn("-    return 1", (run / "changes.diff").read_text())
         self.assertIn("--- " + str(self.root / "hello.py"), (run / "changes.diff").read_text())
         self.assertTrue((run / "report.md").exists())
@@ -394,6 +395,7 @@ class LiveTests(LiveFixture, unittest.TestCase):
     def test_jenkins_example(self):
         original = "pipeline {\n    agent any\n    stages { stage('Tests') { steps { sh 'pytest -q || true' } } }\n}\n"
         (self.root / "Jenkinsfile").write_text(original)
+        self.real_repository()
         _run, status, state = self.run_mode("jenkins")
         self.assertEqual(status, "READY_FOR_REVIEW")
         self.assertEqual((self.root / "Jenkinsfile").read_text(), original.replace(" || true", ""))
@@ -404,6 +406,7 @@ class LiveTests(LiveFixture, unittest.TestCase):
         secondary = self.base / "jenkins"
         secondary.mkdir()
         (secondary / "pipeline.groovy").write_text("old\n")
+        repository(secondary)
         self.task.write_text(
             "```taskrail-task\n"
             + json.dumps({"roots": {"project": str(self.root), "jenkins": str(secondary)}})
@@ -411,7 +414,8 @@ class LiveTests(LiveFixture, unittest.TestCase):
         )
         _, status, state = self.run_mode("multi")
         self.assertEqual(status, "READY_FOR_REVIEW")
-        self.assertEqual((secondary / "pipeline.groovy").read_text(), "new\n")
+        self.assertEqual((Path(state["roots"]["jenkins"]) / "pipeline.groovy").read_text(), "new\n")
+        self.assertEqual((secondary / "pipeline.groovy").read_text(), "old\n")
         self.assertEqual(
             set(state["changed_files"]), {"project/hello.py", "jenkins/pipeline.groovy"}
         )
@@ -584,6 +588,7 @@ class LiveTests(LiveFixture, unittest.TestCase):
             task.replace('"roots":', '"verification": ["Run the declared scenario"], "roots":', 1)
         )
         (self.root / "hello.py").write_text("def hello():\n    return 2\n")
+        self.real_repository()
         run, status, state = self.run_mode("no-change")
         self.assertEqual(status, "NO_CHANGES_REQUIRED")
         self.assertEqual(state["changed_files"], [])
@@ -691,6 +696,7 @@ class LiveTests(LiveFixture, unittest.TestCase):
         source.write_text(
             "".join(f"# Setup step {n}\n" for n in range(11)) + "def hello():\n    return 2\n"
         )
+        self.real_repository()
         run, status, state = self.run_mode("wrapped-no-change")
         self.assertEqual(status, "NO_CHANGES_REQUIRED", state.get("summary"))
         self.assertEqual(
@@ -719,7 +725,7 @@ class LiveTests(LiveFixture, unittest.TestCase):
         )
         state = json.loads((run / "run.json").read_text())
         self.assertEqual(status, "READY_FOR_REVIEW", state.get("summary"))
-        self.assertIn("return 2", (self.root / "hello.py").read_text())
+        self.assertIn("return 2", (Path(state["roots"]["project"]) / "hello.py").read_text())
         self.assertEqual(
             [a["stage"] for a in state["attempts"]],
             ["planner", "plan-reviewer", "implementer", "reviewer"],
@@ -869,6 +875,7 @@ class LiveTests(LiveFixture, unittest.TestCase):
                 "evidence.json",
                 "observations.json",
                 "local-preflight.json",
+                "git-execution.json",
                 "plan.md",
                 "progress.md",
                 "review.md",
@@ -1208,7 +1215,7 @@ class LiveTests(LiveFixture, unittest.TestCase):
 
     def isolated_repository(self):
         process = self.real_repository()
-        header = {"roots": {"project": str(self.root)}, "isolation": "worktree"}
+        header = {"roots": {"project": str(self.root)}}
         self.task.write_text(f"```taskrail-task\n{json.dumps(header)}\n```\nReturn 2")
         return process
 
@@ -1224,7 +1231,7 @@ class LiveTests(LiveFixture, unittest.TestCase):
         worktree = Path(state["roots"]["project"])
         files = process.checked(worktree, ["show", "--pretty=format:", "--name-only", "HEAD~1"])
         self.assertEqual(set(files.splitlines()), {f"Feature{n}.java" for n in range(69)})
-        self.assertFalse(list(self.root.glob("Feature*.java")))
+        self.assertFalse(list(self.original_root.glob("Feature*.java")))
 
     def test_worktree_isolation_leaves_the_source_checkout_untouched(self):
         process = self.isolated_repository()
@@ -1239,9 +1246,9 @@ class LiveTests(LiveFixture, unittest.TestCase):
         self.assertEqual(worktree, (self.base / "worktrees" / run.name / "project").resolve())
         self.assertEqual(entry["branch"], f"taskrail/{run.name}")
         self.assertEqual(state["roots"], {"project": str(worktree)})
-        self.assertIn("return 1", (self.root / "hello.py").read_text())
+        self.assertIn("return 1", (self.original_root / "hello.py").read_text())
         self.assertIn("return 2", (worktree / "hello.py").read_text())
-        self.assertEqual(process.checked(self.root, ["status", "--porcelain"]), "")
+        self.assertEqual(process.checked(self.original_root, ["status", "--porcelain"]), "")
         report = (run / "report.md").read_text()
         self.assertIn("## Isolated worktrees", report)
         self.assertIn("edited in isolated worktrees", report)
@@ -1249,7 +1256,9 @@ class LiveTests(LiveFixture, unittest.TestCase):
         self.assertIn(f"cwd {worktree}", log)
         from taskrail.application.worktree_isolation import source_roots
 
-        self.assertEqual(source_roots(state), [{"alias": "project", "path": str(self.root)}])
+        self.assertEqual(
+            source_roots(state), [{"alias": "project", "path": str(self.original_root)}]
+        )
 
     def test_original_index_and_working_edits_are_visible_and_selectively_committed(self):
         from types import SimpleNamespace
@@ -1300,8 +1309,10 @@ class LiveTests(LiveFixture, unittest.TestCase):
             git.checked(worktree, ["show", "HEAD:hello.py"]), staged.replace("return 1", "return 2")
         )
         self.assertFalse((worktree / nested).exists())
-        self.assertEqual(git.checked(self.root, ["status", "--porcelain", "-uall"]), before)
-        self.assertEqual(git.checked(self.root, ["show", ":hello.py"]), staged)
+        self.assertEqual(
+            git.checked(self.original_root, ["status", "--porcelain", "-uall"]), before
+        )
+        self.assertEqual(git.checked(self.original_root, ["show", ":hello.py"]), staged)
         self.assertEqual(target.read_text(), staged + "# working copy only\n")
         target.write_text("changed after launch")
         child = self.base / "child"
@@ -1332,14 +1343,18 @@ class LiveTests(LiveFixture, unittest.TestCase):
         saved = json.loads((run / "01-plan/result.json").read_text())
         self.assertEqual(saved["proposed_change_files"], [str(worktree / "hello.py")])
         self.assertEqual(saved["steps"][0]["read"], [f"{worktree}/hello.py:1-3"])
-        self.assertIn(f"Files: {self.root}/hello.py", (run / "01-plan/plan.md").read_text())
+        self.assertIn(
+            f"Files: {self.original_root}/hello.py", (run / "01-plan/plan.md").read_text()
+        )
         self.assertEqual((run / "00-input/task.md").read_bytes(), original)
         for stage in state["stages"]:
             if stage["stage"] != "check":
                 request = (run / stage["directory"] / "request.md").read_text()
                 context = json.loads(request.split("Context:\n", 1)[1])
-                self.assertEqual(context["workspace_paths"], {str(self.root): str(worktree)})
-        self.assertIn("return 1", (self.root / "hello.py").read_text())
+                self.assertEqual(
+                    context["workspace_paths"], {str(self.original_root): str(worktree)}
+                )
+        self.assertIn("return 1", (self.original_root / "hello.py").read_text())
         self.assertIn("return 2", (worktree / "hello.py").read_text())
 
     def test_isolated_run_continues_in_its_worktree(self):
@@ -1358,7 +1373,7 @@ class LiveTests(LiveFixture, unittest.TestCase):
         self.isolated_repository()
         nested = self.root / "nested"
         nested.mkdir()
-        header = {"roots": {"project": str(nested)}, "isolation": "worktree"}
+        header = {"roots": {"project": str(nested)}}
         self.task.write_text(f"```taskrail-task\n{json.dumps(header)}\n```\nReturn 2")
         with self.assertRaisesRegex(ValueError, "top-level"):
             self.run_mode("ok", worktree_base=str(self.base / "wt"))
@@ -1488,6 +1503,7 @@ class LiveTests(LiveFixture, unittest.TestCase):
     def test_design_discussion_leaves_a_reviewed_design_document(self):
         header = {"roots": {"project": str(self.root)}, "design": True}
         self.task.write_text(f"```taskrail-task\n{json.dumps(header)}\n```\nDesign caching")
+        self.real_repository()
         run, status, state = self.run_mode("no-change")
         self.assertEqual(status, "NO_CHANGES_REQUIRED", state.get("summary"))
         self.assertEqual((run / "design.md").read_text(), "Current source already returns 2\n")
@@ -1498,6 +1514,7 @@ class LiveTests(LiveFixture, unittest.TestCase):
     def test_question_report_and_index_carry_the_reviewed_answer(self):
         header = {"roots": {"project": str(self.root)}, "read_only": True}
         self.task.write_text(f"```taskrail-task\n{json.dumps(header)}\n```\nWhat is returned?")
+        self.real_repository()
         run, status, state = self.run_mode("no-change")
         self.assertEqual(status, "NO_CHANGES_REQUIRED", state.get("summary"))
         self.assertEqual(state["answer"], "Current source already returns 2")
@@ -1557,6 +1574,7 @@ class LiveTests(LiveFixture, unittest.TestCase):
 
     def test_context_stopped_plan_cannot_claim_unobserved_source(self):
         self.root.joinpath("unread.py").write_text("value = 2\n")
+        self.real_repository()
         _, status, state = self.run_mode("unobserved-planned-overflow", transport_retries=0)
         self.assertEqual(status, "CONTEXT_EXCEEDED", state.get("summary"))
         self.assertEqual(len(state["stages"]), 2)
@@ -1577,12 +1595,6 @@ class LiveTests(LiveFixture, unittest.TestCase):
         self.assertEqual(status, "BLOCKED")
         self.assertEqual(state["attempts"], [])
         self.assertIn("return 1", (self.root / "hello.py").read_text())
-
-    def test_scope_stops_no_revert(self):
-        _, status, state = self.run_mode("scope")
-        self.assertEqual(status, "BLOCKED")
-        self.assertEqual((self.root / "unrelated.txt").read_text(), "corrupted")
-        self.assertIn("project/unrelated.txt", state["changed_files"])
 
     def test_git_mutation_detected(self):
         _, status, state = self.run_mode("git")

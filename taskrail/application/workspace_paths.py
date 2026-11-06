@@ -7,6 +7,7 @@ user text and executor requests always keep their actual paths.
 from functools import partial
 from pathlib import Path
 
+from taskrail.application import worktree_default
 from taskrail.core import prompt_texts
 
 
@@ -14,12 +15,12 @@ def mappings(config):
     """Only recorded worktrees that exactly match the effective roots supply aliases."""
     found = []
     for alias, entry in config.get("worktrees", {}).items():
-        origin = Path(entry["source"])
         target = Path(entry["worktree"])
         if target != config["roots"].get(alias):
             continue
-        if origin != target and origin.resolve() == origin:
-            found.append((origin, target))
+        found.extend(
+            (origin, target) for origin in worktree_default.origins(entry) if origin != target
+        )
     return sorted(found, key=source_depth, reverse=True)
 
 

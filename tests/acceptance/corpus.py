@@ -55,5 +55,7 @@ def snapshot(roots):
         f"{alias}/{file.relative_to(root)}": file.read_bytes()
         for alias, root in roots.items()
         for file in root.rglob("*")
-        if file.is_file() and "__pycache__" not in file.parts
+        if file.is_file()
+        and "__pycache__" not in file.parts
+        and ".git" not in file.relative_to(root).parts
     }

@@ -52,7 +52,7 @@ def environment():
     return inherited
 
 
-def invoke(root, arguments, settings=()):
+def invoke(root, arguments, settings=(), input_data=None):
     """Internal, already validated argv only; output is data, never executable text."""
     executable = shutil.which("git", path=os.defpath)
     require(bool(executable), "Git is not installed on the orchestrator host")
@@ -63,7 +63,9 @@ def invoke(root, arguments, settings=()):
     if arguments[0] == "blame":
         arguments = ["blame", "--no-textconv", *arguments[1:]]
     options = [token for setting in (*OPTIONS, *settings) for token in ("-c", setting)]
-    return transport.run([executable, "--no-pager", *options, *arguments], root, environment())
+    return transport.run(
+        [executable, "--no-pager", *options, *arguments], root, environment(), input_data
+    )
 
 
 def blob(root, name):

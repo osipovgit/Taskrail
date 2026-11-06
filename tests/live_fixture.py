@@ -6,6 +6,8 @@ import tempfile
 from pathlib import Path
 from unittest.mock import patch
 
+from git_fixture import repository
+
 from taskrail.application.live import execute_task
 
 BASE = Path(__file__).resolve().parents[1]
@@ -30,11 +32,14 @@ class LiveFixture:
             + json.dumps({"roots": {"project": str(self.root)}})
             + "\n```\nReturn 2"
         )
+        self.original_root = self.root
+        self.real_repository()
         self.settings = self.base / "settings.json"
         self.profiles = self.base / "profiles"
 
     def configure_mode(self, mode="ok", **overrides):
         settings = dict(
+            worktree_base=str(self.base / "worktrees"),
             command=[
                 sys.executable,
                 str(BASE / "tests/fake_live.py"),
@@ -70,17 +75,9 @@ class LiveFixture:
         ):
             run, status = execute_task(self.task, self.settings, run_dir=self.base / "result")
         state = json.loads((run / "run.json").read_text())
+        self.root = Path(state["roots"]["project"])
         return run, status, state
 
     def real_repository(self):
-        """Turn the root into a Git repository with one commit; returns the Git runner."""
-        from taskrail.git import process
-
-        (self.root / ".git/HEAD").unlink()
-        (self.root / ".git").rmdir()
-        process.checked(self.root, ["init", "-b", "main"])
-        process.checked(self.root, ["config", "user.name", "Fixture"])
-        process.checked(self.root, ["config", "user.email", "fixture@example.invalid"])
-        process.checked(self.root, ["add", "."])
-        process.checked(self.root, ["commit", "-m", "Initial"])
-        return process
+        """Commit fixture setup before adding intentionally pending original edits."""
+        return repository(self.root)

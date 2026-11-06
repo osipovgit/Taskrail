@@ -144,10 +144,10 @@ if mode == "import-original" and not continued and role in {"planner", "implemen
         part.update(messageID="msg1", id=event)
         print(json.dumps(dict(type=event, part=part, sessionID="ses1")))
     sys.exit(0)
-if mode in {"native-partial", "native-partial-dirty"} and role == "implementer":
+if mode == "native-partial" and role == "implementer":
     from fake_native_recovery import interrupted_writer
 
-    interrupted_writer(run, root, target, record, prompt, mode, print)
+    interrupted_writer(run, root, target, record, prompt, print)
 if mode == "report-repair":
     report_result(context, prompt, header, print)
     sys.exit(0)
@@ -163,7 +163,8 @@ if mode in {"git-actions", "git-denied", "git-batch"}:
         if mode == "git-denied":
             request_args = ["log", "--output=/tmp/must-not-write"]
     if role == "implementer" and mode == "git-actions" and len(git_jobs) == 1:
-        revision = (root / ".git/refs/heads/main").read_text().strip()
+        output = Path(git_jobs[0]["output_file"]).read_text()
+        revision = output.split("\nSTDOUT:\n", 1)[1].split()[0]
         request_args = ["revert", "--no-edit", revision]
     if role == "implementer" and mode == "git-batch":
         batch = [f"Feature{number}.java" for number in range(69)]
@@ -447,7 +448,10 @@ elif role == "implementer":
     if mode == "new":
         (root / "new.py").write_text("VALUE = 2\n")
     if mode == "git":
-        (root / ".git/HEAD").write_text("corrupted")
+        metadata = root / ".git"
+        if metadata.is_file():
+            metadata = Path(metadata.read_text().removeprefix("gitdir: ").strip())
+        (metadata / "HEAD").write_text("corrupted")
     if mode == "secret-added":
         kept = [line for line in target.read_text().splitlines(True) if "TOKEN" not in line]
         if not context.get("feedback"):

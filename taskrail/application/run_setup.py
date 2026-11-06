@@ -13,6 +13,7 @@ from taskrail.application import (
     original_checkout,
     run_state,
     run_store,
+    worktree_followup,
 )
 from taskrail.application.artifacts import save_run
 from taskrail.application.checkpoints import RESUMABLE
@@ -39,7 +40,6 @@ SETTINGS_SNAPSHOT = (
     "verify_commands",
     "check_recipes",
     "check_specs",
-    "isolation",
     "protected_paths",
     "host_commands",
     "sandbox_network",
@@ -71,7 +71,7 @@ def source_roots(config, request):
     index = stored_index(request[RUN_DIRECTORY])
     worktrees = index.get(WORKTREES) or {}
     if worktrees:
-        return [entry["source"] for entry in worktrees.values()]
+        return [entry.get("original_source", entry["source"]) for entry in worktrees.values()]
     return list(index[ROOTS].values())
 
 
@@ -82,7 +82,10 @@ def open_state(config, run, request, ready):
         execution_context.restore(run, config, state)
         return state
     if ready:
+        parent = execution_context.submission_source(config, run)
         isolate(config, run.name)
+        if parent is not None:
+            worktree_followup.transfer(config, parent)
     state = new_state(run, config, request)
     original_checkout.capture(run, config)
     return state
