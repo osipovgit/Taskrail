@@ -37,7 +37,7 @@
     "- Optional ## After the change: Jenkins check: ... and Server check: ... (remote servers only).",
     "- ## Check selections when recipes are listed: <recipe-id>: R<n>, R<m> for runtime requirements; selected local checks may use R<n> → T1 instead of runtime.",
     "Paths are absolute or root-alias-relative. Do not copy source or requirement text.",
-    "PROJECT MAP: $map indexes source files, sizes and landmarks. Read the index first; choose relevant files from the task, known entry points and actual dependencies."
+    "PROJECT MAP: $map. Use its index to select files; follow dependencies."
   ],
   "plan.template": [
     "# Plan",
