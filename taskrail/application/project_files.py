@@ -108,7 +108,7 @@ def protected_name(name, protected=protected_paths.DEFAULT_PATTERNS):
 
 
 def described(path):
-    """(line count, landmarks, text) of a text file, or None for a large or binary one."""
+    """(line count, landmarks) of a text file, or None for a large or binary one."""
     regular = path.is_file() and not path.is_symlink()
     if not regular or path.stat().st_size > MAX_BYTES:
         return None
@@ -117,7 +117,7 @@ def described(path):
         return None
     text = raw.decode("utf-8", errors="replace")
     marks = landmarks(path.name, text)
-    return len(text.splitlines()), marks, text
+    return len(text.splitlines()), marks
 
 
 def landmarks(name, text):

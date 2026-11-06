@@ -1,44 +1,39 @@
 """A map of the declared roots for the planner, written once before planning.
 
-It lists each source file with its line count and landmarks and points every
-requirement at the files that name its distinctive words, so the planner reads where
-the work is instead of exploring. An index at the top gives the line range of each
+It lists source files with their line counts and landmarks, without inferring their
+relevance to the task. An index at the top gives the line range of each
 section, and each root's part stays within its share of MAP_LIMIT characters.
 """
 
 from functools import partial
 from itertools import starmap
 
-from taskrail.application import project_files, requirement_hints
+from taskrail.application import project_files
 from taskrail.core import prompt_texts, protected_paths
 from taskrail.infrastructure.agent_sync import atomic_write
 
 NAME = "00-input/project-map.md"
 MAP_LIMIT = 60000
 LINE_LIMIT = 240
-SEARCHED_SIZE = 200000
-SEARCHED_FILES = 2000
 
 
-def prepare(run, roots, requirements, protected=protected_paths.DEFAULT_PATTERNS):
+def prepare(run, roots, protected=protected_paths.DEFAULT_PATTERNS):
     """Write the map once per run; returns its path."""
     target = run / NAME
     if not target.exists():
-        atomic_write(target, render(roots, requirements, protected).encode())
+        atomic_write(target, render(roots, protected).encode())
     return target
 
 
-def render(roots, requirements, protected=protected_paths.DEFAULT_PATTERNS):
-    """The map: header, index, one section per root, then the requirement hints."""
-    texts = {}
+def render(roots, protected=protected_paths.DEFAULT_PATTERNS):
+    """A neutral inventory: header, index and one section per declared root."""
     share = MAP_LIMIT // len(roots)
-    section = partial(root_section, texts=texts, share=share, protected=protected)
+    section = partial(root_section, share=share, protected=protected)
     sections = list(starmap(section, roots.items()))
-    hints = requirement_hints.hint_lines(requirements, texts) or [prompt_texts.text("map.no_hints")]
-    return assembled([*sections, ["## Requirement hints", *hints]])
+    return assembled(sections)
 
 
-def root_section(alias, root, texts, share, protected):
+def root_section(alias, root, share, protected):
     """`## alias: root` and one line per file until the root's share is used."""
     names = project_files.listing(root, protected)
     lines = [f"## {alias}: {root}"]
@@ -47,18 +42,16 @@ def root_section(alias, root, texts, share, protected):
             remaining = len(names) - count
             lines.append(prompt_texts.text("map.more", count=remaining))
             break
-        lines.append(file_line(f"{alias}/{name}", root / name, texts))
+        lines.append(file_line(f"{alias}/{name}", root / name))
     return lines
 
 
-def file_line(shown, path, texts):
-    """`- path (n lines): landmarks`; a searchable text is kept for the hints."""
+def file_line(shown, path):
+    """`- path (n lines): landmarks`, without retaining file contents."""
     found = project_files.described(path)
     if found is None:
         return f"- {shown} (binary, large or unreadable)"
-    count, marks, text = found
-    if len(text) <= SEARCHED_SIZE and len(texts) < SEARCHED_FILES:
-        texts[shown] = text
+    count, marks = found
     detail = ": {}".format("; ".join(marks)) if marks else ""
     return f"- {shown} ({count} lines){detail}"[:LINE_LIMIT]
 
