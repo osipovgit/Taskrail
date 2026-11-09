@@ -60,6 +60,8 @@ source checks, checkpoints and file operations:
 
 | Completed stage | Next boundary |
 |---|---|
+| Task understanding | Validate quotes against the original fields, bind stable requirement IDs, then plan |
+| Planning or plan review: input interpretation defect | Return the quoted defect to task understanding, retain unchanged IDs and revalidate the plan before approval |
 | Planning | Independent plan review, including no-change proposals |
 | Plan review: changes requested | Return the complete findings to planning, then review the revised plan |
 | Plan review: approved | Implementation with captured preimages; a split becomes `TASKS_READY`; a no-change proposal finishes or runs applicable checks and result review |
@@ -73,7 +75,7 @@ source checks, checkpoints and file operations:
 
 Executor requests and result corrections stay in the same stage and session, including
 the distinction between plan review and result review. An authenticated split child
-starts at implementation; integration starts at checks when required, then read-only
+starts at implementation with its inherited requirements; integration starts at checks when required, then read-only
 review. Delivery phases keep their inherited checks and personal-confirmation gates.
 Recovery preserves the current stage; an interrupted writer is never blindly retried.
 
@@ -162,8 +164,10 @@ Before the first planning request the server writes `00-input/project-map.md`
 (`application/project_map.py`): an index, every source file of each root with its line
 count and landmarks (YAML task names and keys; definitions in Python, shell, JavaScript,
 TypeScript, Java, Go and Groovy; Jenkins stages; Dockerfile `FROM`/`ENTRYPOINT`/`CMD`;
-Terraform blocks; Jinja2 blocks and macros; Markdown headings), and for every
-requirement the first lines that name its distinctive words. Long command output also
+Terraform blocks; Jinja2 blocks and macros; Markdown headings). This neutral inventory
+does not assign requirements to files by matching words. The planner receives the
+original task and explicit entry points and chooses its investigation from those inputs
+and source dependencies. Long command output also
 comes with a digest of its severities, most mentioned files and rules
 (`interactions/output_digest.py`). Git and local requests are shown as one filled-in
 example each; SSH and Jenkins requests keep compact JSON schemas, one per line. Those schemas use the same available targets/jobs and stage

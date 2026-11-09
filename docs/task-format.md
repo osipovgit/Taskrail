@@ -19,10 +19,12 @@ the whole Goal, or these `##` sections, each at most once:
 | `## Verification` | Deferred runtime checks, one per line; they join the header's `verification` |
 
 The sections become the same typed fields the browser submits, so CLI tasks get the
-same requirement labels, global constraints and sealed split children. Every
-paragraph and top-level list item of Goal, Acceptance criteria and Constraints is a
-requirement; a single line ending with `:` (such as `Requirements:`) or a lone
-heading only introduces the blocks after it. Headings inside code fences are text.
+same requirement labels, global constraints and sealed split children. A separate
+task-understanding stage extracts obligations from the full narrative, including
+requests embedded in background fields. Paragraphs and bullets do not define requirement
+boundaries. Background remains available in the unchanged original text. The server
+validates exact quoted source fragments and assigns stable IDs; see
+[the interpretation contract](contracts.md). Headings inside code fences are text.
 Any other `#` or `##` heading, a repeated section, and text outside the sections
 (once a section exists) are errors that name their line. See
 [`examples/live`](../examples/live) for complete task files.
@@ -38,8 +40,9 @@ Any other `#` or `##` heading, a repeated section, and text outside the sections
 | Title | Under **More details**; one line, up to 160 characters, default the Goal's first line |
 
 **More details** also holds current behavior and errors, known entry points,
-additional constraints, and deferred verification (one check per line). Write task content in English; generated instructions and section labels
-are English. The planner normally discovers related files and exact edits; no
+additional constraints, and deferred verification (one check per line). Task input may
+use the user's language; generated explanations, instructions and section labels are
+English. The planner normally discovers related files and exact edits; no
 implementation plan or exhaustive file list is needed.
 
 Example goal: "Rebuild the API image without Docker layer cache for every local

@@ -71,7 +71,7 @@ class LandmarkTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "dockerfile"
             path.write_text("FROM busybox\n")
-            self.assertEqual(described(path), (1, ["FROM busybox"], "FROM busybox\n"))
+            self.assertEqual(described(path), (1, ["FROM busybox"]))
             self.assertEqual(landmarks("notes.txt", "FROM busybox\n"), [])
 
 

@@ -30,7 +30,7 @@ def validate_storage(options, base):
 
 
 def validate_roles(source):
-    """All three role files must declare the supported instruction contract."""
+    """Every bundled role must declare the supported instruction contract."""
     task_config.agent_source(dict(agent_source=str(source)), source.parent)
 
 

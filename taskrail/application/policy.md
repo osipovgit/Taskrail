@@ -21,6 +21,10 @@ Follow the access manifest; never read run logs, profiles, evidence.json, observ
 git-metadata.json. A Context value given as text_chunks is one string: join its parts
 without separators.
 
+## understanding
+
+Change no project file. Your only writable file is the task-understanding file.
+
 ## planner, plan-reviewer, reviewer
 
 Change no project file. Local commands inspect or verify, never fix.

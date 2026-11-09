@@ -24,7 +24,7 @@ class ScenarioWorkflows(ScenarioFixture, unittest.TestCase):
                 for name in ("goal", "criteria", "constraints"):
                     self.assertEqual(frozen[name], case[name])
                 self.assert_preserved(case["changes"])
-                expected = ["planner", "plan-reviewer"]
+                expected = ["understanding", "planner", "plan-reviewer"]
                 if case["changes"]:
                     expected += ["implementer", "reviewer"]
                 self.assertEqual([stage["stage"] for stage in state["attempts"]], expected)

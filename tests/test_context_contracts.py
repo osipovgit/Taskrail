@@ -33,6 +33,23 @@ Verify: python -m project
 """
 
 
+def understand(spec, names):
+    from taskrail.core import task_understanding
+
+    fields = [field for field in spec["fields"] if field["name"] in names]
+    entries = [
+        dict(
+            text=field["text"],
+            kind="constraint" if field["name"] == "constraints" else "task",
+            sources=[dict(field=field["name"], quote=field["text"])],
+        )
+        for field in fields
+    ]
+    spec["requirements"] = task_understanding.resolve(
+        dict(summary="Fixture interpretation", requirements=entries), spec
+    )["requirements"]
+
+
 class ContextContractTests(unittest.TestCase):
     def setUp(self):
         temporary = tempfile.TemporaryDirectory()
@@ -124,6 +141,7 @@ class ContextContractTests(unittest.TestCase):
         )
         meta = task_markdown.typed_input(text, dict(verification=["Run the integration check"]))
         spec = task_spec.resolve(text, meta)
+        understand(spec, {"goal", "criteria", "constraints"})
         entries = spec["requirements"]
         self.assertEqual(
             [entry["text"] for entry in entries],
@@ -185,6 +203,7 @@ class ContextContractTests(unittest.TestCase):
         block = "Preserve __name__ identifiers\r\nand `shell` quotes."
         text = f"## Goal\r\n\r\n{block}\r\n"
         spec = task_spec.resolve(text, task_markdown.typed_input(text, {}))
+        understand(spec, {"goal"})
         requirements = spec["requirements"]
         self.assertEqual(requirements[0]["text"], block)
         shown = task_spec.prompt_text(spec, requirements)

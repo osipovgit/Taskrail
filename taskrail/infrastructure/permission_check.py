@@ -2,16 +2,10 @@
 
 import json
 import re
-import subprocess
-import time
 from types import MappingProxyType
 
-from taskrail.core import control
-from taskrail.infrastructure import opencode_cli, opencode_server
-from taskrail.infrastructure.process_group import stop_group
+from taskrail.infrastructure import opencode_cli, permission_probe
 
-# The 2.x adapter's server start and agent loading, each within its agent budget.
-LISTING_SECONDS = 2 * opencode_server.READY_SECONDS
 ANSI = re.compile(r"\x1b\[[0-9;]*m")
 INVALID_LIST = "Invalid effective permission list"
 RESET = MappingProxyType(dict(permission="*", pattern="*", action="deny"))
@@ -22,64 +16,17 @@ def verify_launch(launch, cwd, name, expected, log):
 
     Permission probes use the same limited wrapper environment as the model launch.
     """
-    code = run_listing(
-        launch["command"], cwd, log, launch["agent_env_allow"], launch.get("stop_run")
-    )
+    permission_probe.verify(launch, cwd, log)
     text = ANSI.sub("", log.read_text(errors="replace"))
-    actual = listed_rules(text, name, code, log)
+    actual = listed_rules(text, name, log)
     check_closed(actual, expected, log, launch.get("tool_output_dir"))
     return actual
 
 
-def run_listing(command, cwd, log, allow=(), stop_run=None):
-    """`opencode agent list` with its output in log; the process group is always stopped."""
-    if stop_run is not None:
-        control.check_stop(stop_run)
-    with log.open("wb") as output:
-        process = subprocess.Popen(
-            [*command, "agent", "list"],
-            cwd=cwd,
-            env=opencode_cli.environment(allow),
-            stdin=subprocess.DEVNULL,
-            stdout=output,
-            stderr=subprocess.STDOUT,
-            start_new_session=True,
-        )
-        try:
-            return wait_listing(process, stop_run)
-        except subprocess.TimeoutExpired:
-            stop_group(process.pid)
-            process.wait()
-            raise ValueError(
-                f"opencode did not list agent permissions within {LISTING_SECONDS} seconds;"
-                f" no model launched; inspect {log}"
-            ) from None
-        except BaseException:
-            stop_group(process.pid)
-            process.wait()
-            raise
-        finally:
-            stop_group(process.pid)
-
-
-def wait_listing(process, run):
-    """Poll the permission probe within its deadline while honoring cooperative Stop."""
-    deadline = time.monotonic() + LISTING_SECONDS
-    while time.monotonic() < deadline:
-        if run is not None:
-            control.check_stop(run)
-        code = process.poll()
-        if code is not None:
-            return code
-        remaining = max(0, deadline - time.monotonic())
-        time.sleep(min(0.1, remaining))
-    raise subprocess.TimeoutExpired(process.args, LISTING_SECONDS)
-
-
-def listed_rules(text, name, code, log):
+def listed_rules(text, name, log):
     """The effective rules printed after the managed agent's name."""
     match = re.search(f"(?m)^{re.escape(name)}\\s+\\(primary\\)\\s*", text)
-    if code or not match:
+    if not match:
         raise ValueError(f"opencode did not expose the managed agent permissions; inspect {log}")
     actual = decoded_rules(text[match.end() :].lstrip(), log)
     if not all(isinstance(rule, dict) for rule in actual):

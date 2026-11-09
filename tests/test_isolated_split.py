@@ -185,7 +185,7 @@ class IsolatedSplitTests(IsolatedSplitFixture, unittest.TestCase):
         self.assertNotEqual(finished["roots"], state["roots"])
         self.assertEqual(finished["worktrees"]["project"]["source"], state["roots"]["project"])
         self.assertEqual(len(finished["commits"]), 1)
-        self.assertEqual(finished["attempts"][0]["stage"], "planner")
+        self.assertEqual(finished["attempts"][0]["stage"], "understanding")
         self.assertNotIn("contract_start", finished)
         self.assert_checks(finished, Path(finished["roots"]["project"]))
         self.assertIn("return 1", (self.original_root / "hello.py").read_text())

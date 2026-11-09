@@ -12,7 +12,7 @@ PATH_BYTES = 4000
 
 def signature(workflow):
     """Repeated overflow without changed source or working notes cannot make progress."""
-    files = ("plan.md", "review.md", "progress.md")
+    files = ("understanding.json", "plan.md", "review.md", "progress.md")
     notes = {
         name: digest(workflow.run.joinpath(name).read_bytes())
         for name in files
@@ -35,7 +35,10 @@ def research(run):
 
 def work_version(workflow):
     """A changed plan or project merits review even when some findings survive."""
-    if workflow.flow["stage"] == "plan-reviewer":
+    if (
+        workflow.flow["stage"] in {"planner", "plan-reviewer"}
+        and (workflow.run / "plan.md").is_file()
+    ):
         return digest((workflow.run / "plan.md").read_bytes())
     return digest(json.dumps(workflow.guard.expected, sort_keys=True).encode())
 

@@ -182,7 +182,7 @@ class SubmissionTests(unittest.TestCase):
         self.assertEqual(result["status"], "READY_FOR_REVIEW")
         self.assertEqual(
             [stage["stage"] for stage in result["stages"]],
-            ["planner", "plan-reviewer", "implementer", "check", "reviewer"],
+            ["understanding", "planner", "plan-reviewer", "implementer", "check", "reviewer"],
         )
         state = json.loads((self.runs / name / "run.json").read_text())
         self.assertIn("return 2", (Path(state["roots"]["project"]) / "hello.py").read_text())

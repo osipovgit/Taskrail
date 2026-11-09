@@ -9,7 +9,7 @@ are text. A server-written conversation history ends the task; it is reference d
 import re
 from types import MappingProxyType
 
-from taskrail.core import input_blocks, task_spec
+from taskrail.core import markdown_fences, task_spec
 from taskrail.core.input_header import HEADER
 from taskrail.core.requirements import HISTORY
 
@@ -87,7 +87,7 @@ class Reader:
     def line(self, number, line):
         """A heading opens a section; other lines, with their endings, belong to it."""
         fenced = self.fence
-        self.fence = input_blocks.next_fence(fenced, line)
+        self.fence = markdown_fences.next_fence(fenced, line)
         heading = None if fenced else HEADING.fullmatch(line.rstrip("\r\n"))
         if heading is not None and len(heading[1]) <= 2:
             self.heading(number, heading)

@@ -7,7 +7,7 @@ from taskrail.core import requirements, schema
 
 IDENTIFIER = "id"
 REQUIRED = frozenset((IDENTIFIER, "kind", "text"))
-OPTIONAL = frozenset(("parent_id", "scope", "source", "derived_from"))
+OPTIONAL = frozenset(("parent_id", "scope", "source", "sources", "derived_from"))
 HASH_LENGTH = 12
 
 
@@ -30,7 +30,7 @@ def check_entry(entry):
     schema.require(
         all(isinstance(text, str) for text in texts), "Invalid assigned requirement text"
     )
-    valid = entry["kind"] in {"task", "runtime"}
+    valid = entry["kind"] in {"task", "constraint", "runtime"}
     valid = valid and bool(entry["text"].strip())
     schema.require(valid, "Invalid assigned requirement kind or text")
 
@@ -51,7 +51,7 @@ def distinct(entries):
     kept = {}
     for entry in entries:
         previous = kept.setdefault(entry[IDENTIFIER], entry)
-        global_constraint = entry.get("source", {}).get("field") == "constraints"
+        global_constraint = requirements.constraint(entry)
         if global_constraint and "parent_id" not in previous:
             kept[entry[IDENTIFIER]] = entry
     return list(kept.values())
@@ -72,7 +72,7 @@ def inherited(parent_requirements, step):
     scopes = {entry[IDENTIFIER]: entry["scope"] for entry in scope_records}
     entries = []
     for entry in parent_requirements:
-        global_constraint = entry.get("source", {}).get("field") == "constraints"
+        global_constraint = requirements.constraint(entry)
         if entry[IDENTIFIER] in step["criteria"] or global_constraint:
             entries.append(
                 assigned(entry, None if global_constraint else scopes.get(entry[IDENTIFIER]))

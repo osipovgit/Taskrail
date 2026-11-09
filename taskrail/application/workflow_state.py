@@ -17,13 +17,14 @@ class Workflow:
     """Configuration, persisted state, integrity guard and stage flow of one locked run."""
 
     def __init__(self, config, run, state, request):
-        """Start at planning; a continuation replaces the flow from its checkpoint."""
+        """Interpret a new task; authenticated phases and continuations replace the flow."""
         self.config = config
         self.run = run
         self.state = state
         self.guard = SourceGuard(config["roots"])
         self.flow = dict.fromkeys(FLOW_KEYS)
-        self.flow.update(stage="planner", allowed=[])
+        stage = "planner" if config.get("phase") else "understanding"
+        self.flow.update(stage=stage, allowed=[])
         self.runtime = dict(
             debug=request["debug"],
             resumed=bool(request["resume"]),

@@ -50,7 +50,10 @@ class ChildContractTests(unittest.TestCase):
         return task
 
     def test_real_markdown_split_scope_survives_epic_launch_and_child_validation(self):
-        requirements = [dict(id="R1", text="First"), dict(id="R2", text="Second")]
+        requirements = [
+            dict(id="R1", kind="task", text="First"),
+            dict(id="R2", kind="task", text="Second"),
+        ]
         text = """# Plan
 Decision: split
 Summary: Two independent outputs.
@@ -133,7 +136,8 @@ Verify: Run second check
                 )
             )
         state = dict(
-            roots={"project": str(self.root)}, requirements=[dict(id="R1", text="Correct outputs")]
+            roots={"project": str(self.root)},
+            requirements=[dict(id="R1", kind="task", text="Correct outputs")],
         )
         payload = epic_launch.payload(self.parent, state, entries, entries[-1])
         self.assertLess(len(payload["split_context"]), task_form.FIELD_LIMIT)
@@ -180,7 +184,8 @@ Verify: Run second check
     def test_oversized_child_acceptance_fails_without_replacing_criteria_with_a_pointer(self):
         requirement = "Verify the original condition. " * 800
         state = dict(
-            roots={"project": str(self.root)}, requirements=[dict(id="R1", text=requirement)]
+            roots={"project": str(self.root)},
+            requirements=[dict(id="R1", kind="task", text=requirement)],
         )
         current = dict(
             id="T1",

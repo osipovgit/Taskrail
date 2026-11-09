@@ -1,4 +1,4 @@
-"""Assign stable identities to complete task blocks without model summarization."""
+"""Stable runtime identities and global constraint classification."""
 
 import hashlib
 
@@ -11,3 +11,9 @@ def requirement(description, kind):
     encoded = (kind + description).encode()
     fingerprint = hashlib.sha256(encoded).hexdigest()[:HASH_PREFIX_LENGTH]
     return {"id": f"R-{fingerprint}", "text": description, "kind": kind}
+
+
+def constraint(entry):
+    """Explicit model classification or a constraint supplied to an assigned child."""
+    source = entry.get("source", {})
+    return entry["kind"] == "constraint" or source.get("field") == "constraints"
