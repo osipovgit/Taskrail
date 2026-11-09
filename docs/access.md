@@ -7,6 +7,13 @@ not OS privileges or authentication. Native permission errors return to the agen
 without stopping the turn or creating a read-grant prompt. The agent corrects its
 path or uses an allowed source; it reports a gap if required evidence is inaccessible.
 
+Before a model starts, the configured CLI must report
+the exact managed permission profile. A timed-out or unsuccessful `agent list` is
+retried using `transport_retries`; each failed probe keeps a numbered
+`permissions-failed-N.log` beside `permissions.log`. Stop remains available between
+and during probes. A missing executable, malformed successful listing or mismatched
+policy stops without launching a model or widening permissions.
+
 ## Protected paths
 
 Protected files are never read or edited by a model: the profile denies them after
