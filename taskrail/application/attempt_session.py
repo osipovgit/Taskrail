@@ -93,6 +93,8 @@ def validated(workflow, record, outcome, deliver_lines=False):
     environment = dict(
         roots=roots, run=workflow.run, plan=workflow.flow["plan"], check_config=workflow.config
     )
+    if record["stage"] in {"planner", "plan-reviewer"}:
+        environment["feedback"] = workflow.flow["feedback"]
     environment["deliver_lines"] = deliver_lines
     verdict = result_context.parse(outcome, record, workflow.state, environment)
     if record["stage"] == "planner":

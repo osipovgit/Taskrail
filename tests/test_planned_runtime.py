@@ -96,16 +96,39 @@ class PlannedRuntimeTests(unittest.TestCase):
             task_spec=dict(requirements=self.requirements),
         )
 
-    def parsed(self, text=PLAN):
+    def parsed(self, text=PLAN, feedback=None):
         (self.run / "plan.md").write_text(text)
         state = dict(run_format=2, requirements=self.requirements, changed_files=[])
-        record = dict(role="planner", stage="planner", directory="01-plan")
+        record = dict(number=1, role="planner", stage="planner", directory="01-plan")
         environment = dict(roots=self.roots, run=self.run, plan=None, check_config=self.config)
+        environment["feedback"] = feedback
         outcome = dict(final_text="DONE", sessions=["planner-session"])
         plan = result_context.parse(outcome, record, state, environment)
         plan_validation.canonical_plan(plan, self.roots)
         plan_validation.validate_plan(plan, self.roots, self.base / "task.md", self.config)
         return plan
+
+    def test_planner_must_answer_each_open_id_even_on_checkpoint_continuation(self):
+        folder = self.run / "03-plan-review"
+        folder.mkdir()
+        prior = dict(findings=[dict(id="F3-1", criterion="R-docs")])
+        atomic_json(folder / "result.json", prior)
+        feedback = dict(previous_feedback=dict(findings_file=str(folder / "findings.json")))
+        for response, message in (
+            ("", "Missing: F3-1"),
+            ("F3-1: disputed:", "use the issued finding ID"),
+            ("F3-1: fixed: revised\nF3-1: disputed: reason", "has two decisions"),
+            ("F3-2: fixed: revised", "Unknown or already closed: F3-2"),
+        ):
+            with self.subTest(response=response), self.assertRaisesRegex(ValueError, message):
+                self.parsed(PLAN + "\n## Finding responses\n" + response, feedback)
+        plan = self.parsed(
+            PLAN + "\n## Finding responses\nF3-1: disputed: See T2: output docs.", feedback
+        )
+        self.assertEqual(
+            plan["finding_responses"],
+            [dict(id="F3-1", status="disputed", reason="See T2: output docs.")],
+        )
 
     def context(self, plan, stage="plan-reviewer"):
         return dict(

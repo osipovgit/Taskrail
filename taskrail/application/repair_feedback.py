@@ -21,12 +21,15 @@ def identity(version, feedback):
 
 
 def issue_set(entries):
-    """Numbering and ordering of findings can change on every independent review."""
+    """Keep stable plan IDs and ignore incidental ordering or local evidence numbering."""
     issues = set()
     for entry in entries:
         if isinstance(entry, dict):
-            description = EVIDENCE_IDS.sub("", entry["evidence"])
-            entry = (entry["criterion"], entry["file"], description)
+            if re.fullmatch(r"F\d+-\d+", entry.get("id", "")):
+                entry = entry["id"]
+            else:
+                description = EVIDENCE_IDS.sub("", entry["evidence"])
+                entry = (entry["criterion"], entry["file"], description)
         issues.add(json.dumps(entry, sort_keys=True))
     return sorted(issues)
 

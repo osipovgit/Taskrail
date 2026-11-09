@@ -24,9 +24,9 @@ def validate_paths(payload, context):
 
 def path_feedback(payload, claim, error, stage):
     """Reviewers must not be told to use planner-only outcomes or fields."""
-    owners = ", ".join(
-        entry["id"] for entry in payload["coverage"] if claim["id"] in entry["evidence_ids"]
-    )
+    rows = [*payload["coverage"], *payload.get("finding_checks", ())]
+    matching = (entry for entry in rows if claim["id"] in entry["evidence_ids"])
+    owners = ", ".join(entry["id"] for entry in matching)
     if stage == "plan-reviewer":
         return f"{owners}: {error}. {prompt_texts.diagnostic('validation.plan_review_path')}"
     message = prompt_texts.diagnostic("validation.evidence_path", owners=owners, error=error)

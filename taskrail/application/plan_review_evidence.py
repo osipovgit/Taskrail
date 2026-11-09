@@ -30,10 +30,12 @@ def accepts(claim, payload, context):
     if Path(claim["path"]) not in sources(context):
         return False
     identifier = claim["id"]
-    rows = payload["coverage"]
-    owners = [row for row in rows if identifier in row["evidence_ids"]]
+    owners = [row for row in payload["coverage"] if identifier in row["evidence_ids"]]
     kinds = {row["outcome"] for row in owners}
-    permitted = bool(owners) and kinds <= {"planned", "contradicted"}
+    rechecked = any(
+        identifier in decision["evidence_ids"] for decision in payload.get("finding_checks", ())
+    )
+    permitted = (bool(owners) or rechecked) and kinds <= {"planned", "contradicted"}
     schema.require(permitted, prompt_texts.diagnostic("validation.plan_review_evidence"))
     return True
 

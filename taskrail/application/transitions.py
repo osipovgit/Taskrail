@@ -2,7 +2,13 @@
 
 from types import MappingProxyType
 
-from taskrail.application import declared_block, input_revision, repair_feedback, review_outcome
+from taskrail.application import (
+    declared_block,
+    input_revision,
+    plan_feedback,
+    repair_feedback,
+    review_outcome,
+)
 from taskrail.core import plan_contract, prompt_texts
 
 PLAN_REVIEW = "plan-reviewer"
@@ -22,6 +28,9 @@ def understood(flow, state, verdict, version):
     feedback = (
         dict(summary=prompt_texts.text("understanding.replanned")) if flow["feedback"] else None
     )
+    prior = plan_feedback.packet(flow["feedback"])
+    if prior:
+        feedback.update(prior)
     flow.update(
         stage=PLANNER,
         plan=None,

@@ -94,10 +94,7 @@ def finish_stage(run, state, active, outcome):
     announce(record, verdict)
     if verdict is not None:
         atomic_json(path / "result.json", verdict)
-        if record["role"] == "reviewer" and (
-            verdict.get("findings") or verdict.get("blocking_gaps")
-        ):
-            record["review_feedback"] = feedback_files.findings(path, verdict)
+        feedback_files.for_review(path, record, verdict)
     files = [entry.name for entry in path.iterdir() if entry.is_file()]
     record["files"] = sorted(files)
     atomic_json(path / "stage.json", record)

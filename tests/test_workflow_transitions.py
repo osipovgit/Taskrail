@@ -123,6 +123,21 @@ class WorkflowTransitionTests(unittest.TestCase):
             self.assertEqual(execution["feedback"], rejected)
             self.assertEqual(execution["stage"], "planner")
 
+    def test_same_open_ids_in_reworded_reviews_stop_only_after_unchanged_repairs(self):
+        execution = flow("plan-reviewer")
+        state = dict(status="RUNNING", results={})
+        for attempt, ids in enumerate((("F3-1", "F3-2"), ("F3-2",), ("F3-2",), ("F3-2",))):
+            execution["stage"] = "plan-reviewer"
+            findings = [
+                dict(id=name, criterion="same R", evidence=f"diagnosis {attempt}", file="module.py")
+                for name in ids
+            ]
+            rejected = dict(verdict("REQUEST_CHANGES"), findings=findings)
+            transitions.advance(
+                execution, state, rejected, "05-plan-review/result.json", "unchanged plan"
+            )
+            self.assertEqual(state["status"], "RUNNING" if attempt < 3 else "NO_PROGRESS")
+
     def test_implementation_requires_checks_then_independent_review_before_commit(self):
         execution = flow("implementer")
         state = dict(status="RUNNING", results={}, checks=[dict(status="PASS")])
