@@ -49,7 +49,7 @@ def refresh_changes(workflow):
     if workflow.guard.before is not None:
         state["changed_files"] = changed(workflow.guard.before, workflow.guard.scan())
     if state[PREIMAGES]:
-        write_diff(workflow.run, workflow.config["roots"], state[PREIMAGES])
+        write_diff(workflow)
 
 
 def design_document(workflow):

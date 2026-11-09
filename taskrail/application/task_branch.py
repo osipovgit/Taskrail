@@ -53,7 +53,10 @@ def extend(workflow):
     """Adopt the implementer's changes beyond the plan, with preimages from the branch."""
     allowed = workflow.flow["allowed"]
     originals = workflow.state[PREIMAGES]
+    preserved = set(workflow.state.get("followup_preserved", []))
     for name in changed(workflow.guard.before, workflow.guard.scan()):
+        if name in preserved:
+            continue
         if name not in allowed and adoptable(workflow.config, name):
             if name not in originals:
                 originals[name] = preimage(workflow.run, workflow.config["roots"], name)

@@ -166,6 +166,14 @@ A Follow-up creates a new branch from the previous task's HEAD and copies its st
 unstaged and nonignored untracked changes, including deletions, binary files, executable
 modes and symlinks. The previous checkout and index remain unchanged. A capture failure
 or concurrent source change stops initialization instead of silently dropping files.
+For a Follow-up or one of its split tasks, listing a carried file under the task’s
+`Files` selects its current working version, including any further implementation edits.
+The server captures the file at the task’s starting HEAD as its preimage and gives the
+result reviewer its full diff, including binary patches and executable-bit changes.
+Once the reviewer approves, the server commits the selected versions alongside ordinary
+task changes. Other carried files keep their index and working versions. A file listed
+only under `Read` stays available for inspection.
+
 For an ordinary new task, the branch starts at HEAD; before
 planning, Taskrail records the original checkout's Git status in
 `00-input/original/status.jsonl`. Each row names the path, the index/worktree

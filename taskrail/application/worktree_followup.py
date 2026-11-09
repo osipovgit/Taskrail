@@ -14,6 +14,13 @@ INDEX = ("ls-files", "--stage", "-z")
 CHUNK_BYTES = 65536
 
 
+def status(root):
+    """Inspect working changes without running repository-defined clean filters."""
+    listing = process.invoke(root, list(COMMAND), process.filter_settings(root))
+    require(listing.returncode == 0, listing.stderr or "Cannot read Follow-up Git status")
+    return listing.stdout
+
+
 def transfer(config, parent):
     """The parent is authenticated and locked; its checkout and index remain untouched."""
     for alias, record in config["worktrees"].items():
@@ -21,6 +28,7 @@ def transfer(config, parent):
             snapshot = Snapshot(Path(parent["roots"][alias]), Path(scratch))
             snapshot.capture()
             snapshot.apply(Path(record["worktree"]))
+            record["carried_files"] = sorted(snapshot.paths)
         previous = parent["worktrees"][alias]
         record["original_source"] = previous.get("original_source", previous["source"])
 
@@ -32,7 +40,7 @@ class Snapshot:
         self.root = root
         self.scratch = scratch
         self.index = process.checked(root, list(INDEX))
-        self.status = process.checked(root, list(COMMAND))
+        self.status = status(root)
         self.head = process.checked(root, ["rev-parse", "HEAD"])
         self.paths = {}
         for entry in filter(None, self.index.split("\x00")):
@@ -55,9 +63,7 @@ class Snapshot:
         """Concurrent checkout/index changes are an explicit failure, never a partial success."""
         current_index = process.checked(self.root, list(INDEX))
         require(current_index == self.index, "Follow-up index changed")
-        require(
-            process.checked(self.root, list(COMMAND)) == self.status, "Follow-up status changed"
-        )
+        require(status(self.root) == self.status, "Follow-up status changed")
         require(
             process.checked(self.root, ["rev-parse", "HEAD"]) == self.head, "Follow-up HEAD moved"
         )

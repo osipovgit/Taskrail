@@ -3,9 +3,12 @@
 from taskrail.git import history_outcome, index_ownership, process, requests, staging_receipt
 
 
-def completed(run, root, paths):
+def completed(run, root, paths, scoped=False):
     """Reuse an existing own commit only while its HEAD and reviewed contents still match."""
-    if staged_paths(root):
+    staged = staged_paths(root)
+    if scoped:
+        staged = set(staged).intersection(root / name for name in paths)
+    if staged:
         return None
     head = history_outcome.head(root)
     for receipt in own_receipts(run, root):
@@ -49,6 +52,18 @@ def staged(run, root, paths):
         ):
             return False
     return True
+
+
+def pending(root, paths):
+    """Stage only entries whose raw bytes or mode differ from the selected working file."""
+    wanted = [root / name for name in paths]
+    indexed = index_ownership.entries(root, wanted)
+    return [
+        name
+        for name, path in zip(paths, wanted, strict=True)
+        if staging_receipt.working_identity(root, indexed[str(path)])
+        != index_ownership.file_digest(path)
+    ]
 
 
 def staged_paths(root):

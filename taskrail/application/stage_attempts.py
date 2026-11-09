@@ -68,9 +68,7 @@ class StageAttempts:
     def retry(self, record, outcome):
         """Prepare the next attempt, or record why the stage stops."""
         if self.workflow.writable():
-            write_diff(
-                self.workflow.run, self.workflow.config["roots"], self.workflow.state["preimages"]
-            )
+            write_diff(self.workflow)
         if not self.retries.allowed(outcome):
             fail(self.workflow.state, record, outcome)
 

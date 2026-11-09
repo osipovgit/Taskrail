@@ -1,5 +1,7 @@
 """Validate recovery inputs and preserve observations without replaying a writer."""
 
+import stat
+
 from taskrail.application import evidence, instruction_sources
 from taskrail.application.artifacts import finish_stage
 
@@ -8,10 +10,21 @@ def verify_preimages(run, state, before):
     """A preimage must still be the byte version recorded at the start or inherited."""
     for name, reference in state["preimages"].items():
         if reference:
-            source_bytes = (run / reference).read_bytes()
+            path = run / reference
+            verify_mode(path, name, state)
+            source_bytes = path.read_bytes()
             expected = recorded_digest(name, state, before)
             if instruction_sources.fingerprint(source_bytes) != expected:
                 raise ValueError("Saved preimage changed; cannot continue safely")
+
+
+def verify_mode(path, name, state):
+    """Only Follow-up preimages use the saved executable bit when regenerating a review."""
+    if name in state.get("followup_selected", ()):
+        baseline = state["inherited_source_baseline"][name]
+        mode = int(baseline.partition(":")[0], 8)
+        if (path.stat().st_mode ^ mode) & stat.S_IXUSR:
+            raise ValueError("Saved preimage executable mode changed")
 
 
 def recorded_digest(name, state, before):

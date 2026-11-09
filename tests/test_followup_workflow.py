@@ -22,6 +22,9 @@ class FollowupWorkflowTests(LiveFixture, unittest.TestCase):
         process.checked(previous, ["add", "hello.py"])
         (previous / "hello.py").write_text("# unstaged context\ndef hello():\n    return 2\n")
         (previous / "pending.bin").write_bytes(b"\x00pending\xff")
+        (previous / "unrelated.txt").write_text("staged notes\n")
+        process.checked(previous, ["add", "--", "unrelated.txt"])
+        (previous / "unrelated.txt").write_text("working notes\n")
         original_index = process.checked(previous, ["ls-files", "--stage", "-z"])
         original_status = process.checked(previous, ["status", "--porcelain", "-z"])
         head = process.checked(previous, ["rev-parse", "HEAD"]).strip()
@@ -39,7 +42,21 @@ class FollowupWorkflowTests(LiveFixture, unittest.TestCase):
             execution_parent=parent.name,
         )
         (folder / "launch.json").write_text(json.dumps(launch))
+        self.configure_mode("review-timeout", transport_retries=0)
         child, status = execute_task(task, self.settings, run_dir=self.base / "followup")
+        interrupted = json.loads((child / "run.json").read_text())
+        self.assertEqual(status, "TIMEOUT", interrupted.get("summary"))
+        current = Path(interrupted["roots"]["project"])
+        self.assertEqual(process.checked(current, ["rev-parse", "HEAD"]).strip(), head)
+        self.assertEqual(process.checked(current, ["ls-files", "--stage", "-z"]), original_index)
+        preimage = child / interrupted["preimages"]["project/hello.py"]
+        self.assertEqual(preimage.read_text(), process.checked(previous, ["show", "HEAD:hello.py"]))
+        patch = (child / "changes.diff").read_text()
+        self.assertIn("+# unstaged context", patch)
+        self.assertNotIn("working notes", patch)
+        self.configure_mode()
+        _, status = execute_task(task, self.settings, run_dir=child, resume=True)
+
         after = json.loads((child / "run.json").read_text())
         self.assertEqual(status, "READY_FOR_REVIEW", after.get("summary"))
         current = Path(after["roots"]["project"])
@@ -49,7 +66,15 @@ class FollowupWorkflowTests(LiveFixture, unittest.TestCase):
             process.checked(current, ["branch", "--show-current"]).strip(), "taskrail/followup"
         )
         self.assertEqual(process.checked(previous, ["ls-files", "--stage", "-z"]), original_index)
-        self.assertEqual(process.checked(current, ["ls-files", "--stage", "-z"]), original_index)
+        self.assertEqual(
+            process.checked(current, ["diff", "--name-only", head, "HEAD"]), "hello.py\n"
+        )
+        self.assertEqual(
+            process.checked(current, ["show", "HEAD:hello.py"]), (current / "hello.py").read_text()
+        )
+        self.assertEqual(process.checked(current, ["show", ":unrelated.txt"]), "staged notes\n")
+        self.assertEqual((current / "unrelated.txt").read_text(), "working notes\n")
+        self.assertEqual(after["changed_files"], ["project/hello.py"])
         self.assertEqual(
             process.checked(previous, ["status", "--porcelain", "-z"]), original_status
         )

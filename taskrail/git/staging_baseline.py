@@ -5,7 +5,7 @@ import subprocess
 from pathlib import Path
 
 from taskrail.core.schema import require
-from taskrail.git import history_outcome, process
+from taskrail.git import history_outcome, process, review_source
 
 KEY = "source_baseline"
 HISTORY_WRITES = history_outcome.HISTORY_WRITES
@@ -78,10 +78,9 @@ def committed(repo, path, revision):
     listing = process.checked(repo, ["ls-tree", "-z", revision, "--", relative])
     if not listing:
         return None
-    outcome = process.invoke(repo, ["show", f"{revision}:{relative}"])
-    require(outcome.returncode == 0, "Cannot read the committed Git source baseline")
-    mode = listing.split(" ", 1)[0]
-    return f"{mode}:{outcome.stdout_sha256}"
+    mode, _, oid = listing.partition("\t")[0].split()
+    checksum = review_source.blob_digest(repo, oid)
+    return f"{mode}:{checksum}"
 
 
 def source_identity(signature):

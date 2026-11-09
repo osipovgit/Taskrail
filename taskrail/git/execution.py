@@ -74,8 +74,9 @@ def settings(root, argv):
 def prepare(root, entry, previous, environment):
     """Separate immutable policy from source-specific write authorization."""
     payload = entry[REQUEST]
+    arguments = payload[ARGV]
     if not entry[MUTATION]:
-        return payload[ARGV]
+        return arguments
     same = [record for record in previous if record[STATUS] in UNCERTAIN]
     require(
         not any(record.get(MUTATION) for record in same),
@@ -86,14 +87,24 @@ def prepare(root, entry, previous, environment):
     repo = scope.repository(root)
     entry[REPOSITORY] = str(repo)
     history_outcome.prepare(repo, entry)
-    entry[FINGERPRINT] = (
-        worktree_restore if payload[ARGV][0] == "restore" else index_ownership
-    ).fingerprint(repo, root, payload[ARGV])
-    acted_on = [record.get(FINGERPRINT) for record in same]
-    require(entry[FINGERPRINT] not in acted_on, prompt_texts.text("git.replay"))
+    if arguments[0] == "restore":
+        entry[FINGERPRINT] = worktree_restore.fingerprint(repo, root, arguments)
+    else:
+        entry[FINGERPRINT] = index_ownership.fingerprint(
+            repo, root, arguments, environment.get("reviewed_paths")
+        )
+    scope.preserve_for_review(
+        entry[FINGERPRINT], arguments[0], environment.get("review_only_paths")
+    )
+    require(
+        all(record.get(FINGERPRINT) != entry[FINGERPRINT] for record in same),
+        prompt_texts.text("git.replay"),
+    )
     context = dict(
         repository=repo,
-        allowed=environment["allowed_paths"],
+        allowed=set(environment["allowed_paths"]) - set(environment.get("review_only_paths", [])),
+        reviewed=environment.get("reviewed_paths"),
+        adopted=set(environment.get("adopted_paths", [])),
         baseline=staging_baseline.updated(staging_baseline.originals(environment), previous, repo),
         owned=index_ownership.owned(previous, repo),
     )
