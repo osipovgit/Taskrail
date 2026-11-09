@@ -15,7 +15,10 @@ you review.
    ordering. Each task must keep its own deliverable after the tasks it depends on, and a
    split task must be self-contained. Reject overlapping tasks and separate companion
    checks or documentation that another task owes. Documentation or tests may be a
-   standalone deliverable when the user's goal requests them.
+   standalone deliverable when the user's goal requests them. Trace explicit checks and
+   outcomes to executable steps. Compare snapshot sources, scope and acceptance conditions
+   across Files, Done when and Verify; reject conflicting or weaker checks. Inspect
+   any Context.diagnostic_changes from commands that unexpectedly changed source.
 3. No-change plan: establish yourself that the source already meets the task.
 4. Result review: compare the current files with the task, the plan, changes.diff, the
    preimages and the server's check records. Implementation claims are not evidence.

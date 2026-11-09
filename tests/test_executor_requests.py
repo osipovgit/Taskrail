@@ -184,6 +184,10 @@ class LiveRequestTests(LiveFixture, unittest.TestCase):
         journal = json.loads((run / "local-actions.json").read_text())
         self.assertEqual(journal[0]["effects"], ["project/notes.txt"])
         self.assertEqual(state["command_effects"][0]["files"], ["project/notes.txt"])
+        review = next(stage for stage in state["stages"] if stage["stage"] == "plan-reviewer")
+        request = (run / review["directory"] / "request.md").read_text()
+        self.assertIn('"diagnostic_changes"', request)
+        self.assertIn(journal[0]["id"], request)
         planner = next(stage for stage in state["stages"] if stage["stage"] == "planner")
         feedback = (run / planner["directory"] / "tool-result.md").read_text()
         effects = feedback.split("The command changed files inside the declared roots: ")[1]

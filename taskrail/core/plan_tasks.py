@@ -11,7 +11,7 @@ from types import MappingProxyType
 from taskrail.core import plan_files
 from taskrail.core.plan_keys import uncode
 from taskrail.core.plan_markdown import FIELDS, LINE, TASKS
-from taskrail.core.plan_outcomes import PLACEHOLDER, absolute, cited_ranges
+from taskrail.core.plan_outcomes import PLACEHOLDER, cited_ranges
 from taskrail.core.plan_ownership import problems as ownership_problems
 from taskrail.core.task_graph import order
 
@@ -42,7 +42,6 @@ def steps(document, coverage):
     """Every task section as a plan step, in the plan's order."""
     planned = []
     for task in document[TASKS]:
-        coverage.problems.extend(plan_files.of_task(task[FIELDS]))
         try:
             planned.append(step(task, coverage))
         except ValueError as error:
@@ -54,21 +53,21 @@ def step(task, coverage):
     """One task section; requirements of every task belong to each of them."""
     owned = coverage.owners.get(task[IDENTIFIER], []) + coverage.everyone
     done = listed(task, "done")
-    files = listed(task, "files")
     title = task["title"]
+    reads, notes = cited_ranges(coverage, task[FIELDS])
     return dict(
         id=task[IDENTIFIER],
         title=title,
         line=task[LINE],
         action="{}: {}".format(title, "; ".join(done) or title),
-        files=[str(absolute(name, coverage.roots)) for name in files],
+        files=plan_files.names(task[FIELDS], coverage),
         criteria=list(dict.fromkeys(entry[IDENTIFIER] for entry in owned)),
         scopes=[entry for entry in owned if entry.get("scope")],
         depends_on=dependencies(task),
         checks=listed(task, "verify"),
         done_when=done,
-        notes=plan_files.notes(task[FIELDS]),
-        read=cited_ranges(coverage, task[FIELDS].get("read", ([], 0))),
+        notes=plan_files.notes(task[FIELDS], notes),
+        read=reads,
         not_todo=listed(task, "not_todo"),
         required_checks=listed(task, "required_checks"),
     )
@@ -79,9 +78,6 @@ def listed(task, key):
     entries = task[FIELDS].get(key, ([], 0))[0]
     if key in {"not_todo", "required_checks"}:
         entries = [entry for entry in entries if entry.casefold() not in NONE_WORDS]
-    if key == "files":
-        entries = [name.strip() for entry in entries for name in entry.split(",")]
-        entries = map(uncode, (plan_files.NEW_FILE.sub("", name) for name in entries))
     return [entry for entry in entries if entry and not PLACEHOLDER.match(entry)]
 
 

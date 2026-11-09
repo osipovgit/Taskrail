@@ -3,6 +3,11 @@
 The UI shows public messages, tool calls, conclusions, source evidence and per-stage
 usage. It does not expose hidden reasoning. The right sidebar summarizes elapsed
 time and observed tokens; stage cards show steering timeouts and instruction provenance.
+The first stage opened by Continue from checkpoint carries a continuation marker and
+the operator’s verbatim note in the stage body and its Activity log. Subsequent attempts
+keep their own origin. Alternating unchanged requests or transport errors share their
+previous counts within the round. A changed draft, source or newly observed project
+lines can make the same request useful again.
 
 | Metric | Meaning |
 |---|---|

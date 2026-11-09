@@ -70,20 +70,19 @@ def pause(session, seconds):
         time.sleep(min(POLL_SECONDS, remaining))
 
 
-def progress(session):
+def work_state(session):
     """Source and own-artifact progress distinguish recovery from an unchanged loop."""
     snapshot = dict(session.environment["expected"])
     for name in session.launch.get("runtime", {}).get("attached_files", ()):
         path = Path(name)
         if path.is_file():
             snapshot[str(path)] = stream_digest(path)
-    return snapshot
+    return snapshot, research(session.environment["run"], project_only=True)
 
 
 def repeated_feedback(session, kind, error):
     """Only identical feedback on the same artifact and source consumes a repeat."""
-    observed = research(session.environment["run"])
-    details = (kind, error, progress(session), observed)
+    details = (kind, error, work_state(session))
     signature = digest(json.dumps(details, sort_keys=True).encode())
     repeated = session.context.setdefault("feedback_repeats", {})
     repeated[signature] = repeated.get(signature, 0) + 1
@@ -91,11 +90,9 @@ def repeated_feedback(session, kind, error):
 
 
 def stalled_turns(session, diagnostics):
-    """Count consecutive identical interrupted states, resetting after real progress."""
-    current = json.dumps((diagnostics, progress(session)), sort_keys=True)
+    """Recognize recurring diagnostics at the same work state even after other failures."""
+    current = json.dumps((diagnostics, work_state(session)), sort_keys=True)
     signature = digest(current.encode())
-    previous = session.context.get("turn_recovery", {})
-    repeated = previous.get("signature") == signature
-    count = previous.get("count", 0) + 1 if repeated else 1
-    session.context["turn_recovery"] = dict(signature=signature, count=count)
-    return count
+    counts = session.context.setdefault("turn_recovery", {})
+    counts[signature] = counts.get(signature, 0) + 1
+    return counts[signature]

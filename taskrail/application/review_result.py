@@ -57,10 +57,10 @@ def downgraded(record, records, context):
     for row in record["coverage"]:
         if set(row["evidence_ids"]).intersection(failing):
             unproven.append(row)
-    if not context.get("rebuilt"):
+    proposal = context.get("plan") or {}
+    if not context.get("rebuilt") or proposal.get("decision") == "blocked":
         summary = prompt_texts.text("review.unproven", labels=review_lines.labels(unproven))
-        detail = citation_review.feedback(list(failing.values()))
-        raise ValueError(f"{summary}\n{detail}")
+        raise ValueError("\n".join((summary, citation_review.feedback(failing.values()))))
     for row in unproven:
         row.update(outcome=GAP, evidence_ids=[])
         row["explanation"] += " ({})".format(prompt_texts.text("review.unconfirmed"))

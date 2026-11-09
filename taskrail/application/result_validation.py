@@ -12,12 +12,14 @@ from taskrail.application import (
 )
 from taskrail.application.implementer_result import stage_result as implementation
 from taskrail.application.input_revision import requested as input_revision
+from taskrail.application.plan_review_evidence import verify as verify_proposal
 from taskrail.application.result_paths import approved_path as approved_path
 from taskrail.application.result_paths import validate_paths
 from taskrail.application.understanding_file import stage_result as understanding
 from taskrail.core import (
     coverage,
     plan_contract,
+    prompt_texts,
     schema,
 )
 from taskrail.core.files import atomic_json
@@ -71,6 +73,8 @@ def checked(payload, context):
         validate_planner(payload, context)
     else:
         validate_paths(payload, context)
+        if context[STAGE] == "plan-reviewer" and "plan_reference" in context:
+            verify_proposal(context)
         payload = review_result.settled(payload, records, context)
         validate_coverage(payload, context)
     proofs = citation_review.validate(payload[EVIDENCE], records, context)
@@ -126,6 +130,10 @@ def validate_role(payload, context):
 
 def validate_review(payload, plan):
     """No-change approval needs completed static evidence, not future actions."""
+    if payload["status"] == "APPROVE":
+        schema.require(
+            plan.get("decision") != "blocked", prompt_texts.text("validation.block_review")
+        )
     if payload["status"] == "APPROVE" and not plan["proposed_change_files"]:
         schema.require(
             all(

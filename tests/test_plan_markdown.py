@@ -236,6 +236,30 @@ class PlanDocumentTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "'Approach' is not a plan key here"):
             payload("Approach: rewrite\n" + PLAN, REQUIREMENTS, ROOTS)
 
+    def test_manifest_description_is_not_a_filename_and_invalid_read_is_reported(self):
+        text = PLAN.replace(
+            "Files: project/roles/ntp/tasks/main.yml, roles/ntp/defaults/main.yml (new)",
+            "Files:\n- the 67 files copied from the original per 00-input/original/status.jsonl:2-69\nRead: working copies under the original checkout",
+        )
+        with self.assertRaises(ValueError) as rejected:
+            payload(text, REQUIREMENTS, ROOTS)
+        for fragment in ("Files contains prose", "Read"):
+            self.assertIn(fragment, str(rejected.exception))
+
+    def test_literal_punctuation_and_bulleted_keys_reach_the_step_once(self):
+        text = PLAN.replace(
+            "project/roles/ntp/tasks/main.yml, roles/ntp/defaults/main.yml (new)",
+            "`project/Java [v2], config.xml`",
+        ).replace("1. ansible-lint roles/ntp", "1. ansible-lint roles/ntp\n- Required checks: none")
+        step = payload(text, REQUIREMENTS, ROOTS)["steps"][0]
+        self.assertEqual(step["files"], ["/repo/Java [v2], config.xml"])
+        self.assertEqual(step["checks"], ["ansible-lint roles/ntp"])
+        self.assertEqual(step["required_checks"], [])
+
+    def test_after_the_change_rejects_local_checks_with_a_location(self):
+        with self.assertRaisesRegex(ValueError, "Move local checks"):
+            payload(PLAN + "- locally rerun mvn verify\n", REQUIREMENTS, ROOTS)
+
     def test_files_patterns_and_prose_are_named_with_what_to_write(self):
         text = PLAN.replace(
             "Files: project/roles/ntp/tasks/main.yml, roles/ntp/defaults/main.yml (new)",
@@ -284,12 +308,13 @@ class PlanDocumentTests(unittest.TestCase):
         self.assertEqual([step["id"] for step in plan["steps"]], ["T1", "T2"])
         self.assertEqual(plan["unverified"], payload(PLAN, REQUIREMENTS, ROOTS)["unverified"])
 
-    def test_read_ranges_keep_quoted_paths_and_skip_prose(self):
+    def test_read_ranges_keep_quoted_paths_and_ignore_paths_inside_explanations(self):
         text = PLAN.replace("Done when:", "Read: `project/a file.yml:1-2`,3-4\nDone when:", 1)
         plan = payload(text, REQUIREMENTS, ROOTS)
         self.assertEqual(plan["steps"][0]["read"], ["/repo/a file.yml:1-2", "/repo/a file.yml:3-4"])
         prose = payload(text.replace("`,3-4", "` (project/b:99)"), REQUIREMENTS, ROOTS)
-        self.assertEqual(prose["steps"][0]["read"], [])
+        self.assertEqual(prose["steps"][0]["read"], ["/repo/a file.yml:1-2"])
+        self.assertIn("(project/b:99)", prose["steps"][0]["notes"])
 
     def test_a_forgiving_plan_becomes_the_stored_result(self):
         plan = payload(PLAN, REQUIREMENTS, ROOTS)
@@ -427,7 +452,7 @@ class PlanFileTests(unittest.TestCase):
             instructions = plan_file.instructions(run, dict(project=source))
             self.assertIn(f"PROJECT MAP: {run / '00-input/project-map.md'}", instructions)
             self.assertIn(f"PLAN FILE: edit {target}", instructions)
-            self.assertIn("DONE submits for validation, not approval", instructions)
+            self.assertIn("server checks the saved file", instructions)
             self.assertIn("R6 → all tasks", instructions)
 
     def test_messages_name_requirements_by_label(self):

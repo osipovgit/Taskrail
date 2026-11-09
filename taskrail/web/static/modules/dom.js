@@ -18,7 +18,7 @@ export const statuses = {
   RESULT_VALID: 'Result validated',
   UNDERSTOOD: 'Task understood',
   REINTERPRET_TASK: 'Understanding correction required',
-  PLAN_READY: 'Plan ready',
+  PLAN_READY: 'Ready for plan review',
   APPROVE: 'Approved',
   IMPLEMENTED: 'Changes implemented',
   TURN_ERROR: 'Turn interrupted',

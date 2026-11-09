@@ -4,7 +4,6 @@ Only the leading list declares evidence. A comma can introduce another range of
 the same path; prose never creates implicit source paths or line claims.
 """
 
-import contextlib
 import re
 
 from taskrail.core import prompt_texts
@@ -82,19 +81,17 @@ def citation(text, sentence_period=False):
     return [span], text[match.end() :]
 
 
-def hints(entries, resolve):
-    """Resolve explicit read ranges; skip unparsed hints without inventing evidence."""
-    found = []
-    for entry in entries:
-        with contextlib.suppress(ValueError):
-            found.extend(spans(parts(entry, False)[0], resolve))
-    return found
+def read_windows(entry, roots, resolve):
+    """Read hints allow the same trailing explanations as evidence citations."""
+    matches, explanation = parts(entry)
+    return [window(span, roots, resolve) for span in matches], explanation
 
 
-def spans(matches, resolve):
-    """Each range with its resolved path; a single line repeats its start."""
-    texts = []
-    for name, start, end in matches:
-        lines = "-".join((start, end or start))
-        texts.append(":".join((str(resolve(name)), lines)))
-    return texts
+def window(span, roots, resolve):
+    """One absolute inclusive future read range."""
+    name, start, end = span
+    last = end or start
+    if not 0 < int(start) <= int(last):
+        raise ValueError("Invalid source line range")
+    path = resolve(name, roots)
+    return f"{path}:{start}-{last}"

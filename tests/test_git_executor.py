@@ -871,6 +871,17 @@ class GitExecutorTests(unittest.TestCase):
         self.assertEqual(rejected["status"], "FAILED", rejected)
         self.assertIn("rejected", rejected["stderr"])
 
+    def test_git_preflight_timeout_does_not_poison_a_later_write(self):
+        self.file.write_text("4\n")
+        argv = ["add", "--", "value.txt"]
+        with patch(
+            "taskrail.git.execution.settings", side_effect=subprocess.TimeoutExpired(argv, 3)
+        ):
+            failed = self.execute(argv, "implementer")
+        self.assertEqual((failed["status"], failed["mutation"]), ("FAILED", False))
+        self.assertNotIn("effective_argv", failed)
+        self.assertEqual(self.execute(argv, "implementer", [failed])["status"], "SUCCEEDED")
+
     def test_interrupted_write_is_unknown_and_cannot_be_replayed(self):
         argv = ["revert", "--no-edit", process.checked(self.root, ["rev-parse", "HEAD"]).strip()]
         record = dict(request=self.payload(argv), status="RUNNING")

@@ -1,6 +1,7 @@
 """Bound recovery input and recognize unchanged work across context rollovers."""
 
 import json
+from pathlib import Path
 
 from taskrail.application import evidence
 from taskrail.core import prompt_texts, source_lines
@@ -22,11 +23,13 @@ def signature(workflow):
     return digest(json.dumps(payload, sort_keys=True).encode())
 
 
-def research(run):
+def research(run, project_only=False):
     """Compare observed source versions and windows independently of attempt/session IDs."""
     sources = {}
     for record in evidence.validation_records(run):
         source = (record["input"]["filePath"], record["source_sha256"])
+        if project_only and Path(source[0]).is_relative_to(run):
+            continue
         lines = source_lines.returned_lines(record)
         if lines:
             sources.setdefault(source, set()).update(lines)

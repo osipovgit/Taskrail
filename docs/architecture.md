@@ -62,7 +62,7 @@ source checks, checkpoints and file operations:
 |---|---|
 | Task understanding | Validate quotes against the original fields, bind stable requirement IDs, then plan |
 | Planning or plan review: input interpretation defect | Return the quoted defect to task understanding, retain unchanged IDs and revalidate the plan before approval |
-| Planning | Independent plan review, including no-change proposals |
+| Planning | Independent plan review, including no-change proposals and declared blockers |
 | Plan review: changes requested | Return the complete findings to planning, then review the revised plan |
 | Plan review: approved | Implementation with captured preimages; a split becomes `TASKS_READY`; a no-change proposal finishes or runs applicable checks and result review |
 | Implementation | Built-in/configured checks, then independent result review |
@@ -70,7 +70,7 @@ source checks, checkpoints and file operations:
 | Result review: changes requested | Return all findings to the authorized writer. Read-only phases end as `CHANGES_REQUESTED` |
 | Result review: approved | Final status and, on a task branch, a controlled commit of reviewed changes |
 | Result review: blocking gap | Return the missing evidence to the authorized writer. A read-only phase reports the gap to the operator. |
-| Plan review: blocking gap | Return all gaps to planning. Compare the full plan and outstanding set across reviews; unchanged cycles end as `NO_PROGRESS`. |
+| Plan review: blocking gap | Confirming a proposed blocker pauses for the operator with a planner checkpoint. Return correctable gaps or findings to planning. Recurring unchanged plan and findings can end as `NO_PROGRESS`. |
 | Other model stage: blocked | Stop without advancing or granting writes |
 
 Executor requests and result corrections stay in the same stage and session, including

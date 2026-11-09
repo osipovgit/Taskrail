@@ -47,6 +47,8 @@ def request_context(config, execution, state, run):
         diff_file=str(run / "changes.diff") if (run / "changes.diff").exists() else None,
         preimages=preimage_context(state["preimages"], roots, run),
     )
+    if execution[0] in {"planner", "plan-reviewer", "reviewer"}:
+        context["diagnostic_changes"] = plan_projection.diagnostic_changes(state, roots)
     context["original_status"] = status_path(run)
     context["source_packet"] = packet_context(config, run, context["stage"], plan)
     context["source_views"] = source_guidance.inputs(config, plan, run)

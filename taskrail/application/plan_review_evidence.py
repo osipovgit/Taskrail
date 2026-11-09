@@ -35,7 +35,6 @@ def accepts(claim, payload, context):
     kinds = {row["outcome"] for row in owners}
     permitted = bool(owners) and kinds <= {"planned", "contradicted"}
     schema.require(permitted, prompt_texts.diagnostic("validation.plan_review_evidence"))
-    verify(context)
     return True
 
 
@@ -43,7 +42,8 @@ def verify(context):
     """Both readable plan copies and the result must still match the proposal being reviewed."""
     files = sources(context)
     schema.require(
-        all(map(regular, files)), prompt_texts.diagnostic("validation.plan_review_changed")
+        files and all(map(regular, files)),
+        prompt_texts.diagnostic("validation.plan_review_changed"),
     )
     recorded = reviewed_artifacts.document(context["run"], context["plan_reference"])
     expected = tool_paths(context["plan"], context["roots"])

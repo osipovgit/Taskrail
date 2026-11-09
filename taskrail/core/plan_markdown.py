@@ -92,7 +92,7 @@ class Reader:
 
     def field(self, number, line):
         """A `Key: value` line, or a bullet or continuation of the key above."""
-        key, text = key_line(line)
+        key, text = key_line(unbullet(line))
         if key is None:
             self.extend(number, line)
             return
