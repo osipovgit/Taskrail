@@ -216,11 +216,17 @@
             },
             "not_todo": {
               "type": "array",
-              "items": {"type": "string", "minLength": 1}
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
             },
             "required_checks": {
               "type": "array",
-              "items": {"type": "string", "minLength": 1}
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
             },
             "read": {
               "type": "array",
@@ -485,6 +491,116 @@
             "type": "integer",
             "minimum": 1,
             "maximum": 3600
+          }
+        }
+      }
+    }
+  },
+  "understanding": {
+    "type": "object",
+    "required": [
+      "summary",
+      "requirements"
+    ],
+    "additionalProperties": false,
+    "properties": {
+      "summary": {
+        "type": "string",
+        "minLength": 1
+      },
+      "requirements": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "required": [
+            "text",
+            "kind",
+            "sources"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "text": {
+              "type": "string",
+              "minLength": 1
+            },
+            "kind": {
+              "type": "string",
+              "enum": [
+                "task",
+                "constraint"
+              ]
+            },
+            "sources": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "field",
+                  "quote"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "field": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "quote": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "occurrence": {
+                    "type": "integer",
+                    "minimum": 1
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "input-revision": {
+    "type": "object",
+    "required": [
+      "status",
+      "summary",
+      "sources"
+    ],
+    "additionalProperties": false,
+    "properties": {
+      "status": {
+        "type": "string",
+        "enum": [
+          "REINTERPRET_TASK"
+        ]
+      },
+      "summary": {
+        "type": "string",
+        "minLength": 1
+      },
+      "sources": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "required": [
+            "field",
+            "quote"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "field": {
+              "type": "string",
+              "minLength": 1
+            },
+            "quote": {
+              "type": "string",
+              "minLength": 1
+            },
+            "occurrence": {
+              "type": "integer",
+              "minimum": 1
+            }
           }
         }
       }

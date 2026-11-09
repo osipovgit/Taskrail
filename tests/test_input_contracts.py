@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import ClassVar
 
 from taskrail.application import reviewed_artifacts
-from taskrail.core import task_lineage, task_markdown, task_spec
+from taskrail.core import task_lineage, task_markdown, task_spec, task_understanding
 from taskrail.core.plan_document import payload
 from taskrail.web import requests, task_form
 from taskrail.web.history import TaskDraft
@@ -33,9 +33,8 @@ class InputContractTests(unittest.TestCase):
         goal = "Fix the input.\n\n## Workflow rules\nKeep the public API."
         text, meta = self.form(goal=goal, criteria="## Current behavior\nReject invalid input.")
         spec = task_spec.resolve(text, meta)
-        requirements = spec["requirements"]
-        self.assertTrue(any("Keep the public API." in entry["text"] for entry in requirements))
-        self.assertTrue(any("Reject invalid input." in entry["text"] for entry in requirements))
+        self.assertEqual(spec["requirements"], [])
+        self.assertIn("Reject invalid input.", spec["fields"][2]["text"])
         self.assertEqual(spec["fields"][1]["text"], goal)
 
     def test_generated_policy_never_becomes_a_requirement_on_markdown_reimport(self):
@@ -45,7 +44,7 @@ class InputContractTests(unittest.TestCase):
         self.assertNotIn("personal approval of exact scripts", text)
         self.assertEqual(
             [entry["text"] for entry in original["requirements"]],
-            ["Fix the input.", "Reject invalid input.", "Keep the API."],
+            [],
         )
         imported = task_spec.resolve(text, task_markdown.typed_input(text, {}))
         self.assertEqual(imported["requirements"], original["requirements"])
@@ -72,17 +71,13 @@ class InputContractTests(unittest.TestCase):
         self.assertEqual(
             found,
             [
-                ("Fix it.", "goal"),
-                ("- Reject bad names.", "criteria"),
-                ("```text\n## Current behavior\n\n  preserve\n```", "criteria"),
-                ("Keep the API.", "constraints"),
                 ("Check the logs", None),
                 ("Run the API twice", None),
             ],
         )
         prompt = task_spec.prompt_text(spec, spec["requirements"])
-        self.assertIn("Requirements:\n\n[R2]\n- Reject bad names.", prompt)
-        self.assertIn("[R4 constraint]\nKeep the API.", prompt)
+        self.assertIn("Requirements:\n\n- Reject bad names.", prompt)
+        self.assertIn("## Constraints\nKeep the API.", prompt)
         self.assertTrue(reviewed_artifacts.typed_requirements(spec))
 
     def test_unknown_or_stray_markdown_is_an_error_with_its_line(self):
@@ -97,7 +92,8 @@ class InputContractTests(unittest.TestCase):
                 task_markdown.typed_input(text, {})
         plain_text = "# Fix\n\nReturn 2\n"
         plain = task_spec.resolve(plain_text, task_markdown.typed_input(plain_text, {}))
-        self.assertEqual([entry["text"] for entry in plain["requirements"]], ["Return 2"])
+        self.assertEqual(plain["requirements"], [])
+        self.assertIn("Return 2", task_spec.prompt_text(plain))
         with self.assertRaisesRegex(ValueError, "unknown section"):
             TaskDraft("# Old\n\nIntro\n\n## Notes\nKeep X\n")
 
@@ -106,14 +102,22 @@ class InputContractTests(unittest.TestCase):
         text, meta = self.form(criteria=criterion)
         spec = task_spec.resolve(text, meta)
         fields = {field["name"]: field["text"] for field in spec["fields"]}
-        for entry in spec["requirements"]:
-            source = entry["source"]
-            original = fields[source["field"]][source["start"] : source["end"]]
-            self.assertEqual(original, entry["text"])
-        code = next(
-            entry["text"] for entry in spec["requirements"] if entry["text"].startswith("```")
+        self.assertEqual(fields["criteria"], criterion)
+        interpreted = task_understanding.resolve(
+            dict(
+                summary="Keep the requested layout",
+                requirements=[
+                    dict(
+                        text="Preserve the exact requested layout.",
+                        kind="task",
+                        sources=[dict(field="criteria", quote=criterion)],
+                    )
+                ],
+            ),
+            spec,
         )
-        self.assertIn("## Goal\r\n\r\n  value", code)
+        source = interpreted["requirements"][0]["sources"][0]
+        self.assertEqual(fields["criteria"][source["start"] : source["end"]], criterion)
 
     def test_display_edits_require_updating_the_typed_contract(self):
         text, meta = self.form()
@@ -126,8 +130,8 @@ class InputContractTests(unittest.TestCase):
         text, meta = self.form(
             criteria="Keep\n  indentation.", constraints="Do not remove comments."
         )
-        parent = task_spec.resolve(text, meta)["requirements"]
-        criterion = next(entry for entry in parent if entry["source"]["field"] == "criteria")
+        parent = self.interpreted_fields(task_spec.resolve(text, meta))
+        criterion = next(entry for entry in parent if entry["sources"][0]["field"] == "criteria")
         step = dict(criteria=[criterion["id"]], scopes=[], done_when=[])
         assigned = task_lineage.for_step(parent, step)
         self.assertEqual(assigned[0]["id"], criterion["id"])
@@ -141,8 +145,10 @@ class InputContractTests(unittest.TestCase):
 
     def test_global_constraints_cannot_be_narrowed_by_a_parent_scope(self):
         text, meta = self.form(constraints="Keep the API stable.")
-        parent = task_spec.resolve(text, meta)["requirements"]
-        constraint = next(entry for entry in parent if entry["source"]["field"] == "constraints")
+        parent = self.interpreted_fields(task_spec.resolve(text, meta))
+        constraint = next(
+            entry for entry in parent if entry["sources"][0]["field"] == "constraints"
+        )
         step = dict(
             criteria=[constraint["id"]],
             scopes=[dict(id=constraint["id"], scope="only one route")],
@@ -169,14 +175,40 @@ class InputContractTests(unittest.TestCase):
 
     def test_repeated_constraint_stays_global_even_when_it_is_also_the_goal(self):
         text, meta = self.form(goal="Keep the API stable.", constraints="Keep the API stable.")
-        parent = task_spec.resolve(text, meta)["requirements"]
-        matching = [entry for entry in parent if entry["text"] == "Keep the API stable."]
-        self.assertEqual(len(matching), 1)
-        self.assertEqual(matching[0]["source"]["field"], "constraints")
+        spec = task_spec.resolve(text, meta)
+        payload = dict(
+            summary="Preserve the API",
+            requirements=[
+                dict(
+                    text="Keep the API stable.",
+                    kind="constraint",
+                    sources=[
+                        dict(field="goal", quote="Keep the API stable."),
+                        dict(field="constraints", quote="Keep the API stable."),
+                    ],
+                )
+            ],
+        )
+        parent = task_understanding.resolve(payload, spec)["requirements"]
+        self.assertEqual(len(parent), 1)
         self.assertEqual(
             task_lineage.for_step(parent, dict(criteria=[], scopes=[], done_when=[])),
-            [dict(matching[0], parent_id=matching[0]["id"])],
+            [dict(parent[0], parent_id=parent[0]["id"])],
         )
+
+    def interpreted_fields(self, spec):
+        entries = [
+            dict(
+                text=field["text"],
+                kind="constraint" if field["name"] == "constraints" else "task",
+                sources=[dict(field=field["name"], quote=field["text"])],
+            )
+            for field in spec["fields"]
+            if field["name"] in {"goal", "criteria", "constraints"} and field["text"]
+        ]
+        return task_understanding.resolve(
+            dict(summary="Fixture interpretation", requirements=entries), spec
+        )["requirements"]
 
 
 class StrictPlanTests(unittest.TestCase):

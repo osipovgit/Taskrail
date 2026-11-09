@@ -8,7 +8,7 @@ from taskrail.core.files import atomic_json
 from taskrail.core.schema import SCHEMAS, require
 from taskrail.infrastructure.agent_sync import atomic_write
 
-ROLES = ("planner", "implementer", "reviewer")
+ROLES = ("understanding", "planner", "implementer", "reviewer")
 CONTRACT = "00-input/contract.json"
 TEXTS = "texts"
 

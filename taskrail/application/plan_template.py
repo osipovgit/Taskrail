@@ -6,7 +6,7 @@ constraint starts as `all tasks`; every other line waits for the planner's outco
 
 from types import MappingProxyType
 
-from taskrail.core import prompt_texts
+from taskrail.core import prompt_texts, task_labels
 
 LINE = "- R{0} → {1}"
 PLACEHOLDER = "<outcome>"
@@ -34,8 +34,4 @@ def prefilled(requirement, read_only):
 
 def line_kind(requirement):
     """runtime, constraint or task: what the plan line of a requirement starts as."""
-    if requirement["kind"] == RUNTIME:
-        return RUNTIME
-    if requirement.get("source", {}).get("field") == "constraints":
-        return CONSTRAINT
-    return "task"
+    return task_labels.kind_of(requirement)

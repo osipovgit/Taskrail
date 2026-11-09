@@ -13,7 +13,7 @@ from taskrail.core.runtime import DEFAULT_TIMEOUT, run_storage, settings_path
 from taskrail.infrastructure.agent_sync import launch_settings
 
 HEADER = input_header.HEADER
-ROLES = ("planner", "implementer", "reviewer")
+ROLES = ("understanding", "planner", "implementer", "reviewer")
 HOST_AUTO = "auto"
 HOST_MODES = frozenset((HOST_AUTO, "ask"))
 BUNDLED_AGENTS = Path(__file__).resolve().parents[1] / "agents"

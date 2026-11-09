@@ -60,6 +60,8 @@ source checks, checkpoints and file operations:
 
 | Completed stage | Next boundary |
 |---|---|
+| Task understanding | Validate quotes against the original fields, bind stable requirement IDs, then plan |
+| Planning or plan review: input interpretation defect | Return the quoted defect to task understanding, retain unchanged IDs and revalidate the plan before approval |
 | Planning | Independent plan review, including no-change proposals |
 | Plan review: changes requested | Return the complete findings to planning, then review the revised plan |
 | Plan review: approved | Implementation with captured preimages; a split becomes `TASKS_READY`; a no-change proposal finishes or runs applicable checks and result review |
@@ -73,7 +75,7 @@ source checks, checkpoints and file operations:
 
 Executor requests and result corrections stay in the same stage and session, including
 the distinction between plan review and result review. An authenticated split child
-starts at implementation; integration starts at checks when required, then read-only
+starts at implementation with its inherited requirements; integration starts at checks when required, then read-only
 review. Delivery phases keep their inherited checks and personal-confirmation gates.
 Recovery preserves the current stage; an interrupted writer is never blindly retried.
 

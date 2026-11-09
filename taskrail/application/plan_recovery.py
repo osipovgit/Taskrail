@@ -5,7 +5,7 @@ from taskrail.application.attempt_session import validated
 from taskrail.core import prompt_texts
 from taskrail.infrastructure.context_overflow import STATUS
 
-ELIGIBLE = frozenset(("planner", "plan-reviewer", "reviewer"))
+ELIGIBLE = frozenset(("understanding", "planner", "plan-reviewer", "reviewer"))
 STAGE = "stage"
 RECOVERY = "plan_recovery"
 
@@ -32,9 +32,12 @@ def feedback(outcome, folder):
     failure = outcome.get(RECOVERY)
     if not failure:
         return ""
+    key = "recovery.plan" if failure[STAGE] == "planner" else "recovery.review"
+    if failure[STAGE] == "understanding":
+        key = "recovery.understanding"
     return "\n{}\n".format(
         prompt_texts.text(
-            "recovery.plan" if failure[STAGE] == "planner" else "recovery.review",
+            key,
             reason=feedback_files.validation(folder, failure["reason"]),
         )
     )

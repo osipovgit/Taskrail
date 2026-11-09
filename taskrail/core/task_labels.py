@@ -7,6 +7,8 @@ the same words. Labels are numbered in the server's requirement order.
 
 from types import MappingProxyType
 
+from taskrail.core import requirements
+
 HEADINGS = MappingProxyType(
     {
         "goal": "Goal",
@@ -36,7 +38,7 @@ def kind_of(entry):
     """runtime, constraint (an obligation of every task) or task."""
     if entry["kind"] == RUNTIME:
         return RUNTIME
-    if (entry.get(SOURCE) or {}).get(FIELD) == CONSTRAINTS:
+    if requirements.constraint(entry):
         return "constraint"
     return TASK
 
@@ -63,10 +65,11 @@ class Labels:
 
     def place(self, entry):
         """(field, offset) of a requirement block, or None when no field holds its text."""
-        source = entry.get(SOURCE) or {}
+        references = entry.get("sources", [])
+        source = entry.get(SOURCE) or next(iter(references), {})
         if self.at_source(entry[TEXT], source):
             return source[FIELD], source["start"]
-        candidates = (CONSTRAINTS,) if source.get(FIELD) == CONSTRAINTS else SEARCHED
+        candidates = (CONSTRAINTS,) if requirements.constraint(entry) else SEARCHED
         for name in candidates:
             offset = self.fields.get(name, "").find(entry[TEXT])
             if offset >= 0:
@@ -93,9 +96,11 @@ class Labels:
     def title(self):
         """The title section, unless the goal starts with the title anyway."""
         title = self.fields.get("title", "")
-        if not title or self.fields.get("goal", "").startswith(title):
+        redundant = self.fields.get("goal", "").startswith(title)
+        redundant = redundant and not self.marks.get("title")
+        if not title or redundant:
             return []
-        return [f"## Title\n{title}"]
+        return ["## Title\n{}".format(labelled(title, self.marks["title"]))]
 
     def extras(self):
         """Sections for labelled requirements that no field holds, if there are any."""
