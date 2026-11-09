@@ -15,7 +15,7 @@ from taskrail.infrastructure import (
     opencode_api,
     opencode_cli,
     opencode_server,
-    permission_check,
+    permission_probe,
 )
 from taskrail.infrastructure.agent_sync import launch_settings
 from taskrail.infrastructure.event_summary import parse_events
@@ -325,7 +325,7 @@ class PermissionListTests(unittest.TestCase):
             script.write_text("import time\ntime.sleep(30)\n")
             launch = dict(command=[sys.executable, str(script)], agent_env_allow=())
             with (
-                mock.patch.object(permission_check, "LISTING_SECONDS", 0.2),
+                mock.patch.object(permission_probe, "LISTING_SECONDS", 0.2),
                 self.assertRaisesRegex(ValueError, "no model launched"),
             ):
                 verify_launch(launch, root, "managed", [], root / "log")
