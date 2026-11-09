@@ -69,3 +69,10 @@ def stored(key, text, number):
     if key not in LISTS:
         return text, number
     return ([text] if text else []), number
+
+
+def numbered(fields, key):
+    """Every list entry paired with its original Markdown line number."""
+    entries = fields.get(key, ([], 0))[0]
+    lines = fields.get(ENTRY_LINES, {}).get(key, [])
+    return zip(entries, lines, strict=True)

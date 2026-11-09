@@ -13,8 +13,10 @@ from taskrail.application import (
 from taskrail.application.changes import capture
 from taskrail.application.correction_start import begin as begin_correction
 from taskrail.application.execution_context import adopt as inherit_execution_context
+from taskrail.application.original_checkout import DIRECTORY as ORIGINAL
 from taskrail.application.plan_validation import canonical_plan
 from taskrail.application.step_checks import install as install_step_checks
+from taskrail.application.workspace_paths import read_hint
 from taskrail.core import schema, task_lineage
 from taskrail.core.files import atomic_json
 
@@ -49,6 +51,7 @@ def child(workflow):
     parent_state = parent["state"]
     inherit_execution_context(workflow, parent["run"], parent_state)
     check_configuration.adopt(workflow, parent["run"], parent_state)
+    step = inherited_reads(step, parent["run"], workflow.run)
     reviewed_input.capture(workflow, parent, step)
     plan = reviewed_plan.single(step, workflow.state[REQUIREMENTS])
     plan = canonical_plan(plan, workflow.config["roots"])
@@ -58,6 +61,13 @@ def child(workflow):
     )
     install(workflow, plan, "implementer")
     previous_attempt.start(workflow, *lineage)
+
+
+def inherited_reads(step, parent, child):
+    """Reference the child's own inherited launch snapshot in future read windows."""
+    mapping = [(parent / ORIGINAL, child / ORIGINAL)]
+    reads = [read_hint(hint, mapping) for hint in step.get("read", [])]
+    return dict(step, read=reads)
 
 
 def assigned_step(parent, task_id):

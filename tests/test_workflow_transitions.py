@@ -34,6 +34,26 @@ class WorkflowTransitionTests(unittest.TestCase):
                 self.assertNotIn("effect", execution)
                 self.assertEqual(state["results"], {})
 
+    def test_viable_alternative_to_a_blocked_plan_returns_to_the_planner(self):
+        execution = flow("planner", [])
+        state = dict(status="RUNNING", results={})
+        plan = dict(
+            verdict("BLOCKED"),
+            decision="blocked",
+            blocking_gaps=["Need snapshot"],
+            proposed_change_files=[],
+        )
+        transitions.advance(execution, state, plan, "01-plan/result.json", "a")
+        self.assertEqual(execution["stage"], "plan-reviewer")
+        review = dict(
+            verdict("REQUEST_CHANGES"),
+            findings=[dict(criterion="R1", file="plan.md", evidence="Read the frozen snapshot")],
+        )
+        transitions.advance(execution, state, review, "02-plan-review/result.json", "a")
+        self.assertEqual(execution["stage"], "planner")
+        self.assertEqual(execution["feedback"]["findings"], review["findings"])
+        self.assertEqual((state["status"], execution["allowed"]), ("RUNNING", []))
+
     def test_result_review_returns_a_verifiable_gap_only_to_an_authorized_writer(self):
         for files in ([], ["project/Main.java"]):
             execution = flow("reviewer", files)

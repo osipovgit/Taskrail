@@ -501,7 +501,7 @@ class LiveTests(LiveFixture, unittest.TestCase):
         self.assertNotIn("findings", formats)
         planning = (run / "02-plan/request.md").read_text()
         self.assertIn(f"PLAN FILE: edit {run / 'plan.md'}", planning)
-        self.assertIn("DONE submits for validation, not approval", planning)
+        self.assertIn("Ready for server plan checks", planning)
         self.assertIn("[R1]\nReturn 2", planning)
         self.assertEqual(planning.count("Return 2"), 1)
         requests = planning.split("Formats:\n", 1)[1].split("\nContext:")[0]
@@ -1656,7 +1656,10 @@ class LiveTests(LiveFixture, unittest.TestCase):
     def test_blocked_plan_stops_without_repair_or_writes(self):
         run, status, state = self.run_mode("prose-block")
         self.assertEqual(status, "BLOCKED")
-        self.assertEqual(len(state["attempts"]), 2)
+        self.assertEqual(
+            [stage["stage"] for stage in state["stages"]],
+            ["understanding", "planner", "plan-reviewer"],
+        )
         self.assertIn("Decision: blocked", (run / "plan.md").read_text())
         plan = json.loads((run / "02-plan/result.json").read_text())
         self.assertEqual(plan["blocking_gaps"], ["Mandatory local commands unavailable"])
@@ -1676,6 +1679,12 @@ class LiveTests(LiveFixture, unittest.TestCase):
         state = json.loads((run / "run.json").read_text())
         resumed = [stage for stage in state["stages"] if stage["stage"] == "planner"][-1]
         self.assertIn(note, (run / resumed["directory"] / "request.md").read_text())
+        saved = json.loads((run / resumed["directory"] / "stage.json").read_text())
+        self.assertEqual(saved["continuation"]["operator_note"], note)
+        self.assertEqual(
+            [stage["number"] for stage in state["stages"] if "continuation" in stage],
+            [resumed["number"]],
+        )
 
 
 if __name__ == "__main__":

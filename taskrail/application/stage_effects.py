@@ -21,7 +21,7 @@ def apply(workflow, record, verdict):
     elif workflow.state["status"] == "RUNNING":
         source_effect(workflow, effect)
     save_run(workflow.run, workflow.state)
-    if workflow.state["status"] == "RUNNING":
+    if workflow.state["status"] == "RUNNING" or effect == "blocked_checkpoint":
         workflow.checkpoint()
 
 

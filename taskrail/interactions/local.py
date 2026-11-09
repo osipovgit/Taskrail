@@ -76,6 +76,7 @@ def execute(payload, context):
             stderr=errors,
             start_new_session=True,
         )
+        context["process_started"] = True
         try:
             monitor(process, (output, errors), context)
         except BaseException:

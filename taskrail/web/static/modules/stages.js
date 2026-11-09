@@ -29,6 +29,8 @@ export function renderPlan(parent, steps, requirements) {
     const box = el('div', undefined, 'message');
     box.append(el('strong', step.id + ' · ' + step.action));
     list(box, 'Files', step.files);
+    list(box, 'Read first', step.read);
+    if (step.notes) list(box, 'Notes', [step.notes]);
     list(
       box,
       'Criteria',
@@ -161,6 +163,11 @@ export function stageCard(stage, requirements = []) {
   );
   card.append(heading, badge(stage.status));
   if (stage.verdict) card.append(badge(stage.verdict));
+  if (stage.continuation) {
+    card.append(el('strong', 'Continued from checkpoint'));
+    if (stage.continuation.operator_note)
+      card.append(el('p', stage.continuation.operator_note, 'text'));
+  }
   const modes = {
     import: 'Imported plan',
     'research-recovery': 'Recovery from recorded evidence',
@@ -217,7 +224,7 @@ export function stageCard(stage, requirements = []) {
       messageCard(stage.messages.items[stage.messages.items.length - 1]),
     );
   }
-  if (events.length) {
+  if (events.length || stage.continuation) {
     const log = el('details', undefined, 'activity-log');
     const summary = el('summary', 'Activity log · ' + stage.directory);
     const close = el('button', 'Close log', 'activity-log-close');
@@ -231,6 +238,16 @@ export function stageCard(stage, requirements = []) {
     };
     summary.append(close);
     log.append(summary);
+    if (stage.continuation) {
+      const resumed = el('div', undefined, 'message');
+      resumed.append(
+        el('strong', 'Continued from checkpoint'),
+        timeNode(stage.continuation.started_at),
+      );
+      if (stage.continuation.operator_note)
+        resumed.append(el('p', stage.continuation.operator_note, 'text'));
+      log.append(resumed);
+    }
     for (const event of events) {
       if (event.kind === 'text') log.append(messageCard(event));
       else {

@@ -44,7 +44,9 @@ def local_action(actions, payload):
     notice = dict(notice=INLINE_NOTICE) if inline else install_notice(payload)
     decision = actions.approve(dict(payload, **notice))
     if decision["decision"] != "allow":
-        answer = local_actions.execute(actions.run, actions.folder, payload, {}, decision)
+        answer = local_actions.execute(
+            actions.run, actions.folder, payload, actions.session.environment, decision
+        )
         return actions.local_result(payload, answer)
     return executed(actions, payload, decision)
 
@@ -55,7 +57,9 @@ def without_decision(actions, payload):
     A command this host can sandbox runs without a decision; an installed program is
     required, so the operator can still install a missing one and allow it.
     """
-    answer = refusal(actions, payload) or local_actions.previous(actions.run, payload)
+    answer = refusal(actions, payload) or local_actions.previous(
+        actions.run, payload, actions.session.environment
+    )
     if answer is not None:
         return actions.local_result(payload, answer)
     if local_request.missing_executable(payload[ARGV]) or not local_sandbox.sandboxed(payload):

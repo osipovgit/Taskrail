@@ -1,5 +1,7 @@
 """The approved plan as the next stage reads it: decisions and tasks, no copied facts."""
 
+from taskrail.core.paths import tool_paths
+
 PLAN_FIELDS = ("decision", "summary", "proposed_change_files", "unverified")
 # The plan line is for problem messages; the action repeats the title and results.
 HIDDEN_STEP_FIELDS = frozenset(("line", "action"))
@@ -11,6 +13,8 @@ def plan_context(plan, requirements=()):
     if plan is None:
         return None
     context = {key: plan[key] for key in PLAN_FIELDS if key in plan}
+    if plan.get("blocking_gaps"):
+        context["blocking_gaps"] = plan["blocking_gaps"]
     named = labels(requirements)
     if plan.get("check_selections"):
         context["check_selections"] = [
@@ -45,3 +49,15 @@ def labelled_scope(scope, named):
 def labels(requirements):
     """Requirement ID -> the R<n> label the task shows."""
     return {entry["id"]: f"R{number}" for number, entry in enumerate(requirements, 1)}
+
+
+def diagnostic_changes(state, roots):
+    """Changed source from read-only roles must remain visible to independent review."""
+    readers = {
+        stage["directory"]
+        for stage in state.get("stages", [])
+        if stage.get("role") in {"planner", "reviewer"}
+    }
+    effects = state.get("command_effects", [])
+    receipts = [entry for entry in effects if entry["stage"] in readers]
+    return tool_paths(receipts, roots)

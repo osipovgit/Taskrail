@@ -116,7 +116,7 @@ class NativeFailureTests(unittest.TestCase):
             own.write_text("first")
             session = SimpleNamespace(
                 context={},
-                environment=dict(expected={}, config={}),
+                environment=dict(run=Path(temporary), expected={}, config={}),
                 launch=dict(runtime=dict(attached_files=[own])),
             )
             outcome = dict(

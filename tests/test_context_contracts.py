@@ -123,7 +123,7 @@ class ContextContractTests(unittest.TestCase):
             self.assertNotIn("corrected final JSON", text)
         continuation = response_format.continuation("planner", "/run/request.md")
         self.assertIn("plan.md", continuation)
-        self.assertIn("reply DONE", continuation)
+        self.assertIn("Ready for server plan checks", continuation)
         self.assertIn("only the windows named in the feedback", continuation)
         self.assertIn("formatted source view", continuation)
         self.assertNotIn("attached JSON contract", prompt_texts.text("profile.runtime_rules"))

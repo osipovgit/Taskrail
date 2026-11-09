@@ -49,7 +49,8 @@ review again. It cannot alter an authenticated child's assignment. Continue reta
 the accepted requirement list and resumes its checkpointed stage.
 
 The planner writes `plan.md` and a reviewer `review.md`,
-both in the run directory and attached to every turn, and each ends with `DONE`; the
+both in the run directory and attached to every turn. The planner replies
+`Ready for server plan checks.` and the reviewer replies `DONE`. The
 implementer ends with `DONE:` or `BLOCKED:`. The server derives the canonical stored
 result, version 1, from them. Executor requests keep version 1; an input-correction
 message is a workflow transition and executes no command. Unknown wire versions and unsupported run or checkpoint versions are
@@ -227,7 +228,7 @@ commands. Assign that work to a task; `runtime` is a deferral outcome reserved f
 requirements explicitly labelled runtime, not a synonym for executing a command.
 Invalid deferrals are reported with other plan structure errors. Independently
 checkable plan scope, coverage and task-contract defects are reported together
-before citation source bytes are read. A `DONE` message submits a draft; a completed
+before citation source bytes are read. The planner’s final message submits its saved draft. A completed
 correction event only records delivery of rejection feedback, never plan approval.
 
 Transport retry, context handoff, timeouts and output delivery are described in
@@ -272,14 +273,14 @@ A `done:` or `contradicted:` outcome uses the citation syntax described above fo
 review lines, including optional explanations after each citation.
 `/exact/read/path:7-42,43-156,157-169` cites all three ranges of the same file.
 Requirement labels do not substitute for source ranges. `Read:` accepts only citation
-lists, without explanations. Paths are absolute, root-alias-relative, or relative
+lists with optional parenthesized explanations, which also reach the child in Notes. Invalid hints are reported on their own line. Paths are absolute, root-alias-relative, or relative
 to the only declared root; basenames are never searched for or guessed. Every
-explicit range still needs matching observed current lines. A diff alone does not
+range cited as evidence still needs matching observed current lines. A diff alone does not
 establish that an unrun check passed.
 
 `Files` contains exact paths only. A rejected pattern or inline explanation reports
 the actual bullet's line number, including blank lines; valid bullets stay intact.
-Replace patterns with discovered files and move scope explanations to `Notes`.
+Replace patterns with discovered files and move scope explanations to `Notes`. Backtick-quote literal paths with spaces, commas or brackets. A bulleted task field such as `- Required checks: none` starts that field. Put local verification in the owning task’s `Verify` field.
 
 Run instructions and result artifacts (`request.md`, `plan.md`, `review.md`,
 `recovery.md`) never prove completion, even if observed. Path feedback names the
@@ -292,11 +293,18 @@ snapshots for completed work, or declare a blocking evidence gap.
 obligation of every task; it needs at least one task and is not a completed claim.
 `Read:` lists `path:from-to` hints for the implementer's first reads; these hints are
 not evidence that the planner observed the source. A split task starts from the
-reviewed plan and its independently validated citations.
+reviewed plan and its independently validated citations. Launch-snapshot read windows
+resolve to the child’s inherited snapshot at the same line numbers.
 
 Plan syntax, dependency parsing, scopes and field diagnostics are specified in
 [task format](task-format.md). Invalid plans receive all line-specific errors before
-independent review; BLOCKED plans authorize no edits.
+independent review. A blocked planner draft grants no edits. The independent reviewer
+checks the named missing prerequisite and permitted alternatives. A supported route
+returns to planning. A confirmed missing prerequisite stops with its reasons, and
+Continue reopens the planner with the operator’s clarification. An approval cannot
+turn a blocked proposal into a successful no-change result. For each plan-review
+verdict, the server checks that the reviewed JSON and Markdown still match the
+accepted planner snapshot, including reviews consisting entirely of `planned` lines.
 
 Custom roles require `Instruction contract: 1.` and are validated before model work.
 Updates preserve custom roles; `deploy/install.sh --agents=bundled` selects maintained

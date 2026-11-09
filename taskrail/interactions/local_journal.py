@@ -10,7 +10,7 @@ STATUS = "status"
 REQUEST = "request"
 SIGNATURE = "request_sha256"
 IDENTIFIER = "id"
-UNCERTAIN = frozenset(("APPROVED", "RUNNING", "UNKNOWN"))
+UNCERTAIN = frozenset(("RUNNING", "UNKNOWN"))
 
 
 def signature(payload):
@@ -30,11 +30,13 @@ def records(run):
     return json.loads(path.read_text()) if path.exists() else []
 
 
-def previous(run, payload):
+def previous(run, payload, verified_read=False):
     """An unresolved action blocks matching requests even after source changes."""
     identity = signature(payload)
     matching = [entry for entry in records(run) if entry[SIGNATURE] == identity]
     for entry in reversed(matching):
+        if entry[STATUS] == "UNKNOWN" and verified_read and entry.get("verified_read"):
+            continue
         if entry[STATUS] in UNCERTAIN:
             return dict(
                 status="UNKNOWN",
@@ -55,6 +57,7 @@ def create(run, folder, payload, context, decision):
         request_sha256=signature(payload),
         source_snapshot=context.get("expected", {}),
         approval=decision,
+        verified_read=context.get("verified_read", False),
         effective_argv=context.get("effective_argv", []),
         environment_sha256=context.get("environment_sha256"),
         status="APPROVED" if decision["decision"] == "allow" else "DECLINED",

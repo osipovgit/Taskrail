@@ -2,7 +2,7 @@
 
 from types import MappingProxyType
 
-from taskrail.application import input_revision, repair_feedback, review_outcome
+from taskrail.application import declared_block, input_revision, repair_feedback, review_outcome
 from taskrail.core import plan_contract, prompt_texts
 
 PLAN_REVIEW = "plan-reviewer"
@@ -13,6 +13,7 @@ ALLOWED = "allowed"
 IMPLEMENTER = "implementer"
 REVIEWER = "reviewer"
 CHECKS = "checks"
+BLOCKED = "BLOCKED"
 
 
 def understood(flow, state, verdict, version):
@@ -37,7 +38,7 @@ def planning(flow, state, verdict, version):
 def plan_review(flow, state, verdict, version):
     """Approve scope or return bounded feedback to planning."""
     state["plan_review"] = verdict
-    if verdict[STATUS] in {"REQUEST_CHANGES", "BLOCKED"}:
+    if verdict[STATUS] in {"REQUEST_CHANGES", BLOCKED}:
         repair_feedback.route(flow, state, PLANNER, verdict, version)
         return
     flow[ALLOWED] = list(flow["plan"]["proposed_change_files"])
@@ -105,18 +106,13 @@ def advance(flow, state, verdict, reference, version):
                 blocking_gaps=verdict["blocking_gaps"],
             )
         )
-    if verdict[STATUS] == "BLOCKED":
-        if stage == PLAN_REVIEW and verdict["blocking_gaps"]:
-            plan_review(flow, state, verdict, version)
-            state["review_limits"][-1]["returned_to_planning"] = flow["stage"] == PLANNER
-            return
-        if stage == REVIEWER and verdict["blocking_gaps"] and flow[ALLOWED]:
-            result_review(flow, state, verdict, version)
-            return
-        state.update(status="BLOCKED", summary=verdict[SUMMARY])
+    if verdict[STATUS] == BLOCKED and declared_block.stops(flow, state, verdict, reference):
         return
     state["results"][RESULT_KEYS[stage]] = reference
     HANDLERS[stage](flow, state, verdict, version)
+    if stage == PLAN_REVIEW and verdict[STATUS] == BLOCKED:
+        limits = state["review_limits"][-1]
+        limits["returned_to_planning"] = flow["stage"] == PLANNER
 
 
 def checked(flow, state, version):
