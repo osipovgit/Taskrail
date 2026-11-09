@@ -78,6 +78,47 @@ class PlanReviewEvidenceTests(unittest.TestCase):
         bindings = json.loads((self.folder / "evidence-bindings.json").read_text())
         self.assertEqual(bindings[0]["excerpt"], "Verify: skip required check")
 
+    def test_identical_failure_lines_do_not_create_two_findings(self):
+        defect = f"fails: {self.plan_file}:1 (one defect)"
+        with self.assertRaisesRegex(ValueError, "remove the duplicate"):
+            self.review(f"{defect}\n- R1: {defect}")
+
+    def test_account_for_all_issued_ids_and_observe_each_decision_independently(self):
+        self.context.update(prior_findings=[dict(id="F3-1", criterion="R-check")])
+        for lines, message in (
+            ("planned", "Missing: F3-1"),
+            ("planned\n- F3-1: closed: x", "cite the lines"),
+            (
+                f"planned\n- F3-2: closed: {self.plan_file}:1 (covered)",
+                "Unknown or already closed: F3-2",
+            ),
+            ("planned\n- F3-1: closed: x\n- F3-1: open: x", "has two decisions"),
+            (f"planned\n- F3-1: closed: {self.plan_file}:1", "needs currently observed citations"),
+        ):
+            with self.subTest(lines=lines), self.assertRaisesRegex(ValueError, message):
+                self.review(lines)
+        self.context.update(rebuilt=True, deliver_lines=False)
+        with self.assertRaisesRegex(ValueError, "offset=1|never reached"):
+            self.review(f"planned\n- F3-1: closed: {self.plan_file}:1 (required check is present)")
+        self.observe(self.plan_file)
+        closed = self.review(f"planned\n- F3-1: closed: {self.plan_file}:1 (dispute verified)")
+        self.assertEqual(closed["status"], "APPROVE")
+        self.assertEqual(closed["finding_checks"][0]["evidence_ids"], ["E1"])
+
+    def test_open_id_keeps_its_owner_and_source_with_new_defects_in_the_same_review(self):
+        self.context.update(prior_findings=[dict(id="F2-1", criterion="retired")], stage_number=6)
+        self.observe(self.plan_file)
+        decision = f"fails: {self.plan_file}:1 (another defect)"
+        with self.assertRaisesRegex(ValueError, "replaced requirement"):
+            self.review(f"{decision}\n- F2-1: open: {self.plan_file}:1 (still required)")
+        record = self.review(f"{decision}\n- F2-1: open: R1: {self.plan_file}:1 (still required)")
+        self.assertEqual(
+            [(f["id"], f["criterion"]) for f in record["findings"]],
+            [("F6-1", "R-check"), ("F2-1", "R-check")],
+        )
+        self.assertEqual(record["coverage"][0]["evidence_ids"], ["E1", "E2"])
+        self.assertEqual(record["finding_checks"][0]["evidence_ids"], ["E2"])
+
     def test_readable_current_proposal_can_prove_planned_work_only_in_plan_review(self):
         for path in (
             self.plan_file,

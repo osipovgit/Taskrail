@@ -1,31 +1,54 @@
 """Turn a reviewer's review.md into the review result the workflow validates and stores.
 
-One line per requirement: `R<n>: done: <citations>`, `fails: <citations> (<problem>)`,
-`gap: <what is missing>`, `n/a: <why it does not apply>`, `later: <the check after
-delivery>` and, in plan review, `planned` (see `review_lines`). Other lines are free
-notes. The server derives the verdict: a gap blocks, a failure requests changes,
-otherwise the review approves. Every problem names its line.
+Requirement outcomes determine the verdict. Plan review accepts independent defects
+on the same requirement and verifies a separate decision on each earlier finding.
 """
 
-from taskrail.core import plan_citations, prompt_texts, review_lines
-from taskrail.core.plan_markdown import requirement_entry
+import re
+
+from taskrail.core import plan_citations, plan_findings, prompt_texts, review_lines
+from taskrail.core.plan_markdown import requirement_entry, unbullet
 
 SUMMARY = "summary:"
 EVIDENCE = "evidence"
 GAPS = "blocking_gaps"
 LABEL = "label"
 BLOCKED = "BLOCKED"
+IDENTIFIER = "id"
 
 
-def payload(text, requirements, stage, resolve):
+def payload(text, context, resolve):
     """The review result of review.md, or ValueError naming every problem by line.
 
     resolve(name, start, end) returns the absolute path a citation names.
     """
-    review = Review(requirements, dict(stage=stage, resolve=resolve))
+    stage = context["stage"]
+    review = Review(context["requirements"], stage, resolve)
+    checks = read_lines(review, text)
+    if stage == review_lines.PLAN_REVIEW:
+        plan_findings.reassess(review, checks, context.get("prior_findings", ()))
+    prefix = review_lines.prefix(stage, context.get("stage_number", 1))
+    return review.finished(prefix)
+
+
+def read_lines(review, text):
+    """Collect prior-ID checks separately from the ordinary requirement outcomes."""
+    checks = []
+    seen = set()
     for number, line in enumerate(text.splitlines(), 1):
-        review.read(number, line.strip())
-    return review.finished()
+        stripped = unbullet(line.strip())
+        if review.stage == review_lines.PLAN_REVIEW and re.match(r"F\d", stripped):
+            checks.append((stripped, number))
+        elif stripped in seen and requirement_entry(number, stripped):
+            review.problems.append(
+                prompt_texts.text(
+                    "finding.same_line", line=number, label=stripped.partition(":")[0]
+                )
+            )
+        else:
+            seen.add(stripped)
+            review.read(number, line.strip())
+    return checks
 
 
 def verdict(gaps, findings):
@@ -38,9 +61,10 @@ def verdict(gaps, findings):
 class Review:
     """The requirement lines read so far, their evidence and the problems found."""
 
-    def __init__(self, requirements, options):
+    def __init__(self, requirements, stage, resolve):
         self.requirements = requirements
-        self.options = options
+        self.stage = stage
+        self._resolve = resolve
         self.summary = ""
         self.rows = {}
         self.found = {EVIDENCE: [], "findings": [], GAPS: [], "unverified": []}
@@ -59,14 +83,11 @@ class Review:
         if not known:
             self.problems.append("line {line}: {label} is unknown".format(**entry))
             return
-        if entry[LABEL] in self.rows:
-            self.problems.append(prompt_texts.text("review.repeated", **entry))
-            return
         self.decide(entry, self.requirements[index])
 
     def decide(self, entry, requirement):
         """One requirement's outcome, its citations and what it explains."""
-        decision = review_lines.classify(entry["text"], self.options["stage"])
+        decision = review_lines.classify(entry["text"], self.stage)
         if decision is None:
             self.problems.append(prompt_texts.text("review.outcome", **entry))
             self.rows[entry[LABEL]] = None
@@ -75,8 +96,25 @@ class Review:
         if decision[0] in review_lines.EXPLAINED and not cited[1]:
             self.problems.append(prompt_texts.text("review.reason", **entry))
         row = row_of(entry, requirement, decision[0], cited)
-        self.rows[entry[LABEL]] = row
-        self.consequence(row, requirement, cited[1])
+        self.add(entry, row, cited[1])
+        if decision[0] == review_lines.GAP:
+            self.found[GAPS].append(row["explanation"])
+        if decision[0] == review_lines.DEFERRED:
+            self.found["unverified"].append(requirement["text"])
+
+    def add(self, entry, row, explanation, finding_id=None):
+        """Keep one coverage row while retaining each independent plan defect."""
+        combined = review_lines.combine(self.rows, entry[LABEL], row, self.stage)
+        if not combined:
+            self.problems.append(prompt_texts.text("review.repeated", **entry))
+            return
+        identifiers = row["evidence_ids"]
+        if row["outcome"] == review_lines.CONTRADICTED and identifiers:
+            first = self.found[EVIDENCE][-len(identifiers)]["path"]
+            failed = review_lines.finding(row[IDENTIFIER], first, explanation, identifiers)
+            if finding_id:
+                failed[IDENTIFIER] = finding_id
+            self.found["findings"].append(failed)
 
     def cite(self, kind, detail, entry):
         """Evidence IDs of the citations and the explanation in parentheses after them."""
@@ -98,26 +136,14 @@ class Review:
         last = int(end or start)
         span = dict(
             id=f"E{number}",
-            path=str(self.options["resolve"](name, first, last)),
+            path=str(self._resolve(name, first, last)),
             line_start=first,
             line_end=last,
         )
         cited.append(span)
-        return span["id"]
+        return span[IDENTIFIER]
 
-    def consequence(self, row, requirement, explanation):
-        """A failure is a finding, a gap blocks, a later check stays unverified."""
-        identifiers = row["evidence_ids"]
-        if row["outcome"] == review_lines.CONTRADICTED and identifiers:
-            first = self.found[EVIDENCE][-len(identifiers)]["path"]
-            failed = review_lines.finding(requirement["id"], first, explanation, identifiers)
-            self.found["findings"].append(failed)
-        if row["outcome"] == review_lines.GAP:
-            self.found[GAPS].append(row["explanation"])
-        if row["outcome"] == review_lines.DEFERRED:
-            self.found["unverified"].append(requirement["text"])
-
-    def finished(self):
+    def finished(self, prefix):
         """The stored review result; ValueError lists the problems."""
         count = len(self.requirements)
         labels = [f"R{number}" for number in range(1, count + 1)]
@@ -128,12 +154,12 @@ class Review:
             listed = "; ".join(self.problems)
             raise ValueError(f"review.md: {listed}")
         rows = [row for row in self.rows.values() if row]
-        return stored(rows, self.found, self.summary)
+        return stored(rows, self.found, self.summary, prefix)
 
 
-def stored(rows, found, summary):
+def stored(rows, found, summary, prefix):
     """The stored shape: findings numbered, the verdict derived from gaps and findings."""
-    findings = review_lines.numbered(found["findings"])
+    findings = review_lines.numbered(found["findings"], prefix)
     status = verdict(found[GAPS], findings)
     record = dict(found, schema_version=1, status=status, coverage=rows, findings=findings)
     record.update(input_complete=status != BLOCKED)
@@ -146,5 +172,5 @@ def row_of(entry, requirement, kind, cited):
     identifiers, explanation = cited
     label = entry[LABEL]
     stated = explanation or entry["text"]
-    row = dict(id=requirement["id"], outcome=kind, evidence_ids=identifiers)
+    row = dict(id=requirement[IDENTIFIER], outcome=kind, evidence_ids=identifiers)
     return dict(row, explanation=f"{label}: {stated}")

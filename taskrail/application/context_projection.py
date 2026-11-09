@@ -36,7 +36,7 @@ def request_context(config, execution, state, run):
         roots=state["roots"],
         workspace_paths=public_mapping(config),
         task_file=str(run / "00-input/task.md"),
-        plan=plan_projection.plan_context(tool_paths(plan, roots), state.get("requirements", [])),
+        plan=plan_projection.plan_context(execution, state, roots),
         plan_result=str(run / state["results"]["plan"])
         if state.get("results", {}).get("plan")
         else None,
@@ -47,7 +47,7 @@ def request_context(config, execution, state, run):
         diff_file=str(run / "changes.diff") if (run / "changes.diff").exists() else None,
         preimages=preimage_context(state["preimages"], roots, run),
     )
-    if execution[0] in {"planner", "plan-reviewer", "reviewer"}:
+    if context["stage"] in {"planner", "plan-reviewer", "reviewer"}:
         context["diagnostic_changes"] = plan_projection.diagnostic_changes(state, roots)
     context["original_status"] = status_path(run)
     context["source_packet"] = packet_context(config, run, context["stage"], plan)

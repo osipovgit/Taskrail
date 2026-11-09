@@ -180,6 +180,39 @@ class LiveTests(LiveFixture, unittest.TestCase):
             )
         self.assertIn("return 2", (self.root / "hello.py").read_text())
 
+    def test_plan_review_returns_only_two_of_five_findings_on_one_requirement(self):
+        run, status, state = self.run_mode("plan-review-five")
+        self.assertEqual(status, "READY_FOR_REVIEW", state.get("summary"))
+        reviews = [
+            json.loads((run / row["directory"] / "result.json").read_text())
+            for row in state["stages"]
+            if row["stage"] == "plan-reviewer"
+        ]
+        self.assertEqual([len(row["findings"]) for row in reviews], [5, 2, 0])
+        original = [entry["id"] for entry in reviews[0]["findings"]]
+        self.assertEqual(len(set(original)), 5)
+        self.assertEqual(
+            {entry["criterion"] for entry in reviews[0]["findings"]},
+            {state["requirements"][0]["id"]},
+        )
+        self.assertEqual([entry["id"] for entry in reviews[1]["findings"]], original[3:])
+        self.assertEqual(
+            [entry["status"] for entry in reviews[1]["finding_checks"]],
+            ["closed"] * 3 + ["open"] * 2,
+        )
+        plans = sorted(run.glob("*-plan/result.json"))
+        replies = json.loads(plans[1].read_text())["finding_responses"]
+        self.assertEqual(
+            [entry["status"] for entry in replies],
+            ["fixed", "fixed", "disputed", "fixed", "disputed"],
+        )
+        self.assertEqual(
+            [entry["id"] for entry in json.loads(plans[2].read_text())["finding_responses"]],
+            original[3:],
+        )
+        self.assertEqual(reviews[-1]["status"], "APPROVE")
+        self.assertTrue(all(entry["status"] == "closed" for entry in reviews[-1]["finding_checks"]))
+
     def test_clipped_executor_json_repairs_in_same_session_without_reexecuting_command(self):
         self.task.write_text(
             self.task.read_text().replace("Return 2", "Report recorded tool versions")

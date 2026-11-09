@@ -8,14 +8,17 @@ HIDDEN_STEP_FIELDS = frozenset(("line", "action"))
 EMPTY = (None, "", [], {})
 
 
-def plan_context(plan, requirements=()):
+def plan_context(execution, state, roots):
     """Keep the approved decisions, not another role's coverage and copied facts."""
+    plan = tool_paths(execution[1], roots)
     if plan is None:
         return None
     context = {key: plan[key] for key in PLAN_FIELDS if key in plan}
+    if execution[0] == "plan-reviewer" and plan.get("finding_responses"):
+        context["finding_responses"] = plan["finding_responses"]
     if plan.get("blocking_gaps"):
         context["blocking_gaps"] = plan["blocking_gaps"]
-    named = labels(requirements)
+    named = labels(state.get("requirements", []))
     if plan.get("check_selections"):
         context["check_selections"] = [
             labelled_criteria(selection, named) for selection in plan["check_selections"]

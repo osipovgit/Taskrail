@@ -1,6 +1,6 @@
 """Validate one attempt without coupling versioned contracts to state transitions."""
 
-from taskrail.application import execution_wait, result_validation, run_store
+from taskrail.application import execution_wait, plan_feedback, result_validation, run_store
 from taskrail.application.git_reference import git_reference as git_reference
 from taskrail.core.paths import tool_paths
 from taskrail.git import requests
@@ -23,6 +23,8 @@ def parse(outcome, record, state, environment):
             session_id=unique_session(outcome),
             plan=environment["plan"],
             plan_reference=state.get("results", {}).get("plan"),
+            prior_findings=plan_feedback.pending(environment["run"], environment.get("feedback")),
+            stage_number=record["number"],
             changed=tool_paths(state["changed_files"], environment[ROOTS]),
             check_config=environment.get("check_config", {}),
             deliver_lines=environment.get("deliver_lines", False),

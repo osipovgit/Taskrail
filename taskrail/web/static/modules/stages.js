@@ -202,7 +202,36 @@ export function stageCard(stage, requirements = []) {
       result.evidence?.length ? JSON.stringify(result.evidence, null, 2) : '',
     );
     list(card, 'Proposed files', result.proposed_change_files);
-    list(card, 'Findings', result.findings);
+    const named = requirementNames(requirements);
+    list(
+      card,
+      'Findings',
+      result.findings?.map((item) =>
+        [item.id, named.get(item.criterion)?.label || item.criterion, item.file, item.evidence]
+          .filter(Boolean)
+          .join(' · '),
+      ),
+    );
+    for (const [title, entries] of [
+      ['Planner responses', result.finding_responses],
+      ['Finding decisions', result.finding_checks],
+    ]) {
+      list(
+        card,
+        title,
+        entries?.map((item) =>
+          [
+            item.id,
+            named.get(item.criterion)?.label,
+            item.status,
+            item.reason,
+            item.evidence_ids?.join(', '),
+          ]
+            .filter(Boolean)
+            .join(' · '),
+        ),
+      );
+    }
     list(card, 'Missing evidence', result.blocking_gaps);
     list(card, 'Not verified', result.unverified);
   } else if (Array.isArray(result)) {

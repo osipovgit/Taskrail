@@ -10,6 +10,7 @@ GAP = "gap"
 DEFERRED = "deferred"
 NOT_APPLICABLE = "not_applicable"
 PLANNED = "planned"
+EXPLANATION = "explanation"
 KINDS = MappingProxyType(
     {
         "done": SATISFIED,
@@ -37,10 +38,31 @@ def classify(text, stage):
     return kind, detail.strip()
 
 
-def numbered(findings):
+def prefix(stage, number):
+    """Scope fresh plan finding IDs to their originating review attempt."""
+    return f"F{number}-" if stage == PLAN_REVIEW else "F"
+
+
+def combine(rows, label, row, stage):
+    """Aggregate distinct plan defects without weakening single-outcome coverage."""
+    previous = rows.get(label)
+    if previous is None:
+        rows[label] = row
+        return True
+    failures = previous["outcome"] == row["outcome"] == CONTRADICTED
+    if stage != PLAN_REVIEW or not failures:
+        return False
+    previous["evidence_ids"] = [*previous["evidence_ids"], *row["evidence_ids"]]
+    previous[EXPLANATION] = "\n".join((previous[EXPLANATION], row[EXPLANATION]))
+    return True
+
+
+def numbered(findings, prefix):
     """Findings with their F<n> identities."""
     numbered_findings = enumerate(findings, 1)
-    return [dict(entry, id=f"F{index}") for index, entry in numbered_findings]
+    return [
+        dict(entry, id=entry.get("id", f"{prefix}{index}")) for index, entry in numbered_findings
+    ]
 
 
 def finding(requirement, path, explanation, identifiers):
@@ -52,5 +74,5 @@ def finding(requirement, path, explanation, identifiers):
 
 def labels(rows):
     """The `R<n>` labels the explanations of stored review rows start with, comma-separated."""
-    explanations = (row["explanation"] for row in rows)
+    explanations = (row[EXPLANATION] for row in rows)
     return ", ".join(stated.partition(":")[0] for stated in explanations)

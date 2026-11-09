@@ -42,7 +42,7 @@ def validation(folder, message):
     return prompt_texts.text("feedback.file", path=target, lines=len(rendered.splitlines()))
 
 
-def findings(folder, feedback):
+def findings(folder, feedback, instruction="feedback.review_file"):
     """Both the writer and the next reviewer get the same complete record."""
     target = folder / "findings.json"
     text = context_json(feedback)
@@ -50,5 +50,17 @@ def findings(folder, feedback):
     return dict(
         findings_file=str(target),
         lines=len(text.splitlines()),
-        instruction=prompt_texts.text("feedback.review_file"),
+        instruction=prompt_texts.text(instruction),
     )
+
+
+def for_review(folder, record, verdict):
+    """Publish a repair packet only when the reviewer found work to do."""
+    if record["role"] != "reviewer":
+        return
+    if not (verdict.get("findings") or verdict.get("blocking_gaps")):
+        return
+    instruction = "feedback.review_file"
+    if record["stage"] == "plan-reviewer" and verdict.get("findings"):
+        instruction = "feedback.plan_findings"
+    record["review_feedback"] = findings(folder, verdict, instruction)

@@ -7,6 +7,7 @@ session can fix that line instead of writing the plan again.
 
 import re
 
+from taskrail.core.finding_decisions import RESPONSES
 from taskrail.core.plan_checks import SELECTIONS
 from taskrail.core.plan_keys import CONTINUED, ENTRY_LINES, EXTRA, LISTS, NOTES, key_line, stored
 from taskrail.core.prompt_texts import text
@@ -45,6 +46,7 @@ class Reader:
         self.document = {TOP: {}, REQUIREMENTS: [], TASKS: [], AFTER: [], PROBLEMS: []}
         self.document[ANSWER] = []
         self.document[SELECTIONS] = []
+        self.document[RESPONSES] = []
         self.section = TOP
         self.key = None
         self.comment = False
@@ -55,7 +57,7 @@ class Reader:
         if self.comment or comment_start:
             self.comment = "-->" not in raw
             return
-        if self.section == ANSWER:
+        if self.section == ANSWER and raw.strip().casefold() != "## finding responses":
             self.document[ANSWER].append(raw)
             return
         line = raw.strip()
@@ -85,7 +87,7 @@ class Reader:
             entry = requirement_entry(number, line)
             target = self.document[REQUIREMENTS] if entry else self.document[PROBLEMS]
             target.append(entry or f"line {number}: expected 'R<n> → <outcome>'")
-        elif self.section in {AFTER, SELECTIONS}:
+        elif self.section in {AFTER, SELECTIONS, RESPONSES}:
             self.document[self.section].append((unbullet(line), number))
         elif self.section in {TOP, TASKS}:
             self.field(number, line)
@@ -146,16 +148,18 @@ def task_entry(found, number):
 
 def section_of(title, current):
     """The section a non-task heading opens; text before any heading is the top."""
+    sections = {
+        "requirements": REQUIREMENTS,
+        "after the change": AFTER,
+        "checks": AFTER,
+        "answer": ANSWER,
+        "design": ANSWER,
+        "finding responses": RESPONSES,
+        "check selections": SELECTIONS,
+    }
     name = title.casefold()
-    if name == "requirements":
-        return REQUIREMENTS
-    if name in {"after the change", "checks"}:
-        return AFTER
-    if name in {"answer", "design"}:
-        return ANSWER
-    if name == "check selections":
-        return SELECTIONS
-    return TOP if current == TOP and name == "plan" else "invalid"
+    fallback = TOP if current == TOP and name == "plan" else "invalid"
+    return sections.get(name, fallback)
 
 
 def requirement_entry(number, line):
