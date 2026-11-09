@@ -32,12 +32,12 @@ def grant(access, run, requirements):
     access["readable"].append(target)
 
 
-def instructions(run, roots, requirements, protected=protected_paths.DEFAULT_PATTERNS):
-    """The format, the project map and the requirement labels in the planner's request.
+def instructions(run, roots, protected=protected_paths.DEFAULT_PATTERNS):
+    """The format and neutral project map in the planner's request.
 
     The map is written on the first request of the run.
     """
-    project = project_map.prepare(run, roots, requirements, protected)
+    project = project_map.prepare(run, roots, protected)
     return prompt_texts.text("plan.format", path=path(run), map=project)
 
 

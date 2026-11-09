@@ -51,9 +51,8 @@ def section(stage, state, run, config, catalog=None):
     """The response instructions and schemas of a stage."""
     alternatives = executor_contracts.for_stage(stage, run, config, catalog)
     if stage == PLANNER:
-        requirements = state.get("requirements", [])
         protected = protected_paths.patterns(config)
-        rules = plan_file.instructions(run, config["roots"], requirements, protected)
+        rules = plan_file.instructions(run, config["roots"], protected)
         routing = text("format.plan_routing")
     elif stage == IMPLEMENTER:
         rules = "\n".join((progress_file.instructions(run), text("format.done")))
