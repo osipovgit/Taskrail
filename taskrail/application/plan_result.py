@@ -8,7 +8,7 @@ import shutil
 from pathlib import Path
 
 from taskrail.application import evidence_delivery, plan_file, workspace_paths
-from taskrail.core import schema
+from taskrail.core import finding_decisions, schema
 
 PLANNER = "planner"
 
@@ -17,6 +17,8 @@ def stage_result(context):
     """The validated plan result of plan.md; ValueError names its problems by label."""
     run = context["run"]
     payload = plan_file.read_plan(run, context["requirements"], context["roots"])
+    answers = {entry["id"] for entry in payload.get(finding_decisions.RESPONSES, [])}
+    finding_decisions.complete(answers, context.get("prior_findings", []))
     workspace_paths.plan_targets(payload, context.get("check_config", {}))
     payload["files_read"] = observed_sources(context)
     schema.validate(payload, schema.SCHEMAS[PLANNER])

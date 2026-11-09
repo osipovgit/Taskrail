@@ -31,6 +31,9 @@ def stop_result(payload, context):
         ],
         coverage=[blocked_requirement(entry) for entry in context["requirements"]],
     )
+    responses = payload.get("finding_responses")
+    if responses:
+        stopped["finding_responses"] = responses
     return stopped
 
 

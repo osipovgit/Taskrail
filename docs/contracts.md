@@ -96,14 +96,42 @@ or transfer an excluded deliverable from another task.
   session: every turn has it attached, and a later session does not re-check
   finished work. It is a note, never evidence, so a rejected overwrite of it is only
   a warning.
-- Reviewer: writes `review.md`, a `Summary:` line and one line per requirement:
+- Reviewer: writes `review.md`, a `Summary:` line and an outcome for every requirement:
   `R1: done: <citations>`, `R1: fails: <citations> (<problem>)`, `R1: gap: <missing
   input>`, `R1: n/a: <why it does not apply>`, `R1: later: <runtime check>` and, in
-  plan review, `R1: planned`. Other lines are free notes. The server derives a finding
+  plan review, `R1: planned`. Plan review allows a separate `fails` line for each defect of the same requirement. The server derives a finding
   from each failure, the blocking gaps, input completeness and the verdict: a gap
   blocks, a failure requests changes, otherwise the review approves. Plan review can
   approve planned work; result and no-change review cannot. `n/a` covers a conditional
   requirement whose condition did not occur and never blocks.
+
+### Findings across plan revisions
+
+The server sends the planner all open findings in one pageable packet. Each new defect
+gets a stable ID such as `F3-1` (review stage 3, finding 1). On each revision the planner
+replaces `## Finding responses` in `plan.md` with an answer for every open ID.
+
+```markdown
+## Finding responses
+- F3-1: fixed: T1 now runs the parser on empty input before committing.
+- F3-2: disputed: T1 already checks the retry path under Verify.
+```
+
+The next plan reviewer reads the responses and checks the current plan and source.
+Each issued ID needs its own decision, observed citation and reason in `review.md`.
+
+```markdown
+- F3-1: closed: /work/run/plan.md:24 (T1 checks empty input)
+- F3-2: open: /work/run/plan.md:25-27 (the retry check still covers only successful calls)
+```
+
+An open decision supplies a failing outcome for its requirement. If all its issues
+close, include the requirement's ordinary outcome, such as `R1: planned`. Report
+new defects on their own `R1: fails: …` lines. Only open IDs return for repair.
+A planner's disagreement can close a finding after independent confirmation.
+Continue uses the feedback packet of the checkpoint. If a corrected interpretation
+replaces the original requirement, a remaining defect can keep its ID under its new
+owner with `F3-2: open: R2: /work/run/plan.md:25 (reason)`.
 
 Documentation and test work are valid standalone deliverables when the user requests
 them. The planner and reviewer reject only artificial companion tasks that separate

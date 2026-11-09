@@ -21,7 +21,7 @@ from fake_file_writes import (
 from fake_file_writes import event as file_event
 from fake_planning_paths import plan as isolated_plan
 from fake_report_repair import executor_result, report_result
-from fake_review_proposal import proposal
+from fake_review_proposal import finding_cycle, proposal, respond
 
 args = sys.argv[1:]
 if "--version" in args:
@@ -648,6 +648,14 @@ if role == "planner" and header["permission"]["edit"].get(str(plan)) == "allow":
             outcome = "all tasks (ongoing obligation)" if continued else f"done: {request_file}:1"
             plan.write_text(plan.read_text().replace("- R1 → T1", f"- R1 → {outcome}"))
     response = "DONE"
+if mode == "plan-review-five":
+    finding_cycle(context, role, run, print)
+if mode == "plan-repair" and role == "planner" and context.get("feedback"):
+    respond(plan, json.loads(Path(context["feedback"]["findings_file"]).read_text())["findings"])
+if mode == "plan-repair" and role == "plan-reviewer" and context.get("feedback"):
+    name = context["plan"]["finding_responses"][0]["id"]
+    with (run / "review.md").open("a") as stream:
+        stream.write(f"- {name}: closed: {target}:1 (updated plan covers the source)\n")
 if mode == "plan-review-citations":
     response = proposal(context, role, run, print) or response
 if mode == "isolated-plan-paths" and role == "planner":

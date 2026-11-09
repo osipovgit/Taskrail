@@ -7,7 +7,7 @@ blocking gaps, steps and change files, and reports every problem with its line.
 import re
 from types import MappingProxyType
 
-from taskrail.core import plan_checks, prompt_texts
+from taskrail.core import finding_decisions, plan_checks, prompt_texts
 from taskrail.core.plan_markdown import (
     AFTER,
     ANSWER,
@@ -51,6 +51,7 @@ def payload(text, requirements, roots):
     if decision == BLOCKED:
         planned = blocked(coverage, top_text(document))
     report(coverage.problems, coverage.found, decision)
+    finding_decisions.store_responses(document[finding_decisions.RESPONSES], coverage.found)
     selected = plan_checks.selections(document[plan_checks.SELECTIONS], requirements)
     if selected:
         coverage.found[plan_checks.SELECTIONS] = selected

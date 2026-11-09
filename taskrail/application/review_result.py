@@ -14,7 +14,7 @@ from functools import partial
 from pathlib import Path
 
 from taskrail.application import citation_review, review_file, source_packet
-from taskrail.core import prompt_texts, review_document, review_lines
+from taskrail.core import plan_findings, prompt_texts, review_document, review_lines
 from taskrail.core.plan_outcomes import absolute
 
 SOURCE_HANDLE = re.compile(r"S\d+")
@@ -27,7 +27,7 @@ def stage_result(context):
     target = review_file.path(context["run"])
     written = target.read_text(encoding="utf-8") if target.is_file() else ""
     resolve = partial(resolve_reference, context)
-    record = review_document.payload(written, context["requirements"], context["stage"], resolve)
+    record = review_document.payload(written, context, resolve)
     shutil.copyfile(target, context["folder"] / review_file.NAME)
     return record
 
@@ -58,7 +58,11 @@ def downgraded(record, records, context):
         if set(row["evidence_ids"]).intersection(failing):
             unproven.append(row)
     proposal = context.get("plan") or {}
-    if not context.get("rebuilt") or proposal.get("decision") == "blocked":
+    if (
+        not context.get("rebuilt")
+        or proposal.get("decision") == "blocked"
+        or (context["stage"] == "plan-reviewer" and plan_findings.tracked_proof(record, failing))
+    ):
         summary = prompt_texts.text("review.unproven", labels=review_lines.labels(unproven))
         raise ValueError("\n".join((summary, citation_review.feedback(failing.values()))))
     for row in unproven:

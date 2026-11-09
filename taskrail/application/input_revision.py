@@ -2,7 +2,7 @@
 
 import json
 
-from taskrail.application import repair_feedback
+from taskrail.application import plan_feedback, repair_feedback
 from taskrail.core import json_response, schema, task_understanding
 from taskrail.core.files import digest
 
@@ -28,9 +28,13 @@ def requested(response, context):
 
 def route(flow, state, verdict, version):
     """Retry while the full understanding or the set of reported defects makes progress."""
-    summary = verdict["summary"]
     sources = json.dumps(verdict["sources"], sort_keys=True)
-    feedback = dict(summary=summary, findings=[], blocking_gaps=[summary, sources])
+    feedback = dict(
+        summary=verdict["summary"], findings=[], blocking_gaps=[verdict["summary"], sources]
+    )
+    prior = plan_feedback.packet(flow.get("feedback"))
+    if prior:
+        feedback["previous_feedback"] = prior
     feedback["input_correction"] = verdict
     version = json.dumps([version, state["requirements"]], sort_keys=True)
     version = digest(version.encode())

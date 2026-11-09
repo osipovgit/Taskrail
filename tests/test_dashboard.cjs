@@ -303,6 +303,16 @@ async function main() {
             depends_on: [],
           },
         ],
+        finding_responses: [{ id: 'F3-1', status: 'disputed', reason: '<check source>' }],
+        finding_checks: [
+          {
+            id: 'F3-1',
+            criterion: 'R-000000000001',
+            status: 'closed',
+            reason: 'Already covered',
+            evidence_ids: ['E1'],
+          },
+        ],
         coverage: [
           {
             id: 'R-000000000001',
@@ -325,6 +335,10 @@ async function main() {
   assert.equal(
     all(structured).filter((n) => n.textContent === '<Preserve the task order>').length,
     2,
+  );
+  assert.ok(all(structured).some((n) => n.textContent === 'F3-1 · disputed · <check source>'));
+  assert.ok(
+    all(structured).some((n) => n.textContent === 'F3-1 · R1 · closed · Already covered · E1'),
   );
   assert.ok(all(structured).some((n) => n.textContent === 'S1 · Fix behavior'));
   assert.ok(all(structured).some((n) => n.textContent === 'R1 · Satisfied'));

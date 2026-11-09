@@ -141,6 +141,21 @@ class TaskUnderstandingTests(unittest.TestCase):
         )
         self.assertEqual(task_lineage.checked_assignments(child), child)
 
+    def test_reinterpreting_keeps_the_issued_plan_review_packet_for_independent_recheck(self):
+        from taskrail.application import input_revision, transitions
+
+        packet = dict(findings_file="/run/03-plan-review/findings.json", lines=55)
+        flow = dict(stage="planner", feedback=dict(previous_feedback=packet))
+        state = dict(status="RUNNING", requirements=[], results={})
+        revision = dict(
+            summary="Missing condition", sources=[dict(field="goal", quote="condition")]
+        )
+        input_revision.route(flow, state, revision, "plan version")
+        self.assertEqual(flow["stage"], "understanding")
+        transitions.understood(flow, state, dict(requirements=[]), "revised interpretation")
+        self.assertEqual(flow["stage"], "planner")
+        self.assertEqual(flow["feedback"]["findings_file"], packet["findings_file"])
+
     def test_repeated_interpretation_failure_keeps_the_prior_plan_for_checkpoint_resume(self):
         from taskrail.application import input_revision
 
