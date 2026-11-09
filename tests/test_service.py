@@ -16,6 +16,7 @@ from unittest.mock import patch
 from urllib.request import ProxyHandler, Request, build_opener
 
 from deployment_fixture import DeploymentFixture
+from git_fixture import repository
 from run_fixture import current_run
 
 from taskrail.application.task_config import configuration
@@ -113,6 +114,7 @@ class ServiceTests(unittest.TestCase):
             self.assertEqual(settings_path(self.settings), self.settings)
 
     def test_sigterm_stops_owned_worker_and_preserves_checkpoint(self):
+        repository(self.repo)
         with socket.socket() as probe:
             probe.bind(("127.0.0.1", 0))
             port = probe.getsockname()[1]

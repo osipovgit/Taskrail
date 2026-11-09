@@ -35,7 +35,7 @@ def detect(roots, records):
 
 def on_branch(root, record):
     """Check the recorded directory, branch and shared repository, never a name prefix."""
-    source = Path(record["source"])
+    source = Path(record.get("original_source", record["source"]))
     located = root == Path(record["worktree"]) and source != root
     if not located or not top_level(root):
         return False
@@ -53,7 +53,10 @@ def extend(workflow):
     """Adopt the implementer's changes beyond the plan, with preimages from the branch."""
     allowed = workflow.flow["allowed"]
     originals = workflow.state[PREIMAGES]
+    preserved = set(workflow.state.get("followup_preserved", []))
     for name in changed(workflow.guard.before, workflow.guard.scan()):
+        if name in preserved:
+            continue
         if name not in allowed and adoptable(workflow.config, name):
             if name not in originals:
                 originals[name] = preimage(workflow.run, workflow.config["roots"], name)

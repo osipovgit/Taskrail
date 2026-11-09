@@ -21,6 +21,8 @@ EXECUTABLE_BIT = 0o100
 
 def entries(repo, paths):
     """Path -> staged mode/blob/stage identity, or None when the entry is absent."""
+    if not paths:
+        return {}
     names = [path.relative_to(repo).as_posix() for path in paths]
     outcome = process.invoke(repo, ["ls-files", "--stage", "-z", "--", *names])
     require(outcome.returncode == 0, outcome.stderr or "Cannot read the Git index")
@@ -57,7 +59,7 @@ def belongs(repo, staged, recorded):
     return {name: recorded.get(name, UNOWNED) for name in found} == found
 
 
-def fingerprint(repo, root, argv):
+def fingerprint(repo, root, argv, reviewed=None):
     """What an add or commit would act on now; None for other writes.
 
     Repeating the same request is a replay only while this is unchanged.
@@ -66,7 +68,11 @@ def fingerprint(repo, root, argv):
         paths = [root / name for name in argv[2:]]
         return {str(path): file_digest(path) for path in paths}
     if argv[0] == "commit":
-        staged = process.checked(repo, ["diff", "--cached", "--name-only", "--no-renames", "-z"])
+        args = ["diff", "--cached", "--name-only", "--no-renames", "-z"]
+        if reviewed is not None:
+            args.append("--")
+            args.extend(path.relative_to(repo).as_posix() for path in reviewed)
+        staged = process.checked(repo, args)
         names = filter(None, staged.split("\x00"))
         return entries(repo, [repo / name for name in names])
     return None

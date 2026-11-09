@@ -23,13 +23,21 @@ def make_profile(source, destination, name, access):
 
 def closed_permissions(access):
     """Glob and grep use patterns, not paths; external directory rights bound their roots."""
-    return profile_rules.permissions(
+    permissions = profile_rules.permissions(
         access["roots"],
         access["readable"],
         access["writable"],
         access.get("worktree"),
         access.get("protected", protected_paths.DEFAULT_PATTERNS),
     )
+
+    if access.get("preserved"):
+        base = access.get("worktree") or profile_rules.permission_worktree(
+            next(iter(access["roots"]))
+        )
+        for path in access["preserved"]:
+            profile_rules.denied_last(permissions["edit"], profile_rules.read_patterns(path, base))
+    return permissions
 
 
 def profile_text(name, permissions, instructions):

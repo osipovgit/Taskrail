@@ -52,7 +52,7 @@ def environment():
     return inherited
 
 
-def invoke(root, arguments, settings=()):
+def invoke(root, arguments, settings=(), input_data=None):
     """Internal, already validated argv only; output is data, never executable text."""
     executable = shutil.which("git", path=os.defpath)
     require(bool(executable), "Git is not installed on the orchestrator host")
@@ -63,16 +63,24 @@ def invoke(root, arguments, settings=()):
     if arguments[0] == "blame":
         arguments = ["blame", "--no-textconv", *arguments[1:]]
     options = [token for setting in (*OPTIONS, *settings) for token in ("-c", setting)]
-    return transport.run([executable, "--no-pager", *options, *arguments], root, environment())
+    return transport.run(
+        [executable, "--no-pager", *options, *arguments], root, environment(), input_data
+    )
 
 
 def blob(root, name):
     """Bytes of a committed file such as `HEAD:path`; None when there is no such file."""
+    completed = raw(root, ["cat-file", "blob", name])
+    return None if completed.returncode else completed.stdout
+
+
+def raw(root, arguments, settings=()):
+    """Read a complete server-selected artifact without the agent transcript size limit."""
     executable = shutil.which("git", path=os.defpath)
     require(bool(executable), "Git is not installed on the orchestrator host")
-    options = [token for setting in OPTIONS for token in ("-c", setting)]
-    completed = subprocess.run(
-        [executable, "--no-pager", *options, "cat-file", "blob", name],
+    options = [token for setting in (*OPTIONS, *settings) for token in ("-c", setting)]
+    return subprocess.run(
+        [executable, "--no-pager", *options, *arguments],
         cwd=root,
         env=environment(),
         stdin=subprocess.DEVNULL,
@@ -80,7 +88,6 @@ def blob(root, name):
         timeout=transport.TIMEOUT_SECONDS,
         check=False,
     )
-    return None if completed.returncode else completed.stdout
 
 
 def checked(root, arguments):

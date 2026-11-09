@@ -10,14 +10,13 @@ from live_fixture import LiveFixture
 from taskrail.application import child_brief, mode_rules, task_branch, worktree_default
 from taskrail.application.delivery_confirmation import review_guard
 from taskrail.core import prompt_texts
-from taskrail.git import process
 from taskrail.infrastructure import profile_rules
 
 
 class TaskBranchRunTests(LiveFixture, unittest.TestCase):
     def isolated(self, mode):
         self.git = self.real_repository()
-        header = {"roots": {"project": str(self.root)}, "isolation": "worktree"}
+        header = {"roots": {"project": str(self.root)}}
         self.task.write_text(f"```taskrail-task\n{json.dumps(header)}\n```\nReturn 2")
         run, status, state = self.run_mode(mode, worktree_base=str(self.base / "worktrees"))
         self.assertEqual(status, "READY_FOR_REVIEW", state.get("summary"))
@@ -37,7 +36,7 @@ class TaskBranchRunTests(LiveFixture, unittest.TestCase):
         self.assertEqual(self.git.checked(worktree, ["status", "--porcelain"]), "")
         self.assertTrue(review_guard(run).git_unchanged())
         self.assertIn(f"- project: `{head}`", (run / "report.md").read_text())
-        self.assertIn("return 1", (self.root / "hello.py").read_text())
+        self.assertIn("return 1", (self.original_root / "hello.py").read_text())
 
     def test_the_implementer_may_change_files_beyond_the_plan(self):
         run, state, worktree = self.isolated("scope")
@@ -48,7 +47,7 @@ class TaskBranchRunTests(LiveFixture, unittest.TestCase):
         committed = self.git.checked(worktree, ["show", "--name-only", "--format=", "HEAD"])
         self.assertEqual(sorted(committed.split()), ["hello.py", "unrelated.txt"])
         self.assertIn("## Changed beyond the plan", (run / "report.md").read_text())
-        self.assertEqual((self.root / "unrelated.txt").read_text(), "user dirty work\n")
+        self.assertEqual((self.original_root / "unrelated.txt").read_text(), "user dirty work\n")
 
     def test_a_code_change_in_a_repository_gets_a_worktree_by_default(self):
         self.real_repository()
@@ -56,37 +55,20 @@ class TaskBranchRunTests(LiveFixture, unittest.TestCase):
         self.assertEqual(status, "READY_FOR_REVIEW", state.get("summary"))
         self.assertEqual(state["worktrees"]["project"]["branch"], f"taskrail/{run.name}")
         self.assertEqual(len(state["commits"]), 1)
-        self.assertIn("return 1", (self.root / "hello.py").read_text())
+        self.assertIn("return 1", (self.original_root / "hello.py").read_text())
 
-    def test_in_place_the_plan_still_limits_the_files(self):
-        self.real_repository()
+    def test_removed_isolation_option_cannot_enable_in_place_execution(self):
         header = {"roots": {"project": str(self.root)}, "isolation": "in_place"}
         self.task.write_text(f"```taskrail-task\n{json.dumps(header)}\n```\nReturn 2")
-        _, status, state = self.run_mode("scope")
-        self.assertNotEqual(status, "READY_FOR_REVIEW")
-        self.assertFalse(state[task_branch.KEY])
-        self.assertNotIn("commits", state)
+        with self.assertRaisesRegex(ValueError, "isolation option was removed"):
+            self.run_mode()
 
 
 class TaskBranchRuleTests(unittest.TestCase):
-    def test_only_a_code_change_in_repository_top_levels_is_isolated_by_default(self):
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            config = dict(isolation=None, roots={"project": root})
-            self.assertFalse(worktree_default.wanted(config))
-            process.checked(root, ["init", "-b", "main"])
-            self.assertFalse(worktree_default.wanted(config))
-            (root / "a.txt").write_text("a\n")
-            process.checked(root, ["add", "a.txt"])
-            identity = ["-c", "user.name=T", "-c", "user.email=t@example.invalid"]
-            process.checked(root, [*identity, "commit", "-m", "init"])
-            self.assertTrue(worktree_default.wanted(config))
-            self.assertFalse(worktree_default.wanted(dict(config, read_only=True)))
-            self.assertFalse(worktree_default.wanted(dict(config, phase="task")))
-            self.assertFalse(worktree_default.wanted(dict(config, isolation=False)))
-            process.checked(root, ["checkout", "-b", "taskrail/run"])
-            self.assertTrue(worktree_default.wanted(config))
-            self.assertFalse(worktree_default.wanted(dict(config, phase="task", isolation=True)))
+    def test_standalone_tasks_always_isolate_and_children_reuse_the_owned_branch(self):
+        for mode in ({}, dict(read_only=True), dict(design=True)):
+            self.assertTrue(worktree_default.wanted(mode))
+            self.assertFalse(worktree_default.wanted(dict(mode, phase="task")))
 
     def test_writable_roots_never_make_git_metadata_writable(self):
         with tempfile.TemporaryDirectory() as directory:

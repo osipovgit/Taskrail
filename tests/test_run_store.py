@@ -87,7 +87,12 @@ class RunStoreTests(unittest.TestCase):
     def test_settings_backup_is_exact_and_retains_wrapper_configuration(self):
         path = self.base / "settings.json"
         original = json.dumps(
-            dict(command=["nga-opencode"], max_change_files=7, max_change_lines=90)
+            dict(
+                command=["nga-opencode"],
+                isolation="in_place",
+                max_change_files=7,
+                max_change_lines=90,
+            )
         )
         path.write_text(original)
         clean(path)

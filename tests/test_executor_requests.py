@@ -170,8 +170,8 @@ class LiveRequestTests(LiveFixture, unittest.TestCase):
         without_sandbox(self)
         self.real_repository()
         (self.root / ".gitignore").write_text(".cache-tool/\n")
+        self.real_repository()
         header = {"roots": {"project": str(self.root)}, "auto_approve": True}
-        header["isolation"] = "in_place"
         self.task.write_text(f"```taskrail-task\n{json.dumps(header)}\n```\nReturn 2")
         self.configure_mode("local-effects")
         allow = dict(decision="allow", alternative="")
@@ -187,12 +187,18 @@ class LiveRequestTests(LiveFixture, unittest.TestCase):
         planner = next(stage for stage in state["stages"] if stage["stage"] == "planner")
         feedback = (run / planner["directory"] / "tool-result.md").read_text()
         effects = feedback.split("The command changed files inside the declared roots: ")[1]
-        self.assertEqual(effects.split(". They are now", 1)[0], str(self.root / "notes.txt"))
+        self.assertEqual(
+            effects.split(". They are now", 1)[0],
+            str(Path(state["roots"]["project"]) / "notes.txt"),
+        )
         self.assertIn(prompt_texts.text("feedback.command_effects.read_only"), feedback)
         self.assertNotIn("project/.cache-tool/report.txt", state["changed_files"])
         report = (run / "report.md").read_text()
         self.assertIn("## Changed by approved commands", report)
-        self.assertIn(str(self.root / "notes.txt"), report.split("## Changed by approved")[1])
+        self.assertIn(
+            str(Path(state["roots"]["project"]) / "notes.txt"),
+            report.split("## Changed by approved")[1],
+        )
 
 
 if __name__ == "__main__":

@@ -38,7 +38,7 @@ class ReleaseRetentionTests(unittest.TestCase):
 
     def test_default_worktrees_are_independent_of_resettable_history_storage(self):
         with patch("pathlib.Path.home", return_value=Path("/home/fixture")):
-            config = isolation_settings({}, {}, Path("/home/fixture/.local/state/taskrail/runs"))
+            config = isolation_settings({}, {})
         self.assertEqual(
             config["worktree_base"], Path("/home/fixture/.local/share/taskrail-worktrees")
         )

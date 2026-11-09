@@ -15,7 +15,7 @@ def run_sources(run):
     index = json.loads(read_artifact(run, RUN_INDEX))
     worktrees = index.get("worktrees") or {}
     if worktrees:
-        return [entry["source"] for entry in worktrees.values()]
+        return [entry.get("original_source", entry["source"]) for entry in worktrees.values()]
     return list(index.get("roots", {}).values())
 
 

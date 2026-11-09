@@ -2,7 +2,7 @@
 
 from taskrail.application import planned_checks, reviewed_artifacts, understanding_file
 from taskrail.application.artifacts import save_run
-from taskrail.application.changes import capture_preimages, write_diff
+from taskrail.application.changes import capture, write_diff
 from taskrail.application.correction_start import refresh as refresh_correction
 from taskrail.application.task_commit import commit
 
@@ -27,9 +27,7 @@ def apply(workflow, record, verdict):
 
 def source_effect(workflow, effect):
     """Capture preimages before implementation; refresh the diff after it."""
-    roots = workflow.config["roots"]
-    preimages = workflow.state["preimages"]
     if effect == "capture_preimages":
-        capture_preimages(workflow.run, roots, workflow.flow["allowed"], preimages)
+        capture(workflow)
     elif effect == "write_diff":
-        write_diff(workflow.run, roots, preimages)
+        write_diff(workflow)

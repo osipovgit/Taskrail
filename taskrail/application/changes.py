@@ -2,12 +2,21 @@
 
 import difflib
 
+from taskrail.application import followup_selection
 from taskrail.application.planned_paths import safe_file
+from taskrail.git import review_source
 from taskrail.infrastructure.agent_sync import atomic_write
 
 DEV_NULL = "/dev/null"
 NO_NEWLINE = r"\ No newline at end of file"
 NUL = b"\0"
+
+
+def capture(workflow):
+    """Bind carried changes to HEAD and ordinary files to their current working bytes."""
+    selected = followup_selection.select(workflow)
+    ordinary = sorted(set(workflow.flow["allowed"]) - set(selected))
+    capture_preimages(workflow.run, workflow.config["roots"], ordinary, workflow.state["preimages"])
 
 
 def capture_preimages(run, roots, allowed, preimages):
@@ -21,12 +30,23 @@ def capture_preimages(run, roots, allowed, preimages):
         preimages[name] = reference
 
 
-def write_diff(run, roots, preimages):
+def write_diff(workflow):
     """Write changes.diff from preimages to current bytes."""
-    chunks = []
-    for name, stored in preimages.items():
-        chunks.append(file_diff(run, safe_file(name, roots), stored))
-    (run / "changes.diff").write_text("".join(chunks), encoding="utf-8")
+    selected = set(workflow.state.get("followup_selected", []))
+    chunks = (review_patch(workflow, name, selected) for name in workflow.state["preimages"])
+    (workflow.run / "changes.diff").write_text("".join(chunks), encoding="utf-8")
+
+
+def review_patch(workflow, name, selected):
+    """A carried file uses its complete Git patch for every review and continuation."""
+    roots = workflow.config["roots"]
+    path = safe_file(name, roots)
+    stored = workflow.state["preimages"][name]
+    if name in selected:
+        original = workflow.run / stored if stored else None
+        root = roots[name.partition("/")[0]]
+        return review_source.full_patch(root, original, path)
+    return file_diff(workflow.run, path, stored)
 
 
 def file_diff(run, path, stored):

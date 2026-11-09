@@ -9,7 +9,7 @@ import json
 import subprocess
 import textwrap
 
-from taskrail.application import task_branch
+from taskrail.application import followup_selection, task_branch
 from taskrail.application.artifacts import save_run
 from taskrail.application.git_state import git_metadata
 from taskrail.application.planned_paths import safe_file
@@ -89,6 +89,11 @@ def commit_root(workflow, alias, paths, message):
         original_sources=workflow.guard.before,
         scan=workflow.guard.scan,
     )
+    if "original_source" in workflow.config["worktrees"][alias]:
+        environment["reviewed_paths"] = [roots[alias] / name for name in paths]
+        environment["adopted_paths"] = followup_selection.paths(
+            workflow, followup_selection.SELECTED
+        )
     revision = reviewed_commit.commit(environment, roots[alias], paths, message)
     metadata = git_metadata(roots)
     if revision:

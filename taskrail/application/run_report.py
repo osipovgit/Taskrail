@@ -14,9 +14,7 @@ from taskrail.core.paths import tool_paths
 
 BULLET = "- {0}"
 PROJECT = "- {0}: {1}"
-IN_PLACE = (
-    "Source files are edited in place. Git uses the controlled executor; no automatic rollback."
-)
+NOT_STARTED = "No isolated workspace was started."
 ISOLATED = "Source files are edited in isolated worktrees. Git uses the controlled executor; no automatic rollback."
 ROW = "| {0} | [{1}]({1}/stage.json) | {2} | {3} | {4} |"
 FOOTER = (
@@ -50,7 +48,7 @@ def report(run, state):
 
 
 def header(state):
-    """Status, summary, a reviewed answer and the in-place editing notice."""
+    """Status, summary, a reviewed answer and the isolated workspace notice."""
     lines = [
         "# Taskrail — review report",
         "",
@@ -60,7 +58,7 @@ def header(state):
     ]
     if state.get("answer"):
         lines += ["", "## Answer", "", state["answer"]]
-    return [*lines, "", ISOLATED if state.get("worktrees") else IN_PLACE]
+    return [*lines, "", ISOLATED if state.get("worktrees") else NOT_STARTED]
 
 
 def timeline(state):

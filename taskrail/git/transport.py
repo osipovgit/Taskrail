@@ -13,15 +13,22 @@ TIMEOUT_SECONDS = 60
 POLL_SECONDS = 0.05
 
 
-def run(argv, root, environment):
+def run(argv, root, environment, input_data=None):
     """Never execute a shell; keep potentially large output out of process memory."""
     stage_deadline.check(argv)
-    with tempfile.TemporaryFile() as output, tempfile.TemporaryFile() as errors:
+    with (
+        tempfile.TemporaryFile() as output,
+        tempfile.TemporaryFile() as errors,
+        tempfile.TemporaryFile() as incoming,
+    ):
+        if input_data is not None:
+            incoming.write(input_data)
+            incoming.seek(0)
         process = subprocess.Popen(
             argv,
             cwd=root,
             env=environment,
-            stdin=subprocess.DEVNULL,
+            stdin=subprocess.DEVNULL if input_data is None else incoming,
             stdout=output,
             stderr=errors,
             start_new_session=True,
