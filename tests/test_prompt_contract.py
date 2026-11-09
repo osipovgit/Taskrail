@@ -19,13 +19,25 @@ from taskrail.application import (
     recovery,
     task_config,
 )
-from taskrail.core import prompt_texts, task_spec
+from taskrail.core import prompt_texts, task_spec, task_understanding
 from taskrail.infrastructure import agent_profile, artifact_access
 from taskrail.web.task_form import build_task
 
 # Bytes of the instructions of one stage, paths shortened; the task and Context excluded.
-BUDGETS = {"01-plan": 10500, "02-plan-review": 10500, "03-implement": 9000, "05-review": 9000}
-STAGES = dict(zip(("planner", "plan-reviewer", "implementer", "reviewer"), BUDGETS, strict=True))
+BUDGETS = {
+    "01-understand": 5000,
+    "02-plan": 10500,
+    "03-plan-review": 10500,
+    "04-implement": 9000,
+    "06-review": 9000,
+}
+STAGES = dict(
+    zip(
+        ("understanding", "planner", "plan-reviewer", "implementer", "reviewer"),
+        BUDGETS,
+        strict=True,
+    )
+)
 CAPABILITIES = {
     "hosts": {"test": dict(hostname="server.example.invalid", port=22, username="worker")},
     "jenkins": {
@@ -67,7 +79,20 @@ class LabelTests(unittest.TestCase):
             text, _ = build_task(payload, Path(directory) / "runs")
         meta = json.loads(text.split("```taskrail-task\n", 1)[1].split("\n```", 1)[0])
         spec = task_spec.resolve(text, dict(meta, verification=["The play runs twice"]))
-        shown = task_spec.prompt_text(spec, spec["requirements"])
+        payload = dict(
+            summary="Fixture obligations",
+            requirements=[
+                dict(text=text, kind=kind, sources=[dict(field=field, quote=text)])
+                for field, text, kind in (
+                    ("goal", "Fix the lint findings in roles/ntp.", "task"),
+                    ("goal", "Keep variable names stable.", "task"),
+                    ("criteria", "ansible-lint roles/ntp passes", "task"),
+                    ("constraints", "Do not disable rules.", "constraint"),
+                )
+            ],
+        )
+        entries = task_understanding.resolve(payload, spec)["requirements"]
+        shown = task_spec.prompt_text(spec, entries)
         self.assertNotIn("## Title", shown)
         self.assertTrue(shown.startswith("## Goal\n[R1]\nFix the lint findings"))
         self.assertIn("\n\n[R2]\nKeep variable names stable.", shown)
@@ -253,13 +278,19 @@ class RequestBudgetTests(LiveFixture, unittest.TestCase):
                         request = prompts.make_request(
                             dict(config, **overrides), (stage, plan, [], None), state, run
                         )
-                        available.assert_called_once_with()
+                        if stage == "understanding":
+                            available.assert_not_called()
+                        else:
+                            available.assert_called_once_with()
                         self.check_budget(request, stage)
-                        ssh = bool(catalog.get("hosts")) and stage != "implementer"
+                        ssh = bool(catalog.get("hosts")) and stage not in {
+                            "understanding",
+                            "implementer",
+                        }
                         self.assertEqual('"status":{"const":"ACTION_REQUEST"}' in request, ssh)
                         self.assertEqual(
                             '"status":{"const":"JENKINS_REQUEST"}' in request,
-                            bool(catalog.get("jenkins")),
+                            bool(catalog.get("jenkins")) and stage != "understanding",
                         )
 
     def check_budget(self, request, stage):
@@ -278,28 +309,28 @@ class RequestBudgetTests(LiveFixture, unittest.TestCase):
             self.assertIsNone(STABLE_ID.search(request), stage)
             self.assertNotIn("{'", request)
             requests[stage] = request
-        self.assertIn("Your only writable file is the plan file", requests["01-plan"])
-        self.assertIn("The planner was given these rules", requests["02-plan-review"])
-        self.assertNotIn("The planner was given these rules", requests["01-plan"])
-        self.assertNotIn("Cite current lines", requests["03-implement"])
-        self.assertIn("Your task from the approved plan:", requests["03-implement"])
-        self.assertIn("Done when:\n- ", requests["03-implement"])
-        self.assertNotIn("Your task from the approved plan", requests["05-review"])
-        self.assertIn("Cite current lines", requests["05-review"])
-        self.assertNotIn("Your only writable file", requests["03-implement"])
-        self.assertIn("Edit only the allowed files", requests["03-implement"])
-        self.assertNotIn("Edit only the allowed files", requests["05-review"])
-        self.assertIn("Push needs personal approval", requests["03-implement"])
-        self.assertNotIn("push", requests["05-review"].split("Local commands:")[0])
-        self.assertNotIn('"findings"', requests["03-implement"])
-        self.assertEqual(requests["01-plan"].count("as your entire message"), 3)
+        self.assertIn("Your only writable file is the plan file", requests["02-plan"])
+        self.assertIn("The planner was given these rules", requests["03-plan-review"])
+        self.assertNotIn("The planner was given these rules", requests["02-plan"])
+        self.assertNotIn("Cite current lines", requests["04-implement"])
+        self.assertIn("Your task from the approved plan:", requests["04-implement"])
+        self.assertIn("Done when:\n- ", requests["04-implement"])
+        self.assertNotIn("Your task from the approved plan", requests["06-review"])
+        self.assertIn("Cite current lines", requests["06-review"])
+        self.assertNotIn("Your only writable file", requests["04-implement"])
+        self.assertIn("Edit only the allowed files", requests["04-implement"])
+        self.assertNotIn("Edit only the allowed files", requests["06-review"])
+        self.assertIn("Push needs personal approval", requests["04-implement"])
+        self.assertNotIn("push", requests["06-review"].split("Local commands:")[0])
+        self.assertNotIn('"findings"', requests["04-implement"])
+        self.assertEqual(requests["02-plan"].count("as your entire message"), 3)
         progress = run / "progress.md"
         self.assertIn(
-            f"PROGRESS FILE: {progress}", requests["03-implement"].replace("/B", str(self.base))
+            f"PROGRESS FILE: {progress}", requests["04-implement"].replace("/B", str(self.base))
         )
-        self.assertNotIn("PROGRESS FILE", requests["05-review"])
+        self.assertNotIn("PROGRESS FILE", requests["06-review"])
         self.assertIn("## Remaining", progress.read_text())
-        profile = json.loads((run / "03-implement/agent.md").read_text().split("---")[1])
+        profile = json.loads((run / "04-implement/agent.md").read_text().split("---")[1])
         self.assertEqual(profile["permission"]["edit"][str(progress)], "allow")
 
 

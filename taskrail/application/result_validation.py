@@ -11,8 +11,10 @@ from taskrail.application import (
     review_result,
 )
 from taskrail.application.implementer_result import stage_result as implementation
+from taskrail.application.input_revision import requested as input_revision
 from taskrail.application.result_paths import approved_path as approved_path
 from taskrail.application.result_paths import validate_paths
+from taskrail.application.understanding_file import stage_result as understanding
 from taskrail.core import (
     coverage,
     plan_contract,
@@ -34,7 +36,7 @@ def validate(response, context):
     Problems name requirements by the R<n> labels of the request.
     """
     try:
-        return checked(decoded(response, context), context)
+        return decoded(response, context)
     except ValueError as error:
         message = plan_file.labelled(str(error), context[REQUIREMENTS])
         if message == str(error):
@@ -43,13 +45,20 @@ def validate(response, context):
 
 
 def decoded(response, context):
-    """The planner's result comes from plan.md, a reviewer's from review.md and the
-    implementer's from its final DONE or BLOCKED."""
+    """Resolve input handoffs or validate the stage's owned artifact."""
+    revised = input_revision(response, context)
+    if revised is not None:
+        schema.require(not context["check_config"].get("phase"), "Assigned input is frozen")
+        return revised
+    if context[STAGE] == "understanding":
+        return understanding(context)
     if context[STAGE] == plan_result.PLANNER:
-        return plan_result.stage_result(context)
-    if context[ROLE] == IMPLEMENTER:
-        return implementation(response, context)
-    return review_result.stage_result(context)
+        payload = plan_result.stage_result(context)
+    elif context[ROLE] == IMPLEMENTER:
+        payload = implementation(response, context)
+    else:
+        payload = review_result.stage_result(context)
+    return checked(payload, context)
 
 
 def checked(payload, context):

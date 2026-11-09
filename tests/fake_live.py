@@ -76,6 +76,7 @@ run = request_file.parent.parent
 # Every turn attaches the stage's own run file after the prompt, and only that file.
 attached = [args[index + 1] for index, item in enumerate(args) if item == "--file"][1:]
 owned = dict(planner="plan.md", implementer="progress.md", reviewer="review.md")
+owned["understanding"] = "understanding.json"
 owned["plan-reviewer"] = "review.md"
 own = run / owned[role] if role in owned else None
 if "Context handoff. Reply now" in prompt:
@@ -117,6 +118,16 @@ for file in [request_file, Path(context["task_file"])] + (
     assert header["permission"]["external_directory"].get(str(file.parent) + "/*") == "allow", str(
         file.parent
     )
+if role == "understanding":
+    from fake_understanding import execute
+
+    execute(context, run, prompt, mode, print)
+    sys.exit(0)
+if mode == f"input-revision-{role}":
+    from fake_understanding import revision
+
+    if revision(run, print):
+        sys.exit(0)
 if mode == "scenario":
     from acceptance.fixture_agent import execute
 

@@ -163,9 +163,9 @@ class ServiceTests(unittest.TestCase):
         with opener.open(request) as response:
             run = runs / json.load(response)["id"]
         deadline = time.monotonic() + 10
-        while not (run / "01-plan/stderr.log").exists() and time.monotonic() < deadline:
+        while not (run / "01-understand/stderr.log").exists() and time.monotonic() < deadline:
             time.sleep(0.05)
-        self.assertTrue((run / "01-plan/stderr.log").exists())
+        self.assertTrue((run / "01-understand/stderr.log").exists())
         process.send_signal(signal.SIGTERM)
         self.assertEqual(process.wait(timeout=15), 0, (self.home / "service.log").read_text())
         self.assertEqual(json.loads((run / "run.json").read_text())["status"], "INTERRUPTED")

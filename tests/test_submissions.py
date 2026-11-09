@@ -180,7 +180,7 @@ class SubmissionTests(unittest.TestCase):
         self.assertEqual(result["status"], "READY_FOR_REVIEW")
         self.assertEqual(
             [stage["stage"] for stage in result["stages"]],
-            ["planner", "plan-reviewer", "implementer", "check", "reviewer"],
+            ["understanding", "planner", "plan-reviewer", "implementer", "check", "reviewer"],
         )
         self.assertIn("return 2", (self.repo / "hello.py").read_text())
         self.assertEqual((self.repo / "unrelated.txt").read_text(), "keep this")

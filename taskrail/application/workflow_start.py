@@ -14,6 +14,7 @@ from taskrail.application import (
 )
 from taskrail.application.artifacts import save_run
 from taskrail.application.checkpoints import load_checkpoint
+from taskrail.application.understanding_file import restore as restore_understanding
 from taskrail.application.workflow_state import FLOW_KEYS, STAGE
 from taskrail.core import control, prompt_texts
 from taskrail.core.files import atomic_json, digest
@@ -69,6 +70,7 @@ def validated_checkpoint(workflow):
     if task_hash and digest(workflow.config["task_text"].encode()) != task_hash:
         raise ValueError("Task changed since checkpoint; continuation refused")
     reviewed_input.restore(workflow)
+    restore_understanding(workflow)
     instruction_sources.verify(run, workflow.state)
     child_inputs.verify(run, workflow.state)
     resume_inputs.verify_preimages(run, workflow.state, workflow.guard.before)

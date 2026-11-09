@@ -1,4 +1,4 @@
-"""Lossless requirement blocks with positions in their original input field."""
+"""Deterministic explicit-list input for scripted test providers only."""
 
 import re
 

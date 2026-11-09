@@ -428,12 +428,12 @@ class ContractTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "Incomplete"):
             plan_contract.validate_completion(payload, plan, [])
 
-    def test_complete_task_blocks_get_stable_ids(self):
+    def test_only_explicit_runtime_checks_get_ids_before_understanding(self):
         task = "# Task\n\nReturn 2\n- Preserve X\n- Preserve Y\n"
         entries = task_requirements(task, ["Run Jenkins"])
         self.assertEqual(
             [entry["text"] for entry in entries],
-            ["Return 2", "- Preserve X", "- Preserve Y", "Run Jenkins"],
+            ["Run Jenkins"],
         )
         self.assertEqual(entries, task_requirements(task, ["Run Jenkins"]))
         self.assertEqual(entries[-1]["kind"], "runtime")
