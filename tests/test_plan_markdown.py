@@ -424,7 +424,7 @@ class PlanFileTests(unittest.TestCase):
             source = run / "source"
             source.mkdir()
             (source / "site.yml").write_text("- name: Run the playbook check\n")
-            instructions = plan_file.instructions(run, dict(project=source), REQUIREMENTS)
+            instructions = plan_file.instructions(run, dict(project=source))
             self.assertIn(f"PROJECT MAP: {run / '00-input/project-map.md'}", instructions)
             self.assertIn(f"PLAN FILE: edit {target}", instructions)
             self.assertIn("DONE submits a draft for validation, not approval", instructions)
@@ -440,7 +440,22 @@ if __name__ == "__main__":
 
 
 class ProjectMapTests(unittest.TestCase):
-    def test_the_map_indexes_files_landmarks_and_requirement_hints(self):
+    def test_incidental_words_in_comments_do_not_become_planning_hints(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "Example.java").write_text(
+                "// Historical example: audit_mode is unrelated to this task.\n"
+                "public class Example {}\n"
+            )
+            (root / "notes.txt").write_text("Old incident involving roles/ntp and audit_mode.\n")
+            shown = project_map.render(dict(project=root))
+            self.assertIn("- project/Example.java (2 lines): Example", shown)
+            self.assertIn("- project/notes.txt (1 lines)", shown)
+            self.assertNotIn("audit_mode", shown)
+            self.assertNotIn("roles/ntp", shown)
+            self.assertNotIn("Requirement hints", shown)
+
+    def test_the_map_indexes_sources_without_assigning_requirement_ownership(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory) / "repo"
             (root / "roles/ntp/tasks").mkdir(parents=True)
@@ -451,8 +466,7 @@ class ProjectMapTests(unittest.TestCase):
             (root / "node_modules/skip.js").write_text("function skipped() {}\n")
             (root / ".env").write_text("SECRET=1\n")
             (root / "image.bin").write_bytes(b"\x00\x01")
-            requirements = [dict(text="Rename ntp_servers in roles/ntp", kind="task")]
-            text = project_map.render(dict(project=root), requirements)
+            text = project_map.render(dict(project=root))
             lines = text.splitlines()
             self.assertIn(
                 "- project/roles/ntp/tasks/main.yml (2 lines): Install ntp; Configure ntp_servers",
@@ -461,9 +475,8 @@ class ProjectMapTests(unittest.TestCase):
             self.assertIn("- project/image.bin (binary, large or unreadable)", lines)
             self.assertNotIn(".env", text)
             self.assertNotIn("node_modules", text)
-            hints = next(line for line in lines if line.startswith("R1 → "))
-            self.assertIn("ntp_servers: project/roles/ntp/tasks/main.yml:2", hints)
-            self.assertIn("roles/ntp: project/roles/ntp/tasks/main.yml:1", hints)
+            self.assertNotIn("Requirement hints", text)
+            self.assertNotIn("R1 →", text)
             for entry in (line for line in lines if " · lines " in line):
                 first, last = map(int, entry.rsplit("lines ", 1)[1].split("-"))
                 self.assertTrue(lines[first - 1].startswith("## "), entry)

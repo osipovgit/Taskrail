@@ -84,7 +84,7 @@ class ProtectedPathTests(unittest.TestCase):
         self.assertTrue(self.listing(["cat", "certs/server.pem"], custom))
 
     def test_project_map_and_source_windows_leave_protected_files_out(self):
-        text = project_map.render(self.roots, [], protected_paths.DEFAULT_PATTERNS)
+        text = project_map.render(self.roots, protected_paths.DEFAULT_PATTERNS)
         self.assertIn("project/app.py", text)
         for name in ("server.pem", "id_ed25519", ".npmrc"):
             self.assertNotIn(name, text)
