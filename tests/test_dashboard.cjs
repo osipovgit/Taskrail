@@ -290,6 +290,7 @@ async function main() {
       instruction_sha256: 'request-hash',
       timeout_seconds: 3600,
       telemetry,
+      continuation: { started_at: stamp, operator_note: '<Preserve the task order>' },
       result: {
         summary: 'Validated',
         steps: [
@@ -320,6 +321,10 @@ async function main() {
       },
     },
     requirements,
+  );
+  assert.equal(
+    all(structured).filter((n) => n.textContent === '<Preserve the task order>').length,
+    2,
   );
   assert.ok(all(structured).some((n) => n.textContent === 'S1 · Fix behavior'));
   assert.ok(all(structured).some((n) => n.textContent === 'R1 · Satisfied'));

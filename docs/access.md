@@ -89,6 +89,17 @@ approval ledger with `"rule": "sandbox"`:
 `"sandbox": false` requests host execution. Without working bubblewrap, commands also
 use the host route (`rule: host`); `host_commands: "ask"` requires approval there.
 `taskrail check` and `local-preflight.json` report the effective boundary and tool paths.
+The local journal records RUNNING before process creation. A reported failure to start
+(such as a vanished executable or working directory) permits a fresh request under
+the current permissions. A timeout or lost result after an actual start leaves uncertain
+effects. A fresh local request may repeat a settled uncertain read only if both
+invocations qualify under the read grammar, protected paths and system executable
+resolution. A running action or uncertain writer still requires inspection. Use a
+separate diagnostic or controlled Git status to establish what changed. A permission refusal and an ordinary nonzero exit each retain their own
+outcome. A failed Git preflight probe does not reserve the write it was preparing. If a host diagnostic in a reading stage changes
+non-ignored source, Taskrail records the affected paths and action ID and supplies
+them to the current agent, subsequent planners and independent review in `Context.diagnostic_changes`. Ignored caches are
+outside this source inventory. A Git metadata change still trips the integrity guard.
 Required tools are checked before model work and again after recipe selection;
 missing tools stop before execution. Install and Continue, or fix the check and Restart.
 Configured checks share the sandbox and may not change source. Required Linux CI

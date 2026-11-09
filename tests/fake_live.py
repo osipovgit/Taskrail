@@ -508,6 +508,9 @@ else:
             summary="Missing required evidence",
             blocking_gaps=["Cannot confirm current behaviour"],
         )
+    if mode == "prose-block" and role == "plan-reviewer":
+        assert context["plan"]["blocking_gaps"]
+        value.update(status="BLOCKED", blocking_gaps=["Mandatory local commands unavailable"])
     if mode == "incomplete-review" and role == "plan-reviewer":
         value.update(status="BLOCKED", blocking_gaps=["Task was truncated"])
 if mode == "review-repair" and role == "implementer" and context.get("feedback"):

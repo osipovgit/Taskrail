@@ -37,9 +37,9 @@ def record(session, payload):
     path = session.environment["run"] / NAME
     counts = json.loads(path.read_text()) if path.exists() else {}
     entries = counts.setdefault(session.active[1]["stage"], {})
-    identity = fingerprint(payload, turn_recovery.progress(session))
+    identity = fingerprint(payload, turn_recovery.work_state(session))
     count = 1 + entries.get(identity, 0)
-    counts[session.active[1]["stage"]] = {identity: count}
+    entries[identity] = count
     atomic_json(path, counts)
     return count
 

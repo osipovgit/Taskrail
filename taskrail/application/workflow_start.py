@@ -118,7 +118,8 @@ def reopen(workflow):
     """Close abandoned records and mark the run as running again."""
     state = workflow.state
     resume_inputs.interrupt_open_records(workflow.run, state)
-    continuation = dict(started_at=clock(), stage=workflow.flow[STAGE])
+    number = len(state["stages"]) + 1
+    continuation = dict(started_at=clock(), stage=workflow.flow[STAGE], next_number=number)
     if workflow.runtime["note"]:
         continuation["operator_note"] = workflow.runtime["note"]
     state.setdefault("continuations", []).append(continuation)

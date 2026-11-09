@@ -2,11 +2,13 @@
 
 from taskrail.core.files import atomic_json
 
+GAPS = "blocking_gaps"
+
 
 def present(payload):
     """Only explicit structured blockers can trigger the conservative stop."""
     return (
-        bool(payload["blocking_gaps"])
+        bool(payload[GAPS])
         or any(entry["outcome"] == "gap" for entry in payload["coverage"])
         or payload.get("input_complete") is False
     )
@@ -15,7 +17,7 @@ def present(payload):
 def stop_result(payload, context):
     """Preserve the draft; generate no source claims or authorization to proceed."""
     atomic_json(context["folder"] / "blocked-draft.json", payload)
-    gaps = payload["blocking_gaps"] or ["Agent reported incomplete required evidence."]
+    gaps = payload[GAPS] or ["Agent reported incomplete required evidence."]
     stopped = {key: [] for key in payload}
     stopped.update(
         schema_version=1,
@@ -41,3 +43,26 @@ def blocked_requirement(requirement):
         evidence_ids=[],
         explanation="Not evaluated: the stage stopped on a shared blocker before validating this requirement.",
     )
+
+
+def confirmed(flow, state, verdict, reference):
+    """Keep a confirmed blocker and resume the planner when the requested input arrives."""
+    if flow["plan"].get("decision") != "blocked" or verdict["findings"]:
+        return False
+    state["results"]["plan-review"] = reference
+    summary = " ".join(verdict[GAPS])
+    state.update(status="BLOCKED", plan_review=verdict, summary=summary)
+    flow.update(stage="planner", feedback=verdict, effect="blocked_checkpoint")
+    return True
+
+
+def stops(flow, state, verdict, reference):
+    """Route actionable gaps through normal stage handlers; keep terminal gaps read-only."""
+    stage = flow["stage"]
+    if verdict[GAPS]:
+        if stage == "plan-reviewer":
+            return confirmed(flow, state, verdict, reference)
+        if stage == "planner" or (stage == "reviewer" and flow["allowed"]):
+            return False
+    state.update(status="BLOCKED", summary=verdict["summary"])
+    return True

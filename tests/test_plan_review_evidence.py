@@ -93,6 +93,19 @@ class PlanReviewEvidenceTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "Path outside"):
             self.review(f"fails: {self.plan_file}:1 (bad implementation).")
 
+    def test_approval_cannot_turn_a_proposed_blocker_into_no_change(self):
+        self.plan.update(decision="blocked", proposed_change_files=[])
+        atomic_json(self.run / self.context["plan_reference"], self.plan)
+        self.observe(self.source)
+        with self.assertRaisesRegex(ValueError, "Review the proposed blocker"):
+            self.review(f"done: `{self.source}`:1")
+
+    def test_bare_planned_review_authenticates_the_same_snapshot(self):
+        self.assertEqual(self.review("planned")["status"], "APPROVE")
+        self.plan_file.write_text("A different proposal\n")
+        with self.assertRaisesRegex(ValueError, "plan under review changed"):
+            self.review("planned")
+
     def test_missing_read_requires_actual_delivery_to_the_current_session(self):
         self.observe(self.plan_file, session="earlier")
         with self.assertRaises(ValueError) as rejected:

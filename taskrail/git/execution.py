@@ -34,18 +34,22 @@ def execute(entry, previous, role, environment):
     except ValueError as exc:
         entry.update(status="REJECTED", stderr=str(exc), mutation=False)
     except (OSError, subprocess.TimeoutExpired) as exc:
-        status = "UNKNOWN" if entry.get(MUTATION) else "FAILED"
-        entry.update(status=status, stderr=str(exc))
+        uncertain = entry.get(MUTATION) and "effective_argv" in entry
+        entry.update(
+            status="UNKNOWN" if uncertain else "FAILED", stderr=str(exc), mutation=bool(uncertain)
+        )
 
 
 def perform(entry, previous, role, environment):
     """Record effective argv before the subprocess can produce any side effects."""
     root = requests.root_path(entry[REQUEST], environment["roots"])
     entry[MUTATION] = policy.validate(entry[REQUEST][ARGV], role)
-    entry["effective_argv"] = prepare(root, entry, previous, environment)
+    arguments = prepare(root, entry, previous, environment)
     overrides = settings(root, entry[REQUEST][ARGV])
     overrides.extend(environment.get("identity_settings", ()))
-    atomic_json(environment["run"] / "git-execution.json", [*previous, entry])
+    running = dict(entry, effective_argv=arguments)
+    atomic_json(environment["run"] / "git-execution.json", [*previous, running])
+    entry["effective_argv"] = arguments
     outcome = process.invoke(root, entry["effective_argv"], overrides)
     entry.update(
         status="SUCCEEDED" if outcome.returncode == 0 else "FAILED",
@@ -121,7 +125,7 @@ def scoped_arguments(root, entry, context):
 def identical(record, payload):
     """The same write to the same root; changing the reason does not make it new."""
     original = record[REQUEST]
-    if record[STATUS] == "REJECTED" or original["root"] != payload["root"]:
+    if not record.get(MUTATION) or original["root"] != payload["root"]:
         return False
     return original[ARGV] == payload[ARGV]
 

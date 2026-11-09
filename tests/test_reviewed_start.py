@@ -93,6 +93,26 @@ class ReviewedStartTests(unittest.TestCase):
             run=self.child, state=state, config=config, guard=guard, flow={"stage": "planner"}
         )
 
+    def test_child_reads_its_own_snapshot_at_the_reviewed_lines(self):
+        manifest = self.parent / "00-input/original/status.jsonl"
+        manifest.parent.mkdir()
+        manifest.write_text('{"changed_entries":0}\n')
+        path = self.parent / "01-plan/result.json"
+        plan = json.loads(path.read_text())
+        plan["steps"][0]["read"] = [f"{manifest}:1-1", f"{self.root}/a.py:1-1"]
+        atomic_json(path, plan)
+        self.parent_state["reviewed_plan_sha256"] = digest(path.read_bytes())
+        atomic_json(self.parent / "run.json", current_run(self.parent_state))
+        reviewed_start.begin(self.workflow)
+        child_manifest = self.child / "00-input/original/status.jsonl"
+        self.assertEqual(child_manifest.read_bytes(), manifest.read_bytes())
+        installed = self.workflow.flow["plan"]
+        self.assertEqual(
+            installed["steps"][0]["read"], [f"{child_manifest}:1-1", f"{self.root}/a.py:1-1"]
+        )
+        self.assertEqual(installed["evidence"][0]["path"], str(child_manifest))
+        self.assertEqual(json.loads(path.read_text()), plan)
+
     def test_authenticated_child_starts_writer_with_preimages_and_one_exact_scope(self):
         reviewed_start.begin(self.workflow)
         self.assertEqual(self.workflow.flow["stage"], "implementer")

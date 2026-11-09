@@ -59,6 +59,9 @@ def new_stage(run, state, stage, attempt=NO_DETAILS):
     folder = "-".join((format(number, "02d"), PHASES[stage]))
     run.joinpath(folder).mkdir()
     record = stage_record(number, folder, stage, attempt, state["results"])
+    continuations = state.get("continuations", [])
+    if continuations and continuations[-1].get("next_number") == number:
+        record["continuation"] = continuations[-1]
     state["stages"].append(record)
     state["stage"] = stage
     atomic_json(run / folder / "stage.json", record)

@@ -7,7 +7,7 @@ blocking gaps, steps and change files, and reports every problem with its line.
 import re
 from types import MappingProxyType
 
-from taskrail.core import plan_checks
+from taskrail.core import plan_checks, prompt_texts
 from taskrail.core.plan_markdown import (
     AFTER,
     ANSWER,
@@ -44,12 +44,12 @@ def payload(text, requirements, roots):
     coverage.problems.extend(document[PROBLEMS])
     decision = read_decision(document, coverage.problems)
     coverage.read(document[REQUIREMENTS])
+    coverage.found["unverified"].extend(after_checks(document, coverage.problems))
     planned = steps(document, coverage)
     if decision != BLOCKED:
         check(decision, planned, coverage)
-    coverage.found["unverified"].extend(after_checks(document))
     if decision == BLOCKED:
-        planned = blocked(coverage.found, top_text(document))
+        planned = blocked(coverage, top_text(document))
     report(coverage.problems, coverage.found, decision)
     selected = plan_checks.selections(document[plan_checks.SELECTIONS], requirements)
     if selected:
@@ -57,10 +57,17 @@ def payload(text, requirements, roots):
     return finished(coverage.found, decision, top_text(document), planned)
 
 
-def after_checks(document):
+def after_checks(document, problems):
     """The checks listed under `## After the change`; a "None" line lists none."""
-    checks = [text for text, _ in document[AFTER]]
-    return [check for check in checks if check and not NO_CHECKS.match(check)]
+    deferred = []
+    for entry, line in document[AFTER]:
+        if NO_CHECKS.match(entry):
+            continue
+        if entry.lower().startswith(("jenkins check:", "server check:")):
+            deferred.append(entry)
+        else:
+            problems.append(prompt_texts.text("validation.after_check", line=line))
+    return deferred
 
 
 def finished(found, decision, summary, planned):
@@ -83,13 +90,17 @@ def read_decision(document, problems):
     return decision
 
 
-def blocked(found, summary):
+def blocked(coverage, summary):
     """A blocked plan authorizes nothing; its planned requirements wait with it."""
+    found = coverage.found
     for entry in found["coverage"]:
         if entry["outcome"] == PLANNED:
             entry["outcome"] = "not_evaluated"
     if not found["blocking_gaps"]:
-        found["blocking_gaps"].append(summary or "The plan is blocked")
+        if summary:
+            found["blocking_gaps"].append(summary)
+        else:
+            coverage.problems.append(prompt_texts.text("validation.block_reason"))
     return []
 
 

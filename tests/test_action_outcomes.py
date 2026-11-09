@@ -7,8 +7,9 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from taskrail.application import transitions
-from taskrail.interactions import local_actions, local_journal, request_limits
+from taskrail.application import evidence, transitions
+from taskrail.core.files import atomic_json
+from taskrail.interactions import local_actions, local_journal, request_limits, turn_recovery
 from taskrail.web import delivery_steps
 
 
@@ -58,6 +59,32 @@ class LocalJournalTests(unittest.TestCase):
         self.assertEqual(outcome["status"], "UNKNOWN")
         self.assertEqual(len(local_journal.records(self.run)), 1)
 
+    def test_failure_before_process_creation_can_be_corrected_and_retried(self):
+        with patch(
+            "taskrail.interactions.local.subprocess.Popen", side_effect=FileNotFoundError("gone")
+        ):
+            failed = self.execute()
+        self.assertEqual((failed["status"], failed["reason"]), ("FAILED", "gone"))
+        self.assertEqual(self.execute()["status"], "SUCCEEDED")
+
+    def test_only_verified_reads_can_run_again_after_uncertainty(self):
+        self.payload["argv"] = ["wc", "-l", "source.txt"]
+        (self.root / "source.txt").write_text("first\n")
+        with patch("taskrail.interactions.local.monitor", side_effect=ValueError("limit")):
+            self.assertEqual(self.execute()["status"], "UNKNOWN")
+        self.assertEqual(self.execute()["status"], "SUCCEEDED")
+        self.context["config"] = {"protected_paths": ["source.txt"]}
+        with patch("taskrail.interactions.local.subprocess.Popen") as launch:
+            self.assertEqual(self.execute()["status"], "UNKNOWN")
+            launch.assert_not_called()
+
+    def test_post_start_monitor_failure_remains_uncertain(self):
+        with patch("taskrail.interactions.local.monitor", side_effect=ValueError("output limit")):
+            self.assertEqual(self.execute()["status"], "UNKNOWN")
+        with patch("taskrail.interactions.local.subprocess.Popen") as launch:
+            self.assertEqual(self.execute()["status"], "UNKNOWN")
+            launch.assert_not_called()
+
     def test_denied_command_does_not_run_again_under_a_new_reason(self):
         decision = dict(decision="deny", alternative="Use source evidence")
         with patch("taskrail.interactions.local.execute") as execute:
@@ -77,6 +104,7 @@ class LocalJournalTests(unittest.TestCase):
             self.execute()
         execute.assert_not_called()
         self.assertEqual(local_journal.records(self.run)[0]["status"], "APPROVED")
+        self.assertEqual(self.execute()["status"], "SUCCEEDED")
 
 
 class RequestLimitTests(unittest.TestCase):
@@ -107,6 +135,39 @@ class RequestLimitTests(unittest.TestCase):
             request_limits.check(self.session, {}, self.request(number))
         request_limits.reset(self.run, "planner")
         self.assertFalse(request_limits.check(self.session, {}, self.request(99)))
+
+    def test_alternating_requests_count_against_the_same_complete_draft(self):
+        draft = self.run / "plan.md"
+        self.session.launch = dict(runtime=dict(attached_files=[str(draft)]))
+        alternate = dict(self.request(), argv=["wc", "README"])
+        draft.write_text("Five outstanding findings")
+        for _ in range(request_limits.MAX_DUPLICATES):
+            for request in (self.request(), alternate):
+                self.assertFalse(request_limits.check(self.session, {}, request))
+        self.assertTrue(request_limits.check(self.session, {}, self.request()))
+        draft.write_text("Two outstanding findings")
+        self.assertFalse(request_limits.check(self.session, {}, alternate))
+
+    def test_a_new_project_window_advances_recovery_but_rereads_do_not(self):
+        self.session.context = {}
+        failure = dict(status="INCOMPLETE", errors=["A"])
+        other = dict(status="INCOMPLETE", errors=["B"])
+        self.assertEqual(turn_recovery.stalled_turns(self.session, failure), 1)
+        self.assertEqual(turn_recovery.stalled_turns(self.session, other), 1)
+        self.assertEqual(turn_recovery.stalled_turns(self.session, failure), 2)
+        record = dict(
+            input=dict(filePath="/repo/source.java"),
+            source_sha256="current",
+            output="1:class App {}",
+        )
+        ledger = self.run / evidence.OBSERVATIONS
+        atomic_json(ledger, dict(records=[record], omitted=0))
+        self.assertEqual(turn_recovery.stalled_turns(self.session, failure), 1)
+        atomic_json(ledger, dict(records=[record, record], omitted=0))
+        self.assertEqual(turn_recovery.stalled_turns(self.session, failure), 2)
+        snapshot = dict(record, input=dict(filePath=str(self.run / "00-input/local/new.json")))
+        atomic_json(ledger, dict(records=[record, snapshot], omitted=0))
+        self.assertEqual(turn_recovery.stalled_turns(self.session, failure), 3)
 
     def test_changed_source_allows_a_new_check(self):
         for _ in range(request_limits.MAX_DUPLICATES):

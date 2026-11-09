@@ -7,14 +7,15 @@ requirement does not apply, or `gap:`.
 """
 
 import re
-from functools import partial
 from pathlib import Path
 from types import MappingProxyType
 
 from taskrail.core import plan_citations, prompt_texts
+from taskrail.core.plan_keys import numbered
 
 TASK_REFERENCE = re.compile(r"(T\d+)\s*(?:\[([^\]]*)\]|\(([^)]*)\))?\s*", re.IGNORECASE)
 TASK_SEPARATOR = re.compile(r"\s*[,;]\s*")
+OPTIONAL_HINT = re.compile(r"<.*>|none|n/a", re.IGNORECASE)
 PLACEHOLDER = re.compile(r"^<.*>$")
 PLANNED = "planned"
 LINE = "line"
@@ -132,15 +133,21 @@ class Coverage:
         return span["id"]
 
 
-def cited_ranges(coverage, field):
-    """`Read:` ranges of a task as path:from-to.
-
-    They point the implementer at the lines to read first; they are not evidence, so
-    they need not have been read in this session, and an entry that does not parse is
-    skipped.
-    """
-    entries = [entry for entry in field[0] if not PLACEHOLDER.match(entry)]
-    return plan_citations.hints(entries, partial(absolute, roots=coverage.roots))
+def cited_ranges(coverage, fields):
+    """Keep explicit future read windows and report every malformed hint at its line."""
+    hints = ([], [])
+    for entry, line in numbered(fields, "read"):
+        if OPTIONAL_HINT.fullmatch(entry):
+            continue
+        try:
+            windows, reason = plan_citations.read_windows(entry, coverage.roots, absolute)
+        except ValueError:
+            coverage.problems.append(prompt_texts.text("validation.read_hint", line=line))
+            continue
+        hints[0].extend(windows)
+        if reason:
+            hints[1].append(entry)
+    return hints
 
 
 def missing_labels(count, seen):
