@@ -3,7 +3,7 @@
 import stat
 
 from taskrail.core.schema import require
-from taskrail.git import history_outcome, process
+from taskrail.git import history_outcome, review_source
 
 ERROR = "Git index changed outside the controlled add"
 
@@ -32,10 +32,9 @@ def working_identity(repo, identity):
         return None
     mode, blob, stage = identity.split(":")
     require(stage == "0", ERROR)
-    outcome = process.invoke(repo, ["cat-file", "blob", blob])
-    require(outcome.returncode == 0, "Cannot verify staged Git content")
+    checksum = review_source.blob_digest(repo, blob)
     executable = bool(int(mode, 8) & stat.S_IXUSR)
-    return f"{executable}:{outcome.stdout_sha256}"
+    return f"{executable}:{checksum}"
 
 
 def same_head(repo, entry):

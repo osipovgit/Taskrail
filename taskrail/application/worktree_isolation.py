@@ -1,10 +1,4 @@
-"""Isolation: a run edits new linked Git worktrees on their own branches.
-
-By default (`auto`, see `worktree_default`) a code change in Git repositories gets
-them. The source checkout is never touched;
-approved tasks are committed on the branches, nothing is merged or removed
-automatically, and the report says where the changes are.
-"""
+"""Create deterministic linked worktrees without modifying the original checkout."""
 
 from pathlib import Path
 
@@ -12,30 +6,24 @@ from taskrail.application import worktree_default
 from taskrail.core.schema import require
 from taskrail.git import process
 
-MODES = ("in_place", "worktree", "auto")
 WORKTREE = "worktree"
-AUTO = "auto"
 ROOTS = "roots"
 
 
-def isolation_settings(meta, options, run_base):
-    """The task chooses isolation; server settings choose where worktrees live."""
-    mode = meta.get("isolation", AUTO)
-    if mode not in MODES:
-        raise ValueError("isolation must be in_place, worktree or auto")
+def isolation_settings(meta, options):
+    """Isolation is mandatory; settings only select its storage directory."""
+    require(
+        "isolation" not in meta and "isolation" not in options,
+        "The isolation option was removed; standalone tasks always use linked worktrees",
+    )
     default = Path.home() / ".local/share/taskrail-worktrees"
     base = Path(options.get("worktree_base", default)).expanduser()
-    if not base.is_absolute():
-        raise ValueError("worktree_base must be an absolute directory")
-    isolation = None if mode == AUTO else mode == WORKTREE
-    return dict(isolation=isolation, worktree_base=base, worktrees={})
+    require(base.is_absolute(), "worktree_base must be an absolute directory")
+    return dict(worktree_base=base, worktrees={})
 
 
 def isolate(config, name):
-    """Create one worktree per root from its HEAD and run against the worktrees.
-
-    Nothing happens when the task chose in place or the default does not apply.
-    """
+    """Validate all roots before creating the first branch; delivery phases inherit roots."""
     if not worktree_default.wanted(config):
         return
     base = config["worktree_base"] / name
@@ -44,6 +32,11 @@ def isolate(config, name):
         not any(base.is_relative_to(root) for root in roots),
         "worktree_base must be outside the declared roots",
     )
+    for root in roots:
+        require(
+            worktree_default.isolatable(root),
+            f"Worktree isolation needs a Git repository top-level with a commit: {root}",
+        )
     record = {}
     for alias, root in config[ROOTS].items():
         record[alias] = create(root, base / alias, name)
@@ -82,7 +75,8 @@ def source_roots(index):
     worktrees = index.get("worktrees") or {}
     sources = {}
     for alias, path in index[ROOTS].items():
-        sources[alias] = worktrees.get(alias, {}).get("source", path)
+        entry = worktrees.get(alias, {})
+        sources[alias] = entry.get("original_source", entry.get("source", path))
     return root_entries(sources)
 
 

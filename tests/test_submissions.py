@@ -9,6 +9,7 @@ from unittest.mock import patch
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
+from git_fixture import repository
 from run_fixture import current_run
 
 from taskrail.web.server import make_server
@@ -29,6 +30,7 @@ class SubmissionTests(unittest.TestCase):
         (self.repo / ".git/HEAD").write_text("ref: refs/heads/main\n")
         (self.repo / "hello.py").write_text("# user comment\ndef hello():\n    return 1\n")
         (self.repo / "unrelated.txt").write_text("keep this")
+        repository(self.repo)
         self.runs = self.base / "runs"
         self.payload = dict(
             title="Return two",
@@ -182,7 +184,9 @@ class SubmissionTests(unittest.TestCase):
             [stage["stage"] for stage in result["stages"]],
             ["understanding", "planner", "plan-reviewer", "implementer", "check", "reviewer"],
         )
-        self.assertIn("return 2", (self.repo / "hello.py").read_text())
+        state = json.loads((self.runs / name / "run.json").read_text())
+        self.assertIn("return 2", (Path(state["roots"]["project"]) / "hello.py").read_text())
+        self.assertIn("return 1", (self.repo / "hello.py").read_text())
         self.assertEqual((self.repo / "unrelated.txt").read_text(), "keep this")
 
     def test_restart_and_resume_actions_use_worker_and_preserve_history(self):

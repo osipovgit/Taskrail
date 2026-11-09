@@ -41,7 +41,7 @@ def configuration(task, settings=None, roots_override=None, checks_override=None
         launch_settings(options, source.parent),
         **limits(options),
         **input_configuration(text, meta, options, checks_override),
-        **isolation_settings(meta, options, run_storage(source)),
+        **isolation_settings(meta, options),
         read_only=answer_only(meta),
         design=meta.get(DESIGN) is True,
         decompose=meta.get("decompose") is True,

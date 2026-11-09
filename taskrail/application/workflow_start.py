@@ -4,7 +4,6 @@ import json
 
 from taskrail.application import (
     child_inputs,
-    execution_context,
     inherited_preimages,
     instruction_sources,
     resume_inputs,
@@ -55,7 +54,6 @@ def begin(workflow):
     workflow.state["phase"] = workflow.config.get("phase")
     atomic_json(inputs / "manifest.json", workflow.guard.before)
     atomic_json(inputs / "git-metadata.json", workflow.guard.git_before)
-    execution_context.adopt_submission(workflow)
     reviewed_start.begin(workflow)
 
 

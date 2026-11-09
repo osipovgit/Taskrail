@@ -29,7 +29,6 @@ def task_payload(args):
     payload.update(MODES[args.mode])
     if args.allow_all:
         payload["auto_approve"] = True
-    payload["worktree"] = not args.in_place
     return dict(payload, **turn(args))
 
 

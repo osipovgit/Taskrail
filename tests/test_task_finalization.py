@@ -1,6 +1,7 @@
 """Automatic task commits preserve ownership and journal every uncertain mutation."""
 
 import json
+import random
 import subprocess
 import tempfile
 import unittest
@@ -11,8 +12,11 @@ from unittest.mock import patch
 from run_fixture import current_run
 
 from taskrail.application import (
+    attempt_session,
+    changes,
     inherited_preimages,
     prior_git,
+    resume_inputs,
     task_branch,
     task_commit,
     worktree_isolation,
@@ -20,7 +24,7 @@ from taskrail.application import (
 from taskrail.application.changes import capture_preimages
 from taskrail.application.source_guard import SourceGuard
 from taskrail.core.files import atomic_json
-from taskrail.git import execution, process, requests, reviewed_commit
+from taskrail.git import execution, process, requests, reviewed_commit, transport
 
 
 class TaskFinalizationTests(unittest.TestCase):
@@ -86,6 +90,87 @@ class TaskFinalizationTests(unittest.TestCase):
         self.assertEqual(workflow.state["commits"][0]["commit"], receipt["head"])
         self.assertEqual(set(receipt["files"]), {str(self.roots["project"] / "target.txt")})
         workflow.guard.verify("Finalization must preserve reviewed source")
+
+    def test_followup_reviews_and_commits_binary_mode_and_already_staged_deletion(self):
+        root = self.roots["project"]
+        script = root / "run.sh"
+        script.write_bytes(b"exit 0\n")
+        process.checked(root, ["add", "--", "run.sh"])
+        process.checked(root, ["commit", "-m", "Script baseline"])
+        original_head = process.checked(root, ["rev-parse", "HEAD"]).strip()
+        selected = ["run.sh", "target.txt", "new.bin", "empty.txt"]
+        record = self.records["project"]
+        record.update(original_source=record["source"], carried_files=[*selected, "unrelated.txt"])
+        script.chmod(0o755)
+        (root / "target.txt").unlink()
+        process.checked(root, ["add", "--", "target.txt"])
+        binary = random.Random(0).randbytes(transport.OUTPUT_LIMIT + 1)
+        (root / "new.bin").write_bytes(binary)
+        (root / "empty.txt").touch()
+        (root / "unrelated.txt").write_text("staged notes")
+        process.checked(root, ["add", "--", "unrelated.txt"])
+        (root / "unrelated.txt").write_text("working notes")
+        guard = SourceGuard(self.roots)
+        guard.capture()
+        state = current_run(
+            dict(
+                status="READY_FOR_REVIEW",
+                preimages={},
+                attempts=[],
+                results=dict(implementation="implementation.json"),
+            )
+        )
+        names = [f"project/{name}" for name in selected]
+        workflow = SimpleNamespace(
+            run=self.run,
+            config=dict(roots=self.roots, worktrees=self.records, task_branch=True),
+            guard=guard,
+            flow=dict(allowed=names),
+            state=state,
+            checkpoint=lambda: None,
+        )
+        changes.capture(workflow)
+        workflow.writable = lambda: names
+        env = attempt_session.session_environment(workflow, None, None)
+        head_before = process.checked(root, ["rev-parse", "HEAD"])
+        index_before = process.checked(root, ["ls-files", "--stage", "-z"])
+        for args in (["add", "--", "new.bin"], ["commit", "-m", "Too early"]):
+            entry = dict(request=reviewed_commit.payload(root, args), status="RUNNING")
+            execution.execute(entry, [], "implementer", env)
+            self.assertEqual(entry["status"], "REJECTED")
+            self.assertIn("selected for independent review", entry["stderr"])
+        self.assertEqual(process.checked(root, ["ls-files", "--stage", "-z"]), index_before)
+        self.assertEqual(process.checked(root, ["rev-parse", "HEAD"]), head_before)
+        original = self.run / state["preimages"]["project/run.sh"]
+        original.chmod(0o700)
+        with self.assertRaisesRegex(ValueError, "executable mode"):
+            resume_inputs.verify_preimages(self.run, state, guard.before)
+        original.chmod(0o600)
+        state["changed_files"] = guard.accept(names)
+        self.assertEqual(set(state["changed_files"]), set(names))
+        changes.write_diff(workflow)
+        patch_text = (self.run / "changes.diff").read_text()
+        for detail in (
+            "GIT binary patch",
+            "old mode 100644",
+            "new mode 100755",
+            "deleted file mode",
+            "new file mode",
+            "-before",
+        ):
+            self.assertIn(detail, patch_text)
+        self.assertNotIn("unrelated.txt", patch_text)
+        self.assertGreater(len(patch_text), transport.OUTPUT_LIMIT)
+        task_commit.commit(workflow)
+        self.assertEqual(state["status"], "READY_FOR_REVIEW", state.get("summary"))
+        committed = process.checked(
+            root, ["diff", "--no-renames", "--name-only", original_head, "HEAD"]
+        )
+        self.assertEqual(set(committed.splitlines()), set(selected))
+        self.assertEqual(process.blob(root, "HEAD:new.bin"), binary)
+        self.assertEqual(process.blob(root, "HEAD:empty.txt"), b"")
+        self.assertEqual(process.checked(root, ["show", ":unrelated.txt"]), "staged notes")
+        self.assertEqual((root / "unrelated.txt").read_text(), "working notes")
 
     def test_existing_user_index_is_preserved_and_never_committed(self):
         root = self.roots["project"]

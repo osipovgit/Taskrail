@@ -1,8 +1,8 @@
 # Taskrail
 
 A local, browser-first application for research, scoped code changes and independent
-review through [opencode](https://opencode.ai). Code changes use isolated Git
-worktrees by default in the browser; tasks can also edit declared project roots.
+review through [opencode](https://opencode.ai). Every top-level task uses linked Git
+worktrees on a new task branch; source checkouts stay untouched.
 It preserves unrelated work and uses controlled Git access without automatic
 rollback. Git history is available to all roles; task-required writes are restricted
 to the implementer. CLI remains supported.
@@ -57,9 +57,8 @@ A reviewed no-change plan ends without implementation; **Design
 discussion** turns produce a reviewed design document instead of code.
 Failed checks and review findings return to the writer while the work progresses.
 An interrupted writer inspects partial edits before continuing. A steering timeout
-pauses the current stage for an optional note and checkpoint continuation. A task can
-run in [isolated Git worktrees](docs/task-format.md#worktree-isolation) on a new
-branch, the default in the browser, leaving the source checkout untouched: there each
+pauses the current stage for an optional note and checkpoint continuation. Every top-level task runs in [isolated Git worktrees](docs/task-format.md#worktree-isolation) on a new
+branch, leaving the source checkout untouched: there each
 approved task is finalized with verified commits and may change files beyond its plan. Tasks on different projects run in
 parallel; one project runs one task at a time.
 

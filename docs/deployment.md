@@ -123,7 +123,7 @@ reset directories.
 | `models` | `{}` | Role to `provider/model`; a missing role uses opencode's configured default model |
 | `agent_directory` | opencode agent directory | Where managed role profiles are written; relative to the settings file |
 | `agent_env_allow` | `[]` | Extra environment variables opencode may receive despite their secret-shaped names; common provider keys are always allowed |
-| `permission_worktree` | inferred | Base directory for relative permission names (Git worktree for 1.x, first root for 2.x). Server-owned isolation supplies it automatically; unowned/in-place 1.x roots with a `.git` file or symlink require an explicit value |
+| `permission_worktree` | inferred | Base directory for relative permission names (Git worktree for 1.x, first root for 2.x). Server-owned isolation supplies it automatically for every task |
 | `tool_output_dir` | opencode location | Absolute directory (`~` allowed) where the CLI keeps truncated tool output; its automatic `external_directory` allow rule is accepted only for this directory |
 | `opencode_server` | `true` | `false` runs each 1.x turn as its own process instead of on the stage's private server |
 | `sandbox_network` | `false` | `true` keeps the network for agents' sandboxed commands (package installs, collection downloads); every credential mask stays |
@@ -212,7 +212,7 @@ command runs on the host at once and is highlighted in the stage log. Set
 ## Worktree isolation
 
 `worktree_base` (absolute; default `~/.local/share/taskrail-worktrees`) holds the linked
-worktrees of isolated runs, the default for code changes; it must lie outside every declared
+worktrees of every top-level task; it must lie outside every declared
 root. Worktrees are created with hooks and repository filters disabled and are never
 removed automatically. See [task format](task-format.md#worktree-isolation).
 

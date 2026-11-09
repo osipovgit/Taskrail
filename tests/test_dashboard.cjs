@@ -228,7 +228,6 @@ async function main() {
       'task-form',
       'project-roots',
       'task-mode',
-      'task-worktree',
       'task-auto-approve',
       'composer',
       'chat',
@@ -241,7 +240,6 @@ async function main() {
   nodes['task-form'].reset = () => {
     for (const field of Object.values(fields)) field.value = '';
     nodes['task-mode'].value = 'develop';
-    nodes['task-worktree'].checked = false;
     nodes['task-auto-approve'].checked = false;
   };
   nodes['task-goal'].focus = () => {};
@@ -253,7 +251,6 @@ async function main() {
       criteria: 'Check existing work',
       roots: [{ alias: 'qa', path: '/projects/qa' }],
       read_only: true,
-      worktree: true,
       design: true,
       auto_approve: true,
     },
@@ -262,7 +259,6 @@ async function main() {
   assert.equal(fields.goal.value, 'Original goal');
   assert.equal(fields.criteria.value, 'Check existing work');
   assert.equal(nodes['task-mode'].value, 'design');
-  assert.equal(nodes['task-worktree'].checked, true);
   assert.equal(nodes['task-auto-approve'].checked, true);
   assert.equal(fields.worktree, undefined);
   assert.equal(nodes.composer.hidden, false);
@@ -273,7 +269,6 @@ async function main() {
   app.openComposer();
   assert.equal(fields.goal.value, '');
   assert.equal(nodes['task-mode'].value, 'develop');
-  assert.equal(nodes['task-worktree'].checked, false);
   assert.equal(nodes['task-auto-approve'].checked, false);
   assert.equal(nodes['project-roots'].children.length, 1);
   assert.equal(nodes['project-roots'].children[0].children[0].value, '');

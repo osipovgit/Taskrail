@@ -2,7 +2,12 @@
 
 from functools import partial
 
-from taskrail.application import context_windows, result_context, stage_artifacts
+from taskrail.application import (
+    context_windows,
+    followup_selection,
+    result_context,
+    stage_artifacts,
+)
 from taskrail.application.attempt_launch import agent_name
 from taskrail.application.git_state import git_metadata
 from taskrail.application.plan_validation import canonical_plan, validate_plan
@@ -40,6 +45,7 @@ def session_environment(workflow, profile, check_result):
         allowed_paths=git_files(workflow),
         expected=guard.expected,
         original_sources=guard.before,
+        review_only_paths=followup_selection.paths(workflow, followup_selection.SELECTED),
         git_before=guard.git_before,
         scan=guard.scan,
         git_metadata=git_metadata,

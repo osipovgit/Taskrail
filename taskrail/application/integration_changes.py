@@ -27,7 +27,7 @@ def capture(workflow, parent):
     runs = task_runs(parent)
     if runs:
         inherited_preimages.inherit(workflow, runs)
-        write_diff(workflow.run, workflow.config["roots"], workflow.state["preimages"])
+        write_diff(workflow)
 
 
 def resolved_findings(run, state):

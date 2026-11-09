@@ -9,6 +9,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+from git_fixture import repository
 from run_fixture import current_run
 
 from taskrail.application import delivery_confirmation, execution_context, mode_rules
@@ -36,6 +37,7 @@ class TaskControlTests(unittest.TestCase):
         (self.repo / ".git").mkdir()
         (self.repo / ".git/HEAD").write_text("ref: refs/heads/main\n")
         (self.repo / "hello.py").write_text("def hello():\n    return 1\n")
+        repository(self.repo)
         self.runs = self.base / "runs"
         self.payload = dict(
             title="Original",
@@ -90,6 +92,7 @@ class TaskControlTests(unittest.TestCase):
                     ],
                     agent_source=str(BASE / "taskrail/agents"),
                     agent_directory=str(self.base / "profiles"),
+                    worktree_base=str(self.base / "worktrees"),
                     timeout_seconds=30,
                     max_transport_retries=0,
                 )
@@ -161,20 +164,15 @@ class TaskControlTests(unittest.TestCase):
             ):
                 self.launcher.submit(dict(self.payload, **fields))
 
-    def test_worktree_flag_is_a_boolean_task_header_option(self):
+    def test_followup_and_restart_select_parent_and_original_roots_without_an_isolation_toggle(
+        self,
+    ):
         with patch.object(self.launcher, "launch", return_value={"id": "next"}) as launch:
-            self.launcher.submit(dict(self.payload, worktree=True, read_only=True))
+            self.launcher.submit(dict(self.payload, read_only=True))
             text = launch.call_args.args[0]["text"]
         meta = json.loads(text.split("```taskrail-task\n")[1].split("```")[0])
-        # The worktree choice keeps the default isolation; leaving it out works in place.
         self.assertNotIn("isolation", meta)
         self.assertTrue(meta["read_only"])
-        with patch.object(self.launcher, "launch", return_value={"id": "next"}) as launch:
-            self.launcher.submit(dict(self.payload, worktree=False))
-            in_place = launch.call_args.args[0]["text"]
-        self.assertIn('"isolation": "in_place"', in_place)
-        with self.assertRaisesRegex(ValueError, "boolean"):
-            self.launcher.submit(dict(self.payload, worktree="yes"))
         child = self.runs / "isolated"
         (child / "00-input").mkdir(parents=True)
         (child / "00-input/task.md").write_text(text)
@@ -184,17 +182,17 @@ class TaskControlTests(unittest.TestCase):
         index["worktrees"] = {"project": {"source": source}}
         (child / "run.json").write_text(json.dumps(current_run(index)))
         draft = task_draft(child)
-        self.assertTrue(draft["worktree"])
+        self.assertNotIn("worktree", draft)
         self.assertEqual(draft["roots"], [{"alias": "project", "path": source}])
         followup = requests.Submission(
             dict(draft, parent_run="isolated", submission_mode="followup"), self.runs
         )
-        self.assertFalse(followup.worktree)
+        self.assertEqual(followup.delivery["execution_parent"], "isolated")
         self.assertEqual(followup.fields["roots"][0]["path"], "/worktrees/isolated/project")
         restart = requests.Submission(
             dict(draft, parent_run="isolated", submission_mode="restart"), self.runs
         )
-        self.assertTrue(restart.worktree)
+        self.assertIsNone(restart.delivery["execution_parent"])
         self.assertEqual(restart.fields["roots"][0]["path"], source)
 
     def test_allow_all_actions_is_a_header_option_kept_in_the_draft(self):
@@ -860,7 +858,9 @@ class TaskControlTests(unittest.TestCase):
             + "\n".join(p.read_text() for p in run.glob("*/stderr.log")),
         )
         self.assertFalse((run / "stop.request").exists())
-        self.assertIn("return 2", (self.repo / "hello.py").read_text())
+        state = json.loads((run / "run.json").read_text())
+        self.assertIn("return 2", (Path(state["roots"]["project"]) / "hello.py").read_text())
+        self.assertIn("return 1", (self.repo / "hello.py").read_text())
 
     def test_answer_only_rejects_model_changes_before_writer(self):
         with patch.object(self.launcher, "launch") as launch:

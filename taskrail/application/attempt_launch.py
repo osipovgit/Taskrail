@@ -1,6 +1,12 @@
 """Prepare one model attempt: record, prompt, closed permission profile and allowance."""
 
-from taskrail.application import attempt_context, context_handoff, result_context, stage_artifacts
+from taskrail.application import (
+    attempt_context,
+    context_handoff,
+    followup_selection,
+    result_context,
+    stage_artifacts,
+)
 from taskrail.application.artifacts import new_stage
 from taskrail.application.planned_paths import git_files
 from taskrail.application.recovery import write_evidence
@@ -86,6 +92,8 @@ def profile_access(workflow, active, files):
     if base is not None:
         record["permission_worktree"] = str(base)
     access = dict(writable=files, worktree=base)
+    if workflow.writable():
+        access["preserved"] = followup_selection.paths(workflow, followup_selection.PRESERVED)
     access["protected"] = protected_paths.patterns(workflow.config)
     access[ROOTS] = workflow.config[ROOTS].values()
     access["readable"] = artifact_access.model_inputs(workflow.run, folder)

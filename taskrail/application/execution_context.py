@@ -80,13 +80,15 @@ def submitted_parent(task, base, name):
     return reviewed_artifacts.run_path(base, parent)
 
 
-def adopt_submission(workflow):
-    """A fresh follow-up reuses owned roots but receives no prior task approval."""
-    parent = submitted_parent(workflow.config["task"], workflow.run.parent, workflow.run.name)
+def submission_source(config, run):
+    """Authenticate a follow-up before creating its new branch from the parent checkout."""
+    parent = submitted_parent(config["task"], run.parent, run.name)
     if parent is None:
-        return
+        return None
     state = reviewed_artifacts.document(parent, "run.json")
     require(not state.get("phase"), "A child run cannot own a standalone follow-up")
     require(state["status"] not in {"RUNNING", "STARTING"}, "Follow-up parent is still running")
     reviewed_commit.require_settled(parent)
-    adopt(workflow, parent, state)
+    payload = frozen(parent, state)
+    require(payload[ROOTS] == run_state.stored_roots(config[ROOTS]), "Follow-up roots differ")
+    return payload

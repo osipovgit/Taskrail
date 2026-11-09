@@ -1,9 +1,10 @@
 # Controlled Git access
 
 All roles can inspect Git history, commits, diffs, branches, tags and working-tree
-status. A declared root may be a subdirectory of a Git repository. Scope history
-with `-- .` when the task concerns only that project. Original project files remain
-in place; the executor does not create project copies.
+status. Each declared root must be a Git repository top level with an existing commit.
+Standalone tasks use linked worktrees; child tasks use their parent branch. Scope
+history with `-- <project>` when only a subdirectory is relevant. The original checkout
+remains unchanged.
 
 The model submits one strict `GIT_REQUEST` object instead of a final result:
 
@@ -44,7 +45,7 @@ an explicit rejection; it never falls back to shell execution. There is no blank
 Git deny. Additional Git operations require an explicit reviewed parser and scope
 check, not a prompt-only permission change.
 
-Writes must affect only approved files. Staging pre-existing user edits is rejected.
+Model-requested Git writes must affect only approved files. Staging pre-existing user edits is rejected.
 Commit application requires a clean working tree. The index belongs to the run only
 entry by entry and repository by repository: an `add` records the exact staged modes and blobs
 it produced in its repository, and a later `add` or `commit` there proceeds only
@@ -86,7 +87,7 @@ Signature verification helpers are disabled for reads. Pretty formats accept bui
 names or literal formats; configured aliases and `%G` signature directives are rejected.
 Git must be installed on the server PATH. Commits require a configured user name/email.
 SSH authentication must already work noninteractively with a known host key.
-Each Git subprocess has a 60-second timeout and a 4 MiB output limit per stream;
+Agent-requested Git commands have a 60-second timeout and a 4 MiB output limit per stream;
 exhaustion is explicit, never silently truncated. Normal pushes are explicit, non-forced branch pushes; fetch uses explicit,
 non-forced remote-tracking refspecs. No server-side hooks or remote state changes
 are claimed to have been tested by local executor tests.
@@ -97,7 +98,11 @@ After independent approval, an owned isolated task stages and commits through th
 same controlled executor. Ownership comes from the run's sealed worktree record
 and its current repository, path and branch identity; a `taskrail/` branch name
 alone grants nothing. Source files must still match the reviewed snapshot.
-Unrelated staged entries and pre-existing user edits are rejected before staging.
+For a Follow-up, the reviewed task's `Files` list selects which inherited changes
+belong to the task. The reviewer sees their full working versions against HEAD.
+Only after approval may finalization stage those versions and commit the exact
+reviewed paths, leaving every other staged or unstaged change in place.
+Ordinary tasks reject pre-existing user edits and unrelated staging.
 Filters and hooks stay disabled, and a successful receipt verifies the committed
 paths, bytes, executable modes and HEAD before the run can finish successfully.
 
@@ -130,5 +135,5 @@ user's task text.
 
 On an owned task branch, the writer may adopt additional safe project files.
 Before each Git request the server refreshes the exact changed paths and their
-preimages. The same session can stage and commit these paths. Direct-checkout
-writers remain limited to the approved files, and Git still verifies index ownership.
+preimages. The same session can stage and commit these paths. Inherited Follow-up changes require explicit selection in the reviewed task.
+Git verifies index ownership before each write.

@@ -10,7 +10,7 @@ from taskrail.application import (
     reviewed_sources,
     task_scope,
 )
-from taskrail.application.changes import capture_preimages
+from taskrail.application.changes import capture
 from taskrail.application.correction_start import begin as begin_correction
 from taskrail.application.execution_context import adopt as inherit_execution_context
 from taskrail.application.plan_validation import canonical_plan
@@ -88,9 +88,4 @@ def install(workflow, plan, stage):
     workflow.flow.update(plan=plan, allowed=plan["proposed_change_files"], stage=stage)
     if stage == "implementer":
         install_step_checks(workflow, plan)
-        capture_preimages(
-            workflow.run,
-            workflow.config["roots"],
-            workflow.flow["allowed"],
-            workflow.state["preimages"],
-        )
+        capture(workflow)

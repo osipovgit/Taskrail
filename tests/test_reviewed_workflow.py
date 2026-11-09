@@ -6,6 +6,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from git_fixture import repository
+
 from taskrail.application.live import execute_task
 from taskrail.core.files import atomic_json
 from taskrail.web import (
@@ -32,6 +34,8 @@ class ReviewedFixture:
         (self.root / ".git").mkdir()
         (self.root / ".git/HEAD").write_text("ref: refs/heads/main\n")
         (self.root / "hello.py").write_text("# user comment\ndef hello():\n    return 1\n")
+        repository(self.root)
+        self.original_root = self.root
         self.runs = self.base / "runs"
         self.runs.mkdir()
         self.settings = self.base / "settings.json"
@@ -58,11 +62,15 @@ class ReviewedFixture:
                 agent_source=str(BASE / "taskrail/agents"),
                 agent_directory=str(self.base / "profiles"),
                 timeout_seconds=1 if mode == "writer-timeout" else 10,
-                **getattr(self, "settings_extra", {}),
+                **dict(
+                    dict(worktree_base=str(self.base / "worktrees")),
+                    **getattr(self, "settings_extra", {}),
+                ),
             ),
         )
         run, status = execute_task(task, self.settings, run_dir=self.runs / name)
         state = json.loads((run / "run.json").read_text())
+        self.root = Path(state["roots"]["project"])
         return run, status, state
 
 

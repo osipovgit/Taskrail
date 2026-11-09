@@ -7,6 +7,7 @@ recorded, so a continuation can verify it.
 """
 
 import json
+import stat
 
 from taskrail.application import reviewed_artifacts
 from taskrail.core.files import atomic_json, digest
@@ -17,6 +18,7 @@ PREIMAGES = "preimages"
 INHERITED = "inherited_preimages"
 BASELINE = "inherited_source_baseline"
 BASELINE_HASH = "inherited_source_baseline_sha256"
+SELECTED = "followup_selected"
 BASELINE_FILE = "00-input/inherited-sources.json"
 
 
@@ -27,38 +29,53 @@ def inherit(workflow, runs, names=None):
     """
     workflow.state.setdefault(INHERITED, {})
     workflow.state.setdefault(BASELINE, {})
+    seen = set()
     for run in runs:
-        inherit_run(workflow, run, names)
+        inherit_run(workflow, run, names, seen)
+    seal(workflow)
+
+
+def seal(workflow):
+    """Bind the original identities before using them for review and finalization."""
     path = workflow.run / BASELINE_FILE
     atomic_json(path, workflow.state[BASELINE])
     workflow.state[BASELINE_HASH] = digest(path.read_bytes())
     restore(workflow)
 
 
-def inherit_run(workflow, run, names):
-    """Copy each file's first preimage and original source identity together."""
-    inherited = workflow.state[INHERITED]
-    taken = captured(run)
-    wanted = taken.keys() if names is None else taken.keys() & names
-    source = original_sources(run) if taken else {}
-    for name in sorted(wanted - inherited.keys()):
-        inherited[name] = adopt(workflow.run, run, taken[name])
-        workflow.state[PREIMAGES][name] = taken[name]
-        workflow.state[BASELINE][name] = source.get(name)
-
-
-def original_sources(run):
-    """The earliest recorded modes and content identities, including a chain of retries."""
-    source = reviewed_artifacts.document(run, "00-input/manifest.json")
+def inherit_run(workflow, run, names, seen):
+    """Copy each file's earliest preimage and original source identity together."""
+    if not run.joinpath("run.json").is_file():
+        return
     state = reviewed_artifacts.document(run, "run.json")
-    source.update(verified(run, state))
-    return source
+    wanted = set(state.get(PREIMAGES, {})) - seen
+    if names is not None:
+        wanted.intersection_update(names)
+    seen.update(wanted)
+    if wanted:
+        inherit_selected(workflow.state, state, wanted)
+        source = reviewed_artifacts.document(run, "00-input/manifest.json")
+        source.update(verified(run, state))
+        for name in sorted(wanted):
+            reference = state[PREIMAGES][name]
+            workflow.state[INHERITED][name] = adopt(workflow.run, run, reference)
+            workflow.state[PREIMAGES][name] = reference
+            workflow.state[BASELINE][name] = source.get(name)
+
+
+def inherit_selected(state, previous, wanted):
+    """A retry and integration review use the same full patches as their source."""
+    selected = wanted.intersection(previous.get(SELECTED, []))
+    if selected:
+        state[SELECTED] = sorted(selected.union(state.get(SELECTED, [])))
 
 
 def restore(workflow):
     """A child retry owns the whole reviewed diff, even edits it did not repeat."""
     original = verified(workflow.run, workflow.state)
-    if workflow.config.get("phase") != "task":
+    phase = workflow.config.get("phase")
+    writer = phase == "task" or workflow.state.get(SELECTED)
+    if phase == "integration" or not writer:
         return
     for name, signature in original.items():
         if signature is None:
@@ -79,17 +96,12 @@ def verified(run, state):
     return state[BASELINE]
 
 
-def captured(run):
-    """The preimages a finished or stopped run recorded."""
-    if not run.joinpath("run.json").is_file():
-        return {}
-    return reviewed_artifacts.document(run, "run.json").get(PREIMAGES, {})
-
-
 def adopt(target, source, reference):
     """Copy one preimage; returns its digest, or None for a file that did not exist."""
     if not reference:
         return None
     original = reviewed_artifacts.read(source, reference)
     atomic_write(target / reference, original)
+    permissions = (source / reference).stat().st_mode & stat.S_IRWXU
+    (target / reference).chmod(permissions)
     return digest(original)
