@@ -9,7 +9,7 @@ STATUS = "status"
 
 def perform(store, ticket, inventory):
     """Stop after the first failed target and preserve previous outcomes."""
-    if tickets.kind_of(ticket) == tickets.JENKINS:
+    if tickets.stored_kind(ticket) == tickets.JENKINS:
         outcome = jenkins_build.perform(inventory, ticket["action"])
         ticket["results"].append(outcome)
         ticket[STATUS] = outcome[STATUS]

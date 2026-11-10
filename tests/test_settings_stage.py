@@ -10,13 +10,13 @@ from contextlib import redirect_stdout
 from pathlib import Path
 from unittest.mock import patch
 
-from taskrail.deployment.settings_init import main
+from taskrail.deployment.settings_stage import main
 from taskrail.infrastructure.opencode_cli import COMMAND_ERROR
 
 BASE = Path(__file__).resolve().parents[1]
 
 
-class SettingsInitTests(unittest.TestCase):
+class SettingsStageTests(unittest.TestCase):
     def setUp(self):
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
@@ -36,8 +36,10 @@ class SettingsInitTests(unittest.TestCase):
 
     def initialize(self, supplied="", agents="keep"):
         arguments = [str(BASE), str(self.config), supplied, str(self.app), agents]
-        with redirect_stdout(io.StringIO()) as output:
-            main(arguments)
+        with tempfile.TemporaryDirectory() as stage, redirect_stdout(io.StringIO()) as output:
+            prepared = Path(stage) / "settings"
+            main([*arguments, str(prepared)])
+            shutil.copytree(prepared, self.config, dirs_exist_ok=True)
         return output.getvalue()
 
     def settings(self):
@@ -74,10 +76,16 @@ class SettingsInitTests(unittest.TestCase):
                 )
             )
         )
+        (imported / "roles/unrelated.env").write_text("local-only configuration")
+        (imported / "roles/unreadable").symlink_to(self.home / "missing")
         self.initialize(str(supplied))
+        self.assertEqual(
+            {path.name for path in (self.config / "agents").iterdir()},
+            {path.name for path in (BASE / "taskrail/agents").glob("*.md")},
+        )
         settings = self.settings()
         self.assertEqual(settings["command"], [str(self.binaries / "wrapper"), "--flag"])
-        self.assertEqual(settings["timeout_seconds"], 3600)
+        self.assertEqual(settings["timeout_seconds"], 5)
         self.assertEqual(settings["agent_source"], str(self.config / "agents"))
         self.assertEqual(settings["run_base"], str(imported / "runs"))
         self.assertEqual(settings["agent_directory"], "/absolute/profiles")
@@ -96,28 +104,28 @@ class SettingsInitTests(unittest.TestCase):
         self.assertEqual(settings["run_base"], str(self.home / "runs"))
         self.assertFalse((self.config / "agents").exists())
 
-    def test_fresh_preflight_validates_an_import_without_copying_or_writing(self):
+    def test_fresh_stages_import_without_touching_installed_files(self):
         roles = self.home / "roles"
         shutil.copytree(BASE / "taskrail/agents", roles)
         supplied = self.home / "exported.json"
         supplied.write_text(json.dumps(dict(command=["wrapper"], agent_source="roles")))
         arguments = [str(BASE), str(self.config), str(supplied), str(self.app), "keep"]
-        main([*arguments, "--check", "--fresh"])
+        main([*arguments, str(self.home / "prepared"), "--fresh"])
         self.assertEqual(list(self.config.iterdir()), [])
         shutil.rmtree(roles)
         (self.config / "agents").mkdir()
-        with self.assertRaisesRegex(ValueError, "Imported role directory"):
-            main([*arguments, "--check", "--fresh"])
+        with self.assertRaisesRegex(ValueError, "Missing source agent"):
+            main([*arguments, str(self.home / "rejected"), "--fresh"])
         self.assertFalse((self.config / "settings.json").exists())
 
     def test_updates_preserve_existing_settings_and_service_environment(self):
         target = self.config / "settings.json"
-        target.write_text('{"command": ["custom"], "max_integration_corrections": 1}')
+        target.write_text('{"command": ["wrapper"], "max_integration_corrections": 1}')
         environment = self.config / "service.env"
         environment.write_text("PATH=/kept\n")
         self.initialize(str(self.home / "missing.json"))
         self.assertEqual(
-            target.read_text(), '{"command": ["custom"], "max_integration_corrections": 1}'
+            target.read_text(), '{"command": ["wrapper"], "max_integration_corrections": 1}'
         )
         self.assertEqual(environment.read_text(), "PATH=/kept\n")
         target.write_text("{")
@@ -137,7 +145,24 @@ class SettingsInitTests(unittest.TestCase):
         self.assertFalse((self.config / "settings.json.next").exists())
         for _ in range(2):
             self.initialize(agents="bundled")
-        self.assertEqual(len(list(self.config.glob("settings.json.backup-*"))), 2)
+        self.assertEqual(len(list(self.config.glob("settings.json.backup-*"))), 1)
+
+    def test_updates_remove_retired_keys_without_retaining_or_overwriting_extensions(self):
+        path = self.config / "settings.json"
+        path.write_text(json.dumps(dict(command=["wrapper"], extension={"foo": 1}, max_repairs=2)))
+        output = self.initialize()
+        self.assertIn("max_repairs", output)
+        self.assertEqual(self.settings(), dict(command=["wrapper"], extension={"foo": 1}))
+        self.assertFalse(list(self.config.glob("settings.json.backup-*")))
+        self.assertEqual(self.initialize(), "")
+
+    def test_first_install_selecting_bundled_roles_does_not_copy_custom_files(self):
+        supplied = self.home / "import.json"
+        supplied.write_text(json.dumps(dict(command=["wrapper"], agent_source="unused")))
+        self.initialize(str(supplied), agents="bundled")
+        self.assertEqual(self.settings()["agent_source"], str(self.app / "current/taskrail/agents"))
+        self.assertFalse((self.config / "agents").exists())
+        self.assertFalse(list(self.config.glob("settings.json.backup-*")))
 
     def test_invalid_commands_and_multiline_path_are_rejected_before_writing(self):
         supplied = self.home / "settings.json"

@@ -13,7 +13,7 @@ from typing import ClassVar
 from unittest.mock import patch
 from urllib.parse import parse_qs
 
-from taskrail.application import execution_wait, jenkins_requests
+from taskrail.application import execution_wait, jenkins_requests, report_sources
 from taskrail.executor import (
     client,
     jenkins_build,
@@ -267,7 +267,9 @@ class JenkinsTest(unittest.TestCase):
             response = jenkins.consume(actions, envelope)
         self.assertEqual(decisions[0]["jenkins"], READ)
         self.assertEqual(request.call_args.args[0]["operation"], "jenkins-read")
-        self.assertIn("00-input/local", response)
+        receipt = run / "00-input/remote/01-plan-0.json"
+        self.assertIn(str(receipt), response)
+        self.assertEqual(set(report_sources.selected(run, [str(receipt)], ())), {receipt})
         bad = dict(envelope, jenkins=dict(READ, job="unknown"))
         with patch.object(client, "request", return_value=answers[0]):
             self.assertIn("rejected", jenkins.consume(actions, bad))

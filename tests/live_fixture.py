@@ -2,11 +2,11 @@
 
 import json
 import sys
-import tempfile
 from pathlib import Path
 from unittest.mock import patch
 
 from git_fixture import repository
+from run_fixture import workflow_workspace
 
 from taskrail.application.live import execute_task
 
@@ -17,9 +17,7 @@ class LiveFixture:
     """setUp, configure_mode and run_mode of workflow tests."""
 
     def setUp(self):
-        self.tmp = tempfile.TemporaryDirectory()
-        self.addCleanup(self.tmp.cleanup)
-        self.base = Path(self.tmp.name)
+        self.base = workflow_workspace(self)
         self.root = self.base / "repo"
         self.root.mkdir()
         (self.root / ".git").mkdir()

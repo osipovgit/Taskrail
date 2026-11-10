@@ -1,7 +1,7 @@
 # Deployment and operations
 
 Run as your normal Linux user with working opencode credentials. Requirements: user
-systemd, Python 3.10+ with venv, bash, tar and flock; bubblewrap is recommended (see
+systemd, Python 3.10+ with venv, bash and flock; bubblewrap is recommended (see
 [local command sandbox](#local-command-sandbox)). No runtime pip/npm download is
 required. The UI binds to `127.0.0.1:8787`; it is not a public multi-user service.
 
@@ -18,8 +18,7 @@ bash deploy/install.sh --wait=3600 --autostart=keep
 ```
 
 Interactive installation asks about startup at login only when `--autostart` is
-omitted (and boot startup was not requested). Explicit `--autostart=keep` skips the startup question. Interactive updates may
-also offer to archive unsupported runs. Unattended installs need
+omitted (and boot startup was not requested). Explicit `--autostart=keep` skips the startup question. Unattended installs need
 `--autostart=yes` to enable it; `keep` preserves an existing choice. The service
 starts immediately either way. Boot startup without login is explicit:
 
@@ -39,13 +38,17 @@ with isolated Python imports before stopping the service. The installer then swi
 project edits. They never execute Git, rewrite run artifacts or roll back source
 or application changes. If startup fails, inspect the journal. The update
 script uses a trusted local release, not an automatic Internet download feed. An
-installed release holds the application, deployment scripts, README and license;
-documentation stays in the source tree.
+installed release contains the public Python packages, named runtime assets,
+deployment scripts, README and license. Python modules placed directly in a public
+package directory ship as application code, so install from a trusted release tree.
+The separate SSH executor receives only its listed modules, configuration validator,
+and shared schema and storage code. Configuration imports use the explicit installer
+argument.
 
 Failed preparation removes only its own staging directory. After successful startup,
 the installer retains the current and previous successful release and any older release
 explicitly used by `agent_source`. Older successful releases are pruned only when they
-carry this installer's exact success marker; legacy or unrecognized directories remain
+carry this installer's exact success marker. Unrecognized directories remain
 for manual inspection. A failed startup keeps the switched release for diagnosis.
 
 ### Foreground installation
@@ -94,12 +97,23 @@ Root approval of SSH actions happens in a terminal on the server.
 | History and trash | `~/.local/state/taskrail/runs/` |
 | Isolated project worktrees | `~/.local/share/taskrail-worktrees/` |
 | Installation lock (shared by runs) | `~/.local/state/taskrail/live.lock` |
-| Project and run locks | `~/.local/state/taskrail/locks/` |
+| Active project, run and epic locks | `~/.local/state/taskrail/locks/` |
+
+The dashboard header, `taskrail --version` and each run’s `software_version`
+identify the running build by its content hash. The installer uses the same
+prefix in the release directory name. Identical runtime files produce the same
+build ID from a checkout, a wheel or an installed release. Checkpoint continuation
+checks the full digest. The service readiness probe checks the responding build.
+
+Taskrail keeps the installation lock between runs. Resource locks disappear
+when their last holder exits normally. A process crash releases the OS lock;
+the next holder can reuse and remove the empty file.
 
 Sources remain in their declared roots. The application does not copy entire
 projects. `run_base` may override history storage; relative paths resolve from the
 settings directory. Settings precedence: explicit CLI path, `TASKRAIL_SETTINGS`, installed
-user settings, source defaults. See [recovery settings](monitoring.md#recovery-settings) for stage timeouts.
+user settings, source defaults. The workflow creates history storage on demand. Run
+`taskrail check` to see and verify the configured directory. See [recovery settings](monitoring.md#recovery-settings) for stage timeouts.
 
 To switch from imported custom roles to the maintained bundled roles:
 
@@ -107,19 +121,22 @@ To switch from imported custom roles to the maintained bundled roles:
 bash deploy/install.sh --wait=3600 --autostart=keep --agents=bundled
 ```
 
-This backs up `settings.json`, changes only `agent_source`, and leaves custom role
+Switching an existing custom source backs up `settings.json` once per distinct input,
+changes only `agent_source`, and leaves custom role
 files untouched. Subsequent releases update bundled roles through `current`.
 The default `--agents=keep` preserves the existing selection. Role changes apply
 to new tasks; Continue keeps the frozen roles of its run.
 
-Bundled roles follow `current/taskrail/agents`. Imported custom roles are copied once and
+Bundled roles follow `current/taskrail/agents`. An import copies only the four role Markdown
+files consumed by the workflow. Imported roles are copied once and
 preserved on update: merge their instructions deliberately or point `agent_source`
 to bundled roles. Generated opencode profiles are temporary permissions, not editable
 source templates. See [instruction contracts](contracts.md).
 
 An imported settings file without `agent_source` selects bundled roles, as in
 `taskrail init`. Only an explicit `agent_source` imports a custom directory; relative
-paths resolve beside the supplied settings file. Before a fresh reset, the installer
+paths resolve beside the supplied settings file. An explicit imported stage timeout is
+preserved. Before a fresh reset, the installer
 checks runtime settings, the agent executable/version, service environment and every
 custom role contract, then prepares their installable copies. Invalid or incomplete
 roles stop the update; `--agents=bundled` explicitly selects the incoming bundled roles.
@@ -330,15 +347,15 @@ bash deploy/install.sh --fresh --wait=3600 --autostart=keep --agents=bundled
 `--fresh` is destructive and opt-in. It waits for the workflow lock, completely prepares
 and validates the replacement application/configuration, then stops the user
 service and any installed executor before deleting anything. It removes installed releases, settings, imported roles, history/trash,
-managed profiles, cache, the unit/drop-ins and launcher, then installs fresh defaults.
+managed profiles, the unit/drop-ins and launcher, then installs fresh defaults.
 A configured custom history directory is removed only after its contents and
 recorded project roots pass ownership checks. Live runs, archived runs and launcher
-records all protect their declared roots. The same inventory covers cache, unit
+records all protect their declared roots. The same inventory covers unit
 drop-ins, launcher and generated profile files; mixed, redirected or overlapping
 paths abort before deletion. Keep source projects and the extracted release outside
 those paths.
-A full reset removes the retired `~/.local/state/taskrail/worktrees` directory.
-Current worktrees live outside resettable application storage.
+Task worktrees live outside resettable application storage. A recorded project or
+worktree inside a deletion target also prevents the reset.
 A custom `worktree_base` overlapping a deletion target refuses the reset; move that
 storage deliberately before retrying. Worktrees are never pruned with old releases.
 Locked files retain their inodes during installation to prevent concurrent writers.
@@ -358,14 +375,9 @@ Without `--fresh`, installation remains a history/config-preserving update.
 
 ## Run storage updates
 
-Current runs use `run_format: 2`; unsupported histories are excluded from the working
-UI and cannot Continue, Restart or supply parent context. Run
-`taskrail history archive-old` to move them into the existing history trash. The
-installer offers this on interactive updates; noninteractive updates leave artifacts
-untouched. Source roots are not moved. There is no automatic purge.
-
-Continue requires identical application code and instruction files. A same-format
-run from another release may Restart; an unsupported format requires a new task.
-The installer removes retired `max_change_lines` and `max_change_files` settings from
-its staged configuration and keeps an exact private `settings.json.backup-*` copy.
+The dashboard lists current-format runs. Updates leave existing run directories in
+place. Use `--fresh` for the full reset described above. Continue requires the
+same build. Runs from another build can Restart if their format is current.
+The installer removes known retired settings from its staged configuration and prints
+the removed keys. Settings cleanup does not create a backup.
 Custom command/wrapper settings and unknown extension keys remain unchanged.

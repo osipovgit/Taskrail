@@ -1,8 +1,7 @@
 """Bound working progress notes without discarding their original bytes."""
 
 from taskrail.core import prompt_texts
-from taskrail.core.files import digest
-from taskrail.infrastructure.agent_sync import atomic_write
+from taskrail.core.files import atomic_write, digest
 
 DIRECTORY = "00-input/progress-archive"
 MAX_BYTES = 8192

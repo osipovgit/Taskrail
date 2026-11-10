@@ -60,7 +60,7 @@ def historical_telemetry(path, size, mtime):
 
 
 def stage_telemetry(run, directory):
-    """JSONL is authoritative after interruption; telemetry.json may lag its last event."""
+    """Read the recorded events through the last write, including an interrupted turn."""
     path = contained(run, f"{directory}/events.jsonl")
     try:
         stat = path.stat()

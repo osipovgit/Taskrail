@@ -7,7 +7,7 @@ it, derives the review result and names every problem by line.
 """
 
 from taskrail.core import prompt_texts
-from taskrail.infrastructure.agent_sync import atomic_write
+from taskrail.core.files import atomic_write
 
 NAME = "review.md"
 

@@ -5,23 +5,25 @@ Jenkins validation, server checks) names its delivery as its check parent. Such 
 is shown inside its parent's card, not as a separate task.
 """
 
-from taskrail.application import check_parents
+from taskrail.application import check_parents, run_store
 from taskrail.core import delivery_record
 from taskrail.web import epic_tasks, history
+from taskrail.web.run_files import contained, optional_json
 
 TASK = "task"
-# A started run keeps its task in 00-input; a launch folder keeps it at its top.
-TASK_FILES = (history.TASK_FILE, "task.md")
 PHASE_ATTEMPTS = "phase_attempts"
 
 
-def parent_link(folder):
-    """(parent run, task ID or phase name) of a run or launch folder, or None."""
-    tasks = [folder / name for name in TASK_FILES]
-    readable = [path for path in tasks if path.is_file() and not path.is_symlink()]
-    if not readable:
-        return None
-    metadata = history.TaskDraft(readable[0].read_text(encoding="utf-8")).metadata
+def task_metadata(folder, filename):
+    """Use the task location belonging to this run or launch."""
+    path = contained(folder, filename)
+    if not path.is_file():
+        return {}
+    return history.TaskDraft(path.read_text(encoding="utf-8")).metadata
+
+
+def parent_link(metadata):
+    """(parent run, task ID or phase name) encoded by a task header, or None."""
     phase = metadata.get(check_parents.PHASE)
     if phase == TASK:
         contract = metadata.get("assigned_contract")
@@ -42,10 +44,15 @@ def valid(parent, slot):
     return parent, slot
 
 
-def shown_inside(base, folder):
-    """A child run whose parent still exists is shown in that parent's card."""
-    link = parent_link(folder)
-    return link is not None and base.joinpath(link[0], "run.json").is_file()
+def visible_parent(base, metadata):
+    """A child belongs in a parent's card only if the parent is in current storage."""
+    link = parent_link(metadata)
+    if link is None:
+        return None
+    parent = base / link[0]
+    if parent.is_symlink() or not run_store.supported(optional_json(parent, "run.json")):
+        return None
+    return link
 
 
 def members(epic):

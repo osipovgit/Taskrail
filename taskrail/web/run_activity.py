@@ -4,6 +4,7 @@ import json
 from typing import NamedTuple
 
 from taskrail.application import lock_resources, run_locks
+from taskrail.core import file_lock
 from taskrail.web import epic_tasks, run_family
 from taskrail.web.history import read_artifact
 
@@ -64,5 +65,5 @@ def run_active(live, run):
 
 def run_held(run):
     """Another process holds the run's lock."""
-    with run_locks.lock_file(run_locks.lock_path(run_locks.RUN, run)) as stream:
-        return not run_locks.locked(stream, run_locks.EXCLUSIVE)
+    with run_locks.resource(run_locks.RUN, run, file_lock.EXCLUSIVE, probe=True) as available:
+        return not available

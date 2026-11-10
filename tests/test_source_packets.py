@@ -167,7 +167,7 @@ class SourcePacketTests(unittest.TestCase):
             )
         )
         state = dict(
-            run_format=2,
+            run_format=3,
             roots=dict(repo=str(self.root)),
             requirements=[],
             checks=[],
@@ -226,7 +226,7 @@ class SourcePacketTests(unittest.TestCase):
             unverified=deferred,
         )
         state = dict(
-            run_format=2,
+            run_format=3,
             roots=dict(repo=str(self.root)),
             requirements=requirements,
             checks=[],
@@ -283,7 +283,7 @@ class SourcePacketTests(unittest.TestCase):
             context_projection.task_text(self.config, self.run), "## Goal\nReviewed goal"
         )
         state = dict(
-            run_format=2,
+            run_format=3,
             roots=dict(repo=str(self.root)),
             requirements=[],
             checks=[],

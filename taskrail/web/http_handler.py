@@ -6,6 +6,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
 
+from taskrail.core.release import VERSION
 from taskrail.web.analytics import analytics
 from taskrail.web.http_policy import error_json, post_problem, static_file
 from taskrail.web.run_activity import BusyError
@@ -82,7 +83,10 @@ class DashboardHandler(BaseHTTPRequestHandler):
         resource = static_file(target.path)
         if resource is not None:
             name, kind = resource
-            return HTTPStatus.OK, STATIC.joinpath(name).read_text(), kind
+            body = STATIC.joinpath(name).read_text()
+            if target.path == "/":
+                body = body.replace("{{build}}", VERSION)
+            return HTTPStatus.OK, body, kind
         found = api_value(self.server.context, target)
         if found is None:
             return HTTPStatus.NOT_FOUND, NOT_FOUND
@@ -111,7 +115,7 @@ def routed(request):
 def api_value(context, target):
     """The API view for a path, or None for an unknown path."""
     if target.path == "/api/session":
-        return dict(token=context["token"])
+        return dict(token=context["token"], version=VERSION)
     if target.path == "/api/runs":
         return list_runs(context["base"])
     if target.path == "/api/analytics":

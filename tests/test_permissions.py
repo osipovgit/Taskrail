@@ -159,7 +159,7 @@ class AccessManifestTests(unittest.TestCase):
             exposed = manifest(run, stage, {"project": str(root / "repo")})
             self.assertEqual(
                 exposed["readable_artifacts"],
-                [str(path) for path in paths if path.exists() or path.parent == stage],
+                [str(path) for path in paths if path.exists()],
             )
             self.assertNotIn(str(task.parent / "checks"), exposed["readable_artifacts"])
             self.assertIn(task.parent / "checks", paths)

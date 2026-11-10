@@ -4,10 +4,12 @@ import json
 
 from taskrail.application import run_locks, run_store
 from taskrail.application.checkpoints import resume_available
+from taskrail.core import file_lock
 from taskrail.core.files import atomic_json
 from taskrail.interactions import approval_policy, approvals
 from taskrail.web import run_groups, start_controls
 from taskrail.web.history import read_artifact
+from taskrail.web.run_sources import submission_id
 
 RUN_INDEX = "run.json"
 STATUS = "status"
@@ -23,38 +25,33 @@ def request_stop(run):
     return dict(id=run.name, status="STOP_REQUESTED")
 
 
-def trash_run(base, run, archive=False):
+def trash_run(base, run):
     """Move artifacts while holding the run's lock, so its worker cannot start meanwhile."""
-    with run_locks.lock_file(run_locks.lock_path(run_locks.RUN, run)) as stream:
-        if not run_locks.locked(stream, run_locks.EXCLUSIVE):
+    with run_locks.resource(run_locks.RUN, run, file_lock.EXCLUSIVE) as available:
+        if not available:
             raise ValueError("Only stopped task histories can be deleted")
-        HistoryRemoval(base, run, archive).move()
+        HistoryRemoval(base, run).move()
     return dict(id="", status="DELETED")
 
 
 class HistoryRemoval:
     """Validate all storage before moving source-independent task artifacts."""
 
-    def __init__(self, base, run, archive=False):
+    def __init__(self, base, run):
         self.run = run
-        self.archive = archive
         self.folders = self.launch_folders(base)
         self.trash = base / ".trash"
 
     def validate(self):
         """Include failed launches, but exclude active and unknown histories."""
         indices = [json.loads(read_artifact(folder, "launch.json")) for folder in self.folders]
-        current = {}
         if self.run.exists():
-            current = json.loads(read_artifact(self.run, RUN_INDEX))
+            current = run_store.read(self.run)
             # The execution lock is held: a terminal run supersedes stale launch records.
             if current.get(STATUS) not in ACTIVE_STATUSES:
                 indices = []
             indices.append(current)
         active = any(index.get(STATUS) in ACTIVE_STATUSES for index in indices)
-        active = active and not self.archive
-        if self.archive and run_store.supported(current):
-            raise ValueError("Only unsupported runs can be archived")
         if not indices or active:
             raise ValueError("Only stopped task histories can be deleted")
         if self.trash.is_symlink():
@@ -70,16 +67,6 @@ class HistoryRemoval:
         if self.run.exists():
             self.run.rename(destination / "run")
 
-    def matches_launch(self, folder):
-        """Ignore damaged unrelated launcher records."""
-        if folder.is_symlink() or not folder.is_dir():
-            return False
-        try:
-            manifest = json.loads(read_artifact(folder, "launch.json"))
-        except (OSError, ValueError):
-            return False
-        return manifest.get("id") == self.run.name
-
     def launch_folders(self, base):
         """Select valid launcher records without following storage symlinks."""
         submissions = base / ".submissions"
@@ -87,7 +74,9 @@ class HistoryRemoval:
             raise ValueError("Submission storage must not be a symlink")
         if not submissions.exists():
             return []
-        return [folder for folder in submissions.iterdir() if self.matches_launch(folder)]
+        return [
+            folder for folder in submissions.iterdir() if submission_id(folder) == self.run.name
+        ]
 
 
 def require_resumable(run):

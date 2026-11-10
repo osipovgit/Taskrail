@@ -43,10 +43,7 @@ if [[ -n "$replacement_source" ]]; then
     mkdir "$staging/config"
     /usr/bin/python3 -I -B -c \
         'import sys; sys.path.insert(0, sys.argv.pop(1)); from taskrail.deployment.executor_check import main; main()' \
-        "$staging" "$staging/config" "$replacement_source"
-    for name in executor-service ssh-askpass taskrail-executor-approve taskrail-executor.service executor-jenkins.example.json; do
-        cp -- "$replacement_source/deploy/$name" "$staging/$name"
-    done
+        "$staging" "$staging/config" "$staging"
 fi
 if [[ "$check_only" == yes ]]; then
     require_settled /var/lib/taskrail-executor RUNNING UNKNOWN

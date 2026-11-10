@@ -62,13 +62,9 @@ prepare_executor_package "$source_root/taskrail" "$staging"
 # Parse all effective private configuration before maintenance or package replacement.
 /usr/bin/python3 -I -B -c \
     'import sys; sys.path.insert(0, sys.argv.pop(1)); from taskrail.deployment.executor_check import main; main()' \
-    "$staging" "$config" "$source_root" "$release" "$state"
+    "$staging" "$config" "$staging" "$release" "$state"
 # All deployment artifacts must be readable and prepared before stopping the service.
-mkdir "$staging/deploy"
-for name in executor-service ssh-askpass taskrail-executor-approve; do
-    install -m 0755 -o root -g root "$source_root/deploy/$name" "$staging/deploy/$name"
-done
-sed "s/@CLIENT_UID@/$client_uid/g" "$source_root/deploy/taskrail-executor.service" >"$staging/service"
+sed "s/@CLIENT_UID@/$client_uid/g" "$staging/deploy/taskrail-executor.service" >"$staging/service"
 # No new submissions or approvals from here on; refuse while an action runs; the stop
 # must succeed, and the journal is checked again after it.
 begin_maintenance "$marker" "$state" "$unit_file" RUNNING
@@ -86,9 +82,9 @@ done
 install -m 0755 -o root -g root "$staging/deploy/taskrail-executor-approve" /usr/local/bin/taskrail-executor-approve
 install -d -m 0700 -o taskrail-executor -g taskrail-executor "$state"
 if [[ ! -f /etc/taskrail-executor/hosts.json ]]; then
-    install -m 0640 -o root -g taskrail-executor "$source_root/deploy/executor-hosts.example.json" /etc/taskrail-executor/hosts.json
+    install -m 0640 -o root -g taskrail-executor "$staging/deploy/executor-hosts.example.json" /etc/taskrail-executor/hosts.json
 fi
-install -m 0640 -o root -g taskrail-executor "$source_root/deploy/executor-jenkins.example.json" /etc/taskrail-executor/jenkins.json.example
+install -m 0640 -o root -g taskrail-executor "$staging/deploy/executor-jenkins.example.json" /etc/taskrail-executor/jenkins.json.example
 if [[ ! -f /etc/taskrail-executor/known_hosts ]]; then
     install -m 0640 -o root -g taskrail-executor /dev/null /etc/taskrail-executor/known_hosts
 fi

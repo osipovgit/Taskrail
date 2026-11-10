@@ -36,7 +36,6 @@ def remaining(workflow, stage):
 def save_request(folder, record, request, workflow):
     """Store exactly what is sent to the model with its reproducible fingerprint."""
     state = workflow.state
-    (folder / "tool-result.md").touch(exist_ok=True)
     access = folder / "access.json"
     rights = (state["roots"], record.get("writable_files", []))
     protected = protected_paths.patterns(workflow.config)

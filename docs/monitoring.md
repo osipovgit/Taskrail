@@ -55,13 +55,16 @@ usage is reported as zero tokens, so compare models only on runs with telemetry.
 | `00-input/` | Task, settings, role sources, contract, preimages |
 | `NN-stage/stage.json` | Status, duration, provenance, allowance and diagnostics |
 | `request.md`, `agent.md`, `permissions.log` | Effective request/profile/preflight |
-| `events.jsonl`, `stderr.log`, `response.raw.txt` | Raw provider events, diagnostics and final response |
+| `events.jsonl`, `stderr.log` | Model messages, tool calls and process diagnostics. The UI derives usage from these events. |
+| `events.raw.jsonl` | Original opencode 2.x events before normalization |
+| `tool-result.md` | Latest feedback sent to a continued session, created on its first continuation |
 | `result.json`, `evidence-bindings.json` | Validated result and source/event bindings |
 | `plan.md`, `NN-plan/plan.md` | The planner's plan file, and the copy each planning attempt accepted |
 | `00-input/project-map.md` | Neutral file inventory and landmarks the server wrote before planning |
 | `evidence.json`, `recovery.md` | Source-versioned recovery data; clipping stays explicit |
 | `findings.json`, `validation.json`, `handoff.md` | Pageable review feedback, long validation errors and saved public session notes |
 | `changes.diff`, `report.md` | Actual edits and human review report |
+| `00-input/local/`, `00-input/remote/` | Numbered command receipts by stage and text sidecars for long output. Remote approval tickets are named by ID. |
 | `NN-check/verify-NN.log` | Output of a settings verification command |
 
 Numbering reflects attempts in execution order, not fixed role numbers. Recovery

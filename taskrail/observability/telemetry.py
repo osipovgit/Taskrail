@@ -78,7 +78,7 @@ class Telemetry:
         return None
 
     def summary(self):
-        """The telemetry record stored as telemetry.json."""
+        """Observed usage, tool calls and public timeline."""
         return dict(
             **self.steps.summary(),
             **self.tool_calls.summary(),

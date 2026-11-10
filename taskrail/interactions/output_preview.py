@@ -3,6 +3,7 @@
 from pathlib import Path
 
 from taskrail.core import prompt_texts
+from taskrail.core.files import atomic_write
 from taskrail.interactions import output_digest
 
 LINE_LIMIT = 2000
@@ -68,7 +69,7 @@ def immutable_text(path, text):
         if path.read_bytes().decode("utf-8") != text:
             raise ValueError(f"Executor evidence snapshot changed: {path}")
         return
-    path.write_text(text, encoding="utf-8")
+    atomic_write(path, text.encode("utf-8"))
 
 
 def ticket_preview(path, pending):

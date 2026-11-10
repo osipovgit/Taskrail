@@ -5,6 +5,8 @@ import secrets
 from http import HTTPStatus
 from types import MappingProxyType
 
+from taskrail.core.release import WEB_ASSETS
+
 MAX_BODY = 65536
 POST_PATHS = frozenset(("/api/tasks", "/api/actions", "/api/decision"))
 SESSION_HEADER = "X-Taskrail-Token"
@@ -16,26 +18,7 @@ PAGES = MappingProxyType(
     }
 )
 # Browser scripts served from static/; dashboard modules are fixed, never path-derived.
-SCRIPTS = frozenset(
-    (
-        "/dashboard.js",
-        "/theme.js",
-        *(
-            f"/modules/{name}.js"
-            for name in (
-                "analytics",
-                "app",
-                "dom",
-                "epic",
-                "graph",
-                "monitor",
-                "stages",
-                "state",
-                "task",
-            )
-        ),
-    )
-)
+SCRIPTS = frozenset(f"/{name}" for name in WEB_ASSETS if name.endswith(".js"))
 JAVASCRIPT = "text/javascript; charset=utf-8"
 
 

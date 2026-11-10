@@ -95,10 +95,9 @@ must match its checkpoint. Notes are passed verbatim but cannot change authority
 For a changed split child use Restart reviewed task; for a standalone run use Restart.
 None of these operations rolls back edits.
 
-Only `run_format: 2` runs are supported. Continue requires the exact application
-release identity; after a code update use Restart. A run with another format requires
-a new task and can be archived with `taskrail history archive-old`. An unsupported
-run cannot supply parent context or start a child or delivery phase.
+Only `run_format: 3` runs are supported. Continue requires the exact application
+release identity; after a code update use Restart. Start a new task for any other
+format. Only supported runs can supply parent context or start a child or delivery phase.
 
 Allow all actions and its family-wide revocation are described once in
 [access](access.md#approval). A done mark applies to the outcome it was given for;

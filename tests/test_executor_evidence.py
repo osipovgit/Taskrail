@@ -35,8 +35,7 @@ class ExecutorEvidenceTests(unittest.TestCase):
         )
 
     def snapshot(self, stdout):
-        transcripts.local_snapshot(
-            self.run,
+        transcripts.command_snapshot(
             self.folder,
             dict(argv=["fixture"]),
             dict(status="SUCCEEDED", exit_code=0, stdout=stdout, stderr=""),
@@ -98,16 +97,27 @@ class ExecutorEvidenceTests(unittest.TestCase):
         stream.symlink_to(original)
         self.assertIsNone(executor_streams.guidance(self.run, snapshot))
 
+    def test_retry_uses_a_new_receipt_number_after_a_partial_snapshot_write(self):
+        first = self.snapshot("short output")
+        original = first.read_bytes()
+        orphan = first.with_name("02-plan-1.stdout.txt")
+        orphan.write_text("Earlier command output")
+        self.snapshot("next output")
+        self.assertEqual(first.read_bytes(), original)
+        self.assertEqual(orphan.read_text(), "Earlier command output")
+        latest = json.loads(first.with_name("02-plan-2.json").read_text())
+        self.assertEqual(latest["result"]["stdout"], "next output")
+
     def test_remote_ticket_streams_are_single_ticket_and_content_checked(self):
-        snapshot = self.run / "00-input/ssh/ticket.json"
+        snapshot = self.run / "00-input/remote/ticket.json"
         snapshot.parent.mkdir(parents=True)
         text = "remote result\n" * 300
         ticket = dict(results=[dict(stdout=text)])
-        snapshot.write_text(json.dumps([ticket]))
+        snapshot.write_text(json.dumps(ticket))
         stream = snapshot.with_suffix(".1-stdout.txt")
         stream.write_text(text)
         self.assertIn(str(stream), executor_streams.guidance(self.run, snapshot))
-        for payload in ([ticket, ticket], [None], [dict(results=[None])], dict(result=[])):
+        for payload in ([ticket], None, dict(results=[None]), dict(result=[])):
             with self.subTest(payload=str(payload)[:40]):
                 snapshot.write_text(json.dumps(payload))
                 self.assertIsNone(executor_streams.guidance(self.run, snapshot))

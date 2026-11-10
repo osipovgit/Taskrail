@@ -12,9 +12,9 @@ from taskrail.application.artifacts import new_stage
 from taskrail.application.planned_paths import git_files, writable_roots
 from taskrail.application.recovery import write_evidence
 from taskrail.core import prompt_texts, protected_paths
+from taskrail.core.files import atomic_write
 from taskrail.infrastructure import artifact_access, opencode_api
 from taskrail.infrastructure.agent_profile import make_profile
-from taskrail.infrastructure.agent_sync import atomic_write
 from taskrail.infrastructure.permission_check import verify_launch
 
 ROLE = "role"

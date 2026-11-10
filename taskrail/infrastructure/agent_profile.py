@@ -3,8 +3,8 @@
 import json
 
 from taskrail.core import prompt_texts, protected_paths
+from taskrail.core.files import atomic_write
 from taskrail.infrastructure import profile_rules
-from taskrail.infrastructure.agent_sync import atomic_write
 
 FRONTMATTER = "---\n"
 

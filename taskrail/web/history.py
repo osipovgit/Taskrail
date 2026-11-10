@@ -42,6 +42,12 @@ class TaskDraft:
         self.metadata = json.loads(header[1]) if header else {}
         self.typed = self.read(original)
 
+    @classmethod
+    def submitted(cls, run):
+        """Read the submitted task separately from the accumulated conversation."""
+        original = read_artifact(run, TASK_FILE)
+        return cls(original.split(HISTORY, 1)[0])
+
     def read(self, original):
         """Resolve current structured task fields."""
         return task_spec.resolve(original, task_markdown.typed_input(original, self.metadata))
@@ -57,15 +63,14 @@ class TaskDraft:
 
 def task_draft(run):
     """Reconstruct editable fields from the current task format."""
-    run_store.read(run)
-    parsed = TaskDraft(read_artifact(run, TASK_FILE).split(HISTORY, 1)[0])
+    index = run_store.read(run)
+    parsed = TaskDraft.submitted(run)
     draft = parsed.fields()
     draft["title"] = parsed.title(run.name)
     draft["read_only"] = parsed.metadata.get("read_only") is True
     draft[DESIGN] = parsed.metadata.get(DESIGN) is True
     draft[DECOMPOSE] = parsed.metadata.get(DECOMPOSE) is True
     draft["verification"] = "\n".join(parsed.metadata.get("verification", []))
-    index = json.loads(read_artifact(run, "run.json"))
     draft["auto_approve"] = approval_policy.at_start(run, parsed.metadata, index)
     draft["roots"] = worktree_isolation.source_roots(index)
     return draft

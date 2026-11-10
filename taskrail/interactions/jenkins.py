@@ -63,7 +63,7 @@ def read(actions, request):
     except (OSError, ValueError) as error:
         outcome = dict(status="FAILED", detail=str(error))
     request = dict(status=jenkins_requests.STATUS, jenkins=request)
-    return transcripts.local_snapshot(actions.run, actions.folder, request, outcome)
+    return transcripts.command_snapshot(actions.folder, request, outcome, source="remote")
 
 
 def authorize(session):

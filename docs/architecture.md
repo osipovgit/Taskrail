@@ -25,7 +25,7 @@ UI updates read the ordered stage index and public event stream.
 | `web/history.py`, `requests.py`, `lifecycle.py` | Editable task drafts, conversation history and lifecycle controls |
 | `web/static/` | Browser JavaScript, CSS, HTML and theme handling |
 | `deploy/` | Offline release installation, CLI wrapper and systemd units |
-| `deployment/` | Installer helpers: first-install settings and service PATH (`settings_init.py`), validated fresh-install reset (`fresh.py`) |
+| `deployment/` | Installer helpers: first-install settings and service PATH (`settings_stage.py`), validated fresh-install reset (`fresh.py`) |
 | `taskrail/agents/`, `taskrail/settings.json` | Bundled role templates (frozen per run) and default settings |
 | `tests/` | Automatic regressions and explicitly requested scenario acceptance tasks; see [test suites](testing.md) |
 | `tools/` | Development quality gates: pinned tool versions and the Wemake run |
@@ -102,8 +102,8 @@ the server reads `plan.md`, `review.md` or the implementer's final `DONE` or `BL
 and stores canonical version 1 records
 (`core/plan_document.py`, `core/review_document.py`). `core/result-schemas.json` holds
 the planner's stored shape and executor request contracts. Run storage uses a separate
-`run_format: 2` gate. Unsupported runs require a new task; Continue requires identical
-application code and instructions. Same-format runs from another release may Restart.
+`run_format: 3` gate. Unsupported runs require a new task. Continue requires the same runtime build,
+including its browser assets. Same-format runs from another build may Restart.
 Application helpers compose prompts, bind source evidence, freeze instructions and
 record attempt telemetry. The engine owns requirement IDs and the actual
 changed-file and check records; a model cannot claim successful execution by

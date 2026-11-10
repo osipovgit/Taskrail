@@ -25,7 +25,7 @@ STARTED = "started_at"
 
 def run_view(base, name):
     """Everything the dashboard shows for one run; paths are shown as tool paths."""
-    if not RUN_ID.fullmatch(name) or name in {".", ".."}:
+    if not RUN_ID.fullmatch(name) or name.startswith("."):
         raise ValueError("Invalid run ID")
     run = contained(base, name)
     try:
@@ -56,11 +56,12 @@ def readable_view(base, name, run):
 
 def parent_view(run, submission):
     """The split or delivery a task or phase run belongs to, shown in that parent's card."""
-    folder = run if run.joinpath(history.TASK_FILE).is_file() else submission
-    if not run_family.shown_inside(run.parent, folder):
-        return None
-    run_name, slot = run_family.parent_link(folder)
-    return dict(run=run_name, slot=slot)
+    if (run / "run.json").exists():
+        metadata = run_family.task_metadata(run, history.TASK_FILE)
+    else:
+        metadata = run_family.task_metadata(submission, "task.md")
+    link = run_family.visible_parent(run.parent, metadata)
+    return dict(run=link[0], slot=link[1]) if link else None
 
 
 def stage_views(run, state):

@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "taskrail"
 dynamic = ["version"]
-description = "Reviewed, approval-gated, resumable opencode task workflows"
+description = "Turn a task into a reviewed Git change with opencode, isolated worktrees, and resumable checks."
 requires-python = ">=3.10"
 license = {text = "Apache-2.0"}
 readme = "README.md"
@@ -15,16 +15,32 @@ dependencies = []
 taskrail = "taskrail.__main__:main"
 
 [tool.setuptools.dynamic]
-version = {attr = "taskrail.core.version.VERSION"}
+version = {attr = "taskrail.core.release.PACKAGE_VERSION"}
+
+[tool.setuptools]
+include-package-data = false
 
 [tool.setuptools.packages.find]
-include = ["taskrail*"]
+include = [
+    "taskrail", "taskrail.application", "taskrail.core", "taskrail.deployment", "taskrail.executor",
+    "taskrail.git", "taskrail.infrastructure", "taskrail.interactions", "taskrail.observability",
+    "taskrail.web",
+]
+namespaces = false
 
 [tool.setuptools.package-data]
-"taskrail" = ["settings.json", "agents/*.md"]
-"taskrail.core" = ["*.json"]
-"taskrail.application" = ["*.md", "*.json"]
-"taskrail.web" = ["static/*.html", "static/*.js", "static/*.css", "static/*.svg", "static/modules/*.js"]
+"taskrail" = [
+    "settings.json", "agents/understanding.md", "agents/planner.md", "agents/implementer.md",
+    "agents/reviewer.md",
+]
+"taskrail.core" = ["prompt-texts.json", "result-schemas.json"]
+"taskrail.application" = ["policy.md", "instruction-modules.json"]
+"taskrail.web" = [
+    "static/dashboard.html", "static/dashboard.css", "static/dashboard.js", "static/favicon.svg",
+    "static/theme.js", "static/modules/analytics.js", "static/modules/app.js", "static/modules/dom.js",
+    "static/modules/epic.js", "static/modules/graph.js", "static/modules/monitor.js",
+    "static/modules/stages.js", "static/modules/state.js", "static/modules/task.js",
+]
 
 [tool.ruff]
 target-version = "py310"

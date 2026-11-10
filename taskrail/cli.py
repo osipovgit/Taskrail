@@ -5,7 +5,8 @@ import functools
 import sys
 from pathlib import Path
 
-from taskrail import cli_api, cli_history, cli_service
+from taskrail import cli_api, cli_service
+from taskrail.core.release import VERSION
 
 ERROR_PREFIX = "Error: "
 SETTINGS_OPTION = "--settings"
@@ -20,7 +21,6 @@ def main():
     """Dispatch a subcommand; a task file alone runs the task."""
     argv = sys.argv[1:] or ["serve"]
     commands = dict(
-        history=history_command,
         web=cli_service.serve_command,
         serve=cli_service.serve_command,
         status=cli_api.status_command,
@@ -33,11 +33,6 @@ def main():
         analytics=cli_service.analytics_command,
     )
     return commands.get(argv[0], run_command)(argv)
-
-
-def history_command(argv):
-    """Archive unsupported runs through the common CLI error boundary."""
-    return guarded(functools.partial(cli_history.main, argv[1:]))
 
 
 def run_command(argv):
@@ -54,6 +49,7 @@ def run_arguments(argv):
     parser = argparse.ArgumentParser(
         description="Run a task in linked Git worktrees with independent plan and result review."
     )
+    parser.add_argument("--version", action="version", version=f"Taskrail {VERSION}")
     parser.add_argument(
         "task", help="Task Markdown file; taskrail-task header declares project roots"
     )

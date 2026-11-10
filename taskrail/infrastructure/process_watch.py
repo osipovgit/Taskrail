@@ -5,7 +5,6 @@ import subprocess
 import time
 
 from taskrail.core.control import check_stop
-from taskrail.core.files import atomic_json
 from taskrail.infrastructure import context_overflow, usage_limits
 from taskrail.infrastructure.event_summary import decoded
 from taskrail.infrastructure.process_group import stop_group
@@ -106,7 +105,6 @@ class TurnWatch:
         self.activity.observe(lines)
         for line in lines:
             self.telemetry.observe(line)
-        atomic_json(self.attempt / "telemetry.json", self.telemetry.summary())
 
     def drain(self):
         """Read everything left after the process stopped, including a partial line."""

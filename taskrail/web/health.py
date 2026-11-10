@@ -6,6 +6,8 @@ import sys
 import time
 from urllib.request import ProxyHandler, Request, build_opener
 
+from taskrail.core.release import VERSION
+
 STARTUP_SECONDS = 30
 POLL_SECONDS = 0.25
 
@@ -19,7 +21,11 @@ def ready(port):
         return False
     with response:
         payload = json.load(response)
-    return isinstance(payload, dict) and isinstance(payload.get("token"), str)
+    return (
+        isinstance(payload, dict)
+        and isinstance(payload.get("token"), str)
+        and payload.get("version") == VERSION
+    )
 
 
 def main():

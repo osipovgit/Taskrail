@@ -11,7 +11,6 @@ EXTRA = (
     ".config/systemd/user/taskrail.service",
     ".config/systemd/user/taskrail.service.d",
     ".local/bin/taskrail",
-    ".cache/taskrail",
 )
 
 

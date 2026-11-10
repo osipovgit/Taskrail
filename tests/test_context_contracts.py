@@ -166,7 +166,7 @@ class ContextContractTests(unittest.TestCase):
         root = self.run / "source"
         root.mkdir()
         state = dict(
-            run_format=2,
+            run_format=3,
             requirements=entries,
             roots={"project": str(root)},
             checks=[],
@@ -184,15 +184,14 @@ class ContextContractTests(unittest.TestCase):
             stderr="FATAL missing executable",
             status="FAILED",
         )
-        response = transcripts.local_snapshot(self.run, self.stage, {"argv": ["check"]}, outcome)
+        response = transcripts.command_snapshot(self.stage, {"argv": ["check"]}, outcome)
         self.assertIn("status: FAILED", response)
         self.assertIn("exit_code: 1", response)
         self.assertIn("FATAL missing executable", response)
         self.assertLess(len(response), 6000)
 
     def test_large_local_request_cannot_hide_short_result(self):
-        response = transcripts.local_snapshot(
-            self.run,
+        response = transcripts.command_snapshot(
             self.stage,
             {"argv": ["check", "argument" * 10000]},
             dict(status="FAILED", exit_code=2, stderr="FATAL invalid arguments", stdout=""),
@@ -222,11 +221,11 @@ class ContextContractTests(unittest.TestCase):
             )
             for number in range(10)
         ]
-        atomic_json(self.run / "execution.json", entries)
+        atomic_json(self.run / "remote-execution.json", entries)
         response = execution_wait.resume(self.run, {"attempts": []})
-        snapshot = self.run / "00-input/ssh/ticket-9.json"
+        snapshot = self.run / "00-input/remote/ticket-9.json"
         saved = snapshot.read_bytes()
-        self.assertEqual(json.loads(saved), [entries[-1]])
+        self.assertEqual(json.loads(saved), entries[-1])
         self.assertNotIn("output-0", response)
         self.assertIn("output-9", response)
         self.assertLess(len(response), 6000)
@@ -248,12 +247,12 @@ class ContextContractTests(unittest.TestCase):
                 ],
             )
         ]
-        atomic_json(self.run / "execution.json", entries)
+        atomic_json(self.run / "remote-execution.json", entries)
         response = execution_wait.resume(self.run, {"attempts": []})
         self.assertIn("Ticket targets: FAILED", response)
         self.assertLess(len(response), 24500)
-        snapshot = self.run / "00-input/ssh/targets.json"
-        self.assertEqual(json.loads(snapshot.read_bytes()), entries)
+        snapshot = self.run / "00-input/remote/targets.json"
+        self.assertEqual(json.loads(snapshot.read_bytes()), entries[-1])
 
 
 if __name__ == "__main__":

@@ -203,7 +203,7 @@ Inspect the server before a new request. Stopping a task saves its workflow chec
 it does **not** cancel an already approved remote command. Continue observes the
 same ticket instead of submitting it again. Rejection stops the workflow for revision.
 
-Run artifacts contain `execution.json`, UI action cards and a report section. They
+Run artifacts contain `remote-execution.json`, UI action cards and a report section. They
 record targets, payload, approval digest, statuses and bounded output. Captured known
 passwords are redacted, but arbitrary remote output can still contain other secrets:
 do not request secret dumps. Server tickets remain in `/var/lib/taskrail-executor`, owned

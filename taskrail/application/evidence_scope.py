@@ -14,7 +14,7 @@ def roots(run, path, declared):
         name: run / "00-input" / name
         for name in (
             "git",
-            "ssh",
+            "remote",
             "local",
             "checks",
             "preimages",
