@@ -3,6 +3,7 @@
 import re
 from types import MappingProxyType
 
+from taskrail.core import prompt_texts
 from taskrail.core.schema import require
 
 READ_FLAGS = MappingProxyType(
@@ -28,7 +29,7 @@ PRETTY_NAMES = frozenset(("oneline", "short", "medium", "full", "fuller", "refer
 PRETTY_FLAGS = frozenset(("--format", "--pretty"))
 
 
-def validate(argv, role):
+def validate(argv, role, config=None):
     """No aliases, global options, shell strings, abbreviations or unknown commands."""
     require(isinstance(argv, list) and bool(argv), "Git argv must be a nonempty list")
     require(
@@ -43,6 +44,8 @@ def validate(argv, role):
         return False
     require(role == "implementer", "This role has read-only Git access")
     require(command in WRITERS, "Unsupported or prohibited Git operation")
+    if (config or {}).get("task_branch") and command not in {"restore", "fetch", "push"}:
+        raise ValueError(prompt_texts.text("git.submit_changes"))
     write_arguments(argv)
     return True
 

@@ -8,7 +8,7 @@ so the implementer reports no requirement outcomes or citations.
 
 import re
 
-from taskrail.core import prompt_texts
+from taskrail.core import prompt_texts, schema
 
 # A quote or heading marker and emphasis may precede the word; a list bullet may not.
 FINAL = re.compile(
@@ -38,6 +38,8 @@ def blocked(text):
 def finished(text, context):
     """A finished implementation completes every approved step."""
     steps = (context.get("plan") or {}).get("steps", [])
+    if not context["changed"]:
+        schema.require(bool(text), prompt_texts.text("implementer.no_change"))
     summary = text or prompt_texts.text("implementer.done")
     completed = [step["id"] for step in steps]
     return dict(status="IMPLEMENTED", summary=summary, blocking_gaps=[], completed_steps=completed)
@@ -50,8 +52,8 @@ def final_word(response):
         found = final_line(lines[index])
         if found:
             following = lines[index + 1 :]
-            text = " ".join([found[1], *following])
-            return found[0], " ".join(text.split())
+            text = "\n".join([found[1], *following])
+            return found[0], text.strip()
     raise ValueError(prompt_texts.text("implementer.missing"))
 
 

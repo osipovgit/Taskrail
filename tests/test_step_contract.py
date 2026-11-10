@@ -50,7 +50,7 @@ class StepContractTests(unittest.TestCase):
             plan = dict(steps=[dict(required_checks=["lint"])])
             workflow = SimpleNamespace(config=config, state=dict(requirements=[]), flow={})
             step_checks.install(workflow, plan)
-            selected = check_selection.applicable(workflow)
+            selected = check_selection.applicable(workflow.config, workflow.state["requirements"])
             self.assertEqual(len(selected), 1)
             self.assertEqual(selected[0]["recipe"]["request"]["cwd"], str(target))
             self.assertEqual(selected[0]["spec"]["criteria"], [])
@@ -76,4 +76,4 @@ class StepContractTests(unittest.TestCase):
             state=dict(requirements=[]),
         )
         with self.assertRaisesRegex(ValueError, "outside the declared roots"):
-            check_selection.applicable(workflow)
+            check_selection.applicable(workflow.config, workflow.state["requirements"])

@@ -10,6 +10,9 @@ from taskrail.application import (
     source_packet,
     source_windows,
 )
+from taskrail.application.dependency_checks import index as dependency_index
+from taskrail.application.implementation_context import writer
+from taskrail.application.implementation_submission import review_path
 from taskrail.application.original_checkout import status_path
 from taskrail.application.workspace_paths import public_mapping
 from taskrail.core import protected_paths, requirements, task_spec
@@ -33,6 +36,7 @@ def request_context(config, execution, state, run):
     plan = execution[1]
     context = dict(
         stage=execution[0],
+        implementation_submission=review_path(run, execution[0], state),
         roots=state["roots"],
         workspace_paths=public_mapping(config),
         task_file=str(run / "00-input/task.md"),
@@ -41,18 +45,20 @@ def request_context(config, execution, state, run):
         if state.get("results", {}).get("plan")
         else None,
         imported_draft=instruction_sources.imported_draft(run, execution[0]),
-        allowed_files=tool_paths(execution[2], roots) if execution[0] == "implementer" else [],
         feedback=feedback_context(execution[3], roots),
         checks=tool_paths(state["checks"], roots),
         diff_file=str(run / "changes.diff") if (run / "changes.diff").exists() else None,
         preimages=preimage_context(state["preimages"], roots, run),
     )
+    if execution[0] == "implementer":
+        context.update(writer(config, execution, state))
     if context["stage"] in {"planner", "plan-reviewer", "reviewer"}:
         context["diagnostic_changes"] = plan_projection.diagnostic_changes(state, roots)
     context["original_status"] = status_path(run)
     context["source_packet"] = packet_context(config, run, context["stage"], plan)
     context["source_views"] = source_guidance.inputs(config, plan, run)
     if config.get("reviewed_input"):
+        context["dependency_checks"] = dependency_index(run, config["task_spec"])
         context["task_file"] = str(run / "00-input/reviewed-task-spec.json")
     context.update(check_catalog.context(config, context["stage"], context["plan"]))
     return {key: entry for key, entry in context.items() if included(key, entry)}
@@ -68,7 +74,7 @@ def packet_context(config, run, stage, plan):
 
 def included(key, entry):
     """Empty optional projections do not consume model context."""
-    return key == "check_catalog" or entry not in (None, [], {})
+    return key in {"check_catalog", "scheduled_checks"} or entry not in (None, [], {})
 
 
 def preimage_context(preimages, roots, run):

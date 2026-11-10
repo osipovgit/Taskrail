@@ -13,7 +13,7 @@ def execute(context, role, args, emit):
     planned = [str(path(name, roots)) for name in case["changes"]]
     target = path(case["evidence_path"], roots)
     if role == "implementer":
-        allowed = context["allowed_files"]
+        allowed = context["planned_files"]
         for name, content in case["changes"].items():
             if str(path(name, roots)) in allowed:
                 write(path(name, roots), content)

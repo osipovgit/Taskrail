@@ -109,6 +109,9 @@ def result_links(run, state):
     for key, reference in state["results"].items():
         if run.joinpath(reference).is_file():
             links.append(f"- [{key}]({reference})")
+    submission = state.get("implementation_submission")
+    if submission:
+        links.append("- [Implementation submission]({path})".format(**submission))
     if run.joinpath("changes.diff").exists():
         links.append("- [Changes](changes.diff)")
     if run.joinpath("design.md").exists():

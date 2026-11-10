@@ -48,7 +48,7 @@ def make_request(config, execution, state, run):
         mode_rules.render(config, stage),
         instruction_modules.render(run, execution, state),
         execution_requests.instructions(config, stage, run, catalog),
-        git_requests.instructions(stage),
+        git_requests.instructions(stage, config.get("task_branch", False)),
         local.instructions(
             stage, config.get("host_commands", "auto"), config.get("sandbox_network") is True
         ),

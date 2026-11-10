@@ -2,7 +2,11 @@
 
 from pathlib import Path
 
-from taskrail.application import citation_review, evidence_scope, plan_review_evidence
+from taskrail.application import (
+    citation_review,
+    evidence_scope,
+    plan_review_evidence,
+)
 from taskrail.core import prompt_texts, schema
 
 EVIDENCE_FILES = "declared roots, verified source views, preimages or executor snapshots (not run artifacts such as changes.diff or recovery.md)"
@@ -10,16 +14,23 @@ EVIDENCE_FILES = "declared roots, verified source views, preimages or executor s
 
 def validate_paths(payload, context):
     """Report invalid citation paths together, tied to their requirement owners."""
+    evidence_scope.verify_dependencies(context, payload["evidence"])
     errors = []
     for claim in payload["evidence"]:
-        roots = allowed_roots(claim, context)
         try:
-            if not plan_review_evidence.accepts(claim, payload, context):
-                approved_path(claim["path"], roots, EVIDENCE_FILES)
+            validate_claim(claim, payload, context)
         except ValueError as error:
             errors.append(path_feedback(payload, claim, error, context["stage"]))
     if errors:
         raise ValueError(citation_review.feedback(errors))
+
+
+def validate_claim(claim, payload, context):
+    """Accept the current stage's authenticated document or an in-scope source path."""
+    if claim["path"] == context.get("submission_path"):
+        return
+    if not plan_review_evidence.accepts(claim, payload, context):
+        approved_path(claim["path"], allowed_roots(claim, context), EVIDENCE_FILES)
 
 
 def path_feedback(payload, claim, error, stage):
@@ -37,10 +48,12 @@ def path_feedback(payload, claim, error, stage):
 
 def allowed_roots(claim, context):
     """Run artifacts remain excluded even if a broad project root contains the run."""
-    if context["run"] not in Path(claim["path"]).parents:
+    path = Path(claim["path"])
+    run = context["run"]
+    if run not in path.parents:
         return context["roots"]
     return dict(
-        evidence_scope.roots(context["run"], Path(claim["path"]), context["roots"]),
+        evidence_scope.roots(run, path, context["roots"]),
         source_views=context["run"] / "00-input/source-views",
     )
 

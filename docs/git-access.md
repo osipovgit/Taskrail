@@ -30,9 +30,7 @@ apply. Read requests are routed to the executor before final-result validation.
 - Planner/reviewer: read operations only (`log`, `show`, `diff`, `status`, `reflog`,
   `rev-parse`, `ls-files`, `ls-tree`, `blame`, `describe`, `merge-base`, `cat-file`,
   branch/tag listing, `remote -v`).
-- Implementer: additionally `add -- <files>`, `commit -m <message>`,
-  `revert --no-edit <full hash>`, `cherry-pick --no-edit <full hash>`,
-  `merge --ff-only <full hash>`, `restore --worktree -- <explicit files>`, `fetch <remote>`,
+- Implementer on the task branch: `restore --worktree -- <explicit files>`, `fetch <remote>`,
   `push <remote> HEAD:refs/heads/<branch>`, when needed by the task. A push waits for
   your personal decision in the UI (or `taskrail decide`); **Allow all actions** does
   not cover it.
@@ -107,8 +105,8 @@ Filters and hooks stay disabled, and a successful receipt verifies the committed
 paths, bytes, executable modes and HEAD before the run can finish successfully.
 
 Each changed repository has its own commit receipt. Automatic finalization adds
-at most one new commit per root; explicit task-requested Git operations may already
-have created commits, which are verified and reused when applicable. Finalization records a
+at most one new commit per root. The writer submits the proposed message and leaves
+staging, committing and changes to HEAD for finalization after review. Finalization records a
 pending outcome before writing. A failed commit leaves the run `COMMIT_FAILED`
 and stops delivery; a successful commit in an earlier root remains recorded.
 Neither changes nor commits are rolled back. An interrupted or unverified write
@@ -135,5 +133,6 @@ user's task text.
 
 On an owned task branch, the writer may adopt additional safe project files.
 Before each Git request the server refreshes the exact changed paths and their
-preimages. The same session can stage and commit these paths. Inherited Follow-up changes require explicit selection in the reviewed task.
+preimages. Finalization can commit those reviewed paths together. Inherited Follow-up
+changes require explicit selection in the reviewed task.
 Git verifies index ownership before each write.

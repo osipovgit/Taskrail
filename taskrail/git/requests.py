@@ -37,11 +37,12 @@ def output_directory(run):
     return run / "00-input" / "git"
 
 
-def instructions(stage):
+def instructions(stage, task_branch=False):
     """Git reads for every stage; writes only for the implementer."""
     advertised = [prompt_texts.text("routes.git")]
     if stage == "implementer":
-        advertised.append(prompt_texts.text("routes.git.writes"))
+        key = "routes.git.task_branch" if task_branch else "routes.git.writes"
+        advertised.append(prompt_texts.text(key))
     return " ".join(advertised)
 
 

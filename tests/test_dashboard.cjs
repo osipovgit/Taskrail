@@ -81,6 +81,16 @@ async function main() {
   function all(node) {
     return [node, ...node.children.flatMap(all)];
   }
+  const writer = all(
+    stages.stageCard({
+      ...stage,
+      stage: 'implementer',
+      verdict: 'IMPLEMENTED',
+      result: { completed_steps: ['T1'] },
+    }),
+  );
+  assert.ok(writer.some((node) => node.textContent === 'Submitted for checks'));
+  assert.ok(writer.some((node) => node.textContent === 'Submitted steps'));
   const historical = all(stages.stageCard({ ...stage, status: 'TOOL_ERROR', verdict: null }));
   assert.ok(historical.some((node) => node.textContent === 'Tool error'));
   assert.ok(historical.every((node) => node.textContent !== 'TOOL_ERROR'));

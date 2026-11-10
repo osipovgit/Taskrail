@@ -263,7 +263,7 @@ class LiveTests(LiveFixture, unittest.TestCase):
         self.assertEqual(proofs[1]["source_view"]["source_path"], str(self.root / report.name))
         self.assertEqual(report.read_bytes(), original)
 
-    def test_git_history_and_revert_complete_the_workflow(self):
+    def test_git_history_and_rejected_early_revert_keep_work_in_review(self):
         from taskrail.git import process
 
         process.checked(self.root, ["init", "-b", "main"])
@@ -280,8 +280,10 @@ class LiveTests(LiveFixture, unittest.TestCase):
         self.task.write_text(f"```taskrail-task\n{json.dumps(header)}\n```\nReturn 2")
         run, status, state = self.run_mode("git-actions")
         self.assertEqual(status, "READY_FOR_REVIEW", state.get("summary"))
-        self.assertEqual(len(state["git_jobs"]), 2)
-        self.assertTrue(all(entry["status"] == "SUCCEEDED" for entry in state["git_jobs"]))
+        jobs = state["git_jobs"]
+        self.assertEqual(
+            [entry["status"] for entry in jobs], ["SUCCEEDED", "REJECTED", "SUCCEEDED", "SUCCEEDED"]
+        )
         self.assertEqual(process.checked(self.root, ["rev-parse", "HEAD^"]).strip(), head)
         self.assertIn("return 2", (self.root / "hello.py").read_text())
         checkpoint = json.loads((run / "checkpoint.json").read_text())
@@ -289,9 +291,7 @@ class LiveTests(LiveFixture, unittest.TestCase):
 
         self.assertEqual(checkpoint["git_before"], git_metadata({"project": self.root}))
         review = json.loads((run / "06-review/response-object.json").read_text())
-        outputs = {
-            job["output_file"] for job in json.loads((run / "git-execution.json").read_text())
-        }
+        outputs = {job["output_file"] for job in jobs if job["stage"] != "task-commit"}
         self.assertLessEqual(outputs, {claim["path"] for claim in review["evidence"]})
 
     def test_resolved_source_overwrite_keeps_user_edits_and_independent_review(self):
@@ -936,25 +936,25 @@ class LiveTests(LiveFixture, unittest.TestCase):
                     self.assertIn("understanding.json", names)
                     self.assertNotIn("evidence-bindings.json", names)
                     continue
-                self.assertEqual(
-                    names,
-                    {
-                        "stage.json",
-                        "agent.md",
-                        "access.json",
-                        "permissions.log",
-                        "request.md",
-                        "tool-result.md",
-                        "response.raw.txt",
-                        "response-object.json",
-                        "result.json",
-                        "events.jsonl",
-                        "stderr.log",
-                        "activity.json",
-                        "telemetry.json",
-                        "evidence-bindings.json",
-                    },
-                )
+                expected = {
+                    "stage.json",
+                    "agent.md",
+                    "access.json",
+                    "permissions.log",
+                    "request.md",
+                    "tool-result.md",
+                    "response.raw.txt",
+                    "response-object.json",
+                    "result.json",
+                    "events.jsonl",
+                    "stderr.log",
+                    "activity.json",
+                    "telemetry.json",
+                    "evidence-bindings.json",
+                }
+                if record["stage"] == "implementer":
+                    expected.add("commit-message.txt")
+                self.assertEqual(names, expected)
         self.assertTrue((run / "02-plan/plan.md").is_file())
         self.assertEqual(state["stages"][2]["inputs"]["plan"], "02-plan/result.json")
         self.assertEqual(state["stages"][2]["role"], "reviewer")
@@ -1265,19 +1265,50 @@ class LiveTests(LiveFixture, unittest.TestCase):
         self.task.write_text(f"```taskrail-task\n{json.dumps(header)}\n```\nReturn 2")
         return process
 
-    def test_writer_can_stage_and_commit_adopted_files_in_the_current_session(self):
+    def test_writer_submits_all_adopted_files_for_one_commit_after_review(self):
         process = self.isolated_repository()
-        _, status, state = self.run_mode(
+        run, status, state = self.run_mode(
             "git-batch", worktree_base=str(self.base / "worktrees"), timeout_seconds=30
         )
         self.assertEqual(status, "READY_FOR_REVIEW", state.get("summary"))
         batch, commit = state["git_jobs"][:2]
-        self.assertEqual((batch["status"], commit["status"]), ("SUCCEEDED", "SUCCEEDED"))
+        self.assertEqual((batch["status"], commit["status"]), ("REJECTED", "REJECTED"))
         self.assertEqual(batch["stage"], commit["stage"])
         worktree = Path(state["roots"]["project"])
-        files = process.checked(worktree, ["show", "--pretty=format:", "--name-only", "HEAD~1"])
-        self.assertEqual(set(files.splitlines()), {f"Feature{n}.java" for n in range(69)})
+        files = process.checked(worktree, ["show", "--pretty=format:", "--name-only", "HEAD"])
+        self.assertEqual(
+            set(files.splitlines()), {"hello.py", *(f"Feature{n}.java" for n in range(69))}
+        )
+        self.assertEqual(
+            process.checked(worktree, ["rev-parse", "HEAD^"]).strip(),
+            state["worktrees"]["project"]["base"],
+        )
+        preview = run / state["implementation_submission"]["path"]
+        self.assertIn(str(preview), (run / "06-review/request.md").read_text())
+        message = process.raw(worktree, ["cat-file", "commit", "HEAD"]).stdout.split(b"\n\n", 1)[1]
+        self.assertEqual(message, preview.read_bytes())
+        self.assertEqual([job["stage"] for job in state["git_jobs"][2:]], ["task-commit"] * 2)
         self.assertFalse(list(self.original_root.glob("Feature*.java")))
+
+    def test_no_change_implementation_keeps_its_reason_through_review_without_an_empty_commit(self):
+        git = self.isolated_repository()
+        (self.root / "hello.py").write_text("def hello():\n    return 2\n")
+        git.checked(self.root, ["add", "--", "hello.py"])
+        git.checked(self.root, ["commit", "-m", "Earlier task"])
+        run, status, state = self.run_mode("already-fixed")
+        self.assertEqual(status, "READY_FOR_REVIEW", state.get("summary"))
+        self.assertFalse(state["changed_files"])
+        self.assertEqual(state["commits"], [])
+        note = run / state["implementation_submission"]["path"]
+        self.assertEqual(note.name, "no-change-note.txt")
+        self.assertIn(note.name, state["stages"][3]["files"])
+        self.assertIn("dependency already changed hello()", note.read_text())
+        self.assertIn(str(note), (run / "06-review/request.md").read_text())
+        self.assertIn(str(note.relative_to(run)), (run / "report.md").read_text())
+        self.assertEqual(
+            git.checked(self.root, ["rev-parse", "HEAD"]).strip(),
+            state["worktrees"]["project"]["base"],
+        )
 
     def test_worktree_isolation_leaves_the_source_checkout_untouched(self):
         process = self.isolated_repository()
