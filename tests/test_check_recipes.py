@@ -97,15 +97,29 @@ class CheckRecipesTest(unittest.TestCase):
         self.assertEqual(len(json.loads((self.run / "local-actions.json").read_text())), 1)
 
     def test_new_recipe_keeps_personal_approval_and_decline_cannot_become_success(self):
-        decision = dict(decision="deny", alternative="")
+        decision = dict(decision="deny", alternative="Use the offline suite")
         with patch(
             "taskrail.interactions.approval_policy.decision", return_value=decision
         ) as approval:
             checks = verify_commands.run_commands(self.workflow(), self.folder)
         approval.assert_called_once()
-        self.assertEqual(checks[0]["status"], "FAIL")
+        self.assertEqual(checks[0]["status"], "UNVERIFIED")
+        self.assertEqual(checks[0]["execution_status"], "DECLINED")
+        self.assertEqual(checks[0]["assessment"], "unknown")
+        self.assertIn(decision["alternative"], checks[0]["detail"])
         self.assertEqual(check_results.read(self.run)[0]["assessment"]["status"], "unknown")
         self.assertEqual(check_results.trusted(self.run), {})
+
+    def test_malformed_report_reaches_repair_with_observed_exit_and_parse_error(self):
+        self.recipe["adapter"] = "junit"
+        with patch(
+            "taskrail.interactions.approval_policy.decision", return_value=dict(decision="allow")
+        ):
+            (row,) = verify_commands.run_commands(self.workflow(), self.folder)
+        self.assertEqual((row["status"], row["execution_status"]), ("UNVERIFIED", "SUCCEEDED"))
+        self.assertIn("exit 0", row["detail"])
+        self.assertIn("Invalid report XML", row["detail"])
+        self.assertFalse(check_results.trusted(self.run))
 
     def test_reviewed_task_gate_runs_and_failed_exit_cannot_pass(self):
         workflow = self.workflow()
@@ -135,7 +149,7 @@ class CheckRecipesTest(unittest.TestCase):
             checks = verify_commands.run_commands(self.workflow([self.command]), self.folder)
         approval.assert_called_once()
         execute.assert_not_called()
-        self.assertEqual(checks[0]["status"], "FAIL")
+        self.assertEqual(checks[0]["status"], "UNVERIFIED")
         self.assertEqual(check_results.trusted(self.run), {})
 
     def test_source_change_while_waiting_for_check_approval_prevents_execution(self):
@@ -152,7 +166,7 @@ class CheckRecipesTest(unittest.TestCase):
         ):
             checks = verify_commands.run_commands(self.workflow([self.command]), self.folder)
         execute.assert_not_called()
-        self.assertEqual(checks[0]["status"], "FAIL")
+        self.assertEqual(checks[0]["status"], "UNVERIFIED")
         self.assertIn("while waiting", checks[0]["detail"])
         self.assertEqual(check_results.read(self.run), [])
 

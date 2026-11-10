@@ -2,6 +2,7 @@
 
 from taskrail.application import (
     added_lines,
+    check_outcomes,
     check_selection,
     transitions,
     yaml_install,
@@ -38,7 +39,7 @@ def run_checks(workflow):
     workflow.open_record(active)
     checks = collect(workflow, active[0])
     state[CHECKS] = checks
-    failed = any(check[STATUS] == "FAIL" for check in checks)
+    failed = any(map(check_outcomes.blocks, checks))
     workflow.finish_active("CHECK_FAILED" if failed else "CHECK_COMPLETED", checks)
     state["results"][CHECKS] = "{}/result.json".format(active[1]["directory"])
     workflow.guard.verify(
@@ -54,6 +55,6 @@ def collect(workflow, folder):
         workflow, folder, syntax_checks(roots, workflow.state["changed_files"])
     )
     checks.extend(added_lines.scan(workflow.run, roots, workflow.state["preimages"]))
-    if any(check[STATUS] == "FAIL" for check in checks):
+    if any(map(check_outcomes.blocks, checks)):
         return checks
     return [*checks, *run_commands(workflow, folder)]

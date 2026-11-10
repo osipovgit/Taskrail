@@ -1,6 +1,7 @@
 """A retry of a split task continues from the edits of its earlier attempts."""
 
 from taskrail.application import (
+    check_outcomes,
     inherited_preimages,
     outside_changes,
     prior_git,
@@ -8,8 +9,6 @@ from taskrail.application import (
     task_branch,
 )
 from taskrail.core import prompt_texts
-
-FAILED = frozenset(("FAIL",))
 
 
 def start(workflow, earlier, outside):
@@ -38,12 +37,7 @@ def feedback(run):
     review = state.get("results", {}).get("review")
     if review:
         report["findings"] = reviewed_artifacts.document(run, review).get("findings", [])
-    failed = list(filter(failed_check, state.get("checks", [])))
+    failed = list(filter(check_outcomes.blocks, state.get("checks", [])))
     if failed:
         report["checks"] = failed
     return report
-
-
-def failed_check(check):
-    """A built-in or configured check that did not pass."""
-    return check.get("status") in FAILED

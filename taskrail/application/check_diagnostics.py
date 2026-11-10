@@ -16,8 +16,8 @@ def assess(adapter, outcome):
         return unknown(adapter, "Execution did not produce a known result")
     try:
         parsed = parse(adapter, outcome)
-    except PARSE_ERRORS:
-        return unknown(adapter, "Invalid or incomplete structured check output")
+    except PARSE_ERRORS as error:
+        return unknown(adapter, f"Invalid {adapter} report: {error}")
     failed = bool(parsed["counts"].get("failed", 0))
     failed = failed or outcome.get("exit_code", 0) != 0
     status = "failed" if failed or outcome["status"] == "FAILED" else "passed"

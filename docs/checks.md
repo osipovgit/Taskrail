@@ -154,6 +154,11 @@ unknown. Malformed output, missing exit codes, denied execution and incomplete
 remote operations never become passed checks. Words such as “error” in arbitrary
 logs do not determine results.
 
+Local check rows distinguish a failed assertion (`FAIL`) from an inconclusive
+mandatory check (`UNVERIFIED`). Both return to repair when a writer is available.
+Feedback includes the execution outcome, observed exit code when available, and
+the executor or report parser's reason, including any operator alternative.
+
 A runtime criterion is satisfied only by a current passed result bound to that
 criterion. A current failed result can support a contradiction. Unrelated,
 superseded, altered or stale results cannot support either claim; generic command
