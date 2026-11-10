@@ -124,6 +124,8 @@ class DashboardTests(unittest.TestCase):
             "/api/run?id=..",
             "/api/run?id=..%2Fsecret",
             "/api/run?id=escape",
+            "/modules/%2e%2e/%2e%2e/core/prompt-texts.json",
+            "/modules/not-shipped.js",
             "/etc/passwd",
         ]:
             with self.assertRaises(HTTPError) as error:

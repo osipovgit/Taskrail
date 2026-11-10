@@ -8,7 +8,7 @@ from urllib.parse import parse_qs, urlsplit
 
 from taskrail.core.release import VERSION
 from taskrail.web.analytics import analytics
-from taskrail.web.http_policy import error_json, post_problem, static_file
+from taskrail.web.http_policy import STATIC_ROUTES, error_json, post_problem
 from taskrail.web.run_activity import BusyError
 from taskrail.web.run_list import list_runs
 from taskrail.web.run_view import run_view
@@ -79,8 +79,8 @@ class DashboardHandler(BaseHTTPRequestHandler):
             return self.send(HTTPStatus.NOT_FOUND, UNAVAILABLE)
 
     def get_result(self, target):
-        """(status, body[, type]) of a GET request."""
-        resource = static_file(target.path)
+        """Status, body and content type of a GET request."""
+        resource = STATIC_ROUTES.get(target.path)
         if resource is not None:
             name, kind = resource
             body = STATIC.joinpath(name).read_text()
@@ -89,8 +89,8 @@ class DashboardHandler(BaseHTTPRequestHandler):
             return HTTPStatus.OK, body, kind
         found = api_value(self.server.context, target)
         if found is None:
-            return HTTPStatus.NOT_FOUND, NOT_FOUND
-        return HTTPStatus.OK, json.dumps(found, ensure_ascii=False)
+            return HTTPStatus.NOT_FOUND, NOT_FOUND, JSON_TYPE
+        return HTTPStatus.OK, json.dumps(found, ensure_ascii=False), JSON_TYPE
 
 
 def post_result(request):
