@@ -39,7 +39,7 @@ generated dependencies; [deployment](deployment.md) owns configuration details.
 | Git mutation | `GIT_REQUEST` final response | Implementer, approved scope, bounded command grammar |
 | Remote inspection/change | `ACTION_REQUEST` final response | Configured SSH targets; exact script root-approved; inspection only before you confirm a change, server checks after it; never the implementer |
 | Jenkins | `JENKINS_REQUEST` final response | Configured jobs; reads automatically approved, builds root-approved unless root configured the job with `approval: none` |
-| Local checks | Built-in syntax checks; `LOCAL_REQUEST` for tests, linters or Bash. [Deployment](deployment.md) documents available parsers | [Sandbox](#local-commands) without a decision; on the host only after approval |
+| Local checks | Built-in syntax checks and `LOCAL_REQUEST` for tests and linters | [Sandbox or host policy](#local-commands) |
 | HTTP/API/database tools | No direct connector | Approved SSH scripts may use installed remote clients |
 
 Executor JSON responses and turn rules are defined in [contracts](contracts.md#executor-requests).
@@ -55,7 +55,7 @@ contains evidence created when a configured check runs. Native permission denial
 show a short reason in Activity. The raw opencode event retains the ruleset.
 
 The permission profile is not an OS sandbox. Search permissions are pattern-based,
-and Git reads can inspect the underlying repository when a root is a subdirectory.
+and Git reads can expose history from elsewhere in the same repository.
 Agents must not use either route to bypass scope or protected-file rules. Hostile
 project content and untrusted local users require stronger isolation.
 
@@ -112,18 +112,16 @@ exercises real isolation and cannot pass by skipping an unavailable sandbox.
 
 ### Approval
 
-Reads outside the declared roots wait for a decision; so do host commands under
-`host_commands: "ask"`. The exact working directory, argv and reason appear in the UI
-before execution.
+Native reads outside the declared roots and granted run inputs are denied. A host
+command that needs approval shows its working directory, argv and reason in the UI.
 Allow is single-use; Deny skips execution; Alternative sends your text back to the
 agent. Waiting has no expiry and is excluded from active stage time. Stop remains
 available. Each decision is bound to a random ticket and retained for audit.
 
-Read-only source requests, Jenkins reads and bounded built-in listings are recorded
-without asking. Host listings allow `ls`, `find`, `du`, `stat`, `wc`, `cat`, `head`,
+Jenkins reads and bounded in-root listing commands are recorded without asking. Host listings allow `ls`, `find`, `du`, `stat`, `wc`, `cat`, `head`,
 `tail` and `grep` only with the explicit read grammar, canonical in-root operands and
 fixed system executables. Options precede operands; `--color=value` is explicit.
-Unknown flags, link following, recursive or continuous content reads require approval.
+Other flags and operands follow the configured local command policy.
 `find` permits only name/path/type/depth tests and printing. The executor rechecks
 scope immediately before execution. Remote inspection uses its own bounded grammar.
 

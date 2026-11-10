@@ -14,6 +14,7 @@ from taskrail.application.changes import capture
 from taskrail.application.correction_start import begin as begin_correction
 from taskrail.application.execution_context import adopt as inherit_execution_context
 from taskrail.application.original_checkout import DIRECTORY as ORIGINAL
+from taskrail.application.plan_reports import inherit as inherit_reports
 from taskrail.application.plan_validation import canonical_plan
 from taskrail.application.step_checks import install as install_step_checks
 from taskrail.application.workspace_paths import read_hint
@@ -65,6 +66,7 @@ def child(workflow):
 
 def inherited_reads(step, parent, child):
     """Reference the child's own inherited launch snapshot in future read windows."""
+    step = inherit_reports(child, step, parent)
     mapping = [(parent / ORIGINAL, child / ORIGINAL)]
     reads = [read_hint(hint, mapping) for hint in step.get("read", [])]
     return dict(step, read=reads)

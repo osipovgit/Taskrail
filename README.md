@@ -1,117 +1,56 @@
 # Taskrail
 
-A local, browser-first application for research, scoped code changes and independent
-review through [opencode](https://opencode.ai). Every top-level task uses linked Git
-worktrees on a new task branch; source checkouts stay untouched.
-It preserves unrelated work and uses controlled Git access without automatic
-rollback. Git history is available to all roles; task-required writes are restricted
-to the implementer. CLI remains supported.
+[![CI on master](https://github.com/osipovgit/Taskrail/actions/workflows/ci.yml/badge.svg?branch=master&event=push)](https://github.com/osipovgit/Taskrail/actions/workflows/ci.yml?query=branch%3Amaster+event%3Apush)
 
-## Start
+Give [opencode](https://opencode.ai) a goal and a Git repository. Taskrail turns the goal into a plan, runs the work on an isolated branch, and gives you the reviewed change with its diff, commits and check results. Follow each step in a local browser or use the CLI.
 
-Requirements: Linux user systemd, Python 3.10+ with venv, bash, tar, flock and a working
-opencode 1.x or 2.x installation on PATH. Install as your normal user, without sudo:
+| Choose a mode | What you get |
+| --- | --- |
+| **Develop** | A reviewed change on a task branch. Larger changes can split into tasks with their own checks and commits. |
+| **Answer only** | An independently reviewed answer grounded in project files and recorded evidence. |
+| **Design discussion** | A reviewed design document. Start a Develop follow-up when you want to implement it. |
+
+## Run your first task
+
+On Linux, install Git, Python 3.10+ with venv and a working opencode 1.x or 2.x on your PATH. The managed installer also uses user systemd, Bash, tar and flock. Run it as your normal user from a trusted checkout or extracted release:
 
 ```sh
 bash deploy/install.sh
-# Import existing settings and custom roles only on first installation:
-# bash deploy/install.sh /absolute/path/settings.json
 ```
 
-Without the managed service, install the package and run the UI in the foreground:
+1. Open [the local dashboard](http://127.0.0.1:8787) and choose **New task**.
+2. Select the root of a Git repository with at least one commit. Describe the goal and how you will know it is done.
+3. Open a stage to inspect the plan, review findings and command output. When a change is ready, inspect the diff and commits on `taskrail/<run>`. You decide when to merge.
+
+For a first read-only run, try **Answer only** with “Where does this project validate its configuration, and which tests cover invalid input?”
+
+The bundled settings use opencode's configured default model. For role-specific models, foreground installation, updates or a remote host, see the [deployment guide](docs/deployment.md).
+
+## How a change reaches review
+
+- **Understand and plan.** Taskrail extracts requirements from the original text. A planner explores the project, and a separate reviewer checks the proposed tasks against those requirements.
+- **Implement and verify.** Each writer works in a linked Git worktree. Taskrail records what changed, which checks ran and their results. Review findings return to the writer. A stopped stage can resume from an eligible checkpoint with your clarification.
+- **Deliver.** After result review, the server commits the approved changes. A split also receives an integration review. Optional Jenkins validation and post-confirmation server checks use the configured executor.
+
+Local commands normally run in a sandbox where available. Commands that require host execution run under your account and are highlighted in the log. Set `host_commands` to `"ask"` to review host requests. Git pushes require a personal decision. [Access and approvals](docs/access.md)
+
+## From the CLI
 
 ```sh
-pipx install .            # from a checkout or an extracted release
-taskrail init          # writes ~/.config/taskrail/settings.json
-taskrail check         # verifies opencode, settings and permission enforcement
-taskrail serve
-```
-
-The bundled settings launch `opencode` with its configured default model; set role
-`models` or a wrapper `command` as described in [opencode settings](docs/deployment.md#opencode).
-
-Open http://127.0.0.1:8787 and select **New task**. Provide project roots, Goal and
-acceptance criteria; let the planner discover related files. The service is local
-and not intended for public or multi-user exposure.
-
-To update from a trusted extracted release:
-
-```sh
-bash deploy/install.sh --wait=3600 --autostart=keep
-```
-
-Settings/history survive; the installer switches the release and restarts the
-service. Imported custom roles are preserved, not overwritten by bundled updates.
-See [deployment](docs/deployment.md) before changing existing installations.
-
-## Workflow
-
-Planning as decomposition → independent plan review → scoped implementation →
-built-in syntax checks and your [verification commands](docs/deployment.md#verification-commands)
-→ independent result review → combined integration review after a split →
-Jenkins validation for selected recipes or planned checks on a configured Jenkins →
-your confirmation → server checks, only after it. The planner writes its plan as a
-Markdown file; it chooses one atomic task or splits into independent tasks, one run per task, in
-dependency order ([delivery](docs/task-controls.md#delivery-of-a-code-change)).
-A reviewed no-change plan ends without implementation; **Design
-discussion** turns produce a reviewed design document instead of code.
-Failed checks and review findings return to the writer while the work progresses.
-An interrupted writer inspects partial edits before continuing. A steering timeout
-pauses the current stage for an optional note and checkpoint continuation. Every top-level task runs in [isolated Git worktrees](docs/task-format.md#worktree-isolation) on a new
-branch, leaving the source checkout untouched: there each
-approved task is finalized with verified commits and may change files beyond its plan. Tasks on different projects run in
-parallel; one project runs one task at a time.
-
-A finished change waits as **Ready for your review** until you confirm it; **No
-changes required** ends a run that needed no edits. Agents run project tests and
-linters at once in an offline [sandbox](docs/access.md#local-commands) where the host
-has bubblewrap; commands that need the network or host files run at once on the host and
-are highlighted in the stage log (`host_commands: "ask"` makes them wait for you). Reads
-outside the declared roots and pushes wait for your decision. The optional
-[isolated SSH executor](docs/ssh-executor.md) runs exact remote scripts and Jenkins builds after personal
-root approval, with results returned to the same task. Deferred runtime checks
-remain visible. The planner and the reviewers write Markdown files and finish with `DONE`;
-the implementer finishes with `DONE` or `BLOCKED`. See the
-[response contracts](docs/contracts.md). Source quotations
-and per-requirement outcomes are checked before each transition.
-
-## CLI
-
-The CLI runs a task in the foreground, or starts and controls runs for automation
-(a chat bot or script on the server) with the browser's launcher; see
-[automation](docs/task-controls.md#automation-from-the-cli).
-
-```sh
-taskrail /absolute/path/task.md
 taskrail submit --root shop=/srv/shop --goal @goal.md
 taskrail status RUN
-taskrail decide RUN allow
-taskrail action RUN resume --note "python3 is installed now"
-taskrail analytics
-# Foreground development UI:
-python3 -m taskrail serve --settings taskrail/settings.json
+taskrail action RUN resume --note "The test dependency is installed."
 ```
+
+Use the run ID returned by `submit` in place of `RUN`. To run a Markdown task in the foreground, use `taskrail /absolute/path/task.md`. [CLI and run controls](docs/task-controls.md#automation-from-the-cli)
 
 ## Guides
 
-- [Isolated SSH and Jenkins executor and approvals](docs/ssh-executor.md)
-- [Task format and example](docs/task-format.md)
-- [Controls, continuation and history](docs/task-controls.md)
-- [Configuration, deployment and file locations](docs/deployment.md)
-- [Metrics, recovery and diagnostics](docs/monitoring.md)
-- [Contracts and instruction ownership](docs/contracts.md)
-- [Architecture](docs/architecture.md) · [Development](docs/development.md)
+| I want to… | Start here |
+| --- | --- |
+| Write a task and choose its scope | [Task format](docs/task-format.md) · [Examples](examples/live) |
+| Set up tests, linters or a remote check | [Verification](docs/checks.md) · [SSH and Jenkins](docs/ssh-executor.md) |
+| Inspect a branch or recover a run | [Git access](docs/git-access.md) · [Monitoring and diagnostics](docs/monitoring.md) |
+| Understand or contribute to Taskrail | [Architecture](docs/architecture.md) · [Agent contracts](docs/contracts.md) · [Contributing](CONTRIBUTING.md) |
 
-For a failure, share `run.json`, `report.md`, and the affected stage's `stage.json`,
-`request.md`, `response.raw.txt`, `events.jsonl`, `stderr.log`. Include the saved checkpoint
-and `evidence.json` for recovery issues. Inspect source snippets and redact secrets.
-
-For a deliberate clean reinstall use
-`bash deploy/install.sh --fresh --wait=3600 --autostart=keep --agents=bundled`. It deletes
-managed history and configuration; read the [reset scope](docs/deployment.md#full-reinstallation)
-first. [Access routes](docs/access.md) describe what agents may read, edit and run.
-
-## License and security
-
-Taskrail is licensed under the [Apache License 2.0](LICENSE). Report vulnerabilities
-privately as described in [SECURITY.md](SECURITY.md); see [CONTRIBUTING.md](CONTRIBUTING.md) to contribute.
+[Apache License 2.0](LICENSE) · [Report a security issue privately](SECURITY.md)

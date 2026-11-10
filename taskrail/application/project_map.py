@@ -37,12 +37,13 @@ def root_section(alias, root, share, protected):
     """`## alias: root` and one line per file until the root's share is used."""
     names = project_files.listing(root, protected)
     lines = [f"## {alias}: {root}"]
+    available = share - len(lines[0])
     for count, name in enumerate(names):
-        if sum(map(len, lines)) > share:
-            remaining = len(names) - count
-            lines.append(prompt_texts.text("map.more", count=remaining))
+        if available < 0:
+            lines.append(prompt_texts.text("map.more", count=len(names) - count))
             break
         lines.append(file_line(f"{alias}/{name}", root / name))
+        available -= len(lines[-1])
     return lines
 
 

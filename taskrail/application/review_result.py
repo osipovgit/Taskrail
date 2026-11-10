@@ -15,7 +15,7 @@ from pathlib import Path
 
 from taskrail.application import citation_review, review_file, source_packet
 from taskrail.core import plan_findings, prompt_texts, review_document, review_lines
-from taskrail.core.plan_outcomes import absolute
+from taskrail.core.paths import absolute
 
 SOURCE_HANDLE = re.compile(r"S\d+")
 GAP = "gap"

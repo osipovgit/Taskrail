@@ -31,7 +31,6 @@ INSTRUCTIONS_HEADING = "# Orchestrator instructions"
 
 def make_request(config, execution, state, run):
     """The complete request of one stage attempt."""
-    state["module_source_files"] = instruction_modules.observed_files(run)
     frozen = instruction_sources.freeze_contract(run, POLICY, state)
     stage = execution[0]
     if stage == "understanding":

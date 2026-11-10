@@ -94,12 +94,12 @@ Recovery preserves the current stage; an interrupted writer is never blindly ret
 | `check_stage.py`, `builtin_checks.py`, `verify_*.py` | Syntax checks and settings verification commands |
 | `source_tree.py`, `git_state.py`, `planned_paths.py`, `plan_validation.py`, `changes.py` | Fingerprints, path safety, plan checks, preimages and the diff |
 
-The browser has no runtime
-dependencies; Node packages are only linting and formatting tools. The runtime needs
-Python 3.10+ for both the runtime and development tools, and Node 24.19+ for UI linting.
+The application uses the Python 3.10+ standard library and browser-native JavaScript.
+Development uses Node 24.19+ for UI lint, formatting and tests.
 
-Models write no JSON results: the server reads `plan.md`, `review.md` and the
-implementer's final `DONE` or `BLOCKED` and stores canonical version 1 records
+Task understanding writes its interpretation to `understanding.json`. For later stages
+the server reads `plan.md`, `review.md` or the implementer's final `DONE` or `BLOCKED`
+and stores canonical version 1 records
 (`core/plan_document.py`, `core/review_document.py`). `core/result-schemas.json` holds
 the planner's stored shape and executor request contracts. Run storage uses a separate
 `run_format: 2` gate. Unsupported runs require a new task; Continue requires identical
@@ -113,9 +113,9 @@ returning a status alone. See [contracts](contracts.md).
 
 `application/instruction-modules.json` selects reading, Python, shell, UI and
 verification modules by metadata and catalog key; their prose lives in
-`core/prompt-texts.json`. Every stage gets the reading module, which
-keeps large inputs within the model context: search first, map a large file by its
-landmarks, read windows of at most 200 lines, never re-read a range, and map diffs
+`core/prompt-texts.json`. Task understanding uses the submitted text directly. Project research, implementation
+and review receive the reading module: search first, map a large file by its
+landmarks, read windows of at most 200 lines, reuse complete current lines, and map diffs
 and long outputs before reading them. Selection of the others uses validated plan
 paths and observed source reads. Initial planning starts with general verification
 guidance; later attempts and stages add matching language modules. The decomposition

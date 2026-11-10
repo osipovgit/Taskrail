@@ -10,7 +10,7 @@
 | Correct integration findings | Rejected integration, no unfinished correction, remaining integration corrections | Start a fresh linked task with planning, plan review, implementation, local checks and result review; owned isolated branches also receive a verified commit |
 | Stop task | Running | Write a stop request; the worker cleans up opencode and saves an interruption checkpoint |
 | Continue from checkpoint | Eligible checkpoint, unchanged source, no active run on its projects | Append new attempts to the same run, starting at the interrupted stage; a stage that reported **Blocked** can continue too, with your note answering its question; an interrupted or blocked implementer first inspects its existing edits |
-| Send a follow-up Goal | Previous standalone run stopped, no active run on its projects | Snapshot prior public evidence and start a new run from planning; a task or phase run has no follow-up, use Continue with a note or a follow-up of its parent |
+| Send a follow-up Goal | Previous standalone run stopped, no active run on its projects | Snapshot prior public evidence and start a new run from task understanding; a task or phase run has no follow-up, use Continue with a note or a follow-up of its parent |
 | Answer only | New or follow-up submission | Research and independent review, no implementation; the reviewed answer opens the report and is the `answer` of `taskrail status` |
 | Design discussion | New or follow-up submission | Like Answer only, but the reviewed summary is a design document, saved as `design.md`; follow-ups refine it, a **Develop** follow-up implements it |
 | Confirm changes | A finished code change with planned server checks, after integration review for a split and any Jenkins validation | Accept the change; the server checks start only now |
@@ -30,14 +30,14 @@ The run list groups runs by what they need:
 | Group | Runs |
 |---|---|
 | Running | Starting or running, not waiting for you |
-| Needs you | A pending UI decision, an SSH or Jenkins ticket waiting for root approval, or a stop without a successful result (errors, budgets, interruptions); highlighted in yellow |
+| Needs you | A pending UI decision, an SSH or Jenkins ticket waiting for root approval, or a stop without a successful result (errors, steering timeouts, interruptions); highlighted in yellow |
 | Ready for review | A finished change: waiting for your review, or for your confirmation before server checks |
 | Done | Confirmed with its server checks finished, finished without changes, or marked done; collapsed until opened or searched |
 
 ## Delivery of a code change
 
-Every top-level Develop task follows task understanding, planning, independent plan review, implementation,
-checks and result review. A split dispatches authenticated children in dependency
+A Develop task starts with task understanding, planning and independent plan review.
+A change then goes through implementation, checks and result review. A split dispatches authenticated children in dependency
 order, followed by independent integration review over the combined original and
 corrective diff. Each child receives its complete assignment, prerequisite outcomes
 and immutable `00-input/parent-task.md`. Later work appears under Not ToDo.

@@ -11,6 +11,7 @@ from pathlib import Path
 from types import MappingProxyType
 
 from taskrail.core import protected_paths
+from taskrail.core.files import bounded_bytes
 from taskrail.git import process
 
 SKIPPED = frozenset(
@@ -109,11 +110,8 @@ def protected_name(name, protected=protected_paths.DEFAULT_PATTERNS):
 
 def described(path):
     """(line count, landmarks) of a text file, or None for a large or binary one."""
-    regular = path.is_file() and not path.is_symlink()
-    if not regular or path.stat().st_size > MAX_BYTES:
-        return None
-    raw = path.read_bytes()
-    if b"\x00" in raw[:BINARY_PROBE]:
+    raw = bounded_bytes(path, MAX_BYTES)
+    if raw is None or b"\x00" in raw[:BINARY_PROBE]:
         return None
     text = raw.decode("utf-8", errors="replace")
     marks = landmarks(path.name, text)

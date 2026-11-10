@@ -2,8 +2,9 @@
 
 import stat
 
-from taskrail.application import evidence, instruction_sources
+from taskrail.application import evidence
 from taskrail.application.artifacts import finish_stage
+from taskrail.core.files import stream_digest
 
 
 def verify_preimages(run, state, before):
@@ -12,9 +13,8 @@ def verify_preimages(run, state, before):
         if reference:
             path = run / reference
             verify_mode(path, name, state)
-            source_bytes = path.read_bytes()
             expected = recorded_digest(name, state, before)
-            if instruction_sources.fingerprint(source_bytes) != expected:
+            if stream_digest(path) != expected:
                 raise ValueError("Saved preimage changed; cannot continue safely")
 
 

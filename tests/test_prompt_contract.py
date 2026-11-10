@@ -231,6 +231,8 @@ class RequestBudgetTests(LiveFixture, unittest.TestCase):
     def test_capabilities_modes_and_language_modules_keep_the_same_stage_budgets(self):
         run, status, state = self.run_mode()
         self.assertEqual(status, "READY_FOR_REVIEW", state.get("summary"))
+        with self.subTest(requests="saved stage instructions"):
+            self.check_saved_requests(run)
         config = task_config.configuration(self.task, self.settings)
         plan = dict(files_read=["project/hello.py", "project/check.sh", "project/ui.js"])
         plan["proposed_change_files"] = []
@@ -296,9 +298,7 @@ class RequestBudgetTests(LiveFixture, unittest.TestCase):
     def check_budget(self, request, stage):
         assert_request_budget(self, request, stage, self.base)
 
-    def test_each_stage_reads_only_its_own_instructions_within_budget(self):
-        run, status, state = self.run_mode()
-        self.assertEqual(status, "READY_FOR_REVIEW", state.get("summary"))
+    def check_saved_requests(self, run):
         requests = {}
         for stage, budget in BUDGETS.items():
             request = (run / stage / "request.md").read_text()
@@ -309,6 +309,8 @@ class RequestBudgetTests(LiveFixture, unittest.TestCase):
             self.assertIsNone(STABLE_ID.search(request), stage)
             self.assertNotIn("{'", request)
             requests[stage] = request
+        self.assertNotIn("Use LOCAL_REQUEST", requests["01-understand"])
+        self.assertIn("even with an empty check_catalog", requests["03-plan-review"])
         self.assertIn("Your only writable file is the plan file", requests["02-plan"])
         self.assertIn("The planner was given these rules", requests["03-plan-review"])
         self.assertNotIn("The planner was given these rules", requests["02-plan"])

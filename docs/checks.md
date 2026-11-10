@@ -1,9 +1,9 @@
 # Deterministic verification
 
-The application executes selected checks, waits for completion and parses their
-declared output format. The model chooses relevant recipes and interprets recorded
-facts; it does not construct commands, poll jobs or count errors in logs.
-Independent review remains mandatory.
+A task can require an ordinary local command or a configured verification gate.
+Agents run ordinary diagnostics via `LOCAL_REQUEST`. Taskrail runs selected recipes,
+records their output and evaluates it with the configured adapter. The reviewer
+uses those records to judge whether the task meets its acceptance criteria.
 
 ## Configure exact recipes
 
@@ -104,10 +104,18 @@ Exact duplicates in `verify_commands` execute once per local check stage.
 Identity includes the effective worktree directory, argument vector and timeout.
 Explicit criterion bindings still use their selected recipe and adapter.
 
-Assign a project-wide task requirement to one owning step. Place its named
-recipe under that step's `Required checks`. Other children can run their own
-checks. Settings-level `verify_commands` explicitly require the command for
-every applicable engineering task. Use a named recipe for an owner-specific check.
+Assign a project-wide check to one task, usually the task that sees the combined
+changes. The other tasks can verify their own scope.
+
+| What the task needs | Where to put it | Who runs it |
+| --- | --- | --- |
+| A local syntax check, linter or test | Owning task's `Verify`, including the command and expected outcome | The agent requests `LOCAL_REQUEST` under the local command policy. An empty recipe catalog is fine. |
+| An automatic gate for this task | A configured local recipe ID under `Required checks` | Taskrail schedules it for the owner and repeats it during integration. |
+| Acceptance of an explicit runtime criterion | A configured or selected matching recipe bound to its criterion ID | Taskrail records the execution and its assessment in the appropriate phase. |
+
+Settings-level `verify_commands` apply to every eligible engineering task. A
+reviewer sees only recipes selected or configured for the plan. The complete
+`Verify` field remains in the owning step even if that view of the catalog is empty.
 
 Preserve the requested acceptance rule. A clean lint or an explicit zero exit
 requires that outcome from the tool itself. For “no new findings”, compare
@@ -138,14 +146,8 @@ recipe keep the ordinary planning path.
 
 ## Results and continuation
 
-Each reviewed task can also list `Required checks:` with local recipe IDs. These
-are mandatory gates even when no runtime criterion was assigned to the recipe.
-They use the same sandbox, approval, journal, adapters and source integrity guard.
-The server runs each selected recipe once, also retaining mandatory settings commands;
-the child receives its own selections and integration repeats the union. An invalid
-recipe or cwd outside the effective roots stops the task rather than skipping a gate.
-These results carry no invented criterion IDs and cannot satisfy an unrelated runtime
-requirement. `Verify:` describes verification intent; it is never interpreted as shell.
+An invalid mandatory recipe or `cwd` outside the effective roots stops the task.
+The check stage records only criterion IDs explicitly bound to that recipe.
 
 `00-input/settings.json` freezes the catalog and mandatory commands; the run index
 records their digest. Continue verifies and restores that snapshot. A linked

@@ -1,6 +1,7 @@
 """Display root references as absolute paths while retaining internal scope keys."""
 
 import re
+from pathlib import Path
 
 from taskrail.core.schema import require
 
@@ -30,4 +31,17 @@ def readable_source(name, roots):
     path = roots[alias] / relative
     require(path.resolve() == path, "Noncanonical source read")
     require(roots[alias] in path.parents and path.is_file(), "Source file outside root or absent")
+    return path
+
+
+def absolute(name, roots):
+    """An absolute path, `alias/relative`, or a path relative to the only root."""
+    path = Path(name)
+    if path.is_absolute():
+        return path
+    alias, _, relative = name.partition("/")
+    if alias in roots and relative:
+        return Path(roots[alias]) / relative
+    if len(roots) == 1:
+        return Path(next(iter(roots.values()))) / name
     return path

@@ -71,7 +71,8 @@ task projection, while untrusted original task and history files remain archival
 artifacts outside the model's readable inputs. Each ID needs one outcome: satisfied, planned, contradicted, gap,
 deferred, not_applicable or not_evaluated. `not_evaluated` is allowed only in BLOCKED results, when
 a shared blocker prevented validation. Only runtime requirements may be deferred.
-Required missing evidence means BLOCKED, even when the result format is valid. A plan names
+A confirmed missing prerequisite blocks the run. A repairable gap in a plan goes
+back to the planner. A plan names
 checks that must run after the change in unverified, one per entry, prefixed
 `Jenkins check: <server>/<job>: <parameters and expected result>` or
 `Server check: <what to run and the expected result>`; the server starts Jenkins
@@ -144,8 +145,7 @@ tests or documentation from the implementation that owes them. Each task still n
 observable acceptance criteria, planned files and appropriate verification. On an
 authenticated task branch, necessary additional files within permitted roots remain
 allowed; Not ToDo names later work to leave alone unless the task needs a part of it,
-which the summary names. In-place runs
-retain their exact approved file boundary.
+which the summary names.
 
 Review lines use the assigned requirement labels. A failure needs its problem;
 `gap`, `n/a` and `later` need their explanations. An explained `n/a` is valid in
@@ -272,48 +272,53 @@ Transport retry, context handoff, timeouts and output delivery are described in
 The planner writes `<run>/plan.md`, attached at every turn. It survives interruption.
 A ready proposal recovered after a context stop still passes complete validation and
 independent plan review. The server labels requirement blocks with `R<n>`.
-The planner and the next reviewer receive the same complete findings file. Address each finding or document an evidence-backed disagreement for the reviewer to resolve. Long strings use lossless `text_chunks` and the file can be read by line ranges.
-Read ranges identify evidence, never edit coordinates. Use freshly read content for
-edits. The format:
+The planner and the next reviewer receive the same complete [findings file](#findings-across-plan-revisions).
+Each task describes its intended result and how to verify it. For example:
 
 ```markdown
-Decision: split | single | no change | blocked
-Summary: one or two sentences (an answer or design document goes in ## Answer)
+Decision: single
+Summary: Correct the invalid variable name in the NTP role.
 
 ## Requirements
-- R1 → T1 [roles/ntp], T2 [roles/web]
-- R2 → done: project/README.md:12-18
-- R3 → runtime
-- R4 → all tasks
-- R5 → gap: the Jenkins job name is not in the task
+- R1 → T1
+- R2 → T1
 
-## T1: Fix lint in roles/ntp
+## T1: Correct the NTP role variable
 Depends on: none
-Files: project/roles/ntp/tasks/main.yml, project/roles/ntp/defaults/main.yml (new)
-Read: project/roles/ntp/tasks/main.yml:1-40, project/.ansible-lint:1-12
-Done when:
-- ansible-lint roles/ntp reports no var-naming findings
+Files:
+- project/roles/ntp/tasks/main.yml
+- project/roles/ntp/defaults/main.yml
+Read:
+- project/roles/ntp/tasks/main.yml
+- project/.ansible-lint:1-12
+Done when: The default and all references use the corrected name and retain its value.
 Verify:
-- ansible-lint roles/ntp
-Notes: optional pointers for the implementer
-
-## After the change
-- Jenkins check: ci/ansible-lint: BRANCH=main passes
-- Server check: run ansible-playbook --check site.yml on the controller
+- Run ansible-lint roles/ntp and inspect any remaining findings.
 ```
 
-A `done:` or `contradicted:` outcome uses the citation syntax described above for
-review lines, including optional explanations after each citation.
-`/exact/read/path:7-42,43-156,157-169` cites all three ranges of the same file.
-Requirement labels do not substitute for source ranges. `Read:` accepts only citation
-lists with optional parenthesized explanations, which also reach the child in Notes. Invalid hints are reported on their own line. Paths are absolute, root-alias-relative, or relative
-to the only declared root; basenames are never searched for or guessed. Every
-range cited as evidence still needs matching observed current lines. A diff alone does not
-establish that an unrun check passed.
+`Read` is optional. Use a file, a file with a line or range, or a list of these
+references. Paths can be absolute, root-alias-relative, or relative to the only
+root. Backtick-quote names with spaces or punctuation. A trailing `:N` or
+`:N-M` selects lines even inside backticks. For a literal name ending in
+`:N`, put an explicit range outside the quoted name, as in `` `report:2`:1-20 ``.
+A parenthesized note stays with the task. A bare source path gives the child a
+starting point for a bounded read. For `done` and `contradicted`, cite observed
+lines that support the claim using the review citation format above.
+
+A split task can name a parent executor report under `00-input/local`, `git`, `ssh`
+or `checks` in its `Read` list. Taskrail binds selected report material to the
+reviewed plan and gives the assigned child a read-only copy under
+`00-input/plan-reports/`. Relevant command receipts and captured streams travel
+with the report. A line range is a starting window into it. For a large JSON
+report, use its original path in `Read`. The child can make its own readable view.
+The receipt describes the original execution. Claims about the changed tree need
+current verification.
 
 `Files` contains exact paths only. A rejected pattern or inline explanation reports
 the actual bullet's line number, including blank lines; valid bullets stay intact.
 Replace patterns with discovered files and move scope explanations to `Notes`. Backtick-quote literal paths with spaces, commas or brackets. A bulleted task field such as `- Required checks: none` starts that field. Put local verification in the owning task’s `Verify` field.
+The model sees those instructions in `Context.plan.steps[].verify`. The stored
+plan retains them under `steps[].checks`. See [check ownership](checks.md#select-and-bind-checks).
 
 Run instructions and result artifacts (`request.md`, `plan.md`, `review.md`,
 `recovery.md`) never prove completion, even if observed. Path feedback names the
@@ -324,10 +329,7 @@ snapshots for completed work, or declare a blocking evidence gap.
 `runtime` may be followed by `: <check>`; without it the requirement text is the check.
 `all tasks` (optionally followed by a parenthesized reason) makes the requirement an
 obligation of every task; it needs at least one task and is not a completed claim.
-`Read:` lists `path:from-to` hints for the implementer's first reads; these hints are
-not evidence that the planner observed the source. A split task starts from the
-reviewed plan and its independently validated citations. Launch-snapshot read windows
-resolve to the child’s inherited snapshot at the same line numbers.
+Launch-snapshot read hints resolve to the child’s inherited snapshot.
 
 Plan syntax, dependency parsing, scopes and field diagnostics are specified in
 [task format](task-format.md). Invalid plans receive all line-specific errors before
@@ -397,8 +399,8 @@ These bindings are reviewed with the plan. The engine materializes a closed
 `check_specs` record per selection: `id`, `recipe_id`, assigned runtime `criteria`,
 `phase` and empty `parameters`. Task headers may supply the same typed records.
 Tasks cannot introduce recipes, override commands or supply parameter overrides.
-Written verification remains explicit deferred work where no configured recipe is
-selected. The existing approval route still decides whether an exact
+Explicit runtime criteria without a selected recipe remain deferred when the plan
+assigns them to their delivery phase. The existing approval route still decides whether an exact
 configured request may execute; selection grants no permission. Local checks run
 after edits, Jenkins validation uses its delivery phase, and server checks require
 the operator's confirmation of the changes.

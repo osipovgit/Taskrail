@@ -27,14 +27,6 @@ def prepare(run):
     return target
 
 
-def grant(access, run):
-    """Let the implementer's profile read and write progress.md."""
-    target = prepare(run)
-    access["writable"] = [*access["writable"], target]
-    access["readable"].append(target)
-    access["readable"].extend(progress_archive.paths(run))
-
-
 def instructions(run):
     """How the implementer keeps its progress."""
     return prompt_texts.text("progress.format", path=path(run))

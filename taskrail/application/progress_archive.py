@@ -26,9 +26,3 @@ def excerpts(source, notice):
     beginning = source[:half].decode("utf-8", errors="ignore").encode()
     ending = source[-half:] if half else b""
     return beginning + notice + ending.decode("utf-8", errors="ignore").encode()
-
-
-def paths(run):
-    """Only exact files of this run are readable; no directory permission is granted."""
-    candidates = sorted((run / DIRECTORY).glob("*.md"))
-    return [path for path in candidates if path.is_file() and not path.is_symlink()]

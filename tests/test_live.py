@@ -1590,7 +1590,7 @@ class LiveTests(LiveFixture, unittest.TestCase):
         self.assertIn("return 1", (self.root / "hello.py").read_text())
         request = (run / "02-plan/request.md").read_text()
         self.assertIn("Choose split for independent deliverables", request)
-        self.assertIn("Split tasks have no fresh planning phase", request)
+        self.assertIn("Split tasks start at implementation", request)
         self.assertIn("Decision: split", (run / "plan.md").read_text())
 
     def test_design_discussion_leaves_a_reviewed_design_document(self):

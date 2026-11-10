@@ -4,6 +4,7 @@ import functools
 import hashlib
 import json
 import os
+from contextlib import suppress
 from pathlib import Path
 
 CHUNK_BYTES = 1024 * 1024
@@ -30,6 +31,20 @@ def changed(before, after):
 def digest(source_bytes):
     """Return the SHA-256 hex digest of bytes."""
     return hashlib.sha256(source_bytes).hexdigest()
+
+
+def bounded_bytes(path, limit):
+    """Read a small regular file once. A vanished or growing file is an unavailable input."""
+    with suppress(OSError):
+        if path is None or not path.is_file() or path.is_symlink():
+            return None
+        if path.stat().st_size > limit:
+            return None
+        with path.open("rb") as stream:
+            raw = stream.read(limit + 1)
+        if len(raw) <= limit:
+            return raw
+    return None
 
 
 def stream_digest(path):

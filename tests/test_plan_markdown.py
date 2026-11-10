@@ -316,6 +316,42 @@ class PlanDocumentTests(unittest.TestCase):
         self.assertEqual(prose["steps"][0]["read"], ["/repo/a file.yml:1-2"])
         self.assertIn("(project/b:99)", prose["steps"][0]["notes"])
 
+    def test_future_files_can_mix_with_windows_but_never_prove_completion(self):
+        text = PLAN.replace(
+            "Done when:",
+            "Read: project/README, `project/src/App [main], v2.java` (entry point); lib.py:3-7\n"
+            "- `project/report:9`:2-4, trailing-dot.\n"
+            "Done when:",
+            1,
+        )
+        step = payload(text, REQUIREMENTS, ROOTS)["steps"][0]
+        self.assertEqual(
+            step["read"],
+            [
+                "/repo/README",
+                "/repo/src/App [main], v2.java",
+                "/repo/lib.py:3-7",
+                "/repo/report:9:2-4",
+                "/repo/trailing-dot.",
+            ],
+        )
+        self.assertIn("(entry point)", step["notes"])
+        with self.assertRaisesRegex(ValueError, "cite the lines"):
+            payload(
+                PLAN.replace("project/README.md:12-18", "project/README.md"), REQUIREMENTS, ROOTS
+            )
+        for invalid in ("lib.py:bad", "lib.py:7-3", "src/*.py", "src/", "."):
+            with self.subTest(invalid=invalid), self.assertRaisesRegex(ValueError, "Read"):
+                payload(text.replace("lib.py:3-7", invalid), REQUIREMENTS, ROOTS)
+
+    def test_a_read_hint_in_multiple_roots_must_identify_its_file(self):
+        roots = dict(project="/repo", other="/second")
+        text = PLAN.replace("Done when:", "Read: other/README\nDone when:", 1)
+        self.assertEqual(payload(text, REQUIREMENTS, roots)["steps"][0]["read"], ["/second/README"])
+        for hint in ("README", "missing/README:3"):
+            with self.subTest(hint=hint), self.assertRaisesRegex(ValueError, "Read"):
+                payload(text.replace("other/README", hint), REQUIREMENTS, roots)
+
     def test_a_forgiving_plan_becomes_the_stored_result(self):
         plan = payload(PLAN, REQUIREMENTS, ROOTS)
         self.assertEqual((plan["status"], plan["decision"]), ("PLAN_READY", "split"))

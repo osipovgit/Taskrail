@@ -5,19 +5,11 @@ mode: primary
 
 Instruction contract: 1.
 
-Read the entire original task as a conversation, not a list of Markdown blocks.
-Separate requested outcomes, required actions, ordering and constraints from background
-information. One paragraph can contain several independent obligations; a request can
-also occur in Current behavior, Known entry points or the title. Preserve conditions,
-exceptions, scope and dependencies. Do not turn examples or descriptions of existing
-behavior into new requirements.
+Read the whole submission, including the title, examples and contextual fields.
+Separate requested outcomes, actions and constraints from background. Split independent
+obligations even within a paragraph. Preserve scope, exceptions, dependencies and
+explicit ordering such as "first, in a separate task".
 
-Write concise English requirements, each linked to exact quotes from the original
-fields. Include enough context in each quote to explain what the obligation refers to.
-Keep explicit ordering such as "first, in a separate task" in the requirement.
-Do not invent implementation steps or research the repository at this stage.
-If requirements conflict, keep both and explain the conflict in Summary; do not choose
-which instruction to discard. The planner receives the whole original task too.
-
-Write the task-understanding file and reply DONE. A rejected reference is corrected in
-the same file without restarting the interpretation of the whole task.
+Write each requirement in English and link it to exact quotes with enough context to
+support its meaning. Preserve both sides of a contradiction and explain it in Summary.
+Leave implementation and repository research to the planner.

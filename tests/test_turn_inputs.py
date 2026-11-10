@@ -138,7 +138,7 @@ class TurnInputTests(unittest.TestCase):
         target.write_text(original)
         progress_file.prepare(self.run)
         self.assertLessEqual(target.stat().st_size, progress_archive.MAX_BYTES)
-        archives = progress_archive.paths(self.run)
+        archives = artifact_access.progress_archives(self.run)
         self.assertEqual(len(archives), 1)
         self.assertEqual(archives[0].read_text(), original)
         self.assertIn("Finish the boundary check", target.read_text())
@@ -146,10 +146,6 @@ class TurnInputTests(unittest.TestCase):
         self.assertIn(archives[0], inputs)
         self.assertNotIn(archives[0].parent, inputs)
         self.assertNotIn(self.run / "run.json", inputs)
-        access = dict(writable=[], readable=[])
-        progress_file.grant(access, self.run)
-        self.assertIn(archives[0], access["readable"])
-        self.assertEqual(access["writable"], [target])
 
     def test_large_changed_file_inventory_has_a_bounded_handoff(self):
         workflow = SimpleNamespace(run=self.run, config=dict(roots={"repo": self.run}))
@@ -169,7 +165,7 @@ class ProgressHandoffTests(LiveFixture, unittest.TestCase):
         self.assertEqual(writers[0]["session_turns"], 2)
         self.assertEqual(writers[0]["session_id"], "ses1")
         self.assertGreater((run / "progress.md").stat().st_size, 1900000)
-        self.assertEqual(progress_archive.paths(run), [])
+        self.assertEqual(artifact_access.progress_archives(run), [])
         actions = json.loads((run / "local-actions.json").read_text())
         self.assertEqual(len(actions), 1)
         self.assertEqual(actions[0]["status"], "SUCCEEDED")
@@ -182,7 +178,7 @@ class ProgressHandoffTests(LiveFixture, unittest.TestCase):
         self.assertEqual(len(writers), 2)
         self.assertEqual(writers[0]["status"], "CONTEXT_EXCEEDED")
         self.assertLessEqual(writers[1]["context_budget"]["attached_bytes"], 8192)
-        archives = progress_archive.paths(run)
+        archives = artifact_access.progress_archives(run)
         self.assertEqual(len(archives), 1)
         self.assertGreater(archives[0].stat().st_size, 1900000)
         profile = json.loads(

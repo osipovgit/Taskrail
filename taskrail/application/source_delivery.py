@@ -16,17 +16,29 @@ def public(packet):
 
 
 def append(packet, entry):
-    """Trim a window to the remaining serialized budget, avoiding repeated positions."""
-    entry[LINES] = novel_lines(packet, entry)
+    """Try the full window, then bisect for the longest prefix fitting this packet."""
+    rows = list(novel_lines(packet, entry).items())
     position = len(packet) + 1
     entry["handle"] = f"S{position}"
-    while entry[LINES]:
-        proposed = public([*packet, entry])
-        rendered = json.dumps(proposed, ensure_ascii=False, indent=2)
-        if len(rendered.encode()) <= PACKET_BYTES:
-            packet.append(entry)
-            return
-        entry[LINES].popitem()
+    lower, upper = 0, len(rows)
+    count = upper
+    while lower < upper:
+        entry[LINES] = dict(rows[:count])
+        if fits(packet, entry):
+            lower = count
+        else:
+            upper = count - 1
+        count = (lower + upper + 1) // 2
+    entry[LINES] = dict(rows[:count])
+    if count:
+        packet.append(entry)
+
+
+def fits(packet, entry):
+    """Measure exactly the serialized public representation sent to the model."""
+    proposed = public([*packet, entry])
+    rendered = json.dumps(proposed, ensure_ascii=False, indent=2)
+    return len(rendered.encode()) <= PACKET_BYTES
 
 
 def novel_lines(packet, entry):

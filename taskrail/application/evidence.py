@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 
 from taskrail.application.recovery import complete_evidence
-from taskrail.core.files import atomic_json
+from taskrail.core.files import atomic_json, stream_digest
 
 OMITTED = "omitted"
 RECORDS = "records"
@@ -17,7 +17,7 @@ MAX_CHARACTERS = 240000
 def fingerprint(path):
     """Hash bytes only for an existing regular source file."""
     if path.is_file() and not path.is_symlink():
-        return hashlib.sha256(path.read_bytes()).hexdigest()
+        return stream_digest(path)
     return None
 
 

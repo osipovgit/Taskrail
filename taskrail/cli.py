@@ -52,7 +52,7 @@ def run_command(argv):
 def run_arguments(argv):
     """Arguments of a fresh run."""
     parser = argparse.ArgumentParser(
-        description="Run a task on original projects: plan, implement, check, review. Controlled Git access; no full copies or automatic rollback."
+        description="Run a task in linked Git worktrees with independent plan and result review."
     )
     parser.add_argument(
         "task", help="Task Markdown file; taskrail-task header declares project roots"

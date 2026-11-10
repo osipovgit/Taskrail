@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from taskrail.application import reviewed_artifacts
+from taskrail.application import plan_reports, reviewed_artifacts
 from taskrail.core import prompt_texts, schema
 from taskrail.core.paths import tool_paths
 
@@ -40,7 +40,7 @@ def accepts(claim, payload, context):
     return True
 
 
-def verify(context):
+def verify(context, *, approving=False):
     """Both readable plan copies and the result must still match the proposal being reviewed."""
     files = sources(context)
     schema.require(
@@ -51,6 +51,8 @@ def verify(context):
     expected = tool_paths(context["plan"], context["roots"])
     matching = recorded == expected and markdown_matches(files)
     schema.require(matching, prompt_texts.diagnostic("validation.plan_review_changed"))
+    if approving:
+        plan_reports.bind(recorded, context, verify=True)
 
 
 def regular(path):

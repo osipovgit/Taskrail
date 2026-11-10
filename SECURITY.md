@@ -24,11 +24,11 @@ Read [access routes](docs/access.md) before deployment. In short:
 
 - The web UI binds to `127.0.0.1` and is not a public or multi-user service.
 - opencode permission profiles are policy, not an operating-system sandbox. Project
-  code you approve to run is trusted code.
-- Agents and approved local commands receive no secret-shaped environment
-  variables; only opencode keeps provider keys that it needs.
-- Remote actions run only through the separate SSH executor after root approval of
-  the exact request digest.
+  code executed by local commands runs under the configured sandbox or host policy.
+- Local commands receive a filtered environment. The opencode process also receives
+  the allowlisted provider variables and any explicit `agent_env_allow` additions.
+- SSH actions require root approval of the exact request digest. Jenkins uses
+  the same executor and its per-job build approval settings.
 
 Reports that depend on running hostile project content, granting an untrusted local
 user access to your account, or approving a malicious command are outside this
