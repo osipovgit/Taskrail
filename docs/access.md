@@ -45,6 +45,11 @@ generated dependencies; [deployment](deployment.md) owns configuration details.
 Executor JSON responses and turn rules are defined in [contracts](contracts.md#executor-requests).
 Requests are not execution proof. Internal indexes are not model inputs; use supplied
 source/recovery files and executor snapshots. The manifest lists existing inputs.
+Implementation requests separate planned files from writable roots or exact file grants.
+Protected paths, Git metadata and preserved Follow-up files remain excluded.
+`scheduled_checks` names the local gates the server will run; agents can request other
+task diagnostics with `LOCAL_REQUEST`.
+
 `Context.check_catalog` lists recipe IDs during planning; `00-input/checks/`
 contains evidence created when a configured check runs. Native permission denials
 show a short reason in Activity. The raw opencode event retains the ruleset.

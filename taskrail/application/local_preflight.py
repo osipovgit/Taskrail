@@ -33,7 +33,11 @@ def required(workflow):
     """Remote delivery phases and research without bound checks need no local tools."""
     if workflow.config.get("phase") in {"validation", "server"}:
         return []
-    return check_selection.applicable(workflow) if check_stage.required(workflow) else []
+    return (
+        check_selection.applicable(workflow.config, workflow.state["requirements"])
+        if check_stage.required(workflow)
+        else []
+    )
 
 
 def availability(workflow, check):

@@ -40,6 +40,14 @@ class TaskBranchRunTests(LiveFixture, unittest.TestCase):
 
     def test_the_implementer_may_change_files_beyond_the_plan(self):
         run, state, worktree = self.isolated("scope")
+        folder = next(run.glob("*-implement"))
+        request = (folder / "request.md").read_text()
+        context, _ = json.JSONDecoder().raw_decode(request.split("Context:\n", 1)[1])
+        self.assertEqual(context["planned_files"], [str(worktree / "hello.py")])
+        self.assertEqual(context["writable_roots"], [str(worktree)])
+        self.assertNotIn("allowed_files", context)
+        self.assertNotIn("Context.check_catalog lists", request)
+        self.assertIn("scheduled_checks", context)
         self.assertEqual(state[task_branch.BEYOND], ["project/unrelated.txt"])
         diff = (run / "changes.diff").read_text()
         self.assertIn("-user dirty work", diff)

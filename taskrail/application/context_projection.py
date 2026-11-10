@@ -10,6 +10,7 @@ from taskrail.application import (
     source_packet,
     source_windows,
 )
+from taskrail.application.implementation_context import writer
 from taskrail.application.original_checkout import status_path
 from taskrail.application.workspace_paths import public_mapping
 from taskrail.core import protected_paths, requirements, task_spec
@@ -41,12 +42,13 @@ def request_context(config, execution, state, run):
         if state.get("results", {}).get("plan")
         else None,
         imported_draft=instruction_sources.imported_draft(run, execution[0]),
-        allowed_files=tool_paths(execution[2], roots) if execution[0] == "implementer" else [],
         feedback=feedback_context(execution[3], roots),
         checks=tool_paths(state["checks"], roots),
         diff_file=str(run / "changes.diff") if (run / "changes.diff").exists() else None,
         preimages=preimage_context(state["preimages"], roots, run),
     )
+    if execution[0] == "implementer":
+        context.update(writer(config, execution, state))
     if context["stage"] in {"planner", "plan-reviewer", "reviewer"}:
         context["diagnostic_changes"] = plan_projection.diagnostic_changes(state, roots)
     context["original_status"] = status_path(run)
@@ -68,7 +70,7 @@ def packet_context(config, run, stage, plan):
 
 def included(key, entry):
     """Empty optional projections do not consume model context."""
-    return key == "check_catalog" or entry not in (None, [], {})
+    return key in {"check_catalog", "scheduled_checks"} or entry not in (None, [], {})
 
 
 def preimage_context(preimages, roots, run):

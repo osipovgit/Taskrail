@@ -8,7 +8,7 @@ from taskrail.application import (
     stage_artifacts,
 )
 from taskrail.application.artifacts import new_stage
-from taskrail.application.planned_paths import git_files
+from taskrail.application.planned_paths import git_files, writable_roots
 from taskrail.application.recovery import write_evidence
 from taskrail.core import prompt_texts, protected_paths
 from taskrail.infrastructure import artifact_access, opencode_api
@@ -40,11 +40,8 @@ def open_record(workflow, mode):
 
 def planned_files(workflow):
     """Approved files the current stage may write; on a task branch, its whole roots."""
-    roots = workflow.config["roots"]
     files = git_files(workflow)
-    if files and workflow.config.get("task_branch"):
-        files.extend(roots.values())
-    return files
+    return [*files, *writable_roots(workflow.config, files)]
 
 
 def attempt_prompt(workflow, active, request, recovery):

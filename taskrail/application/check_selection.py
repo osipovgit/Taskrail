@@ -10,18 +10,18 @@ CWD = "cwd"
 RECIPE = "recipe"
 
 
-def applicable(workflow):
-    """The same effective commands decide scheduling and execution."""
-    checks = assigned(workflow.config, workflow.state["requirements"])
+def applicable(config, requirements):
+    """Effective configured gates for this task, in execution order."""
+    checks = assigned(config, requirements)
     bound = {check["spec"].get("recipe_id") for check in checks}
-    for gate in step_checks.selected(workflow.config):
+    for gate in step_checks.selected(config):
         if gate["spec"]["recipe_id"] not in bound:
             checks.append(gate)
     covered = {protocol.fingerprint(check["recipe"]["request"]) for check in checks}
-    for command in workflow.config.get("verify_commands", []):
+    for command in config.get("verify_commands", []):
         if protocol.fingerprint(command) not in covered:
             checks.append(configured_command(command))
-    return mapped_checks(checks, command_roots(workflow.config))
+    return mapped_checks(checks, command_roots(config))
 
 
 def command_roots(config):

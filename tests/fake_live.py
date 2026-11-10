@@ -365,8 +365,8 @@ if role == "plan-reviewer":
         assert Path(name).is_absolute(), name
         Path(name).read_bytes()
 if role == "implementer":
-    assert all(Path(name).is_absolute() for name in context["allowed_files"])
-    for name in context["allowed_files"]:
+    assert all(Path(name).is_absolute() for name in context["planned_files"])
+    for name in context["planned_files"]:
         relative = os.path.relpath(name, root)
         assert header["permission"]["edit"].get(relative) == "allow", relative
 if mode == "denied" and role == "plan-reviewer":
