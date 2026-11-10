@@ -29,6 +29,9 @@ def extract(text):
         isinstance(payload["reason"], str) and bool(payload["reason"].strip()),
         "Git request needs a reason",
     )
+    schema.require(schema.valid_argv(payload["argv"]), "Invalid Git argument list")
+    specification = schema.SCHEMAS["git-request"]["properties"][ROOT]
+    schema.validate(payload[ROOT], specification, "/root")
     return payload
 
 

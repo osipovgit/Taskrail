@@ -13,14 +13,16 @@ READS = frozenset(("status", "console", "tests"))
 def validate(payload, servers):
     """A known server and job, an allowed operation, build reference and parameters."""
     require(isinstance(payload, dict) and set(payload) == FIELDS, "Jenkins request fields missing")
-    require(payload["server"] in servers, "Unknown Jenkins server")
-    jobs = servers[payload["server"]]["jobs"]
-    require(payload["job"] in jobs, "Unknown Jenkins job")
-    require(payload[OPERATION] in READS | {BUILD}, "Unknown Jenkins operation")
+    server = protocol.label(payload["server"])
+    job = protocol.label(payload["job"])
+    require(server in servers, "Unknown Jenkins server")
+    jobs = servers[server]["jobs"]
+    require(job in jobs, "Unknown Jenkins job")
+    require(payload[OPERATION] in (*READS, BUILD), "Unknown Jenkins operation")
     protocol.text(payload["reason"])
     action_schema.timeout(payload["timeout_seconds"])
     check_build(payload)
-    check_arguments(payload, jobs[payload["job"]][ARGUMENTS])
+    check_arguments(payload, jobs[job][ARGUMENTS])
     return payload
 
 

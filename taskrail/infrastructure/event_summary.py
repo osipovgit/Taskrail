@@ -136,6 +136,7 @@ class EventSummary:
             ),
             completed=final is not None,
             final_text=text,
+            final_message_id=final,
         )
         for failure in summary["tool_errors"]:
             summary[ERRORS].remove(failure[ERROR])

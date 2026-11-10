@@ -169,10 +169,11 @@ does not assign requirements to files by matching words. The planner receives th
 original task and explicit entry points and chooses its investigation from those inputs
 and source dependencies. Long command output also
 comes with a digest of its severities, most mentioned files and rules
-(`interactions/output_digest.py`). Git and local requests are shown as one filled-in
-example each; SSH and Jenkins requests keep compact JSON schemas, one per line. Those schemas use the same available targets/jobs and stage
-permissions as their instructions (`application/response_format.py`); an absent,
-unreachable or empty executor advertises neither capability. All roles run with automatic compaction disabled.
+(`interactions/output_digest.py`). After task understanding, each stage receives one
+filled-in example per available executor. Git and local examples use a declared
+worktree. SSH and Jenkins use the same configured targets and jobs as their route
+instructions (`application/response_format.py`). All roles use sessions with automatic
+compaction disabled.
 Request, role and attachment byte counts are diagnostics, not admission
 limits. Context enforcement uses the latest provider-reported input including cache,
 explicit overflow errors and compaction events. Missing usage stays unknown.

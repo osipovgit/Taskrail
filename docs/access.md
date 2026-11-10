@@ -66,7 +66,7 @@ See [SSH executor](ssh-executor.md) and [Git access](git-access.md).
 
 ## Local commands
 
-All roles can request installed linters, tests and diagnostic commands with
+Planning, implementation and review can request installed linters, tests and diagnostics with
 `LOCAL_REQUEST`. Where [bubblewrap](deployment.md#local-command-sandbox) works, every
 request runs at once in a sandbox, without a decision, and is recorded in the
 approval ledger with `"rule": "sandbox"`:

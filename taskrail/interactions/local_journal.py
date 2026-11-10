@@ -2,6 +2,7 @@
 
 import json
 import uuid
+from pathlib import Path
 
 from taskrail.core.files import atomic_json, digest
 
@@ -18,8 +19,10 @@ def signature(payload):
 
     A command asked to run on the host instead of the sandbox is a different action.
     """
-    named = ("cwd", "argv", "sandbox")
-    operation = {key: payload[key] for key in named if key in payload}
+    directory = Path(payload["cwd"])
+    operation = dict(cwd=str(directory), argv=payload["argv"])
+    if payload.get("sandbox") is False:
+        operation["sandbox"] = False
     encoded = json.dumps(operation, sort_keys=True, separators=(",", ":")).encode()
     return digest(encoded)
 

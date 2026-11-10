@@ -229,9 +229,10 @@ Host execution follows `host_commands`. Remote operations use the
 [SSH and Jenkins executor](ssh-executor.md) and its approval rules. A
 no-change result requires independent plan review and sufficient evidence.
 
-An answer-only task rejects any implementation plan and never reaches the
-implementer, even with an imported plan. The answer appears in the planner
-conclusion and is independently reviewed.
+Answer-only and design tasks start with a requirements list and an `## Answer`
+section. Use `Decision: no change` for a supported answer or `Decision: blocked`
+with a precise gap when required input is missing. Both go through independent
+review. These modes never start implementation, even with an imported plan.
 
 Each submission creates a separate run. After a run stops, a new Goal starts another
 complete planning pass with explicit prior evidence; it never messages an in-flight

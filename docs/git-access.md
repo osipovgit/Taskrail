@@ -1,7 +1,7 @@
 # Controlled Git access
 
-All roles can inspect Git history, commits, diffs, branches, tags and working-tree
-status. Each declared root must be a Git repository top level with an existing commit.
+Planning, implementation and review can inspect Git history, commits, diffs, branches,
+tags and working-tree status. Each declared root must be a Git repository top level with an existing commit.
 Standalone tasks use linked worktrees; child tasks use their parent branch. Scope
 history with `-- <project>` when only a subdirectory is relevant. The original checkout
 remains unchanged.

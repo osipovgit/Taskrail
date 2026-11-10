@@ -3,11 +3,22 @@
 import json
 import re
 
+FENCE = re.compile(r"^```(?:json)?[ \t]*\r?\n(.*?)\r?\n[ \t]*```$", re.I | re.S)
+
+
+def body(response):
+    """Remove a single enclosing Markdown JSON fence, keeping the entire message inside."""
+    stripped = response.strip()
+    fence = FENCE.fullmatch(stripped)
+    return fence[1].strip() if fence else stripped
+
 
 def read_container(fragment, pairs_hook):
     """Allow bracketed prose, but never rescue children of malformed JSON."""
     try:
         return json.JSONDecoder(object_pairs_hook=pairs_hook).raw_decode(fragment)
+    except RecursionError as error:
+        raise ValueError("JSON nesting exceeds the decoder limit") from error
     except json.JSONDecodeError as error:
         if re.match(r"\[[A-Za-z][A-Za-z0-9 _-]*\]", fragment):
             return None

@@ -33,6 +33,8 @@ Stable requirement IDs stay server-side; the model uses labels.
 
 Task understanding writes `understanding.json`, a resumable draft containing a summary
 and obligations with `text`, `kind` (`task` or `constraint`) and exact source quotes.
+An obligation citing the Constraints field uses `kind: "constraint"`. Understanding
+can edit its draft and correct validation errors. It has no executor routes.
 Each source names an input field and a verbatim quote, plus a one-based occurrence when
 the quote repeats. The server checks those references, resolves character spans and
 assigns IDs. These checks prove provenance, not semantic completeness: the planner and
@@ -48,16 +50,17 @@ unchanged obligations retain IDs, and the saved plan must pass validation and in
 review again. It cannot alter an authenticated child's assignment. Continue retains
 the accepted requirement list and resumes its checkpointed stage.
 
-The planner writes `plan.md` and a reviewer `review.md`,
-both in the run directory and attached to every turn. The planner replies
-`Ready for server plan checks.` and the reviewer replies `DONE`. The
-implementer ends with `DONE:` or `BLOCKED:`. The server derives the canonical stored
-result, version 1, from them. Executor requests keep version 1; an input-correction
-message is a workflow transition and executes no command. Unknown wire versions and unsupported run or checkpoint versions are
-rejected. Continuations and validation feedback retain the stage's original format.
-The request parser also accepts one unambiguous object surrounded by prose or
-Markdown; the surrounding text is neither evidence nor instructions.
-Multiple objects, incomplete JSON, unknown fields and duplicate keys are invalid.
+| Stage | What the model submits |
+| --- | --- |
+| Understanding | Write `understanding.json` and reply `DONE`. |
+| Planning | Write `plan.md` and reply `Ready for server plan checks.` |
+| Plan or result review | Write `review.md` and reply `DONE`. |
+| Implementation | Reply `DONE: <summary and commit rationale>` or `BLOCKED: <missing prerequisite>`. |
+
+The run attaches the stage's writable draft on each turn. The server validates the
+submission and derives the stored result. Corrections retain the same contract.
+A completion can describe a command it ran or quote a request without dispatching
+that command. A separate executor message requests exactly one operation.
 All result and tool paths are canonical absolute paths. Root aliases in task
 metadata are labels; the engine resolves them.
 
@@ -226,8 +229,8 @@ seed a new source packet, but are not proof that its receiver read them.
 observations needed for validation. An oversized record is skipped without dropping other useful
 records. Changed or unseen content cannot justify approval. A
 matching citation proves provenance, not the model's interpretation, so independent
-review remains necessary. Only server records prove executed checks. The exact
-schema is supplied in each request; do not copy it into custom roles.
+review remains necessary. Only server records prove executed checks. Each stage
+receives its output instructions and an example of each available executor request.
 
 Recovery never upgrades a failed or partial read to source evidence. Required
 unresolved proof remains a blocking gap. The session receives the complete validation feedback. Repeated failures on
@@ -348,31 +351,38 @@ engine. Stages record role source/hash, contract hash and request hash for UI pr
 
 ## Executor requests
 
-Executor requests replace the final result for one turn: return one complete
-GIT_REQUEST, LOCAL_REQUEST or (when advertised) ACTION_REQUEST or JENKINS_REQUEST object as the entire
-response and end the turn. They are not model function tools. The server validates
-the request, waits for any required approval, records the result and resumes the
-same opencode session in the same stage. Final schemas and evidence checks are
-unchanged. See [access](access.md) and [Git access](git-access.md).
+To request an operation, send one JSON object as the entire message. The examples
+use a declared working root for Git and local commands. SSH and Jenkins examples
+use configured aliases and appear only when the route is available. The server
+validates the request, obtains any required approval, records the result and resumes
+the same opencode session. See [access](access.md) and [Git access](git-access.md).
 
 ```json
 {"schema_version":1,"status":"LOCAL_REQUEST","cwd":"/absolute/declared/root","argv":["python3","-m","unittest"],"reason":"Run the unit tests without changing source"}
 ```
 
-Every request type is recognized the same way (`interactions/request_envelope.py`):
-exactly one JSON object whose `status` names a request, with prose or a Markdown fence
-around it ignored. Only a Git request that can change state must be the entire
-response. A local command is taken as the model meant it (`interactions/local_intake.py`):
-a missing `status` (when `argv` is given) or `schema_version` is filled in, other fields
-are dropped, `command` or `cmd` may name the command, a command string is split, or run
-with `bash -c` when it uses shell syntax, and a missing or relative `cwd` resolves
-inside the single root or the named root alias. The command policy, the sandbox and any
-approval see the resulting argv and cwd. A request that still has a wrong shape (a wrong
-version, a non-list command, a wrong status, a wrapped Git write) runs nothing: the same
-session is told what to fix, with the same progress detection as result validation. Multiple objects, duplicate
-keys and malformed JSON are not requests. `cwd` must end up a declared root or an
-existing directory inside one. Planner and reviewer stages cannot request `--fix`,
-`--write`, in-place or `sed -i` options; such a request is rejected before approval.
+Git writes require bare JSON. Local, SSH and Jenkins requests also accept a single
+Markdown fence around the entire object. A read-only Git request can include
+surrounding prose. Quoting an operation in a submission never starts it.
+Ambiguous or malformed command messages receive correction in the same session.
+This includes duplicate keys, several objects, invalid versions, conflicting
+command aliases and fields from two different executors. Corrections run no command.
+
+For an unambiguous local request, the server can infer the status and version,
+accept `command` or `cmd` for `argv`, and resolve a relative `cwd` against an
+explicit root alias or the sole declared root. A command string becomes an argument
+list or, for shell syntax, a Bash command. The effective `cwd` and `argv` go through
+the same policy and approval as the canonical form. Inspection stages reject fix
+and in-place options before approval.
+
+A provider session and final message ID identify a delivery independently of its
+contents. The server reserves that identity before dispatch and stores the reply.
+Redelivery of the same operation returns its recorded reply. If dispatch was
+interrupted before a reply was saved, the agent inspects the action journal and
+current state. A new message can request a fresh observation. Within a stage,
+successful reads of unchanged project files with eligible system commands can
+return a pointer to the earlier receipt. Linters, builds and queries of current
+external state can produce new observations.
 
 Command permissions, sandbox boundaries, approvals and source/Git checks are owned
 by [access](access.md). Remote request examples and executor setup are in

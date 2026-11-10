@@ -525,8 +525,8 @@ class LiveTests(LiveFixture, unittest.TestCase):
         self.assertIsInstance(header["permission"]["read"], dict)
         self.assertIn("Saved earlier plan:", (run / "02-plan/request.md").read_text())
 
-    def test_live_prompt_has_complete_schema(self):
-        run, _status, _state = self.run_mode()
+    def test_stage_prompt_examples_use_the_current_worktree(self):
+        run, _status, state = self.run_mode()
         prompt = (run / "03-plan-review/request.md").read_text()
         self.assertIn(f"REVIEW FILE: write your review in {run / 'review.md'}", prompt)
         formats = prompt.split("Formats:\n", 1)[1].split("\nContext:", 1)[0]
@@ -538,11 +538,16 @@ class LiveTests(LiveFixture, unittest.TestCase):
         self.assertIn("[R1]\nReturn 2", planning)
         self.assertEqual(planning.count("Return 2"), 1)
         requests = planning.split("Formats:\n", 1)[1].split("\nContext:")[0]
-        examples = [line.partition(": ")[2] for line in requests.splitlines()]
-        decoded = [json.JSONDecoder().raw_decode(example)[0] for example in examples]
+        decoded = [
+            json.loads(line.partition(": ")[2])
+            for line in requests.splitlines()
+            if line.startswith("Example ")
+        ]
         self.assertEqual(
             [request["status"] for request in decoded], ["GIT_REQUEST", "LOCAL_REQUEST"]
         )
+        self.assertEqual(decoded[0]["root"], state["roots"]["project"])
+        self.assertEqual(decoded[1]["cwd"], decoded[0]["root"])
         self.assertIn("Decision: single", (run / "02-plan/plan.md").read_text())
         self.assertNotIn("NEEDS_INFO", (run / "00-input/agents/planner.md").read_text())
 
@@ -1055,6 +1060,7 @@ class LiveTests(LiveFixture, unittest.TestCase):
             "plan.md: line 3: Decision must be split, single, no change or blocked", feedback
         )
         self.assertIn("line 7: R1 has no outcome", feedback)
+        self.assertNotIn("expected 'R<n> → <outcome>'", feedback)
         header = json.loads((run / "02-plan/agent.md").read_text().split("---")[1])
         self.assertEqual(header["permission"]["edit"][str(run / "plan.md")], "allow")
         self.assertEqual(header["permission"]["edit"]["*"], "deny")
@@ -1543,8 +1549,12 @@ class LiveTests(LiveFixture, unittest.TestCase):
         self.assertEqual(status, "READY_FOR_REVIEW", state.get("summary"))
         planner = [stage for stage in state["stages"] if stage["stage"] == "planner"]
         self.assertEqual([stage["mode"] for stage in planner], ["model"])
-        prompt = (run / planner[0]["directory"] / "tool-result.md").read_text()
-        self.assertIn('"status":"LOCAL_REQUEST"', prompt)
+        self.assertEqual(planner[0]["session_turns"], 2)
+        stage = run / planner[0]["directory"]
+        feedback = (stage / "tool-result.md").read_text()
+        self.assertIn("No executor command ran", feedback)
+        self.assertIn(str(stage / "request.md"), feedback)
+        self.assertIn('"status":"LOCAL_REQUEST"', (stage / "request.md").read_text())
 
     def test_failed_writer_response_can_continue_with_an_operator_note(self):
         run, status, state = self.run_mode("writer-prose-always")

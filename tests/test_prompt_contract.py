@@ -289,9 +289,9 @@ class RequestBudgetTests(LiveFixture, unittest.TestCase):
                             "understanding",
                             "implementer",
                         }
-                        self.assertEqual('"status":{"const":"ACTION_REQUEST"}' in request, ssh)
+                        self.assertEqual("Example ACTION_REQUEST:" in request, ssh)
                         self.assertEqual(
-                            '"status":{"const":"JENKINS_REQUEST"}' in request,
+                            "Example JENKINS_REQUEST:" in request,
                             bool(catalog.get("jenkins")) and stage != "understanding",
                         )
 
@@ -328,7 +328,7 @@ class RequestBudgetTests(LiveFixture, unittest.TestCase):
         self.assertIn("Push needs personal approval", requests["04-implement"])
         self.assertNotIn("push", requests["06-review"].split("Local commands:")[0])
         self.assertNotIn('"findings"', requests["04-implement"])
-        self.assertEqual(requests["02-plan"].count("as your entire message"), 3)
+        self.assertEqual(requests["02-plan"].count("as your entire message"), 1)
         progress = run / "progress.md"
         self.assertIn(
             f"PROGRESS FILE: {progress}", requests["04-implement"].replace("/B", str(self.base))

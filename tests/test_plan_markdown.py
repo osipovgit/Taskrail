@@ -468,6 +468,24 @@ class PlanDocumentTests(unittest.TestCase):
 
 
 class PlanFileTests(unittest.TestCase):
+    def test_read_only_template_can_report_an_answer_or_a_required_gap_without_a_task(self):
+        requirement = dict(id="R-a", text="Explain the public API", kind="task")
+        with tempfile.TemporaryDirectory() as directory:
+            target = plan_file.prepare(Path(directory), [requirement], read_only=True)
+            template = target.read_text()
+        self.assertIn("## Answer", template)
+        self.assertNotIn("## T1", template)
+        for decision, outcome, status in (
+            ("no change", "done: project/api.py:1", "PLAN_READY"),
+            ("blocked", "gap: required API source is unavailable", "BLOCKED"),
+        ):
+            with self.subTest(decision=decision):
+                text = template.replace("<choose a decision>", decision).replace(
+                    "<outcome>", outcome
+                )
+                result = payload(text + "\nThe public API uses keys.", [requirement], ROOTS)
+                self.assertEqual((result["status"], result["steps"]), (status, []))
+
     def test_the_untouched_template_names_what_to_fill_in(self):
         with tempfile.TemporaryDirectory() as directory:
             run = Path(directory)

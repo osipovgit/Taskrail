@@ -4,21 +4,15 @@ import json
 
 from taskrail.application import execution_requests, execution_wait, jenkins_requests
 from taskrail.core import prompt_texts
-from taskrail.executor import client
+from taskrail.executor import client, jenkins_schema
 from taskrail.interactions import events, transcripts
 from taskrail.interactions.clock import ApprovalPause
 
 READ_SECONDS = 300
 
 
-def consume(actions, text):
-    """Handle a JENKINS_REQUEST; any other response is left to the next route."""
-    try:
-        payload = jenkins_requests.extract(text)
-    except ValueError as error:
-        return prompt_texts.text("feedback.jenkins_rejected", error=error)
-    if payload is None:
-        return None
+def consume(actions, payload):
+    """Submit a parsed request to the currently configured Jenkins executor."""
     event = events.begin(actions.folder, "jenkins", payload)
     try:
         response = routed(actions, payload)
@@ -44,7 +38,7 @@ def routed(actions, payload):
 def checked(payload):
     """The request validated against the jobs the executor currently offers."""
     servers = client.request(dict(operation="catalog"))["jenkins"]
-    return jenkins_requests.validate(payload, servers)
+    return jenkins_schema.validate(payload[jenkins_requests.JENKINS], servers)
 
 
 def build(session, request):
