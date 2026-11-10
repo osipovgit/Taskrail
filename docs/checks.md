@@ -103,6 +103,12 @@ verification command binds that execution to criteria rather than rerunning it.
 Written `Jenkins check:` and `Server check:` plan entries become the deferred
 verification of their delivery phase; they are never guessed into executable commands.
 
+The local stage summary counts passed, failed and skipped file syntax checks
+separately from scheduled project commands. It records confirmed starts, known
+non-starts and uncertain starts. Each command held back by a failed syntax or
+added-line check has its own reason. The stage card, report and next agent share
+the same summary, including when zero commands were scheduled.
+
 Local checks run after syntax checks. An approved no-change development plan still
 runs applicable mandatory `verify_commands` and selected local recipes. Plain
 answer/design research does not run engineering gates unless it explicitly binds

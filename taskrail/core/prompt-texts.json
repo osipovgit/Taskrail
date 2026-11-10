@@ -1,4 +1,6 @@
 {
+  "checks.summary": "File syntax: $passed passed, $failed failed, $skipped skipped. Project commands: $selected selected, $started started, $not_started not started, $uncertain start unknown.",
+  "checks.prerequisite": "Not started because a file syntax or added-line check failed.",
   "stage.planner": "Stage: planning.",
   "stage.plan-reviewer": "Stage: plan review. Compare Context.plan with the task and current source. Context.plan_result names its current accepted snapshot; earlier results and feedback may describe an obsolete plan. For decision blocked, independently check alternatives: gap for a missing prerequisite, fails with evidence for a viable route. Otherwise empty proposed_change_files claims no change is needed.",
   "stage.implementer": "Stage: implementation.",

@@ -81,6 +81,14 @@ async function main() {
   function all(node) {
     return [node, ...node.children.flatMap(all)];
   }
+  const emptySummary = 'File syntax: 0 passed, 0 failed, 0 skipped. Project commands: 0 selected.';
+  const emptyChecks = stages.stageCard({
+    ...stage,
+    stage: 'check',
+    result: [],
+    summary: emptySummary,
+  });
+  assert.ok(all(emptyChecks).some((node) => node.textContent === emptySummary));
   const writer = all(
     stages.stageCard({
       ...stage,

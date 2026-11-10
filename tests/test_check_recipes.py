@@ -107,8 +107,30 @@ class CheckRecipesTest(unittest.TestCase):
         self.assertEqual(checks[0]["execution_status"], "DECLINED")
         self.assertEqual(checks[0]["assessment"], "unknown")
         self.assertIn(decision["alternative"], checks[0]["detail"])
+        self.assertFalse(checks[0]["started"])
         self.assertEqual(check_results.read(self.run)[0]["assessment"]["status"], "unknown")
         self.assertEqual(check_results.trusted(self.run), {})
+
+    def test_interrupted_command_keeps_its_known_start_and_cannot_count_as_passed(self):
+        def time_out(payload, context):
+            context["process_started"] = True
+            raise ValueError("Local command timed out; inspect effects before retry")
+
+        with (
+            patch(
+                "taskrail.interactions.approval_policy.decision",
+                return_value=dict(decision="allow"),
+            ),
+            patch("taskrail.interactions.local.execute", side_effect=time_out) as invoke,
+        ):
+            (first,) = verify_commands.run_commands(self.workflow(), self.folder)
+            (retry,) = verify_commands.run_commands(self.workflow(), self.folder)
+        invoke.assert_called_once()
+        self.assertTrue(first["started"])
+        self.assertIn("timed out", first["detail"])
+        self.assertIsNone(retry["started"])
+        self.assertEqual(retry["status"], "UNVERIFIED")
+        self.assertIn("No replay", retry["detail"])
 
     def test_malformed_report_reaches_repair_with_observed_exit_and_parse_error(self):
         self.recipe["adapter"] = "junit"

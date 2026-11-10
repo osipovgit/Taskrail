@@ -10,6 +10,7 @@ from taskrail.application import (
     source_packet,
     source_windows,
 )
+from taskrail.application.check_outcomes import latest_summary
 from taskrail.application.dependency_checks import index as dependency_index
 from taskrail.application.implementation_context import writer
 from taskrail.application.implementation_submission import review_path
@@ -46,6 +47,7 @@ def request_context(config, execution, state, run):
         else None,
         imported_draft=instruction_sources.imported_draft(run, execution[0]),
         feedback=feedback_context(execution[3], roots),
+        check_summary=latest_summary(state),
         checks=tool_paths(state["checks"], roots),
         diff_file=str(run / "changes.diff") if (run / "changes.diff").exists() else None,
         preimages=preimage_context(state["preimages"], roots, run),

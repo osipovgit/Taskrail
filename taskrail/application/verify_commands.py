@@ -7,6 +7,7 @@ must not change files inside declared roots.
 import shlex
 
 from taskrail.application import check_outcomes, check_runner, check_selection
+from taskrail.core import prompt_texts
 
 TAIL_CHARACTERS = 2000
 STATUS = "status"
@@ -16,13 +17,23 @@ ARGV = "argv"
 RECIPE = "recipe"
 
 
-def run_commands(workflow, folder):
+def run_commands(workflow, folder, *, prerequisite_failed=False):
     """Run the commands whose cwd is a declared root of this run, in settings order."""
     selected = check_selection.applicable(workflow.config, workflow.state["requirements"])
+    if prerequisite_failed:
+        return [not_started(check) for check in selected]
     return [
         run_command(workflow, folder / LOG_NAME.format(number), chosen)
         for number, chosen in enumerate(selected, 1)
     ]
+
+
+def not_started(check):
+    """Keep scheduled commands visible when an earlier prerequisite failed."""
+    row = check_record(
+        check[RECIPE]["request"], "NOT_STARTED", prompt_texts.text("checks.prerequisite")
+    )
+    return dict(row, check_id=check["spec"]["id"], started=False)
 
 
 def run_command(workflow, log, check):
@@ -53,6 +64,7 @@ def outcome_record(command, outcome, recorded, log):
         check_record(command, status, detail),
         execution_status=outcome[STATUS],
         assessment=assessment[STATUS],
+        started=check_outcomes.observed_start(outcome),
         check_id=recorded["check_id"],
         result_id=recorded["id"],
     )

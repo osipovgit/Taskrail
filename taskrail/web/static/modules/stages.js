@@ -235,6 +235,7 @@ export function stageCard(stage, requirements = []) {
     list(card, 'Missing evidence', result.blocking_gaps);
     list(card, 'Not verified', result.unverified);
   } else if (Array.isArray(result)) {
+    if (stage.summary) card.append(el('p', stage.summary));
     for (const check of result) {
       const line = el('p');
       line.append(badge(check.status), el('span', check.file + ' — ' + check.detail));
