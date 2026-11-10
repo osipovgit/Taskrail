@@ -35,6 +35,9 @@ def model_inputs(run, folder):
     ]
     if (run / "00-input/original").is_dir():
         paths.append(run / "00-input/original")
+    dependency = run / "00-input/dependency-checks"
+    if dependency.is_dir() and not dependency.is_symlink():
+        paths.append(dependency)
     paths.extend(result_inputs(run))
     paths.extend(
         path

@@ -10,6 +10,7 @@ from taskrail.application import (
     source_packet,
     source_windows,
 )
+from taskrail.application.dependency_checks import index as dependency_index
 from taskrail.application.implementation_context import writer
 from taskrail.application.original_checkout import status_path
 from taskrail.application.workspace_paths import public_mapping
@@ -55,6 +56,7 @@ def request_context(config, execution, state, run):
     context["source_packet"] = packet_context(config, run, context["stage"], plan)
     context["source_views"] = source_guidance.inputs(config, plan, run)
     if config.get("reviewed_input"):
+        context["dependency_checks"] = dependency_index(run, config["task_spec"])
         context["task_file"] = str(run / "00-input/reviewed-task-spec.json")
     context.update(check_catalog.context(config, context["stage"], context["plan"]))
     return {key: entry for key, entry in context.items() if included(key, entry)}

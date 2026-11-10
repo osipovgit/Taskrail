@@ -2,7 +2,12 @@
 
 from pathlib import Path
 
-from taskrail.application import citation_review, evidence_scope, plan_review_evidence
+from taskrail.application import (
+    citation_review,
+    dependency_checks,
+    evidence_scope,
+    plan_review_evidence,
+)
 from taskrail.core import prompt_texts, schema
 
 EVIDENCE_FILES = "declared roots, verified source views, preimages or executor snapshots (not run artifacts such as changes.diff or recovery.md)"
@@ -10,6 +15,12 @@ EVIDENCE_FILES = "declared roots, verified source views, preimages or executor s
 
 def validate_paths(payload, context):
     """Report invalid citation paths together, tied to their requirement owners."""
+    directory = context["run"] / dependency_checks.DIRECTORY
+    if any(directory in Path(claim["path"]).parents for claim in payload["evidence"]):
+        spec = context.get("check_config", {}).get("task_spec", {})
+        schema.require(
+            dependency_checks.index(context["run"], spec), "Unauthenticated dependency checks"
+        )
     errors = []
     for claim in payload["evidence"]:
         roots = allowed_roots(claim, context)
@@ -37,10 +48,12 @@ def path_feedback(payload, claim, error, stage):
 
 def allowed_roots(claim, context):
     """Run artifacts remain excluded even if a broad project root contains the run."""
-    if context["run"] not in Path(claim["path"]).parents:
+    path = Path(claim["path"])
+    run = context["run"]
+    if run not in path.parents:
         return context["roots"]
     return dict(
-        evidence_scope.roots(context["run"], Path(claim["path"]), context["roots"]),
+        evidence_scope.roots(run, path, context["roots"]),
         source_views=context["run"] / "00-input/source-views",
     )
 

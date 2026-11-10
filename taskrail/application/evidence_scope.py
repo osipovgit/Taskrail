@@ -7,5 +7,5 @@ def roots(run, path, declared):
         return declared
     return {
         name: run / "00-input" / name
-        for name in ("git", "ssh", "local", "checks", "preimages", "original")
+        for name in ("git", "ssh", "local", "checks", "preimages", "original", "dependency-checks")
     }

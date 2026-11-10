@@ -77,6 +77,22 @@ class IsolatedSplitFixture(ReviewedFixture):
         self.assertEqual(len(checks), 1, state)
         self.assertEqual((checks[0]["status"], checks[0]["cwd"]), ("PASS", str(worktree)))
 
+    def assert_dependency_checks(self, child, context, dependency, number):
+        review = (child / "03-review/request.md").read_text()
+        if number == 1:
+            self.assertNotIn("dependency_checks", context)
+            return
+        index = Path(context["dependency_checks"])
+        self.assertIn(str(index), review)
+        self.assertTrue(index.is_relative_to(child))
+        receipts = json.loads(index.read_text())
+        self.assertTrue(receipts)
+        self.assertEqual({receipt["run"] for receipt in receipts}, {dependency})
+        for receipt in receipts:
+            self.assertEqual(receipt["argv"], self.settings_extra["verify_commands"][0]["argv"])
+            self.assertEqual((receipt["assessment"], receipt["exit_code"]), ("passed", 0))
+            self.assertEqual((index.parent / receipt["stdout"]).read_text(), "")
+
     def complete_split(self):
         parent, state = self.split()
         record = state["worktrees"]["project"]
@@ -93,6 +109,7 @@ class IsolatedSplitFixture(ReviewedFixture):
             context, _ = json.JSONDecoder().raw_decode(request.split("Context:\n", 1)[1])
             self.assertTrue(context["scheduled_checks"])
             self.assertEqual(context["writable_roots"], [str(worktree)])
+            self.assert_dependency_checks(child, context, linked["T1"], number)
             frozen = execution_context.frozen(child, finished)
             self.assertEqual(frozen["permission_worktree"], str(worktree))
         atomic_json(parent / "epic.json", dict(tasks=linked, phases=dict(integration="combined")))

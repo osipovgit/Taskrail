@@ -53,6 +53,11 @@ Planned work may be approved. No-change claims need evidence for every requireme
 Approve only finished work; nothing deferred to implementation. An unresolved contradiction
 that changes the implementation is a gap, even if the proposed choice seems safe.
 
+## implementer, reviewer
+
+Context.dependency_checks indexes historical command results of direct dependencies.
+Read streams beside the index for baseline comparisons. Verify current source separately.
+
 ## implementer
 
 Context.planned_files lists expected targets. Edit necessary files under writable_roots,
