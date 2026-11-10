@@ -41,6 +41,13 @@ checks and result review. A split dispatches authenticated children in dependenc
 order, followed by independent integration review over the combined original and
 corrective diff. Each child receives its complete assignment, prerequisite outcomes
 and immutable `00-input/parent-task.md`. Later work appears under Not ToDo.
+When a direct dependency recorded local commands, both roles receive a child-local
+`dependency_checks` index. It identifies the approved run, task, command, source
+fingerprint, exit code, and raw output files beside the index. Configured checks also
+carry their gate ID and assessment. Failed checks can supply a baseline. Interrupted
+commands and commands that changed source are excluded. Only the current child's
+checks can satisfy its runtime criteria. Use fresh Git status for current edits and
+the launch snapshot for original changes.
 A child starts at implementation and cannot split again. See [contracts](contracts.md)
 for plan and review rules, [task format](task-format.md#worktree-isolation) for commit
 and file scope, and [checks](checks.md) for executable acceptance.

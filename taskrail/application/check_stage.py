@@ -24,7 +24,7 @@ def schedule(workflow):
 
 def required(workflow):
     """Engineering results keep their gates; research executes explicitly bound checks."""
-    checks = check_selection.applicable(workflow)
+    checks = check_selection.applicable(workflow.config, workflow.state["requirements"])
     engineering = not workflow.config.get("read_only")
     integration = workflow.config.get("phase") == "integration"
     bound = any(check["spec"]["criteria"] for check in checks)

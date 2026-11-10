@@ -194,7 +194,7 @@ export function stageCard(stage, requirements = []) {
     card.append(conclusion, el('div', result.summary || '', 'text'));
     renderPlan(card, result.steps, requirements);
     renderCoverage(card, result.coverage, requirements);
-    list(card, 'Completed steps', result.completed_steps);
+    list(card, 'Submitted steps', result.completed_steps);
     list(card, 'Changed files', result.changed_files);
     detail(
       card,

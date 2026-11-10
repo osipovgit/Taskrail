@@ -12,7 +12,14 @@ def result_inputs(run):
     for directory in sorted(run.iterdir()):
         if directory.is_symlink() or not re.fullmatch(r"\d+-[a-z-]+", directory.name):
             continue
-        for name in ("result.json", "handoff.md", "findings.json", "validation.json"):
+        for name in (
+            "result.json",
+            "handoff.md",
+            "findings.json",
+            "validation.json",
+            "commit-message.txt",
+            "no-change-note.txt",
+        ):
             candidate = directory / name
             paths.append(candidate)
     return [path for path in paths if path.is_file() and not path.is_symlink()]
@@ -35,6 +42,9 @@ def model_inputs(run, folder):
     ]
     if (run / "00-input/original").is_dir():
         paths.append(run / "00-input/original")
+    dependency = run / "00-input/dependency-checks"
+    if dependency.is_dir() and not dependency.is_symlink():
+        paths.append(dependency)
     paths.extend(result_inputs(run))
     paths.extend(
         path

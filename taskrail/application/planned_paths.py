@@ -60,6 +60,13 @@ def check_target(path, name):
         raise ValueError(f"Hard-linked files cannot be edited: {name}")
 
 
+def writable_roots(config, files):
+    """An owned branch with an active writer grants native edits across its roots."""
+    if files and config.get("task_branch"):
+        return list(config["roots"].values())
+    return []
+
+
 def git_files(workflow):
     """Exact, currently authorized files; native directory grants never authorize Git."""
     protected = protected_paths.patterns(workflow.config)

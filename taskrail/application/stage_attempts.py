@@ -26,8 +26,7 @@ from taskrail.application.attempt_session import (
     validated,
 )
 from taskrail.application.changes import write_diff
-from taskrail.application.plan_review_evidence import paths as review_paths
-from taskrail.application.result_context import git_directory
+from taskrail.application.result_context import git_directory, review_inputs
 from taskrail.application.task_branch import KEY as TASK_BRANCH
 from taskrail.application.task_branch import extend as extend_beyond_plan
 from taskrail.interactions import request_limits
@@ -151,17 +150,17 @@ def evidence_roots(workflow):
     """Sources, executor output snapshots and original files that reads may cite."""
     run = workflow.run
     inputs = run / "00-input"
-    reference = workflow.state["results"].get("plan")
     return [
         *workflow.config["roots"].values(),
         git_directory(run),
         inputs / "ssh",
         inputs / "local",
         inputs / "checks",
+        inputs / "dependency-checks",
         inputs / "source-views",
         inputs / "preimages",
         inputs / "original",
-        *review_paths(run, workflow.flow[STAGE], reference),
+        *review_inputs(workflow),
     ]
 
 

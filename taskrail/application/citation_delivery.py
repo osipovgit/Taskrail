@@ -56,6 +56,7 @@ def permitted(path, context):
     paths = map(Path, roots.values())
     inside = any(root in path.parents for root in paths)
     inside = inside or path in plan_review_evidence.sources(context)
+    inside = inside or str(path) == context.get("submission_path")
     return inside and source_windows.permitted(path, protected)
 
 

@@ -14,6 +14,7 @@ from run_fixture import current_run
 from taskrail.application import (
     attempt_session,
     changes,
+    implementation_submission,
     inherited_preimages,
     prior_git,
     resume_inputs,
@@ -72,6 +73,7 @@ class TaskFinalizationTests(unittest.TestCase):
             preimages=originals,
             results=dict(implementation="implementation.json"),
         )
+        implementation_submission.publish(self.run / "01-implement", state, "# Change the output")
         return SimpleNamespace(
             run=self.run,
             config=dict(task_branch=True, roots=self.roots, worktrees=self.records, phase="task"),
@@ -81,15 +83,28 @@ class TaskFinalizationTests(unittest.TestCase):
         )
 
     def test_a_successful_commit_has_a_controlled_content_receipt(self):
+        root = self.roots["project"]
+        process.checked(root, ["config", "commit.cleanup", "strip"])
         workflow = self.workflow()
         task_commit.commit(workflow)
         self.assertEqual(workflow.state["status"], "READY_FOR_REVIEW")
+        preview = self.run / workflow.state["implementation_submission"]["path"]
+        body = process.raw(root, ["cat-file", "commit", "HEAD"]).stdout.split(b"\n\n", 1)[1]
+        self.assertEqual(body, preview.read_bytes())
         entries = requests.history(self.run)
         self.assertEqual([entry["status"] for entry in entries], ["SUCCEEDED", "SUCCEEDED"])
         receipt = entries[-1]["source_baseline"]
         self.assertEqual(workflow.state["commits"][0]["commit"], receipt["head"])
         self.assertEqual(set(receipt["files"]), {str(self.roots["project"] / "target.txt")})
         workflow.guard.verify("Finalization must preserve reviewed source")
+
+    def test_changed_submission_cannot_be_committed_after_approval(self):
+        workflow = self.workflow()
+        note = self.run / workflow.state["implementation_submission"]["path"]
+        note.write_text("different message")
+        with self.assertRaisesRegex(ValueError, "submission changed"):
+            task_commit.commit(workflow)
+        self.assertEqual(requests.history(self.run), [])
 
     def test_followup_reviews_and_commits_binary_mode_and_already_staged_deletion(self):
         root = self.roots["project"]
@@ -138,7 +153,7 @@ class TaskFinalizationTests(unittest.TestCase):
             entry = dict(request=reviewed_commit.payload(root, args), status="RUNNING")
             execution.execute(entry, [], "implementer", env)
             self.assertEqual(entry["status"], "REJECTED")
-            self.assertIn("selected for independent review", entry["stderr"])
+            self.assertIn("server stages and commits after independent approval", entry["stderr"])
         self.assertEqual(process.checked(root, ["ls-files", "--stage", "-z"]), index_before)
         self.assertEqual(process.checked(root, ["rev-parse", "HEAD"]), head_before)
         original = self.run / state["preimages"]["project/run.sh"]
@@ -161,6 +176,9 @@ class TaskFinalizationTests(unittest.TestCase):
             self.assertIn(detail, patch_text)
         self.assertNotIn("unrelated.txt", patch_text)
         self.assertGreater(len(patch_text), transport.OUTPUT_LIMIT)
+        implementation_submission.publish(
+            self.run / "01-implement", state, "Carry the selected changes"
+        )
         task_commit.commit(workflow)
         self.assertEqual(state["status"], "READY_FOR_REVIEW", state.get("summary"))
         committed = process.checked(

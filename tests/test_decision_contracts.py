@@ -8,6 +8,7 @@ from unittest.mock import patch
 from taskrail.application import (
     evidence,
     evidence_delivery,
+    implementation_submission,
     result_validation,
     source_packet,
 )
@@ -45,7 +46,7 @@ class DecisionContractTests(unittest.TestCase):
         record = dict(
             tool="read",
             input=dict(filePath=str(self.path)),
-            output="1: value = 2\n",
+            output=f"1: {self.path.read_text().splitlines()[0]}\n",
             source_sha256=evidence.fingerprint(self.path),
             source_event=str(self.folder / "events.jsonl"),
             session_id="review-session",
@@ -63,6 +64,9 @@ class DecisionContractTests(unittest.TestCase):
         self.assertEqual(done["changed_files"], [str(self.path)])
         self.assertEqual(done["completed_steps"], ["T1"])
         self.assertEqual((done["coverage"], done["evidence"]), ([], []))
+        self.context["changed"] = []
+        with self.assertRaisesRegex(ValueError, "reason for your no-change submission"):
+            result_validation.validate("DONE", self.context)
         blocked = result_validation.validate("BLOCKED: the inventory is missing", self.context)
         self.assertEqual(blocked["status"], "BLOCKED")
         self.assertEqual(blocked["blocking_gaps"], ["the inventory is missing"])
@@ -124,6 +128,21 @@ class DecisionContractTests(unittest.TestCase):
         self.assertEqual(result["evidence"][0]["path"], str(self.path))
         self.assertEqual(result["summary"], "Checked.")
         self.assertTrue((self.folder / "review.md").is_file())
+
+    def test_review_cites_only_the_current_submitted_wording_after_a_real_read(self):
+        state = dict(changed_files=[str(self.path)])
+        for revision in ("01-implement", "02-implement"):
+            implementation_submission.publish(
+                self.run / revision, state, f"Recorded rationale for {revision}"
+            )
+        self.path = Path(implementation_submission.review_path(self.run, "reviewer", state))
+        self.context["submission_path"] = str(self.path)
+        self.observe()
+        review = self.review(f"R1: done: {self.path}:1")
+        self.assertEqual(review["status"], "APPROVE")
+        stale = self.run / "01-implement" / self.path.name
+        with self.assertRaisesRegex(ValueError, "outside declared roots"):
+            self.review(f"R1: done: {stale}:1")
 
     def test_a_condition_that_did_not_occur_is_not_applicable_not_a_blocker(self):
         result = self.review("- R1: n/a: No optional source was unavailable")

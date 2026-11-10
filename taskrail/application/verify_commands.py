@@ -19,7 +19,7 @@ RECIPE = "recipe"
 
 def run_commands(workflow, folder):
     """Run the commands whose cwd is a declared root of this run, in settings order."""
-    selected = check_selection.applicable(workflow)
+    selected = check_selection.applicable(workflow.config, workflow.state["requirements"])
     return [
         run_command(workflow, folder / LOG_NAME.format(number), chosen)
         for number, chosen in enumerate(selected, 1)
