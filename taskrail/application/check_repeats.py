@@ -2,7 +2,8 @@
 
 import re
 
-FAIL = "FAIL"
+from taskrail.application import check_outcomes
+
 VARYING = re.compile(r"evidence \S+|\b\d+(?:\.\d+)?\s?(?:ms|s|sec|seconds)\b")
 
 
@@ -10,7 +11,7 @@ def failures(checks):
     """Match the command, directory and diagnostic of every failing check."""
     found = set()
     for check in checks:
-        if check.get("status") != FAIL:
+        if not check_outcomes.blocks(check):
             continue
         detail = str(check.get("detail", ""))
         name = str(check.get("file", ""))

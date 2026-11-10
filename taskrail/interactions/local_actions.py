@@ -74,7 +74,9 @@ def invoke(run, entry, payload, context):
         return local.execute(payload, context)
     except (ValueError, OSError, subprocess.SubprocessError) as error:
         status = "UNKNOWN" if context.get("process_started") else "FAILED"
-        return dict(status=status, reason=str(error))
+        return dict(
+            status=status, reason=str(error), process_started=bool(context.get("process_started"))
+        )
     except BaseException:
         outcome = dict(status="UNKNOWN", reason="Local execution interrupted; inspect effects.")
         local_journal.update(run, entry, outcome)

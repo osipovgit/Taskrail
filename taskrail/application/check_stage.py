@@ -2,6 +2,7 @@
 
 from taskrail.application import (
     added_lines,
+    check_outcomes,
     check_selection,
     transitions,
     yaml_install,
@@ -36,9 +37,10 @@ def run_checks(workflow):
     state = workflow.state
     active = new_stage(workflow.run, state, "check", dict(mode="builtin"))
     workflow.open_record(active)
-    checks = collect(workflow, active[0])
+    checks, summary = collect(workflow, active[0])
+    active[1]["summary"] = summary
     state[CHECKS] = checks
-    failed = any(check[STATUS] == "FAIL" for check in checks)
+    failed = any(map(check_outcomes.blocks, checks))
     workflow.finish_active("CHECK_FAILED" if failed else "CHECK_COMPLETED", checks)
     state["results"][CHECKS] = "{}/result.json".format(active[1]["directory"])
     workflow.guard.verify(
@@ -50,10 +52,12 @@ def run_checks(workflow):
 def collect(workflow, folder):
     """Commands run only after every changed file passed its syntax and added-line scan."""
     roots = workflow.config["roots"]
-    checks = yaml_install.resolve(
+    syntax = yaml_install.resolve(
         workflow, folder, syntax_checks(roots, workflow.state["changed_files"])
     )
-    checks.extend(added_lines.scan(workflow.run, roots, workflow.state["preimages"]))
-    if any(check[STATUS] == "FAIL" for check in checks):
-        return checks
-    return [*checks, *run_commands(workflow, folder)]
+    findings = added_lines.scan(workflow.run, roots, workflow.state["preimages"])
+    prerequisites = [*syntax, *findings]
+    commands = run_commands(
+        workflow, folder, prerequisite_failed=any(map(check_outcomes.blocks, prerequisites))
+    )
+    return [*prerequisites, *commands], check_outcomes.summary(syntax, commands)

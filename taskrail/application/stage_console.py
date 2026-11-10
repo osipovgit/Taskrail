@@ -14,6 +14,8 @@ def announce(record, verdict):
         record.update(verdict=verdict[STATUS], summary=verdict.get(SUMMARY, ""))
         announce_verdict(record, verdict)
     if isinstance(verdict, list):
+        if record.get(SUMMARY):
+            say(record[SUMMARY])
         for check in verdict:
             say("  Check: {file} — {status}: {detail}".format(**check))
 
