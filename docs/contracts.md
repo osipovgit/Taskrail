@@ -84,12 +84,17 @@ or transfer an excluded deliverable from another task.
   server derives the stored plan result from it: coverage, evidence, steps (one per
   task, with its files, owned requirements and scopes, dependencies, results and
   checks), files_read from observed reads and proposed_change_files from the tasks.
-- Implementer: no JSON result. It ends with `DONE: <what changed>` (one or two
-  sentences; on a task branch they become the commit message) or
+- Implementer: no JSON result. It submits `DONE: <what changed or why no change was needed>`, including
+  any rationale the task requires, or
   `BLOCKED: <what it needs>`, the last such line of its final message. The server
   derives everything else: changed_files from the source scan, completed_steps from
   the approved contract, checks from their records. It reports no requirement
-  outcomes or citations; the independent review judges every requirement. A final
+  outcomes or citations; the independent review judges every requirement.
+  The review request names the exact proposed commit message or no-change note.
+  The reviewer may cite its wording and must verify code and checks independently.
+  The report links the submitted text. After approval each changed repository
+  receives the reviewed message and a commit receipt. No-change submissions keep
+  their reason in the run without creating an empty commit. A final
   message without either word gets a correction in the same session and no other
   attempt. Besides its allowed files it keeps `<run>/progress.md` (Done,
   Remaining, Verify), which survives an interrupted, timed-out or overflowing

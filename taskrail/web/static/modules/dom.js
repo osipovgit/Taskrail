@@ -20,7 +20,7 @@ export const statuses = {
   REINTERPRET_TASK: 'Understanding correction required',
   PLAN_READY: 'Ready for plan review',
   APPROVE: 'Approved',
-  IMPLEMENTED: 'Changes implemented',
+  IMPLEMENTED: 'Submitted for checks',
   TURN_ERROR: 'Turn interrupted',
   RECOVERY_REQUIRED: 'Saved data needs recovery',
   CONTEXT_EXCEEDED: 'Context window exceeded',

@@ -454,6 +454,8 @@ elif role == "implementer":
         implement(target, mode, print)
     else:
         target.write_text(target.read_text().replace("return 1", "return 2"))
+    if mode == "git-actions":
+        target.write_text(target.read_text().replace("return 3", "return 2"))
     if mode == "scope":
         (root / "unrelated.txt").write_text("corrupted")
     if mode == "new":
@@ -486,6 +488,10 @@ elif role == "implementer":
     if mode == "integration-fix":
         target.write_text(target.read_text() + "# marker\n")
     value = dict(status="IMPLEMENTED", summary="fixed")
+    if mode == "already-fixed":
+        value["summary"] = (
+            "The dependency already changed hello() to return 2. No further source edit is needed."
+        )
 else:
     reject = (
         mode == "review-repair" and role == "reviewer" and "marker" not in target.read_text()

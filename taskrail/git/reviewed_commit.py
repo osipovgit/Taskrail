@@ -41,7 +41,8 @@ def commit(environment, root, paths, message):
 def commit_environment(environment, root):
     """The fallback author is server-owned; request arguments cannot choose Git settings."""
     author = process.invoke(root, ["config", "user.email"]).stdout.strip()
-    return dict(environment, identity_settings=() if author else IDENTITY)
+    author_settings = () if author else IDENTITY
+    return dict(environment, identity_settings=(*author_settings, "commit.cleanup=verbatim"))
 
 
 def invoke(environment, root, argv):

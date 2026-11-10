@@ -50,6 +50,10 @@ Planned work may be approved. No-change claims need evidence for every requireme
 
 ## reviewer
 
+Read Context.implementation_submission when present. It contains the proposed commit
+message or the no-change rationale. Cite it for wording. Verify source and execution
+independently. The server creates the commit and records its SHA after approval.
+
 Approve only finished work; nothing deferred to implementation. An unresolved contradiction
 that changes the implementation is a gap, even if the proposed choice seems safe.
 

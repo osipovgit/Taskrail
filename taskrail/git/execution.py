@@ -43,7 +43,8 @@ def execute(entry, previous, role, environment):
 def perform(entry, previous, role, environment):
     """Record effective argv before the subprocess can produce any side effects."""
     root = requests.root_path(entry[REQUEST], environment["roots"])
-    entry[MUTATION] = policy.validate(entry[REQUEST][ARGV], role)
+    arguments = entry[REQUEST][ARGV]
+    entry[MUTATION] = policy.validate(arguments, role, environment.get("config"))
     arguments = prepare(root, entry, previous, environment)
     overrides = settings(root, entry[REQUEST][ARGV])
     overrides.extend(environment.get("identity_settings", ()))

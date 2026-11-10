@@ -4,7 +4,6 @@ from pathlib import Path
 
 from taskrail.application import (
     citation_review,
-    dependency_checks,
     evidence_scope,
     plan_review_evidence,
 )
@@ -15,22 +14,23 @@ EVIDENCE_FILES = "declared roots, verified source views, preimages or executor s
 
 def validate_paths(payload, context):
     """Report invalid citation paths together, tied to their requirement owners."""
-    directory = context["run"] / dependency_checks.DIRECTORY
-    if any(directory in Path(claim["path"]).parents for claim in payload["evidence"]):
-        spec = context.get("check_config", {}).get("task_spec", {})
-        schema.require(
-            dependency_checks.index(context["run"], spec), "Unauthenticated dependency checks"
-        )
+    evidence_scope.verify_dependencies(context, payload["evidence"])
     errors = []
     for claim in payload["evidence"]:
-        roots = allowed_roots(claim, context)
         try:
-            if not plan_review_evidence.accepts(claim, payload, context):
-                approved_path(claim["path"], roots, EVIDENCE_FILES)
+            validate_claim(claim, payload, context)
         except ValueError as error:
             errors.append(path_feedback(payload, claim, error, context["stage"]))
     if errors:
         raise ValueError(citation_review.feedback(errors))
+
+
+def validate_claim(claim, payload, context):
+    """Accept the current stage's authenticated document or an in-scope source path."""
+    if claim["path"] == context.get("submission_path"):
+        return
+    if not plan_review_evidence.accepts(claim, payload, context):
+        approved_path(claim["path"], allowed_roots(claim, context), EVIDENCE_FILES)
 
 
 def path_feedback(payload, claim, error, stage):

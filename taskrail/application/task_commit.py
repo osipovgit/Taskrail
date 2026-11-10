@@ -5,11 +5,10 @@ adopts the new HEAD before the final checkpoint, so confirmation and the next ta
 a split start from it. A failed commit is recorded with its error, never automatically retried.
 """
 
-import json
 import subprocess
-import textwrap
+from pathlib import Path
 
-from taskrail.application import followup_selection, task_branch
+from taskrail.application import followup_selection, implementation_submission, task_branch
 from taskrail.application.artifacts import save_run
 from taskrail.application.git_state import git_metadata
 from taskrail.application.planned_paths import safe_file
@@ -17,7 +16,6 @@ from taskrail.core.schema import require
 from taskrail.git import history_outcome, requests, reviewed_commit
 
 COMMITS = "commits"
-SUBJECT_LIMIT = 72
 FAILURES = (ValueError, OSError, subprocess.SubprocessError)
 PENDING = "Commit outcome is uncertain; inspect the Git journal before retrying"
 
@@ -67,12 +65,15 @@ def grouped(names):
 
 def commit_message(workflow):
     """The implementer's summary, with the run named in a trailer."""
-    path = workflow.run / workflow.state["results"]["implementation"]
-    implementation = json.loads(path.read_text(encoding="utf-8"))
-    summary = str(implementation.get("summary") or "Taskrail task")
-    subject = textwrap.shorten(summary, SUBJECT_LIMIT, placeholder="...")
-    run_name = workflow.run.name
-    return f"{subject}\n\n{summary}\n\nTaskrail-Run: {run_name}"
+    submission = workflow.state[implementation_submission.KEY]
+    name = Path(submission["path"]).name
+    expected = (
+        implementation_submission.MESSAGE
+        if workflow.state["changed_files"]
+        else implementation_submission.NO_CHANGE
+    )
+    require(name == expected, "Source changes differ from the implementation submission")
+    return implementation_submission.read(workflow.run, submission)
 
 
 def commit_root(workflow, alias, paths, message):

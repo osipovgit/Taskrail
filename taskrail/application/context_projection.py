@@ -12,6 +12,7 @@ from taskrail.application import (
 )
 from taskrail.application.dependency_checks import index as dependency_index
 from taskrail.application.implementation_context import writer
+from taskrail.application.implementation_submission import review_path
 from taskrail.application.original_checkout import status_path
 from taskrail.application.workspace_paths import public_mapping
 from taskrail.core import protected_paths, requirements, task_spec
@@ -35,6 +36,7 @@ def request_context(config, execution, state, run):
     plan = execution[1]
     context = dict(
         stage=execution[0],
+        implementation_submission=review_path(run, execution[0], state),
         roots=state["roots"],
         workspace_paths=public_mapping(config),
         task_file=str(run / "00-input/task.md"),
