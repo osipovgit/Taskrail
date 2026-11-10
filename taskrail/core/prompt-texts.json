@@ -9,6 +9,7 @@
   "mode.decompose": "Mode: split into tasks. The operator asked for a split: every task, even a single one, runs as its own implementation run.",
   "mode.tasks": [
     "Each task owns a requirement or scoped part, one deliverable, its tests and necessary documentation, and fits one implementation session.",
+    "Assign each requested project-wide check to one task. Preserve explicit exit-code criteria. For no new findings, compare individual diagnostics in comparable completed baseline and current reports for the same scope.",
     "Tasks run in dependency order against earlier changes. Shared files require an explicit dependency; no task may undo or rework another task's result.",
     "Split tasks have no fresh planning phase: provide exact Files, source Read ranges, observable Done when results, Verify checks and essential Notes.",
     "Keep companion tests and documentation in their owning task. Standalone documentation or tests are valid user-requested deliverables. A prerequisite may await a later task that wires it in.",

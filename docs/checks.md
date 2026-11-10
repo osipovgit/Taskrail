@@ -100,6 +100,22 @@ must be a runtime requirement of that task. The recipe owns the phase; parameter
 command and adapter overrides are rejected. Selecting the same recipe/criterion
 binding twice does not duplicate execution. Selecting an existing mandatory
 verification command binds that execution to criteria rather than rerunning it.
+Exact duplicates in `verify_commands` execute once per local check stage.
+Identity includes the effective worktree directory, argument vector and timeout.
+Explicit criterion bindings still use their selected recipe and adapter.
+
+Assign a project-wide task requirement to one owning step. Place its named
+recipe under that step's `Required checks`. Other children can run their own
+checks. Settings-level `verify_commands` explicitly require the command for
+every applicable engineering task. Use a named recipe for an owner-specific check.
+
+Preserve the requested acceptance rule. A clean lint or an explicit zero exit
+requires that outcome from the tool itself. For “no new findings”, compare
+individual diagnostics in completed baseline and current reports with comparable
+tool versions, settings and scope. Equal counts can conceal a new finding.
+A comparator recipe can perform that comparison. A bare lint exit code or a
+missing report cannot establish it. When both outcomes are requested, verify both.
+
 Written `Jenkins check:` and `Server check:` plan entries become the deferred
 verification of their delivery phase; they are never guessed into executable commands.
 

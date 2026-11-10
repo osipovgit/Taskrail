@@ -96,6 +96,39 @@ class CheckRecipesTest(unittest.TestCase):
         self.assertEqual(records[0]["execution"]["exit_code"], 0)
         self.assertEqual(len(json.loads((self.run / "local-actions.json").read_text())), 1)
 
+    def test_duplicate_settings_and_source_alias_run_once_in_the_effective_worktree(self):
+        original = self.base / "original"
+        original.mkdir()
+        alias = dict(self.command, cwd=str(original))
+        workflow = self.workflow([alias, self.command, alias])
+        workflow.config["worktrees"] = {
+            "project": dict(source=str(original), worktree=str(self.root))
+        }
+        workflow.config["check_specs"] = []
+        with patch(
+            "taskrail.interactions.approval_policy.decision", return_value=dict(decision="allow")
+        ) as approval:
+            rows = verify_commands.run_commands(workflow, self.folder)
+        approval.assert_called_once()
+        self.assertEqual([(row["cwd"], row["status"]) for row in rows], [(str(self.root), "PASS")])
+        self.assertEqual(len(check_results.read(self.run)), 1)
+
+    def test_duplicate_setting_preserves_all_bound_criteria_and_distinct_timeouts(self):
+        other = dict(self.requirement, id="R-second")
+        self.state["requirements"].append(other)
+        self.spec["criteria"].append(other["id"])
+        workflow = self.workflow(
+            [self.command, self.command, dict(self.command, timeout_seconds=60)]
+        )
+        with patch(
+            "taskrail.interactions.approval_policy.decision", return_value=dict(decision="allow")
+        ):
+            rows = verify_commands.run_commands(workflow, self.folder)
+        self.assertEqual(len(rows), 2)
+        bound, unbound = check_results.read(self.run)
+        self.assertEqual(bound["criteria"], ["R-health", "R-second"])
+        self.assertEqual(unbound["criteria"], [])
+
     def test_new_recipe_keeps_personal_approval_and_decline_cannot_become_success(self):
         decision = dict(decision="deny", alternative="Use the offline suite")
         with patch(

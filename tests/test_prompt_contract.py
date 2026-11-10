@@ -312,6 +312,9 @@ class RequestBudgetTests(LiveFixture, unittest.TestCase):
         self.assertIn("Your only writable file is the plan file", requests["02-plan"])
         self.assertIn("The planner was given these rules", requests["03-plan-review"])
         self.assertNotIn("The planner was given these rules", requests["02-plan"])
+        for stage in ("02-plan", "03-plan-review"):
+            self.assertIn("project-wide check to one task", requests[stage])
+            self.assertIn("compare individual diagnostics", requests[stage])
         self.assertNotIn("Cite current lines", requests["04-implement"])
         self.assertIn("Your task from the approved plan:", requests["04-implement"])
         self.assertIn("Done when:\n- ", requests["04-implement"])
