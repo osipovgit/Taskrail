@@ -1189,7 +1189,17 @@ class LiveTests(LiveFixture, unittest.TestCase):
         self.assertEqual(len(state["attempts"]), 7)
 
     def test_syntax_repair(self):
-        _, status, state = self.run_mode("syntax")
+        self.allow_all_actions()
+        command = self.verify_command("print('verified')")
+        run, status, state = self.run_mode("syntax", verify_commands=[command])
+        first, second = [stage for stage in state["stages"] if stage["stage"] == "check"]
+        rows = json.loads((run / first["directory"] / "result.json").read_text())
+        self.assertEqual(rows[-1]["status"], "NOT_STARTED")
+        self.assertIn("1 selected, 0 started, 1 not started", first["summary"])
+        self.assertFalse(list((run / first["directory"]).glob("verify-*.log")))
+        self.assertIn("1 selected, 1 started", second["summary"])
+        self.assertIn(first["summary"], (run / "06-implement/request.md").read_text())
+        self.assertIn(second["summary"], (run / "08-review/request.md").read_text())
         self.assertEqual(status, "READY_FOR_REVIEW")
         self.assertEqual(len(state["attempts"]), 6)
 
@@ -1302,6 +1312,10 @@ class LiveTests(LiveFixture, unittest.TestCase):
         note = run / state["implementation_submission"]["path"]
         self.assertEqual(note.name, "no-change-note.txt")
         self.assertIn(note.name, state["stages"][3]["files"])
+        summary = state["stages"][4]["summary"]
+        self.assertIn("0 selected, 0 started", summary)
+        self.assertIn(summary, (run / "06-review/request.md").read_text())
+        self.assertIn(summary, (run / "report.md").read_text())
         self.assertIn("dependency already changed hello()", note.read_text())
         self.assertIn(str(note), (run / "06-review/request.md").read_text())
         self.assertIn(str(note.relative_to(run)), (run / "report.md").read_text())

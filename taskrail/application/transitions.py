@@ -3,6 +3,7 @@
 from types import MappingProxyType
 
 from taskrail.application import (
+    check_outcomes,
     declared_block,
     input_revision,
     plan_feedback,
@@ -127,7 +128,7 @@ def advance(flow, state, verdict, reference, version):
 def checked(flow, state, version):
     """Route failed built-in checks to bounded repair, never to approval."""
     checks = state[CHECKS]
-    failed = any(check[STATUS] == "FAIL" for check in checks)
+    failed = any(map(check_outcomes.blocks, checks))
     if failed:
         if flow[ALLOWED]:
             repair_feedback.route(flow, state, IMPLEMENTER, {CHECKS: checks}, version)

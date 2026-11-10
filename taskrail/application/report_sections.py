@@ -2,7 +2,7 @@
 
 import json
 
-from taskrail.application import review_outcome
+from taskrail.application import check_outcomes, review_outcome
 
 BULLET = "- {0}"
 CHECK = "- {file}: {status} — {detail}"
@@ -74,6 +74,9 @@ def command_effects(state):
 def check_lines(state):
     """Recorded checks or why none ran."""
     checks = [CHECK.format(**check) for check in state["checks"]]
+    summary = check_outcomes.latest_summary(state)
+    if summary:
+        return [summary, *checks]
     if checks:
         return checks
     if state[STATUS] == "NO_CHANGES_REQUIRED":

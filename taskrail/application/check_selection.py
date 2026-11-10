@@ -8,6 +8,7 @@ from taskrail.executor import protocol
 
 CWD = "cwd"
 RECIPE = "recipe"
+REQUEST = "request"
 
 
 def applicable(config, requirements):
@@ -17,11 +18,7 @@ def applicable(config, requirements):
     for gate in step_checks.selected(config):
         if gate["spec"]["recipe_id"] not in bound:
             checks.append(gate)
-    covered = {protocol.fingerprint(check["recipe"]["request"]) for check in checks}
-    for command in config.get("verify_commands", []):
-        if protocol.fingerprint(command) not in covered:
-            checks.append(configured_command(command))
-    return mapped_checks(checks, command_roots(config))
+    return mapped_checks(checks, config.get("verify_commands", []), command_roots(config))
 
 
 def command_roots(config):
@@ -52,26 +49,31 @@ def configured_command(command):
     return dict(spec=spec, recipe=recipe)
 
 
-def mapped_checks(checks, locations):
-    """Only configured_command settings may silently target another project."""
-    selected = []
-    for check in checks:
-        mapped = mapped_check(check, locations)
-        if mapped is not None:
-            selected.append(mapped)
+def mapped_checks(checks, commands, locations):
+    """Keep every explicit binding, then add each uncovered effective settings command."""
+    selected = [mapped_check(check, locations) for check in checks]
+    covered = {protocol.fingerprint(check[RECIPE][REQUEST]) for check in selected}
+    for command in commands:
+        check = mapped_check(configured_command(command), locations)
+        if check is None:
+            continue
+        signature = protocol.fingerprint(check[RECIPE][REQUEST])
+        if signature not in covered:
+            covered.add(signature)
+            selected.append(check)
     return selected
 
 
 def mapped_check(check, locations):
     """Map source roots to worktrees before presenting the exact approval request."""
-    command = check[RECIPE]["request"]
+    command = check[RECIPE][REQUEST]
     location = mapped_directory(command[CWD], locations)
     if location is None:
         if check["spec"]["criteria"] or check.get("required"):
             raise ValueError("Selected check cwd is outside the declared roots")
         return None
     recipe = dict(check[RECIPE])
-    recipe["request"] = dict(command, cwd=location)
+    recipe[REQUEST] = dict(command, cwd=location)
     check[RECIPE] = recipe
     return check
 

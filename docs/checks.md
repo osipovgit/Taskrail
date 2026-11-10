@@ -100,8 +100,30 @@ must be a runtime requirement of that task. The recipe owns the phase; parameter
 command and adapter overrides are rejected. Selecting the same recipe/criterion
 binding twice does not duplicate execution. Selecting an existing mandatory
 verification command binds that execution to criteria rather than rerunning it.
+Exact duplicates in `verify_commands` execute once per local check stage.
+Identity includes the effective worktree directory, argument vector and timeout.
+Explicit criterion bindings still use their selected recipe and adapter.
+
+Assign a project-wide task requirement to one owning step. Place its named
+recipe under that step's `Required checks`. Other children can run their own
+checks. Settings-level `verify_commands` explicitly require the command for
+every applicable engineering task. Use a named recipe for an owner-specific check.
+
+Preserve the requested acceptance rule. A clean lint or an explicit zero exit
+requires that outcome from the tool itself. For “no new findings”, compare
+individual diagnostics in completed baseline and current reports with comparable
+tool versions, settings and scope. Equal counts can conceal a new finding.
+A comparator recipe can perform that comparison. A bare lint exit code or a
+missing report cannot establish it. When both outcomes are requested, verify both.
+
 Written `Jenkins check:` and `Server check:` plan entries become the deferred
 verification of their delivery phase; they are never guessed into executable commands.
+
+The local stage summary counts passed, failed and skipped file syntax checks
+separately from scheduled project commands. It records confirmed starts, known
+non-starts and uncertain starts. Each command held back by a failed syntax or
+added-line check has its own reason. The stage card, report and next agent share
+the same summary, including when zero commands were scheduled.
 
 Local checks run after syntax checks. An approved no-change development plan still
 runs applicable mandatory `verify_commands` and selected local recipes. Plain
@@ -153,6 +175,11 @@ test cases; an empty report or a report containing only skipped tests remains
 unknown. Malformed output, missing exit codes, denied execution and incomplete
 remote operations never become passed checks. Words such as “error” in arbitrary
 logs do not determine results.
+
+Local check rows distinguish a failed assertion (`FAIL`) from an inconclusive
+mandatory check (`UNVERIFIED`). Both return to repair when a writer is available.
+Feedback includes the execution outcome, observed exit code when available, and
+the executor or report parser's reason, including any operator alternative.
 
 A runtime criterion is satisfied only by a current passed result bound to that
 criterion. A current failed result can support a contradiction. Unrelated,

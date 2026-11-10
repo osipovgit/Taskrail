@@ -25,6 +25,23 @@ class StepContractTests(unittest.TestCase):
         self.assertEqual(step_checks.names(child), ["lint"])
         self.assertEqual(child["steps"][0]["not_todo"], first["not_todo"])
 
+    def test_project_wide_recipe_is_scheduled_only_by_its_reviewed_owner(self):
+        plan = payload(
+            PLAN.replace("Notes: rename", "Required checks: audit\nNotes: rename"),
+            REQUIREMENTS,
+            ROOTS,
+        )
+        with tempfile.TemporaryDirectory() as temp:
+            request = dict(cwd=temp, argv=["audit"])
+            recipe = dict(kind="local", phase="check", request=request, adapter="exit-code")
+            config = dict(roots={"p": temp}, check_recipes={"audit": recipe})
+            chosen = []
+            for step in plan["steps"]:
+                child = SimpleNamespace(config=dict(config), state={})
+                step_checks.install(child, reviewed_plan.single(step, REQUIREMENTS))
+                chosen.append(len(check_selection.applicable(child.config, [])))
+        self.assertEqual(chosen, [1, 0])
+
     def test_not_todo_is_a_free_hint_that_never_rejects_a_plan(self):
         for text in ("T1: own work", "T3: absent task", "web role fixes", "T2:"):
             with self.subTest(text=text):

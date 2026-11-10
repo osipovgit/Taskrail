@@ -96,16 +96,85 @@ class CheckRecipesTest(unittest.TestCase):
         self.assertEqual(records[0]["execution"]["exit_code"], 0)
         self.assertEqual(len(json.loads((self.run / "local-actions.json").read_text())), 1)
 
+    def test_duplicate_settings_and_source_alias_run_once_in_the_effective_worktree(self):
+        original = self.base / "original"
+        original.mkdir()
+        alias = dict(self.command, cwd=str(original))
+        workflow = self.workflow([alias, self.command, alias])
+        workflow.config["worktrees"] = {
+            "project": dict(source=str(original), worktree=str(self.root))
+        }
+        workflow.config["check_specs"] = []
+        with patch(
+            "taskrail.interactions.approval_policy.decision", return_value=dict(decision="allow")
+        ) as approval:
+            rows = verify_commands.run_commands(workflow, self.folder)
+        approval.assert_called_once()
+        self.assertEqual([(row["cwd"], row["status"]) for row in rows], [(str(self.root), "PASS")])
+        self.assertEqual(len(check_results.read(self.run)), 1)
+
+    def test_duplicate_setting_preserves_all_bound_criteria_and_distinct_timeouts(self):
+        other = dict(self.requirement, id="R-second")
+        self.state["requirements"].append(other)
+        self.spec["criteria"].append(other["id"])
+        workflow = self.workflow(
+            [self.command, self.command, dict(self.command, timeout_seconds=60)]
+        )
+        with patch(
+            "taskrail.interactions.approval_policy.decision", return_value=dict(decision="allow")
+        ):
+            rows = verify_commands.run_commands(workflow, self.folder)
+        self.assertEqual(len(rows), 2)
+        bound, unbound = check_results.read(self.run)
+        self.assertEqual(bound["criteria"], ["R-health", "R-second"])
+        self.assertEqual(unbound["criteria"], [])
+
     def test_new_recipe_keeps_personal_approval_and_decline_cannot_become_success(self):
-        decision = dict(decision="deny", alternative="")
+        decision = dict(decision="deny", alternative="Use the offline suite")
         with patch(
             "taskrail.interactions.approval_policy.decision", return_value=decision
         ) as approval:
             checks = verify_commands.run_commands(self.workflow(), self.folder)
         approval.assert_called_once()
-        self.assertEqual(checks[0]["status"], "FAIL")
+        self.assertEqual(checks[0]["status"], "UNVERIFIED")
+        self.assertEqual(checks[0]["execution_status"], "DECLINED")
+        self.assertEqual(checks[0]["assessment"], "unknown")
+        self.assertIn(decision["alternative"], checks[0]["detail"])
+        self.assertFalse(checks[0]["started"])
         self.assertEqual(check_results.read(self.run)[0]["assessment"]["status"], "unknown")
         self.assertEqual(check_results.trusted(self.run), {})
+
+    def test_interrupted_command_keeps_its_known_start_and_cannot_count_as_passed(self):
+        def time_out(payload, context):
+            context["process_started"] = True
+            raise ValueError("Local command timed out; inspect effects before retry")
+
+        with (
+            patch(
+                "taskrail.interactions.approval_policy.decision",
+                return_value=dict(decision="allow"),
+            ),
+            patch("taskrail.interactions.local.execute", side_effect=time_out) as invoke,
+        ):
+            (first,) = verify_commands.run_commands(self.workflow(), self.folder)
+            (retry,) = verify_commands.run_commands(self.workflow(), self.folder)
+        invoke.assert_called_once()
+        self.assertTrue(first["started"])
+        self.assertIn("timed out", first["detail"])
+        self.assertIsNone(retry["started"])
+        self.assertEqual(retry["status"], "UNVERIFIED")
+        self.assertIn("No replay", retry["detail"])
+
+    def test_malformed_report_reaches_repair_with_observed_exit_and_parse_error(self):
+        self.recipe["adapter"] = "junit"
+        with patch(
+            "taskrail.interactions.approval_policy.decision", return_value=dict(decision="allow")
+        ):
+            (row,) = verify_commands.run_commands(self.workflow(), self.folder)
+        self.assertEqual((row["status"], row["execution_status"]), ("UNVERIFIED", "SUCCEEDED"))
+        self.assertIn("exit 0", row["detail"])
+        self.assertIn("Invalid report XML", row["detail"])
+        self.assertFalse(check_results.trusted(self.run))
 
     def test_reviewed_task_gate_runs_and_failed_exit_cannot_pass(self):
         workflow = self.workflow()
@@ -135,7 +204,7 @@ class CheckRecipesTest(unittest.TestCase):
             checks = verify_commands.run_commands(self.workflow([self.command]), self.folder)
         approval.assert_called_once()
         execute.assert_not_called()
-        self.assertEqual(checks[0]["status"], "FAIL")
+        self.assertEqual(checks[0]["status"], "UNVERIFIED")
         self.assertEqual(check_results.trusted(self.run), {})
 
     def test_source_change_while_waiting_for_check_approval_prevents_execution(self):
@@ -152,7 +221,7 @@ class CheckRecipesTest(unittest.TestCase):
         ):
             checks = verify_commands.run_commands(self.workflow([self.command]), self.folder)
         execute.assert_not_called()
-        self.assertEqual(checks[0]["status"], "FAIL")
+        self.assertEqual(checks[0]["status"], "UNVERIFIED")
         self.assertIn("while waiting", checks[0]["detail"])
         self.assertEqual(check_results.read(self.run), [])
 

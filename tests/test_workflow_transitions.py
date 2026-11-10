@@ -174,6 +174,19 @@ class WorkflowTransitionTests(unittest.TestCase):
                 self.assertEqual(state["status"], "NO_CHANGES_REQUIRED")
                 self.assertIsNone(execution["effect"])
 
+    def test_unverified_command_returns_its_reason_to_repair_and_blocks_a_read_only_run(self):
+        row = dict(status="UNVERIFIED", file="suite", detail="Invalid report XML")
+        for files in (["project/Main.java"], []):
+            with self.subTest(files=files):
+                execution = flow("check", files)
+                state = dict(status="RUNNING", checks=[row])
+                transitions.checked(execution, state, "same-source")
+                if files:
+                    self.assertEqual(execution["stage"], "implementer")
+                    self.assertEqual(execution["feedback"]["checks"], [row])
+                else:
+                    self.assertEqual(state["status"], "CHECK_FAILED")
+
     def test_failed_checks_never_reach_approval_or_repair_without_authorized_files(self):
         execution = flow("check", [])
         state = dict(status="RUNNING", checks=[dict(status="FAIL")])

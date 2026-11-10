@@ -59,8 +59,8 @@ that changes the implementation is a gap, even if the proposed choice seems safe
 
 ## implementer, reviewer
 
-Context.dependency_checks indexes historical command results of direct dependencies.
-Read streams beside the index for baseline comparisons. Verify current source separately.
+Context.dependency_checks indexes prior task outputs. Compare findings in complete
+baseline and current reports with matching scope and settings. Verify current source.
 
 ## implementer
 
