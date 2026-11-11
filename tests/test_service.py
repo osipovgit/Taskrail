@@ -20,6 +20,7 @@ from git_fixture import repository
 from run_fixture import current_run
 
 from taskrail.application.task_config import configuration
+from taskrail.core.release import VERSION
 from taskrail.core.runtime import run_storage, settings_path
 from taskrail.web.config_watch import ConfigurationWatch
 from taskrail.web.health import ready
@@ -146,7 +147,11 @@ class ServiceTests(unittest.TestCase):
         opener = build_opener(ProxyHandler({}))
         url = f"http://127.0.0.1:{port}"
         with opener.open(url + "/api/session") as response:
-            token = json.load(response)["token"]
+            session = json.load(response)
+            self.assertEqual(session["version"], VERSION)
+            token = session["token"]
+        with opener.open(url + "/") as response:
+            self.assertIn(VERSION, response.read().decode())
         payload = dict(
             title="Stop test",
             goal="Return 2",
@@ -197,6 +202,10 @@ class ServiceTests(unittest.TestCase):
         loginctl.chmod(0o755)
         self.environment["PATH"] = str(binaries) + os.pathsep + self.environment["PATH"]
         self.environment["PYTHON"] = sys.executable
+        extras = ("deploy/private.json", "taskrail/agents/custom.md", "taskrail/core/debug.json")
+        source = self.deployment.source()
+        for filename in extras:
+            (source / filename).write_text("operator data")
         installed = self.installer(str(self.settings), "--autostart=yes")
         self.assertEqual(installed.returncode, 0, installed.stderr)
         self.assertFalse((self.home / "loginctl.log").exists())
@@ -205,7 +214,21 @@ class ServiceTests(unittest.TestCase):
         log.write_text("")
         current = self.home / ".local/share/taskrail/current"
         first = current.resolve()
-        self.assertTrue((first / "taskrail/deployment/settings_init.py").is_file())
+        shadow = self.home / "old-checkout/taskrail"
+        shadow.mkdir(parents=True)
+        (shadow / "__init__.py").touch()
+        (shadow / "__main__.py").write_text("raise SystemExit('wrong checkout')")
+        version = subprocess.check_output(
+            [str(self.home / ".local/bin/taskrail"), "--version"],
+            cwd=shadow.parent,
+            env=self.environment,
+            text=True,
+        ).strip()
+        self.assertEqual(version, f"Taskrail {VERSION}")
+        self.assertTrue(first.name.startswith(f"{VERSION}-"))
+        self.assertTrue((first / "taskrail/deployment/settings_stage.py").is_file())
+        for filename in extras:
+            self.assertFalse((first / filename).exists())
         self.assertFalse((first / "docs").exists())
         config = self.home / ".config/taskrail/settings.json"
         options = json.loads(config.read_text())
@@ -217,7 +240,7 @@ class ServiceTests(unittest.TestCase):
         config.write_text(json.dumps(options))
         before = config.read_bytes()
         run = self.home / ".local/state/taskrail/runs/preserved"
-        run.mkdir()
+        run.mkdir(parents=True)
         (run / "run.json").write_text("{}")
         updated = self.installer()
         self.assertEqual(updated.returncode, 0, updated.stderr)
@@ -242,7 +265,8 @@ class ServiceTests(unittest.TestCase):
             capture_output=True,
             text=True,
         )
-        self.assertEqual(command.returncode, 0, command.stderr)
+        self.assertNotEqual(command.returncode, 0)
+        self.assertIn("Unsupported run format", command.stderr)
         switched = self.installer("--agents=bundled", "--autostart=keep")
         self.assertEqual(switched.returncode, 0, switched.stderr)
         self.assertEqual(

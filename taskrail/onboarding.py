@@ -11,7 +11,7 @@ from types import MappingProxyType
 from taskrail.core.runtime import run_storage, settings_path
 from taskrail.infrastructure import opencode_cli
 from taskrail.infrastructure.agent_profile import make_profile
-from taskrail.infrastructure.agent_sync import launch_settings
+from taskrail.infrastructure.opencode_settings import launch_settings
 from taskrail.infrastructure.permission_check import verify_launch
 
 ROLES = ("planner", "implementer", "reviewer")

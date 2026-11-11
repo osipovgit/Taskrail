@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 app_dir=$(readlink -f -- "$HOME/.local/share/taskrail/current")
-export PYTHONPATH="$app_dir"
 export TASKRAIL_SETTINGS="$HOME/.config/taskrail/settings.json"
-exec "$app_dir/venv/bin/python" -m taskrail "$@"
+exec "$app_dir/venv/bin/python" -I -B -c \
+    'import sys; sys.path.insert(0, sys.argv.pop(1)); from taskrail.cli import main; sys.exit(main())' \
+    "$app_dir" "$@"

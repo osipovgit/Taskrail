@@ -19,8 +19,7 @@ from taskrail.application.artifacts import save_run
 from taskrail.application.checkpoints import RESUMABLE
 from taskrail.application.task_config import configuration
 from taskrail.application.worktree_isolation import isolate
-from taskrail.core.files import atomic_json
-from taskrail.infrastructure.agent_sync import atomic_write
+from taskrail.core.files import atomic_json, atomic_write
 from taskrail.observability.progress import say
 
 INPUTS = "00-input"

@@ -4,14 +4,12 @@ import contextlib
 import io
 import json
 import shutil
-import tempfile
 import threading
 import unittest
-from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from run_fixture import current_run
+from run_fixture import current_run, workflow_workspace
 from test_prompt_contract import CAPABILITIES, assert_request_budget
 
 from taskrail import cli
@@ -34,9 +32,7 @@ from taskrail.web.submissions import TaskLauncher
 
 class DeliveryApprovalTests(unittest.TestCase):
     def setUp(self):
-        temporary = tempfile.TemporaryDirectory()
-        self.addCleanup(temporary.cleanup)
-        self.base = Path(temporary.name)
+        self.base = workflow_workspace(self)
         self.runs = self.base / "runs"
         self.runs.mkdir()
         self.repo = self.base / "repo"
@@ -209,7 +205,7 @@ class DeliveryApprovalTests(unittest.TestCase):
             checks=[],
             preimages={},
             requirements=config["task_spec"]["requirements"],
-            run_format=2,
+            run_format=3,
         )
         for stage in ("planner", "reviewer"):
             with (

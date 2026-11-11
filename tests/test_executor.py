@@ -82,6 +82,27 @@ class ExecutorTest(unittest.TestCase):
         self.assertEqual(first["status"], "PENDING_APPROVAL")
         self.assertNotIn(INVENTORY["server-a"]["password"], json.dumps(first))
 
+    def test_ambiguous_submission_and_an_untyped_ticket_never_start_a_worker(self):
+        server = self.server()
+        with patch.object(threading.Thread, "start") as start:
+            for fields in (
+                {},
+                {"action": ACTION, "jenkins": {}},
+                {"kind": "ssh", "action": ACTION},
+            ):
+                request = dict(operation="submit", key="ambiguous", **fields)
+                with self.subTest(fields), self.assertRaisesRegex(ValueError, "exactly one"):
+                    server.dispatch(request, server.client_uid)
+            self.assertEqual(list(self.store.directory.iterdir()), [])
+            ticket = self.submit()
+            ticket.pop("kind")
+            self.store.save(ticket)
+            request = dict(operation="approve", id=ticket["id"], digest=ticket["digest"])
+            with self.assertRaisesRegex(ValueError, "executor ticket kind"):
+                server.dispatch(request, 0)
+            self.assertEqual(self.store.get(ticket["id"])["status"], "PENDING_APPROVAL")
+            start.assert_not_called()
+
     def test_exact_digest_and_single_use_approval(self):
         ticket = self.submit()
         with self.assertRaises(ValueError):
@@ -336,9 +357,9 @@ class ExecutorTest(unittest.TestCase):
         with patch.object(client, "request", return_value=outcome) as request:
             context = execution_wait.resume(run, state)
             self.assertIn("Linux", context)
-            proof = run / "00-input/ssh/ticket.json"
+            proof = run / "00-input/remote/ticket.json"
             self.assertIn(str(proof), context)
-            self.assertEqual(json.loads(proof.read_text())[-1]["status"], "SUCCEEDED")
+            self.assertEqual(json.loads(proof.read_text())["status"], "SUCCEEDED")
             self.assertEqual(request.call_count, 1)
         with patch.object(client, "request") as request:
             self.assertIn("Linux", execution_wait.resume(run, state))
@@ -439,12 +460,12 @@ class ExecutorTest(unittest.TestCase):
         from taskrail.core.coverage import validate_outcome
 
         run = self.root / "runtime-proof"
-        directory = run / "00-input/ssh"
+        directory = run / "00-input/remote"
         directory.mkdir(parents=True)
         entry = {"id": "ticket", "status": "SUCCEEDED", "results": [{"output": "healthy"}]}
-        (run / "execution.json").write_text(json.dumps([entry]))
+        (run / "remote-execution.json").write_text(json.dumps([entry]))
         path = directory / "ticket.json"
-        path.write_text(json.dumps([entry]))
+        path.write_text(json.dumps(entry))
         claims = [{"id": "E1", "path": str(path)}]
         self.assertEqual(claim_ids(run, claims), {})
         outcome = {"outcome": "satisfied", "evidence_ids": ["E1"]}
@@ -452,7 +473,7 @@ class ExecutorTest(unittest.TestCase):
             validate_outcome(outcome, {"kind": "runtime"}, {"E1": {}}, ())
         with self.assertRaises(ValueError):
             validate_outcome(outcome, {"kind": "runtime"}, {"E1": {}}, {"E1"})
-        path.write_text(json.dumps([{**entry, "results": [{"output": "forged"}]}]))
+        path.write_text(json.dumps({**entry, "results": [{"output": "forged"}]}))
         self.assertEqual(claim_ids(run, claims), {})
 
 

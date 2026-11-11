@@ -3,9 +3,8 @@
 import json
 
 from taskrail.core import prompt_texts
-from taskrail.core.files import atomic_json, digest
+from taskrail.core.files import atomic_json, atomic_write, digest
 from taskrail.core.schema import SCHEMAS, require
-from taskrail.infrastructure.agent_sync import atomic_write
 
 ROLES = ("understanding", "planner", "implementer", "reviewer")
 CONTRACT = "00-input/contract.json"

@@ -7,7 +7,7 @@ the server reads it, derives the plan result and names every problem by line.
 
 from taskrail.application import plan_template, project_map
 from taskrail.core import plan_document, prompt_texts, protected_paths
-from taskrail.infrastructure.agent_sync import atomic_write
+from taskrail.core.files import atomic_write
 
 NAME = "plan.md"
 

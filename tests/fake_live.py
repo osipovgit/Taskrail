@@ -216,7 +216,7 @@ if mode in {"bad-git-request", "local-effects"} and role == "planner" and "--ses
         part.update(messageID="msg1", id=event)
         print(json.dumps(dict(type=event, part=part, sessionID="ses1")))
     sys.exit(0)
-if mode == "ssh-action" and role == "planner" and not (run / "execution.json").exists():
+if mode == "ssh-action" and role == "planner" and not (run / "remote-execution.json").exists():
     action = dict(
         targets=["server-a"],
         script="uname -a\n",

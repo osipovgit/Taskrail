@@ -20,19 +20,14 @@ systemctl --user show-environment >/dev/null
 run_module() {
     local module=$1
     shift
-    "$python_bin" -I -c \
+    "$python_bin" -I -B -c \
         'import importlib, sys; sys.path.insert(0, sys.argv.pop(1)); importlib.import_module(sys.argv.pop(1)).main()' \
         "$source_dir" "$module" "$@"
 }
 # Serialize installers. Never switch releases underneath an active workflow.
 # shellcheck source=deploy/install-locks.sh
 source "$source_dir/deploy/install-locks.sh"
-mkdir -p "$app_dir/releases" "$config_dir" "$state_dir/runs" "$unit_dir" "$HOME/.local/bin"
-# An invalid import must not destroy an existing installation during --fresh.
-preflight=(--check)
-[[ "$fresh" == yes ]] && preflight+=(--fresh)
-run_module taskrail.deployment.settings_init "$source_dir" "$config_dir" "$initial_settings" "$app_dir" "$agent_mode" "${preflight[@]}"
-version=$("$python_bin" -I -c 'import sys; sys.path.insert(0, sys.argv[1]); from taskrail.core.version import VERSION; print(VERSION)' "$source_dir")
+mkdir -p "$app_dir/releases" "$config_dir" "$unit_dir" "$HOME/.local/bin"
 # A fresh reset removes app_dir, so preparation lives beside it, on the same filesystem.
 staging=$(mktemp -d "$HOME/.local/share/.taskrail-stage-XXXXXXXX")
 release=$staging/release
@@ -45,13 +40,10 @@ cleanup() {
     fi
 }
 trap cleanup EXIT
-# Copy the application only; project source roots and task history are never copied.
-tar -C "$source_dir" --exclude='__pycache__' --exclude='*.pyc' -cf - \
-    taskrail deploy pyproject.toml README.md LICENSE |
-    tar -C "$release" -xf -
+run_module taskrail.deployment.release_files application "$source_dir" "$release"
 "$python_bin" -m venv --without-pip "$release/venv"
-"$release/venv/bin/python" -I -c \
-    'import sys; sys.path.insert(0, sys.argv[1]); from taskrail.web.service import ApplicationService' "$release"
+version=$("$release/venv/bin/python" -I -B -c \
+    'import sys; sys.path.insert(0, sys.argv[1]); from taskrail.web.service import ApplicationService; from taskrail.core.release import VERSION; print(VERSION)' "$release")
 # Configuration, copied roles and the environment are prepared before any reset.
 prepare_options=()
 [[ "$fresh" == yes ]] && prepare_options+=(--fresh)
@@ -82,15 +74,9 @@ esac
 # Workers must not inherit the installer's workflow lock.
 flock -u 9
 exec 9>&-
-if [[ -t 0 && "$fresh" != yes ]]; then
-    read -r -p "Archive unsupported task histories to trash? [y/N] " archive_old
-    if [[ "$archive_old" == y || "$archive_old" == Y ]]; then
-        run_module taskrail.cli_history archive-old --settings "$config_dir/settings.json"
-    fi
-fi
 systemctl --user restart "$service"
 systemctl --user is-active --quiet "$service"
-"$release/venv/bin/python" -I -c \
+"$release/venv/bin/python" -I -B -c \
     'import sys; sys.path.insert(0, sys.argv.pop(1)); from taskrail.deployment.releases import main; main()' \
     "$release" "$app_dir" "$config_dir/settings.json"
 if [[ "$boot" == yes ]]; then
@@ -102,9 +88,9 @@ if [[ "$boot" == yes ]]; then
 fi
 printf 'Autostart: '
 systemctl --user is-enabled "$service" || true
-printf 'Installed Taskrail %s\nUI: http://127.0.0.1:8787 (default port)\nSettings: %s/settings.json\nHistory: %s/runs\n' "$version" "$config_dir" "$state_dir"
+printf 'Installed Taskrail %s\nUI: http://127.0.0.1:8787 (default port)\nSettings: %s/settings.json\n' "$version" "$config_dir"
 if ! PATH=/usr/bin:/bin command -v bwrap >/dev/null; then
-    echo 'Install bubblewrap (for example: sudo apt install bubblewrap) so agents run local commands in a sandbox without approval; until then each one waits for you.'
+    echo 'Install bubblewrap (for example: sudo apt install bubblewrap) to sandbox local commands. Without it the host command policy applies.'
 fi
 
 if [[ "${executor_reset:-no}" == yes ]]; then

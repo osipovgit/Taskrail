@@ -25,7 +25,7 @@ class AttemptProvenanceTests(unittest.TestCase):
         record = dict(self.record(1), role="planner")
         state = {
             "agent_sources": {"planner": "saved-hash"},
-            "run_format": 2,
+            "run_format": 3,
             "agent_source_directory": str(inputs / "agents"),
         }
         config = dict(timeout=60)

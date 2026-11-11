@@ -9,7 +9,7 @@ from taskrail.core import prompt_texts, protected_paths, read_hints, schema
 from taskrail.core.files import digest, stream_digest
 from taskrail.interactions import output_preview
 
-KINDS = frozenset(("local", "git", "checks", "ssh"))
+KINDS = frozenset(("local", "git", "checks", "remote"))
 STREAM = re.compile(r"(.+)\.(?:\d+-)?(?:stdout|stderr|console|output)\.txt")
 OUTPUTS = (*output_preview.OUTPUT_FIELDS, "output")
 
@@ -78,11 +78,10 @@ def recorded_hashes(kind, entry):
     if kind == "checks":
         streams = entry["execution"]["artifacts"]
         return {name: streams[name]["sha256"] for name in OUTPUTS if name in streams}
-    if kind == "ssh":
-        single = isinstance(entry, list) and len(entry) == 1
-        schema.require(single, "Invalid SSH report")
-        streams = executor_streams.remote(entry)
+    if kind == "remote" and "results" in entry:
+        streams = output_preview.ticket_streams(entry)
         return {name: digest(text.encode()) for name, text in streams.items()}
+    schema.require(isinstance(entry["result"], dict), "Invalid command report")
     streams = executor_streams.streams(entry)
-    selected = entry["outputs"].keys() & OUTPUTS
+    selected = entry.get("outputs", {}).keys() & OUTPUTS
     return {name: digest(streams[name].encode()) for name in selected}

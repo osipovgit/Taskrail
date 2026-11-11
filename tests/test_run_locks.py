@@ -1,17 +1,22 @@
 """Runs on different projects proceed in parallel; one project runs one task at a time."""
 
+import contextlib
 import fcntl
 import json
-import os
 import subprocess
 import sys
-import tempfile
 import unittest
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from threading import Event, current_thread, main_thread
 from unittest import mock
 
+from run_fixture import workflow_workspace
+
+from taskrail.application import run_locks as locks
 from taskrail.application.live import execute_task
 from taskrail.application.run_locks import INSTALL_LOCK, STATE, conflict, run_locks
+from taskrail.core import file_lock
 from taskrail.web.run_activity import BusyError, require_idle
 
 BASE = Path(__file__).resolve().parents[1]
@@ -19,12 +24,7 @@ BASE = Path(__file__).resolve().parents[1]
 
 class RunLockTests(unittest.TestCase):
     def setUp(self):
-        temporary = tempfile.TemporaryDirectory()
-        self.addCleanup(temporary.cleanup)
-        self.base = Path(temporary.name)
-        patcher = mock.patch.dict(os.environ, {"HOME": str(self.base / "home")})
-        patcher.start()
-        self.addCleanup(patcher.stop)
+        self.base = workflow_workspace(self)
 
     def test_a_stray_empty_git_directory_does_not_join_projects_into_one_repository(self):
         (self.base / ".git").mkdir()
@@ -53,6 +53,45 @@ class RunLockTests(unittest.TestCase):
             fcntl.flock(stream, fcntl.LOCK_EX | fcntl.LOCK_NB)
             with run_locks([first], self.base / "run-4") as reason:
                 self.assertEqual(reason, "An installation is in progress")
+
+    def test_probes_and_shared_holders_leave_no_resource_files(self):
+        path = locks.lock_path(locks.ROOT, self.base)
+        self.assertIsNone(conflict([self.base]))
+        self.assertFalse(path.parent.exists())
+        with locks.resource(locks.ROOT, self.base, file_lock.SHARED) as first:
+            with locks.resource(locks.ROOT, self.base, file_lock.SHARED) as second:
+                self.assertTrue(first and second)
+            self.assertTrue(path.exists())
+            self.assertIn("Another task", conflict([self.base]))
+        self.assertEqual(list(path.parent.iterdir()), [])
+
+    def test_open_descriptor_on_retired_inode_cannot_bypass_new_holder(self):
+        opened, proceed = Event(), Event()
+        open_file = file_lock.open_lock
+
+        @contextlib.contextmanager
+        def delayed_open(path):
+            with open_file(path) as stream:
+                if current_thread() is not main_thread() and not opened.is_set():
+                    opened.set()
+                    self.assertTrue(proceed.wait(5))
+                yield stream
+
+        def try_acquire():
+            with locks.resource(locks.RUN, self.base, file_lock.EXCLUSIVE) as acquired:
+                return acquired
+
+        with (
+            ThreadPoolExecutor(max_workers=1) as pool,
+            mock.patch.object(file_lock, "open_lock", delayed_open),
+        ):
+            with locks.resource(locks.RUN, self.base, file_lock.EXCLUSIVE):
+                waiter = pool.submit(try_acquire)
+                self.assertTrue(opened.wait(5))
+            with locks.resource(locks.RUN, self.base, file_lock.EXCLUSIVE):
+                proceed.set()
+                self.assertFalse(waiter.result(timeout=5))
+        self.assertFalse(locks.lock_path(locks.RUN, self.base).exists())
 
     def test_a_directory_excludes_its_subdirectories_and_aliases(self):
         parent, other = self.base / "p", self.base / "q"

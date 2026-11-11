@@ -13,10 +13,9 @@ from taskrail.application import lock_resources
 from taskrail.application.planned_paths import safe_file
 from taskrail.application.worktree_default import top_level
 from taskrail.core import protected_paths
-from taskrail.core.files import changed
+from taskrail.core.files import atomic_write, changed
 from taskrail.core.schema import require
 from taskrail.git import process
-from taskrail.infrastructure.agent_sync import atomic_write
 
 KEY = "task_branch"
 BEYOND = "beyond_plan"

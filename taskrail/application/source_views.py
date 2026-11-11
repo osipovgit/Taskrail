@@ -9,9 +9,8 @@ from taskrail.application import (
     source_view_storage,
     source_windows,
 )
-from taskrail.core.files import atomic_json
+from taskrail.core.files import atomic_json, atomic_write
 from taskrail.core.schema import require
-from taskrail.infrastructure.agent_sync import atomic_write
 
 MAX_BYTES = 8 * 1024 * 1024
 MAX_LINE = source_view_json.MAX_LINE

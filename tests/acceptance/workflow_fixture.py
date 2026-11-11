@@ -2,12 +2,12 @@
 
 import json
 import sys
-import tempfile
 from pathlib import Path
 from unittest.mock import patch
 
 from corpus import fields, materialize, snapshot, submission
 from git_fixture import repository
+from run_fixture import workflow_workspace
 
 from taskrail.application.live import execute_task
 from taskrail.core.files import atomic_json
@@ -18,9 +18,7 @@ BASE = Path(__file__).resolve().parents[2]
 
 class ScenarioFixture:
     def prepare(self, case):
-        temporary = tempfile.TemporaryDirectory()
-        self.addCleanup(temporary.cleanup)
-        self.base = Path(temporary.name)
+        self.base = workflow_workspace(self)
         self.case = case
         self.roots = materialize(self.base, case)
         self.originals = snapshot(self.roots)

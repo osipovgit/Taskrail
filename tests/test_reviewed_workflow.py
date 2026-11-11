@@ -2,11 +2,11 @@
 
 import json
 import sys
-import tempfile
 import unittest
 from pathlib import Path
 
 from git_fixture import repository
+from run_fixture import workflow_workspace
 
 from taskrail.application.live import execute_task
 from taskrail.core.files import atomic_json
@@ -26,9 +26,7 @@ class ReviewedFixture:
     """A source tree, a run store and execute(), which submits a form like the browser."""
 
     def setUp(self):
-        self.temporary = tempfile.TemporaryDirectory()
-        self.addCleanup(self.temporary.cleanup)
-        self.base = Path(self.temporary.name)
+        self.base = workflow_workspace(self)
         self.root = self.base / "source"
         self.root.mkdir()
         (self.root / ".git").mkdir()
@@ -62,10 +60,7 @@ class ReviewedFixture:
                 agent_source=str(BASE / "taskrail/agents"),
                 agent_directory=str(self.base / "profiles"),
                 timeout_seconds=1 if mode == "writer-timeout" else 10,
-                **dict(
-                    dict(worktree_base=str(self.base / "worktrees")),
-                    **getattr(self, "settings_extra", {}),
-                ),
+                **getattr(self, "settings_extra", {}),
             ),
         )
         run, status = execute_task(task, self.settings, run_dir=self.runs / name)

@@ -10,7 +10,7 @@ from taskrail.application.verify_settings import parse_commands
 from taskrail.application.worktree_isolation import isolation_settings
 from taskrail.core import corrections, input_header, task_markdown
 from taskrail.core.runtime import DEFAULT_TIMEOUT, run_storage, settings_path
-from taskrail.infrastructure.agent_sync import launch_settings
+from taskrail.infrastructure.opencode_settings import launch_settings
 
 HEADER = input_header.HEADER
 ROLES = ("understanding", "planner", "implementer", "reviewer")

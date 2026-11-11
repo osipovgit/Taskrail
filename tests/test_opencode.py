@@ -17,9 +17,9 @@ from taskrail.infrastructure import (
     opencode_server,
     permission_probe,
 )
-from taskrail.infrastructure.agent_sync import launch_settings
 from taskrail.infrastructure.event_summary import parse_events
 from taskrail.infrastructure.opencode_events import EventTranslator
+from taskrail.infrastructure.opencode_settings import launch_settings
 from taskrail.infrastructure.permission_check import verify_launch
 from taskrail.infrastructure.profile_rules import permissions
 from taskrail.infrastructure.runner import run_agent

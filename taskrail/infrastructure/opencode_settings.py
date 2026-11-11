@@ -1,6 +1,5 @@
-"""opencode launch settings and atomic file writes."""
+"""opencode launch settings."""
 
-import os
 from pathlib import Path
 
 from taskrail.infrastructure import environment as host_environment
@@ -28,17 +27,6 @@ def launch_settings(options, base):
         destination=(base / destination.expanduser()).resolve(),
         **validated,
     )
-
-
-def atomic_write(path, content_bytes):
-    """Replace a file atomically, creating its folder."""
-    path.parent.mkdir(parents=True, exist_ok=True)
-    pending = path.with_name(f"{path.name}.tmp-{os.getpid()}")
-    with pending.open("wb") as stream:
-        stream.write(content_bytes)
-        stream.flush()
-        os.fsync(stream.fileno())
-    pending.replace(path)
 
 
 def tool_output_setting(setting):

@@ -19,7 +19,11 @@ def validate(config, source):
     for name in ("hosts.json", "known_hosts", "jenkins.json"):
         regular(config / name)
     inventory = config / "hosts.json"
-    hosts.load(inventory if inventory.exists() else source / "deploy/executor-hosts.example.json")
+    if not inventory.exists():
+        inventory = source / "deploy/executor-hosts.example.json"
+        if inventory.resolve() != inventory:
+            raise ValueError("Executor example inventory must not be redirected")
+    hosts.load(inventory)
     jenkins_config.load(config / "jenkins.json")
 
 

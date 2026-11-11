@@ -210,7 +210,7 @@ class DecisionContractTests(unittest.TestCase):
         (self.folder / "events.jsonl").write_text("")
         request = dict(cwd=str(self.root), argv=["ansible-lint", "roles/"], reason="Verify")
         outcome = dict(status="SUCCEEDED", exit_code=0, stdout="0 failure(s), 2 warning(s).")
-        delivered = transcripts.local_snapshot(self.run, self.folder, request, outcome)
+        delivered = transcripts.command_snapshot(self.folder, request, outcome)
         evidence_delivery.confirm(
             self.run,
             self.folder,

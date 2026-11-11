@@ -3,8 +3,7 @@
 import textwrap
 
 from taskrail.core import schema
-from taskrail.core.files import digest
-from taskrail.infrastructure.agent_sync import atomic_write
+from taskrail.core.files import atomic_write, digest
 
 KEY = "implementation_submission"
 PATH = "path"

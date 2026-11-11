@@ -40,7 +40,8 @@ Repository rules must require both statuses; YAML alone does not prevent a merge
 
 The ordinary regression suite includes real disposable Git repositories and linked
 worktrees for automatic commit ownership, content receipts, filter suppression,
-partial failure and interrupted writes. Split workflows use scripted 1.x and 2.x
+partial failure and interrupted writes. Workflow fixtures give workers a temporary
+home for worktrees, locks and provider data even when invoked directly with `unittest`. Split workflows use scripted 1.x and 2.x
 CLI transports to check inherited permissions, configured checks, child commits,
 restart/Continue and combined integration review. Evidence tests distinguish
 attempts and session IDs and reject unsent or omitted source deliveries. These

@@ -4,8 +4,8 @@ import difflib
 
 from taskrail.application import followup_selection
 from taskrail.application.planned_paths import safe_file
+from taskrail.core.files import atomic_write
 from taskrail.git import review_source
-from taskrail.infrastructure.agent_sync import atomic_write
 
 DEV_NULL = "/dev/null"
 NO_NEWLINE = r"\ No newline at end of file"

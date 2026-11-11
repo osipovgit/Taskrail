@@ -2,7 +2,6 @@
 
 import json
 import sys
-import tempfile
 import threading
 import time
 import unittest
@@ -10,7 +9,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from git_fixture import repository
-from run_fixture import current_run
+from run_fixture import current_run, workflow_workspace
 
 from taskrail.application import delivery_confirmation, execution_context, mode_rules
 from taskrail.application.live import execute_task
@@ -29,9 +28,7 @@ BASE = Path(__file__).resolve().parents[1]
 
 class TaskControlTests(unittest.TestCase):
     def setUp(self):
-        self.tmp = tempfile.TemporaryDirectory()
-        self.addCleanup(self.tmp.cleanup)
-        self.base = Path(self.tmp.name)
+        self.base = workflow_workspace(self)
         self.repo = self.base / "repo"
         self.repo.mkdir()
         (self.repo / ".git").mkdir()
@@ -542,6 +539,20 @@ class TaskControlTests(unittest.TestCase):
         with patch.object(restarted, "launch") as launch_again:
             delivery_launch.advance(restarted)
         launch_again.assert_not_called()
+
+    def test_launch_recovery_skips_external_and_malformed_records(self):
+        folders = self.runs / ".submissions"
+        invalid = folders / "invalid"
+        invalid.mkdir(parents=True)
+        atomic_json(invalid / "launch.json", [])
+        linked = folders / "external"
+        linked.symlink_to(self.repo, target_is_directory=True)
+        outside = self.repo / "launch.json"
+        pending = dict(id="external", status="STARTING")
+        atomic_json(outside, pending)
+        TaskLauncher(self.runs, self.settings)
+        self.assertEqual(json.loads(outside.read_text()), pending)
+        self.assertEqual(json.loads((invalid / "launch.json").read_text()), [])
 
     def test_a_started_worker_survives_a_restart_without_a_second_run(self):
         epic = self.make_epic()

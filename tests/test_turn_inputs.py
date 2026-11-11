@@ -11,6 +11,7 @@ from live_fixture import LiveFixture
 
 from taskrail.application import context_handoff, progress_archive, progress_file
 from taskrail.infrastructure import artifact_access, runner
+from taskrail.observability.telemetry import inspect_events
 
 
 class TurnInputTests(unittest.TestCase):
@@ -81,9 +82,8 @@ class TurnInputTests(unittest.TestCase):
                 result = runner.run_agent(self.options(note, "same"))
                 self.assertEqual(result["status"], "OK", result["errors"])
                 self.assertEqual(result["final_text"], "DONE")
-                telemetry = json.loads(self.folder.joinpath("telemetry.json").read_text())
+                telemetry = inspect_events(self.folder / "events.jsonl")
                 self.assertEqual(telemetry["last_input"], reported)
-                self.assertFalse(self.folder.joinpath("turn-inputs.json").exists())
 
     def test_growing_attachments_reach_the_provider_on_continued_turns(self):
         note = self.run / "review.md"
@@ -97,9 +97,8 @@ class TurnInputTests(unittest.TestCase):
         self.assertEqual(continued["status"], "OK", continued["errors"])
         inputs = json.loads(self.run.joinpath("provider-inputs.json").read_text())
         self.assertEqual([turn[str(note)] for turn in inputs], [5, 1900000])
-        self.assertFalse(self.folder.joinpath("turn-inputs.json").exists())
 
-    def test_missing_usage_and_obsolete_ledger_do_not_block_continuations(self):
+    def test_missing_usage_does_not_block_continuations(self):
         note = self.run / "plan.md"
         note.write_text("x" * 180000)
         event = dict(
@@ -111,15 +110,12 @@ class TurnInputTests(unittest.TestCase):
             ),
         )
         self.folder.joinpath("events.jsonl").write_text(json.dumps(event) + "\n")
-        ledger = self.folder / "turn-inputs.json"
-        ledger.write_text("historical incomplete ledger")
         options = self.options(note, "same")
         for _ in range(2):
             result = runner.run_agent(options)
             self.assertEqual(result["status"], "OK", result["errors"])
-        telemetry = json.loads(self.folder.joinpath("telemetry.json").read_text())
+        telemetry = inspect_events(self.folder / "events.jsonl")
         self.assertIsNone(telemetry["last_input"])
-        self.assertEqual(ledger.read_text(), "historical incomplete ledger")
 
     def test_provider_context_rejection_remains_authoritative_without_usage(self):
         note = self.run / "review.md"
@@ -130,7 +126,6 @@ class TurnInputTests(unittest.TestCase):
         self.assertEqual(result["status"], "CONTEXT_EXCEEDED")
         self.assertIn("maximum context length exceeded", result["errors"])
         self.assertTrue(self.run.joinpath("provider-inputs.json").exists())
-        self.assertFalse(self.folder.joinpath("turn-inputs.json").exists())
 
     def test_progress_is_bounded_with_lossless_archive_and_exact_read_access(self):
         original = "# Done\n" + "ж" * 20000 + "\n# Remaining\nFinish the boundary check\n"

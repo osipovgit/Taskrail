@@ -12,6 +12,7 @@ from run_fixture import current_run
 
 from taskrail import cli
 from taskrail.application import run_locks
+from taskrail.core import file_lock
 from taskrail.core.files import atomic_json
 
 
@@ -94,8 +95,8 @@ class CliApiTests(unittest.TestCase):
         atomic_json(self.run / "run.json", current_run(dict(status="RUNNING")))
         code, status = self.call("status", self.run.name)
         self.assertEqual((code, status["status"], status["active"]), (0, "RUNNING", False))
-        with run_locks.lock_file(run_locks.lock_path(run_locks.RUN, self.run)) as stream:
-            self.assertTrue(run_locks.locked(stream, run_locks.EXCLUSIVE))
+        with file_lock.open_lock(run_locks.lock_path(run_locks.RUN, self.run)) as stream:
+            self.assertTrue(file_lock.locked(stream, file_lock.EXCLUSIVE))
             code, status = self.call("status", self.run.name)
         self.assertEqual((code, status["active"]), (0, True))
 

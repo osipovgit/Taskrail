@@ -10,7 +10,6 @@ from taskrail.web.run_files import contained, read_json
 
 SUMMARY_LIMIT = 500
 RUN_INDEX = "run.json"
-TITLE_PREFIX = "# "
 REQUIRED_LAUNCH_FIELDS = frozenset(("title", "status"))
 # Header flags in precedence order: a design discussion is also read-only.
 MODES = MappingProxyType(
@@ -29,7 +28,7 @@ def list_runs(base):
 
 def run_entry(path):
     """A readable run directory, or None; a task or phase run is shown in its parent."""
-    if path.is_symlink() or not path.is_dir():
+    if path.name.startswith(".") or path.is_symlink() or not path.is_dir():
         return None
     try:
         return run_summary(path)
@@ -42,17 +41,15 @@ def run_summary(path):
     state = read_json(contained(path, RUN_INDEX))
     if not run_store.supported(state):
         return None
-    if run_family.shown_inside(path.parent, path):
+    draft = history.TaskDraft.submitted(path)
+    if run_family.visible_parent(path.parent, draft.metadata):
         return None
-    state = read_json(contained(path, RUN_INDEX))
-    task = history.read_artifact(path, history.TASK_FILE)
-    request = task.split(history.HISTORY, 1)[0]
     status = lifecycle.display_status(path, state)
     summary = dict(
         id=path.name,
-        title=task_title(request, path.name),
+        title=draft.title(path.name),
         status=status,
-        mode=task_mode(request),
+        mode=task_mode(draft.metadata),
         group=run_groups.group(path, state, status),
         summary=state.get("summary", "")[:SUMMARY_LIMIT],
     )
@@ -61,21 +58,12 @@ def run_summary(path):
     return summary
 
 
-def task_mode(task):
+def task_mode(metadata):
     """develop, answer, design or decompose, from the server-generated task header."""
-    metadata = history.TaskDraft(task).metadata
     for flag, mode in MODES.items():
         if metadata.get(flag) is True:
             return mode
     return "develop"
-
-
-def task_title(task, fallback):
-    """The first Markdown level-one heading."""
-    for line in task.splitlines():
-        if line.startswith(TITLE_PREFIX):
-            return line.lstrip(TITLE_PREFIX).strip()
-    return fallback
 
 
 def pending_entries(base, known):
@@ -102,7 +90,8 @@ def pending_entry(folder):
     # A continuation, task or phase launch is shown in its own or its parent's card.
     shown_elsewhere = True
     with contextlib.suppress(*run_errors.ERRORS):
-        shown_elsewhere = run_family.shown_inside(folder.parent.parent, folder)
+        metadata = run_family.task_metadata(folder, "task.md")
+        shown_elsewhere = run_family.visible_parent(folder.parent.parent, metadata)
     if not isinstance(launch, dict) or launch.get("resume") or shown_elsewhere:
         return None
     if not REQUIRED_LAUNCH_FIELDS.issubset(launch):

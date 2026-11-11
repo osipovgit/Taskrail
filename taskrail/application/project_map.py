@@ -10,7 +10,7 @@ from itertools import starmap
 
 from taskrail.application import project_files
 from taskrail.core import prompt_texts, protected_paths
-from taskrail.infrastructure.agent_sync import atomic_write
+from taskrail.core.files import atomic_write
 
 NAME = "00-input/project-map.md"
 MAP_LIMIT = 60000

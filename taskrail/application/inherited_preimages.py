@@ -10,9 +10,8 @@ import json
 import stat
 
 from taskrail.application import reviewed_artifacts
-from taskrail.core.files import atomic_json, digest
+from taskrail.core.files import atomic_json, atomic_write, digest
 from taskrail.core.schema import require
-from taskrail.infrastructure.agent_sync import atomic_write
 
 PREIMAGES = "preimages"
 INHERITED = "inherited_preimages"

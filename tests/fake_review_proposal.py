@@ -20,7 +20,7 @@ def proposal(context, role, run, emit):
             respond(plan, findings)
         return None
     if role == "plan-reviewer":
-        if not (run / "local-execution.json").exists():
+        if not any((run / "00-input/local").glob("*.json")):
             return json.dumps(
                 dict(
                     schema_version=1,

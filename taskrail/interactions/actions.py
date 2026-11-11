@@ -42,7 +42,7 @@ class Actions:
         session.environment.update(expected=effect[0], git_before=effect[1])
         session.state[command_effects.SOURCE_EFFECT] = effect
         path = Path(session.state["git_jobs"][-1]["output_file"])
-        return transcripts.delivered(self.run, self.folder, path, path.read_text())
+        return transcripts.delivered(self.folder, path, path.read_text())
 
     def push_refusal(self, payload):
         """Feedback when the operator does not approve a push; None to run it.
@@ -69,7 +69,7 @@ class Actions:
 
     def local_result(self, payload, answer, index=None):
         """Keep command results in the public transcript and evidence ledger."""
-        return transcripts.local_snapshot(self.run, self.folder, payload, answer, index)
+        return transcripts.command_snapshot(self.folder, payload, answer, index=index)
 
 
 def incomplete_request(actions, outcome):

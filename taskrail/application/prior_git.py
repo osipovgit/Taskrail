@@ -3,10 +3,9 @@
 from pathlib import Path
 
 from taskrail.application import reviewed_artifacts
-from taskrail.core.files import atomic_json
+from taskrail.core.files import atomic_json, atomic_write
 from taskrail.core.schema import require
 from taskrail.git import requests
-from taskrail.infrastructure.agent_sync import atomic_write
 
 ORIGIN = "origin"
 

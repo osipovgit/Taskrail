@@ -17,7 +17,7 @@ OPTIONAL = MappingProxyType(dict(debug=False, progress=False, runtime=None))
 
 
 def run_agent(launch):
-    """Launch, watch and classify one turn; the raw response is saved unchanged.
+    """Launch, watch and classify one turn from the recorded event stream.
 
     launch: command, workspace, agent, model, prompt, attempt and timeout, plus the
     optional debug, progress and runtime.
@@ -29,7 +29,6 @@ def run_agent(launch):
     watch = TurnWatch(turn, attempt, options["progress"])
     outcome = summarize(watch, start(watch, options), options)
     outcome.update(model=options["model"], agent=options["agent"])
-    attempt.joinpath("response.raw.txt").write_text(outcome["final_text"], encoding="utf-8")
     return outcome
 
 
