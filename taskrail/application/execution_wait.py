@@ -9,7 +9,7 @@ from taskrail.core.files import atomic_json
 from taskrail.executor import client, protocol
 from taskrail.interactions import output_preview
 
-LEDGER = "execution.json"
+LEDGER = "remote-execution.json"
 STATUS = "status"
 IDENTIFIER = "id"
 TERMINAL = frozenset(("SUCCEEDED", "FAILED", "UNKNOWN", "REJECTED"))
@@ -87,7 +87,7 @@ def report_lines(state):
         "",
         "## SSH and Jenkins execution",
         "",
-        "Exact requests and outputs: [execution.json](execution.json)",
+        "Exact requests and outputs: [remote-execution.json](remote-execution.json)",
         "",
     ]
     for job in jobs:
@@ -99,13 +99,15 @@ def report_lines(state):
 def save_snapshot(run, pending):
     """Keep completed ticket evidence at a stable, model-readable path."""
     filename = f"{protocol.label(pending[IDENTIFIER])}.json"
-    destination = run / "00-input" / "ssh" / filename
+    destination = run / "00-input/remote" / filename
     destination.parent.mkdir(parents=True, exist_ok=True)
+    if destination.is_symlink():
+        raise ValueError("Executor evidence snapshot changed")
     if destination.exists():
         snapshot = json.loads(destination.read_text())
-        if destination.is_symlink() or snapshot != [pending]:
+        if snapshot != pending:
             raise ValueError("Executor evidence snapshot changed")
     else:
-        atomic_json(destination, [pending])
+        atomic_json(destination, pending)
     output_preview.save_ticket_outputs(destination, pending)
     return destination

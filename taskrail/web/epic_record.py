@@ -19,8 +19,7 @@ PAUSE = epic_tasks.PAUSE
 @contextlib.contextmanager
 def changing(run):
     """Yield the record to edit; it is written when the block ends without an error."""
-    with run_locks.lock_file(run_locks.lock_path("epic", run)) as stream:
-        fcntl.flock(stream, fcntl.LOCK_EX)
+    with run_locks.resource("epic", run, fcntl.LOCK_EX):
         run_store.read(run)
         epic = epic_tasks.record(run)
         yield epic

@@ -37,6 +37,10 @@ def recover_launches(base):
         return
     for folder in submissions.iterdir():
         manifest = launch_record(folder)
-        if manifest.get(STATUS) == "STARTING" and "pid" not in manifest:
+        if (
+            isinstance(manifest, dict)
+            and manifest.get(STATUS) == "STARTING"
+            and "pid" not in manifest
+        ):
             manifest.update(status=LAUNCH_ERROR, summary=NOT_STARTED)
             atomic_json(folder / LAUNCH_FILE, manifest)

@@ -2,6 +2,7 @@
 
 import json
 import os
+import shutil
 import socket
 import subprocess
 import tempfile
@@ -185,7 +186,8 @@ class MaintenanceScriptTests(unittest.TestCase):
         ):
             directory.mkdir(parents=True, exist_ok=True)
         (self.package / "previous").write_text("previous package")
-        (self.release / "taskrail/replacement").write_text("prepared package")
+        (self.release / "taskrail/executor/debug.json").write_text("private diagnostics")
+        (self.release / "taskrail/executor/custom.py").write_text("# operator helper")
         self.unit.write_text("[Unit]\n")
         self.log = self.home / "operations.log"
         stubs = {
@@ -229,7 +231,14 @@ class MaintenanceScriptTests(unittest.TestCase):
     def test_the_installer_swaps_a_prepared_package_only_after_maintenance(self):
         installed = self.execute("install-executor.sh", "--client=fixture")
         self.assertEqual(installed.returncode, 0, installed.stderr)
-        self.assertEqual((self.package / "replacement").read_text(), "prepared package")
+        service = Path("executor/service.py")
+        self.assertEqual(
+            (self.package / service).read_bytes(),
+            (self.release / "taskrail" / service).read_bytes(),
+        )
+        self.assertFalse((self.package / "web").exists())
+        self.assertFalse((self.package / "executor/debug.json").exists())
+        self.assertFalse((self.package / "executor/custom.py").exists())
         self.assertFalse((self.package / "previous").exists())
         self.assertEqual(
             self.log.read_text().splitlines()[:2],
@@ -245,7 +254,7 @@ class MaintenanceScriptTests(unittest.TestCase):
                 failed = self.execute("install-executor.sh", "--client=fixture", **environment)
                 self.assertNotEqual(failed.returncode, 0)
                 self.assertEqual((self.package / "previous").read_text(), "previous package")
-                self.assertFalse((self.package / "replacement").exists())
+                self.assertFalse((self.package / "executor/service.py").exists())
                 self.assertFalse((self.config / "maintenance").exists())
                 calls = self.log.read_text()
                 if environment.get("PREPARE_EXIT") or not environment:
@@ -278,7 +287,7 @@ class MaintenanceScriptTests(unittest.TestCase):
         failed = self.execute("reset-executor.sh", f"--replacement={self.release}")
         self.assertNotEqual(failed.returncode, 0)
         self.assertEqual((self.package / "previous").read_text(), "previous package")
-        self.assertNotIn("stop ", self.log.read_text())
+        self.assertFalse(self.log.exists())
         self.assertEqual(list(self.package.parent.glob(".reset-*")), [])
 
     def test_combined_reset_check_prepares_without_stopping_or_deleting(self):
@@ -316,14 +325,10 @@ class ExecutorPackageTests(unittest.TestCase):
         self.addCleanup(temporary.cleanup)
         self.base = Path(temporary.name)
         self.source = self.base / "source/taskrail"
-        (self.source / "executor").mkdir(parents=True)
-        for name in (
-            "__init__.py",
-            "executor/__init__.py",
-            "executor/service.py",
-            "executor/approval.py",
-        ):
-            (self.source / name).write_text('"""Import fixture."""\n')
+        shutil.copytree(
+            BASE / "taskrail", self.source, ignore=shutil.ignore_patterns("__pycache__")
+        )
+        shutil.copytree(BASE / "deploy", self.source.parent / "deploy")
         self.staging = self.base / "staging"
         self.staging.mkdir(mode=0o700)
         binaries = self.base / "bin"
@@ -355,7 +360,8 @@ class ExecutorPackageTests(unittest.TestCase):
             path.chmod(0o700 if path.is_dir() else 0o600)
         prepared = self.prepare_package()
         self.assertEqual(prepared.returncode, 0, prepared.stderr)
-        for path in [self.staging, *self.staging.rglob("*")]:
+        installed = self.staging / "taskrail"
+        for path in [self.staging, installed, *installed.rglob("*")]:
             self.assertEqual(path.stat().st_mode & 0o777, 0o755 if path.is_dir() else 0o644)
         self.assertIn("-u taskrail-executor --", (self.base / "preflight.log").read_text())
 
@@ -369,10 +375,21 @@ class ExecutorPackageTests(unittest.TestCase):
         target = self.base / "outside.py"
         target.write_text("preserved")
         target.chmod(0o600)
-        (self.source / "outside.py").symlink_to(target)
+        service = self.source / "executor/service.py"
+        service.unlink()
+        service.symlink_to(target)
         failed = self.prepare_package()
         self.assertNotEqual(failed.returncode, 0)
         self.assertEqual(target.stat().st_mode & 0o777, 0o600)
+        self.assertFalse((self.base / "preflight.log").exists())
+
+    def test_executor_deployment_assets_cannot_redirect_maintenance(self):
+        asset = self.source.parent / "deploy/taskrail-executor.service"
+        asset.unlink()
+        asset.symlink_to(self.base / "private-unit")
+        refused = self.prepare_package()
+        self.assertNotEqual(refused.returncode, 0)
+        self.assertIn("regular file", refused.stderr)
         self.assertFalse((self.base / "preflight.log").exists())
 
 

@@ -30,4 +30,4 @@ systemctl --user disable "$service" 2>/dev/null || true
 fresh_reset remove
 systemctl --user daemon-reload
 systemctl --user reset-failed "$service" 2>/dev/null || true
-mkdir -p "$app_dir/releases" "$config_dir" "$state_dir/runs"
+mkdir -p "$app_dir/releases" "$config_dir"

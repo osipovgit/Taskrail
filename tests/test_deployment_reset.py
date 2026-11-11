@@ -46,7 +46,6 @@ class DeploymentResetTests(unittest.TestCase):
             self.config / "source",
             self.app / "source",
             self.state / "source",
-            self.home / ".cache/taskrail/source",
             self.home / ".config/systemd/user/taskrail.service.d/source",
         ):
             with self.subTest(root=root):
@@ -115,15 +114,6 @@ class DeploymentResetTests(unittest.TestCase):
         erase(inventory)
         self.assertFalse(policy.exists())
 
-    def test_release_and_supplied_settings_in_cache_are_protected(self):
-        cache = self.home / ".cache/taskrail"
-        for protected in (cache / "release", cache / "settings.json"):
-            with (
-                self.subTest(protected=protected),
-                self.assertRaisesRegex(ValueError, "outside reset directories"),
-            ):
-                prepare(self.home, [protected])
-
     def test_generated_profile_inside_a_declared_source_is_protected(self):
         profile = self.profiles / "taskrail-planner.md"
         profile.write_text("Managed Taskrail workflow")
@@ -150,7 +140,7 @@ class DeploymentResetTests(unittest.TestCase):
         self.assertFalse(self.history.exists())
         self.assertFalse(self.config.exists())
 
-    def test_fresh_removes_retired_state_worktrees(self):
+    def test_projects_under_state_worktrees_are_protected_like_other_roots(self):
         worktree = self.state / "worktrees/run/project"
         worktree.mkdir(parents=True)
         (worktree / ".git").write_text("gitdir: /existing/repository/worktrees/project\n")
@@ -160,8 +150,9 @@ class DeploymentResetTests(unittest.TestCase):
         state = json.loads(record.read_text())
         state["worktrees"] = dict(project=dict(source=str(self.project)))
         record.write_text(json.dumps(state))
-        erase(prepare(self.home, [BASE]))
-        self.assertFalse(worktree.exists())
+        with self.assertRaisesRegex(ValueError, "overlap a declared project"):
+            prepare(self.home, [BASE])
+        self.assertTrue(edits.is_file())
         self.assertTrue(self.project.is_dir())
 
     def test_custom_worktree_base_inside_deleted_storage_blocks_fresh(self):

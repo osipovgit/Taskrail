@@ -25,17 +25,14 @@ def find_submission(base, name):
 
 def submission_id(folder):
     """The run ID recorded by a launcher folder, if readable."""
-    if folder.is_symlink() or not folder.is_dir():
-        return None
-    try:
-        launch = read_json(contained(folder, LAUNCH_FILE))
-    except (OSError, ValueError):
-        return None
+    launch = launch_record(folder)
     return launch.get("id") if isinstance(launch, dict) else None
 
 
 def launch_record(submission):
     """The launcher record, or an empty record."""
+    if submission.is_symlink() or not submission.is_dir():
+        return {}
     try:
         return read_json(contained(submission, LAUNCH_FILE))
     except (OSError, ValueError):

@@ -1,7 +1,5 @@
 """Persist delivered executor output as attributable evidence, not model claims."""
 
-import json
-
 from taskrail.application import evidence, evidence_delivery
 from taskrail.core import prompt_texts
 from taskrail.core.files import atomic_json
@@ -10,13 +8,10 @@ from taskrail.interactions import output_digest, output_preview, read_receipts
 INLINE_LIMIT = 24000
 # With full text files beside the snapshot, a shorter inline copy saves model context.
 INLINE_WITH_FILES = 8000
-# The JSON snapshot keeps each output on one line; file readers cut lines this long.
-LINE_LIMIT = 2000
-OUTPUT_FIELDS = ("stdout", "stderr", "console")
 OUTPUTS = "outputs"
 
 
-def delivered(run, folder, path, text, outputs=None):
+def delivered(folder, path, text, outputs=None):
     """Record exactly the text attached to the next model turn."""
     visible = text[: INLINE_WITH_FILES if outputs else INLINE_LIMIT]
     clipped = len(visible) < len(text)
@@ -50,32 +45,40 @@ def snapshot_text(path, visible, clipped, outputs):
     return "{}\n{}\n{}".format(prompt_texts.text("output.snapshot", path=path), notice, visible)
 
 
-def local_snapshot(run, folder, request, outcome, index=None):
-    """The ledger binds a result to its exact request and immutable snapshot."""
-    ledger = run / "local-execution.json"
-    entries = json.loads(ledger.read_text()) if ledger.exists() else []
-    count = len(entries)
-    path = run / "00-input/local" / f"{folder.name}-{count}.json"
-    path.parent.mkdir(parents=True, exist_ok=True)
-    entry = dict(request=request, result=outcome, path=str(path))
-    entry[OUTPUTS] = output_files(path, outcome)
+def command_snapshot(folder, request, outcome, *, source="local", index=None):
+    """Publish a stage-owned receipt with readable sidecars before delivering its text."""
+    directory = folder.parent / "00-input" / source
+    directory.mkdir(parents=True, exist_ok=True)
+    path = next_snapshot(directory, folder.name)
+    outputs = output_files(path, outcome)
+    entry = dict(request=request, result=outcome)
+    if outputs:
+        entry[OUTPUTS] = outputs
     atomic_json(path, entry)
-    entries.append(entry)
-    atomic_json(ledger, entries)
     if index and outcome.get("status") == "SUCCEEDED":
         read_receipts.remember(index, path)
-    if entry[OUTPUTS] or path.stat().st_size > INLINE_LIMIT:
-        return output_preview.render(path, outcome, entry[OUTPUTS])
-    return delivered(run, folder, path, path.read_text(), entry[OUTPUTS])
+    if outputs or path.stat().st_size > INLINE_LIMIT:
+        return output_preview.render(path, outcome, outputs)
+    return delivered(folder, path, path.read_text(), outputs)
+
+
+def next_snapshot(directory, stage):
+    """A partial sidecar reserves its number even when its JSON receipt could not be published."""
+    existing = directory.glob(f"{stage}-*")
+    occupied = {path.name.partition(".")[0] for path in existing}
+    number = 0
+    while f"{stage}-{number}" in occupied:
+        number += 1
+    return directory / f"{stage}-{number}.json"
 
 
 def output_files(path, outcome):
     """Long outputs also as plain text beside the snapshot, readable line by line."""
     files = {}
-    for name in OUTPUT_FIELDS:
+    for name in output_preview.OUTPUT_FIELDS:
         text = outcome.get(name)
-        if isinstance(text, str) and len(text) > LINE_LIMIT:
+        if isinstance(text, str) and len(text) > output_preview.LINE_LIMIT:
             target = path.with_name(f"{path.stem}.{name}.txt")
-            target.write_text(text, encoding="utf-8")
+            output_preview.immutable_text(target, text)
             files[name] = str(target)
     return files

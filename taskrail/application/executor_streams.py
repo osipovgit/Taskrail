@@ -10,7 +10,7 @@ MAX_BYTES = 8 * 1024 * 1024
 
 def guidance(run, path):
     """Pointers are not observations: the receiving session must read their lines."""
-    permitted = path.parent in {run / "00-input/local", run / "00-input/ssh"}
+    permitted = path.parent in {run / "00-input/local", run / "00-input/remote"}
     if not permitted or path.suffix != ".json" or path.resolve() != path:
         return None
     try:
@@ -35,7 +35,11 @@ def describe(path):
 def streams(payload):
     """Only the current local result or single immutable remote ticket contributes."""
     if not isinstance(payload, dict):
-        return remote(payload)
+        return {}
+    outcomes = payload.get("results")
+    if isinstance(outcomes, list):
+        valid = all(isinstance(outcome, dict) for outcome in outcomes)
+        return output_preview.ticket_streams(payload) if valid else {}
     outcome = payload.get("result")
     if not isinstance(outcome, dict):
         return {}
@@ -44,18 +48,6 @@ def streams(payload):
         for name, text in outcome.items()
         if name in output_preview.OUTPUT_FIELDS and isinstance(text, str)
     }
-
-
-def remote(payload):
-    """A single-ticket snapshot with object results, never an older combined snapshot."""
-    if not isinstance(payload, list) or len(payload) != 1:
-        return {}
-    entry = payload[0]
-    outcomes = entry.get("results") if isinstance(entry, dict) else None
-    if not isinstance(outcomes, list):
-        return {}
-    valid = all(isinstance(outcome, dict) for outcome in outcomes)
-    return output_preview.ticket_streams(entry) if valid else {}
 
 
 def verified(snapshot, name, text):

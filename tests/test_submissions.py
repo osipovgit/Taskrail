@@ -1,6 +1,5 @@
 import json
 import sys
-import tempfile
 import threading
 import time
 import unittest
@@ -10,7 +9,7 @@ from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
 from git_fixture import repository
-from run_fixture import current_run
+from run_fixture import current_run, workflow_workspace
 
 from taskrail.web.server import make_server
 from taskrail.web.submissions import BusyError, TaskLauncher
@@ -21,9 +20,7 @@ BASE = Path(__file__).resolve().parents[1]
 
 class SubmissionTests(unittest.TestCase):
     def setUp(self):
-        self.tmp = tempfile.TemporaryDirectory()
-        self.addCleanup(self.tmp.cleanup)
-        self.base = Path(self.tmp.name)
+        self.base = workflow_workspace(self)
         self.repo = self.base / "repo"
         self.repo.mkdir()
         (self.repo / ".git").mkdir()
@@ -185,7 +182,9 @@ class SubmissionTests(unittest.TestCase):
             ["understanding", "planner", "plan-reviewer", "implementer", "check", "reviewer"],
         )
         state = json.loads((self.runs / name / "run.json").read_text())
-        self.assertIn("return 2", (Path(state["roots"]["project"]) / "hello.py").read_text())
+        worktree = Path(state["roots"]["project"])
+        self.assertTrue(worktree.is_relative_to(self.base))
+        self.assertIn("return 2", (worktree / "hello.py").read_text())
         self.assertIn("return 1", (self.repo / "hello.py").read_text())
         self.assertEqual((self.repo / "unrelated.txt").read_text(), "keep this")
 
@@ -199,14 +198,14 @@ class SubmissionTests(unittest.TestCase):
                 current_run(
                     dict(
                         status="TIMEOUT",
-                        run_format=2,
+                        run_format=3,
                         roots={"project": str(self.repo)},
                         stages=[],
                     )
                 )
             )
         )
-        (run / "checkpoint.json").write_text(json.dumps(dict(run_format=2)))
+        (run / "checkpoint.json").write_text(json.dumps(dict(run_format=3)))
         url, headers = self.start_server()
         with patch("taskrail.web.submissions.subprocess.Popen") as popen:
             popen.return_value.poll.return_value = 0

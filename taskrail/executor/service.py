@@ -66,7 +66,7 @@ class ExecutorServer(socketserver.ThreadingUnixStreamServer):
 
     def submit(self, payload):
         """Record a ticket; a build of a job configured with approval none starts at once."""
-        kind = tickets.kind_of(payload)
+        kind = tickets.submission_kind(payload)
         ticket = self.store.submit(payload, self.configs[kind])
         waiting = ticket["status"] == "PENDING_APPROVAL" and kind == tickets.JENKINS
         if waiting and tickets.preapproved(self.configs[kind], ticket["action"]):
@@ -82,7 +82,7 @@ class ExecutorServer(socketserver.ThreadingUnixStreamServer):
         identifier = payload[IDENTIFIER]
         if operation == "reject":
             return self.store.reject(identifier, payload[DIGEST])
-        config = self.configs[tickets.kind_of(self.store.get(identifier))]
+        config = self.configs[tickets.stored_kind(self.store.get(identifier))]
         ticket = self.store.approve(identifier, payload[DIGEST], config)
         threading.Thread(
             target=worker.perform, args=(self.store, ticket, config), daemon=True

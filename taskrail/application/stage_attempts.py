@@ -153,7 +153,7 @@ def evidence_roots(workflow):
     return [
         *workflow.config["roots"].values(),
         git_directory(run),
-        inputs / "ssh",
+        inputs / "remote",
         inputs / "local",
         inputs / "checks",
         inputs / "dependency-checks",

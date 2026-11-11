@@ -9,7 +9,7 @@ import json
 
 from taskrail.application.history_index import HistoryFile, section_lines, text_of
 from taskrail.core import prompt_texts, requirements
-from taskrail.infrastructure.agent_sync import atomic_write
+from taskrail.core.files import atomic_write
 
 MARKER = f"{requirements.HISTORY}\n"
 INLINE_BYTES = 24000

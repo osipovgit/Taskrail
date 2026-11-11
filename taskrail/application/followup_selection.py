@@ -5,9 +5,8 @@ import stat
 from taskrail.application import inherited_preimages, worktree_followup
 from taskrail.application.planned_paths import safe_file
 from taskrail.core import protected_paths
-from taskrail.core.files import digest
+from taskrail.core.files import atomic_write, digest
 from taskrail.git import review_source
-from taskrail.infrastructure.agent_sync import atomic_write
 
 SELECTED = "followup_selected"
 PRESERVED = "followup_preserved"

@@ -336,7 +336,7 @@ class InteractionTests(unittest.TestCase):
             f"roles/web/tasks/main.yml:{number}: name[missing]\n" for number in range(3000)
         )
         outcome = dict(status="SUCCEEDED", exit_code=0, stdout=lines, stderr="")
-        response = transcripts.local_snapshot(self.run, stage, self.request(["lint"]), outcome)
+        response = transcripts.command_snapshot(stage, self.request(["lint"]), outcome)
         text_file = self.run / "00-input/local/01-plan-0.stdout.txt"
         self.assertEqual(text_file.read_text(), lines)
         self.assertIn(f"Full output files: {text_file}", response)

@@ -4,10 +4,6 @@ import json
 import os
 from pathlib import Path
 
-from taskrail.core.version import VERSION
-
-SOFTWARE_VERSION = VERSION
-
 DEFAULT_TIMEOUT = 3600
 
 

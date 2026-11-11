@@ -130,7 +130,7 @@ class ReviewedStartTests(unittest.TestCase):
         stdout = "source.py:51: unused import\n" * 125
         outcome = dict(status="FAILED", exit_code=2, stdout=stdout, stderr="")
         for reason in ("T1 report", "T2 report"):
-            transcripts.local_snapshot(self.parent, folder, dict(request, reason=reason), outcome)
+            transcripts.command_snapshot(folder, dict(request, reason=reason), outcome)
         reports = self.parent / "00-input/local"
         receipt = reports / "01-plan-0.json"
         stream = reports / "01-plan-0.stdout.txt"

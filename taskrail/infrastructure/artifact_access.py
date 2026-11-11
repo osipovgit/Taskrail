@@ -35,7 +35,7 @@ def model_inputs(run, folder):
         *task_inputs(run),
         run / "00-input/preimages",
         run / "00-input/git",
-        run / "00-input/ssh",
+        run / "00-input/remote",
         run / "00-input/local",
         run / "00-input/checks",
         run / "00-input/source-views",
@@ -84,12 +84,11 @@ def task_inputs(run):
 def manifest(run, folder, roots, writable=(), protected=protected_paths.DEFAULT_PATTERNS):
     """Describe rights without disclosing internal state or widening permissions."""
     readable = model_inputs(run, folder)
+    initial = (folder / "access.json", folder / "request.md")
     return {
         "source_roots": roots,
         "writable_files": list(writable),
-        "readable_artifacts": [
-            str(path) for path in readable if path.exists() or path.parent == folder
-        ],
+        "readable_artifacts": [str(path) for path in readable if path.exists() or path in initial],
         "protected_read_patterns": list(protected),
         "internal_not_inputs": [
             "evidence.json",

@@ -65,7 +65,6 @@ def decoded(response, context):
 
 def checked(payload, context):
     """Coverage, evidence and role checks of a decoded result."""
-    atomic_json(context["folder"] / "response-object.json", payload)
     records = evidence_delivery.session_records(context)
     if context[STAGE] == plan_result.PLANNER and declared_block.present(payload):
         payload = declared_block.stop_result(payload, context)

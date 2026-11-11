@@ -100,7 +100,7 @@ class PlannedRuntimeTests(unittest.TestCase):
 
     def parsed(self, text=PLAN, feedback=None):
         (self.run / "plan.md").write_text(text)
-        state = dict(run_format=2, requirements=self.requirements, changed_files=[])
+        state = dict(run_format=3, requirements=self.requirements, changed_files=[])
         record = dict(number=1, role="planner", stage="planner", directory="01-plan")
         environment = dict(roots=self.roots, run=self.run, plan=None, check_config=self.config)
         environment["feedback"] = feedback

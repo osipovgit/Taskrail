@@ -37,11 +37,11 @@ leave_maintenance() { # MARKER
 
 # The dedicated service must be able to import even a privately extracted release.
 prepare_executor_package() { # SOURCE_PACKAGE STAGING_DIRECTORY
-    cp -R -- "$1" "$2/taskrail"
-    if [[ -n $(find "$2/taskrail" -type l -print -quit) ]]; then
-        printf 'Executor packages must not contain symlinks.\n' >&2
-        return 1
-    fi
+    local source_root=${1%/*}
+    /usr/bin/python3 -I -B -c \
+        'import sys; sys.path.insert(0, sys.argv.pop(1)); from taskrail.deployment.release_files import main; main()' \
+        "$source_root" executor "$source_root" "$2"
+    chmod 0700 "$2/deploy"
     chown -R root:root "$2/taskrail"
     find "$2/taskrail" -type d -exec chmod 0755 {} +
     find "$2/taskrail" -type f -exec chmod 0644 {} +

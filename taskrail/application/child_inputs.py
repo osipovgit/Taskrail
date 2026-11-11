@@ -1,7 +1,6 @@
 """Freeze complete parent context outside the bounded child prompt."""
 
-from taskrail.core.files import digest
-from taskrail.infrastructure.agent_sync import atomic_write
+from taskrail.core.files import atomic_write, digest
 
 NAME = "parent-task.md"
 HASH = "parent_context_sha256"

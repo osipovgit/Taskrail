@@ -5,7 +5,7 @@ import unittest
 from pathlib import Path
 
 from taskrail.infrastructure.runner import run_agent
-from taskrail.observability.telemetry import Telemetry
+from taskrail.observability.telemetry import Telemetry, inspect_events
 
 
 class TelemetryTests(unittest.TestCase):
@@ -113,4 +113,6 @@ class TelemetryTests(unittest.TestCase):
             )
             self.assertEqual(value["status"], "INCOMPLETE")
             self.assertEqual(value["tokens"]["total"], 100)
-            self.assertTrue((root / "attempt/telemetry.json").exists())
+            self.assertEqual(
+                inspect_events(root / "attempt/events.jsonl")["tokens"], value["tokens"]
+            )

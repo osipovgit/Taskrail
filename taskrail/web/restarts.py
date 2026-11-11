@@ -24,7 +24,7 @@ def restart(launcher, run):
 
 def restart_phase(launcher, run, phase):
     """A delivery phase runs again under the delivery that started it."""
-    link = run_family.parent_link(run)
+    link = run_family.parent_link(run_family.task_metadata(run, history.TASK_FILE))
     require(link is not None and link[1] == phase, "Missing delivery parent of this phase")
     parent = history.checked_run(launcher.base, link[0])
     return delivery_launch.restart_phase(launcher, parent, phase, run.name)

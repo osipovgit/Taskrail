@@ -3,25 +3,34 @@
 from taskrail.core.schema import require
 from taskrail.executor import action_schema, hosts, jenkins_config, jenkins_schema
 
+ACTION = "action"
 JENKINS = "jenkins"
 SSH = "ssh"
 
 
-def kind_of(payload):
-    """The kind a submission or ticket names; old tickets are SSH actions."""
-    kind = payload.get("kind")
-    if kind:
-        return kind
+def submission_kind(payload):
+    """One request identifies its executor by its sole action field."""
+    require(
+        (ACTION in payload) != (JENKINS in payload) and "kind" not in payload,
+        "Submit exactly one SSH action or Jenkins request",
+    )
     return JENKINS if JENKINS in payload else SSH
+
+
+def stored_kind(ticket):
+    """A durable ticket must explicitly identify the executor allowed to run it."""
+    kind = ticket.get("kind")
+    require(kind in (SSH, JENKINS), "Missing or unknown executor ticket kind")
+    return kind
 
 
 def described(payload, config):
     """(kind, validated action, identity) of a submission."""
-    if kind_of(payload) == JENKINS:
+    if submission_kind(payload) == JENKINS:
         request = jenkins_schema.validate(payload[JENKINS], config)
         require(request["operation"] == "build", "Only Jenkins builds use approval tickets")
         return JENKINS, request, jenkins_config.identity(config, request)
-    action = action_schema.validate(payload["action"])
+    action = action_schema.validate(payload[ACTION])
     return SSH, action, ssh_identity(action, config)
 
 
@@ -33,9 +42,9 @@ def preapproved(servers, request):
 
 def identity(ticket, config):
     """The current identity of a ticket's targets, compared again at approval."""
-    if kind_of(ticket) == JENKINS:
-        return jenkins_config.identity(config, ticket["action"])
-    return ssh_identity(ticket["action"], config)
+    if stored_kind(ticket) == JENKINS:
+        return jenkins_config.identity(config, ticket[ACTION])
+    return ssh_identity(ticket[ACTION], config)
 
 
 def ssh_identity(action, inventory):

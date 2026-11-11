@@ -2,13 +2,13 @@
 
 import json
 import sys
-import tempfile
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
 from git_fixture import repository
+from run_fixture import workflow_workspace
 
 from taskrail.application import context_windows, session_budget
 from taskrail.application.attempt_session import launch_options
@@ -32,9 +32,7 @@ def usage(identity, incoming, cached=0, total=1):
 
 class SessionBudgetTests(unittest.TestCase):
     def setUp(self):
-        temporary = tempfile.TemporaryDirectory()
-        self.addCleanup(temporary.cleanup)
-        self.root = Path(temporary.name)
+        self.root = workflow_workspace(self)
 
     def test_positive_headroom_and_conservative_defaults(self):
         configured = limits({})
@@ -218,6 +216,7 @@ class SessionBudgetTests(unittest.TestCase):
         state = json.loads(run.joinpath("run.json").read_text())
         self.assertEqual(status, "READY_FOR_REVIEW", state.get("summary"))
         effective = Path(state["roots"]["project"]) / "hello.py"
+        self.assertTrue(effective.is_relative_to(self.root))
         self.assertIn("return 2", effective.read_text())
         self.assertEqual(source.read_text(), original)
         first = state["stages"][0]

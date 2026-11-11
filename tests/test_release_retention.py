@@ -2,12 +2,14 @@
 
 import json
 import os
+import shutil
 import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
 
 from taskrail.application.worktree_isolation import isolation_settings
+from taskrail.core import release
 from taskrail.core.files import atomic_json
 from taskrail.deployment import releases
 
@@ -35,6 +37,19 @@ class ReleaseRetentionTests(unittest.TestCase):
             self.assertTrue(folders[2].exists())
             self.assertTrue(folders[3].exists())
             self.assertEqual((unknown / "keep").read_text(), "Unrecognized content")
+
+    def test_build_identity_tracks_shipped_assets_and_ignores_local_files(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            source = Path(release.__file__).resolve().parents[1]
+            package = Path(temporary) / "app/taskrail"
+            for path in release.runtime_files(source):
+                target = package / path.relative_to(source)
+                target.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copyfile(path, target)
+            (package / "core/settings.backup.json").write_text("{}")
+            self.assertEqual(release.fingerprint(package), release.RELEASE_ID)
+            (package / "web/static/theme.js").write_text("// updated theme")
+            self.assertNotEqual(release.fingerprint(package), release.RELEASE_ID)
 
     def test_default_worktrees_are_independent_of_resettable_history_storage(self):
         with patch("pathlib.Path.home", return_value=Path("/home/fixture")):

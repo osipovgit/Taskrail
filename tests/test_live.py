@@ -16,6 +16,7 @@ from taskrail.application.plan_validation import canonical_plan, validate_plan
 from taskrail.application.planned_paths import safe_file
 from taskrail.application.task_config import configuration
 from taskrail.core.paths import tool_paths
+from taskrail.infrastructure.event_summary import parse_events
 from taskrail.infrastructure.runner import run_agent as real_run_agent
 from taskrail.interactions.turn_recovery import MAX_STALLS
 
@@ -225,10 +226,10 @@ class LiveTests(LiveFixture, unittest.TestCase):
         self.assertEqual(len(planners), 1)
         self.assertEqual(planners[0]["session_turns"], 3)
         self.assertEqual(planners[0]["result_corrections"], 1)
-        self.assertEqual(len(json.loads((run / "local-execution.json").read_text())), 1)
+        self.assertEqual(len(list((run / "00-input/local").glob("*.json"))), 1)
         proof = json.loads((run / "02-plan/evidence-bindings.json").read_text())[0]
         self.assertEqual(proof["excerpt"], "ansible-lint 26.9.0")
-        self.assertIn("DONE0", (run / "02-plan/response.raw.txt").read_text())
+        self.assertIn("DONE0", parse_events(run / "02-plan/events.jsonl")["final_text"])
 
     def test_finished_planner_at_context_boundary_is_validated_without_research_restart(self):
         run, status, state = self.run_mode(
@@ -239,7 +240,7 @@ class LiveTests(LiveFixture, unittest.TestCase):
         self.assertEqual(len(plans), 1)
         self.assertEqual(plans[0]["status"], "RESULT_VALID")
         self.assertEqual(plans[0]["session_turns"], 1)
-        self.assertIn("DONE0", (run / "02-plan/response.raw.txt").read_text())
+        self.assertIn("DONE0", parse_events(run / "02-plan/events.jsonl")["final_text"])
 
     def test_large_reports_repair_together_without_a_new_planner_session(self):
         text = self.root / "issues.txt"
@@ -290,7 +291,7 @@ class LiveTests(LiveFixture, unittest.TestCase):
         from taskrail.application.git_state import git_metadata
 
         self.assertEqual(checkpoint["git_before"], git_metadata({"project": self.root}))
-        review = json.loads((run / "06-review/response-object.json").read_text())
+        review = json.loads((run / "06-review/result.json").read_text())
         outputs = {job["output_file"] for job in jobs if job["stage"] != "task-commit"}
         self.assertLessEqual(outputs, {claim["path"] for claim in review["evidence"]})
 
@@ -395,6 +396,14 @@ class LiveTests(LiveFixture, unittest.TestCase):
         self.assertEqual(status, "READY_FOR_REVIEW")
         self.assertEqual(request.call_args.args[0], dict(operation="status", id="same-ticket"))
         self.assertEqual(request.call_count, 1)
+
+    def test_profiles_are_removed_even_if_the_report_cannot_be_saved(self):
+        with (
+            patch("taskrail.application.workflow_finish.report", side_effect=OSError("disk full")),
+            self.assertRaisesRegex(OSError, "disk full"),
+        ):
+            self.run_mode()
+        self.assertFalse(list(self.profiles.glob("taskrail-*.md")))
 
     def test_live_success_keeps_dirty_and_only_selected_preimages(self):
         run, status, state = self.run_mode()
@@ -775,7 +784,7 @@ class LiveTests(LiveFixture, unittest.TestCase):
             [a["stage"] for a in state["attempts"]],
             ["understanding", "planner", "plan-reviewer", "implementer", "reviewer"],
         )
-        self.assertEqual(state["run_format"], 2)
+        self.assertEqual(state["run_format"], 3)
         self.assertIn("imported_draft", (run / "02-plan/request.md").read_text())
 
     def test_plan_read_before_write_rejection_stays_in_the_same_session(self):
@@ -947,16 +956,14 @@ class LiveTests(LiveFixture, unittest.TestCase):
                     "access.json",
                     "permissions.log",
                     "request.md",
-                    "tool-result.md",
-                    "response.raw.txt",
-                    "response-object.json",
                     "result.json",
                     "events.jsonl",
                     "stderr.log",
                     "activity.json",
-                    "telemetry.json",
                     "evidence-bindings.json",
                 }
+                if record["session_turns"] > 1:
+                    expected.add("tool-result.md")
                 if record["stage"] == "implementer":
                     expected.add("commit-message.txt")
                 self.assertEqual(names, expected)

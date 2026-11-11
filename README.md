@@ -12,7 +12,7 @@ Give [opencode](https://opencode.ai) a goal and a Git repository. Taskrail turns
 
 ## Run your first task
 
-On Linux, install Git, Python 3.10+ with venv and a working opencode 1.x or 2.x on your PATH. The managed installer also uses user systemd, Bash, tar and flock. Run it as your normal user from a trusted checkout or extracted release:
+On Linux, install Git, Python 3.10+ with venv and a working opencode 1.x or 2.x on your PATH. The managed installer also uses user systemd, Bash and flock. Run it as your normal user from a trusted checkout or extracted release.
 
 ```sh
 bash deploy/install.sh

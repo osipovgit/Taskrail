@@ -17,7 +17,7 @@ def show_json(payload):
 def display(ticket):
     """Escape remote-controlled terminal sequences during review."""
     show_json(ticket)
-    if tickets.kind_of(ticket) == tickets.JENKINS:
+    if tickets.stored_kind(ticket) == tickets.JENKINS:
         sys.stdout.write("Approval starts ONE build of the job above with these parameters:\n")
         show_json(ticket["action"]["parameters"])
     else:

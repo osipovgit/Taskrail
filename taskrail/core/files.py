@@ -4,22 +4,40 @@ import functools
 import hashlib
 import json
 import os
-from contextlib import suppress
+import tempfile
+from contextlib import ExitStack, contextmanager, suppress
 from pathlib import Path
 
 CHUNK_BYTES = 1024 * 1024
 
 
+@contextmanager
+def atomic_output(path, mode, encoding=None):
+    """Publish only a complete write, using a private temporary file per writer."""
+    with ExitStack() as cleanup:
+        with tempfile.NamedTemporaryFile(
+            mode=mode, encoding=encoding, dir=path.parent, prefix=".taskrail-", delete=False
+        ) as stream:
+            pending = Path(stream.name)
+            cleanup.callback(pending.unlink, missing_ok=True)
+            yield stream
+            stream.flush()
+            os.fsync(stream.fileno())
+        pending.replace(path)
+
+
 def atomic_json(path, document):
     """Replace a JSON file atomically."""
-    path = Path(path)
-    pending = path.with_suffix(f"{path.suffix}.tmp")
-    with pending.open("w", encoding="utf-8") as stream:
+    with atomic_output(Path(path), "w", encoding="utf-8") as stream:
         json.dump(document, stream, ensure_ascii=False, indent=2)
         stream.write("\n")
-        stream.flush()
-        os.fsync(stream.fileno())
-    pending.replace(path)
+
+
+def atomic_write(path, content_bytes):
+    """Replace a byte snapshot atomically, creating its folder."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with atomic_output(path, "wb") as stream:
+        stream.write(content_bytes)
 
 
 def changed(before, after):

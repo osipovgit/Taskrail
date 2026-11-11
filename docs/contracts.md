@@ -11,13 +11,11 @@
 
 Code selects catalog keys and fills `$placeholders`. Each run freezes role sources,
 policy, texts and schemas in `00-input/`; their hashes must remain unchanged.
-`run_format: 2` is independent of executor `schema_version: 1`. Unsupported run
-formats cannot Continue, Restart or supply parent context. Archive them with
-`taskrail history archive-old` and start a new task. Continue also requires the
-same application release identity; a same-format run from another release may
-Restart. The identity hashes application Python, JSON and instruction Markdown,
-independent of installation path. Frozen catalogs must equal the release catalog;
-there is no adoption of old wording or missing-key compatibility.
+`run_format: 3` is independent of executor `schema_version: 1`. Continue, Restart
+and parent context require a current-format run. For other formats, start a new task.
+Continue additionally requires the same runtime build. Its identity hashes the
+package-relative paths and contents of the Python modules, runtime configuration,
+agent instructions and dashboard assets. Frozen catalogs must match the release catalog.
 
 The executor catalog advertises only configured, stage-permitted routes; the
 implementer never receives SSH actions. Prompt-budget tests cover capability and
@@ -308,7 +306,7 @@ A parenthesized note stays with the task. A bare source path gives the child a
 starting point for a bounded read. For `done` and `contradicted`, cite observed
 lines that support the claim using the review citation format above.
 
-A split task can name a parent executor report under `00-input/local`, `git`, `ssh`
+A split task can name a parent executor report under `00-input/local`, `git`, `remote`
 or `checks` in its `Read` list. Taskrail binds selected report material to the
 reviewed plan and gives the assigned child a read-only copy under
 `00-input/plan-reports/`. Relevant command receipts and captured streams travel
@@ -387,8 +385,9 @@ external state can produce new observations.
 Command permissions, sandbox boundaries, approvals and source/Git checks are owned
 by [access](access.md). Remote request examples and executor setup are in
 [SSH executor](ssh-executor.md); controlled Git syntax is in [Git access](git-access.md).
-A request is not execution proof. SSH/Jenkins snapshots contain exactly one ticket;
-immutable long-output files remain beside it. Reobservation verifies those bytes.
+Each approved SSH action or Jenkins build has one ticket object in
+`00-input/remote/<ticket-id>.json`. Jenkins reads have numbered command receipts
+in the same directory. Reobservation verifies the ticket and its long-output files.
 UNKNOWN remote outcomes require inspection and are never replayed automatically.
 
 Configured checks can run without model-authored execution requests. Server

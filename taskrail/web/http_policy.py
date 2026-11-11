@@ -5,38 +5,20 @@ import secrets
 from http import HTTPStatus
 from types import MappingProxyType
 
+from taskrail.core.release import WEB_ASSETS
+
 MAX_BODY = 65536
 POST_PATHS = frozenset(("/api/tasks", "/api/actions", "/api/decision"))
 SESSION_HEADER = "X-Taskrail-Token"
-PAGES = MappingProxyType(
+JAVASCRIPT = "text/javascript; charset=utf-8"
+STATIC_ROUTES = MappingProxyType(
     {
         "/": ("dashboard.html", "text/html; charset=utf-8"),
         "/dashboard.css": ("dashboard.css", "text/css; charset=utf-8"),
         "/favicon.svg": ("favicon.svg", "image/svg+xml"),
+        **{f"/{name}": (name, JAVASCRIPT) for name in WEB_ASSETS if name.endswith(".js")},
     }
 )
-# Browser scripts served from static/; dashboard modules are fixed, never path-derived.
-SCRIPTS = frozenset(
-    (
-        "/dashboard.js",
-        "/theme.js",
-        *(
-            f"/modules/{name}.js"
-            for name in (
-                "analytics",
-                "app",
-                "dom",
-                "epic",
-                "graph",
-                "monitor",
-                "stages",
-                "state",
-                "task",
-            )
-        ),
-    )
-)
-JAVASCRIPT = "text/javascript; charset=utf-8"
 
 
 def error_json(message):
@@ -68,13 +50,3 @@ def valid_length(headers):
     if headers.get("Transfer-Encoding") or not length.isdigit():
         return False
     return 0 < int(length) <= MAX_BODY
-
-
-def static_file(path):
-    """(file name, content type) of a fixed dashboard resource, or None."""
-    page = PAGES.get(path)
-    if page is not None:
-        return page
-    if path in SCRIPTS:
-        return path[1:], JAVASCRIPT
-    return None

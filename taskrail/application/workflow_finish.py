@@ -1,6 +1,7 @@
 """Interruption checkpoints and the final report; nothing is rolled back."""
 
 import json
+from contextlib import ExitStack
 
 from taskrail.application.changes import write_diff
 from taskrail.application.run_report import report
@@ -25,7 +26,15 @@ def interrupted(workflow):
 
 
 def close(workflow):
-    """Finish the open record, refresh changes, write the report and remove profiles."""
+    """Release this run's profiles, including when the report cannot be written."""
+    with ExitStack() as cleanup:
+        for profile in workflow.runtime["profiles"]:
+            cleanup.callback(profile.unlink, missing_ok=True)
+        finish_report(workflow)
+
+
+def finish_report(workflow):
+    """Finish the open stage and publish the final change report."""
     state = workflow.state
     if workflow.runtime["active"]:
         errors = [state.get("summary", "")]
@@ -38,8 +47,6 @@ def close(workflow):
     design_document(workflow)
     record_answer(workflow)
     report(workflow.run, state)
-    for profile in workflow.runtime["profiles"]:
-        profile.unlink(missing_ok=True)
     say("Status: {}\nReport: {}".format(state[STATUS], workflow.run / "report.md"))
 
 

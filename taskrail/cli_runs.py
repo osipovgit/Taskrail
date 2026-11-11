@@ -1,8 +1,8 @@
 """One run from the CLI: found by ID or directory, controlled, answered and read."""
 
-import json
 from pathlib import Path
 
+from taskrail.application import run_store
 from taskrail.core.runtime import run_storage
 from taskrail.interactions import approvals
 from taskrail.web import delivery_state, history, run_activity
@@ -62,7 +62,7 @@ def status(args):
     left behind by a stopped process and continues only through `action resume`.
     """
     run = run_path(args)
-    state = json.loads(history.read_artifact(run, "run.json"))
+    state = run_store.read(run)
     report = {key: state.get(key) for key in STATUS_FIELDS}
     report.update(id=run.name, report=str(run / "report.md"))
     report["active"] = run_activity.run_held(run)

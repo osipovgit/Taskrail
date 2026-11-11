@@ -6,6 +6,7 @@ import shutil
 import sys
 from pathlib import Path
 
+from taskrail.application.task_config import ROLES
 from taskrail.deployment.reset_history import history_roots
 from taskrail.deployment.reset_paths import ResetPaths, overlaps
 
@@ -17,17 +18,12 @@ def prepare(home, protected):
     inventory = ResetPaths(home)
     inventory.validate(protected)
     histories = {inventory.main[2] / "runs", inventory.history}
+    targets = inventory.targets()
     for history in histories:
-        for source in project_roots(history, inventory):
-            if any(overlaps(source, target) for target in inventory.targets()):
+        for source in history_roots(history):
+            if any(overlaps(source, target) for target in targets):
                 raise ValueError("Reset paths overlap a declared project; no files deleted")
     return inventory
-
-
-def project_roots(history, inventory):
-    """Retired owned worktrees may be erased; original project roots stay protected."""
-    retired = inventory.main[2] / "worktrees"
-    return (source for source in history_roots(history) if not source.is_relative_to(retired))
 
 
 def remove(path):
@@ -57,16 +53,10 @@ def imported_sources(supplied):
     protected = [source]
     roles = json.loads(source.read_text()).get("agent_source")
     if roles is not None:
-        protected.extend(role_sources(source.parent / Path(roles).expanduser()))
+        directory = source.parent / Path(roles).expanduser()
+        protected.append(directory.resolve())
+        protected.extend((directory / f"{role}.md").resolve() for role in ROLES)
     return protected
-
-
-def role_sources(source):
-    """Copying follows role symlinks, so their targets must survive the reset too."""
-    yield source.resolve()
-    if source.is_dir():
-        for path in source.iterdir():
-            yield from role_sources(path)
 
 
 def main():
