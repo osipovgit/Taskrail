@@ -55,7 +55,8 @@ An ordinary update waits for the workflow lock, prepares an offline venv and con
 in a private staging directory, and validates the incoming package with isolated Python
 imports before stopping the service. The installer switches `current` and restarts.
 History, settings, custom roles and project edits survive the update. If startup fails,
-inspect the journal. The update
+the installer prints the service status. Read the startup log with
+`journalctl --user -u taskrail.service -b -n 50 --no-pager`. The update
 script uses a trusted local release, not an automatic Internet download feed. An
 installed release contains the public Python packages, named runtime assets,
 deployment scripts, README and license. Python modules placed directly in a public
@@ -382,6 +383,7 @@ profiles, the user unit and its drop-ins, and the launcher. It regenerates
 profiles, cleanup uses the previously installed `agent_directory` or the CLI
 profile directory selected by the old service environment. Use
 `--autostart=keep` to retain the service's login startup choice.
+The dashboard starts with empty history. The first task creates the run directory.
 
 The installer validates the replacement and probes its CLI before stopping the
 managed service and its workers. If an independent CLI worker holds the workflow

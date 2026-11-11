@@ -83,7 +83,7 @@ mv -Tf "$app_dir/current.next.$$" "$app_dir/current"
 install -m 644 "$release/deploy/taskrail.service" "$unit_dir/$service"
 install -m 755 "$release/deploy/taskrail" "$HOME/.local/bin/taskrail"
 systemctl --user daemon-reload
-if [[ -n "$reset_mode" ]]; then
+if [[ -n "$reset_mode" ]] && systemctl --user is-failed --quiet "$service"; then
     systemctl --user reset-failed "$service"
 fi
 case "$autostart" in
@@ -95,8 +95,11 @@ esac
 # Workers must not inherit the installer's workflow lock.
 flock -u 9
 exec 9>&-
-systemctl --user restart "$service"
-systemctl --user is-active --quiet "$service"
+if ! systemctl --user restart "$service" || ! systemctl --user is-active --quiet "$service"; then
+    systemctl --user --no-pager --full status "$service" >&2 || true
+    echo "Taskrail did not start. Inspect the journal: journalctl --user -u $service -b -n 50 --no-pager" >&2
+    exit 1
+fi
 publish_config cli-check.sha256
 "$release/venv/bin/python" -I -B -c \
     'import sys; sys.path.insert(0, sys.argv.pop(1)); from taskrail.deployment.releases import main; main()' \
