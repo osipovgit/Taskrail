@@ -196,6 +196,50 @@ class ServiceTests(unittest.TestCase):
             timeout=40,
         )
 
+    def test_update_probes_changed_connections_before_stop_and_caches_only_after_start(self):
+        result = self.installer("--autostart=keep")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        config = self.home / ".config/taskrail"
+        settings = config / "settings.json"
+        marker = config / "cli-check.sha256"
+        original = (settings.read_bytes(), marker.read_bytes())
+        probes = self.home / "permission-probes.log"
+        self.assertEqual(probes.read_text().splitlines(), ["list"])
+        self.assertEqual(marker.stat().st_mode & 0o777, 0o600)
+        result = self.installer()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(probes.read_text().splitlines(), ["list"])
+
+        current = self.home / ".local/share/taskrail/current"
+        previous_release = current.resolve()
+        log = self.home / "privilege.log"
+        log.write_text("")
+        replacement = self.home / "replacement.json"
+        replacement.write_text('{"agent_directory":"wrong-profiles"}')
+        result = self.installer(str(replacement), "--force-update")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("permissions", result.stderr)
+        self.assertNotIn("--user stop", log.read_text())
+        self.assertEqual((settings.read_bytes(), marker.read_bytes()), original)
+        self.assertEqual(current.resolve(), previous_release)
+        self.assertEqual(list((config / "wrong-profiles").glob("*.md")), [])
+
+        binaries = self.deployment.binaries
+        selected = shutil.copy(binaries / "opencode", binaries / "opencode-myfork")
+        systemctl = binaries / "systemctl"
+        original_systemctl = systemctl.read_bytes()
+        systemctl.write_text('#!/bin/sh\n[ "$1 $2" != "--user restart" ]\n')
+        failed = self.installer(f"--opencode={selected}")
+        self.assertNotEqual(failed.returncode, 0)
+        self.assertEqual(json.loads(settings.read_text())["command"], [str(selected)])
+        self.assertEqual(marker.read_bytes(), original[1])
+        systemctl.write_bytes(original_systemctl)
+        retries = len(probes.read_text().splitlines())
+        result = self.installer()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(len(probes.read_text().splitlines()), retries + 1)
+        self.assertNotEqual(marker.read_bytes(), original[1])
+
     def test_offline_install_update_preserves_settings_agents_and_history(self):
         binaries = self.home / "bin"
         binaries.mkdir()
@@ -351,7 +395,13 @@ class ServiceTests(unittest.TestCase):
         release = (app / "current").resolve()
         settings = config / "settings.json"
         installed = json.loads(settings.read_text())
-        installed.update(agent_directory="profiles", run_base="runs")
+        installed.update(
+            agent_directory="profiles/agent",
+            command=[str(self.deployment.binaries / "opencode")],
+            run_base="runs",
+        )
+        with (config / "service.env").open("a") as environment:
+            environment.write(f'OPENCODE_CONFIG_DIR="{config / "profiles"}"\n')
         settings.write_text(json.dumps(installed))
         run = config / "runs/completed"
         run.mkdir(parents=True)
@@ -362,9 +412,9 @@ class ServiceTests(unittest.TestCase):
         executor = self.deployment.system / "opt/taskrail-executor"
         executor.mkdir(parents=True)
         (executor / "approval").write_text("pending decision")
-        profile = config / "profiles/taskrail-test.md"
-        profile.parent.mkdir()
-        profile.write_text("Managed Taskrail workflow")
+        profile = config / "profiles/agent/taskrail-test.md"
+        profile.parent.mkdir(parents=True)
+        profile.write_text('---\n{"permission":{}}\n---\nManaged Taskrail workflow')
         credentials = self.home / ".config/opencode/auth.json"
         credentials.parent.mkdir(parents=True)
         credentials.write_text("test credential")
@@ -388,7 +438,9 @@ class ServiceTests(unittest.TestCase):
             self.assertIn("--user stop taskrail.service", log.read_text())
             self.assertIn("--user start taskrail.service", log.read_text())
         supplied = self.home / "replacement.json"
-        supplied.write_text(json.dumps(dict(installed, timeout_seconds=19)))
+        replacement = dict(installed, timeout_seconds=19)
+        replacement.pop("agent_directory")
+        supplied.write_text(json.dumps(replacement))
         result = self.installer(str(supplied), "--force-update", "--opencode=opencode")
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertTrue((app / "current/venv/bin/python").is_file())

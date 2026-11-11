@@ -31,12 +31,22 @@ ADAPTER = (
 
 def select(setting, command, allow=()):
     """An explicit generation wins; auto trusts only an exact version line."""
-    if setting in {ONE_X, TWO_X}:
+    if version_setting(setting) != AUTO:
         return setting
-    if setting != AUTO:
+    return detected(reported_version(command, allow))
+
+
+def version_setting(setting):
+    """Validate the selected protocol without invoking the CLI."""
+    if setting not in (AUTO, ONE_X, TWO_X):
         raise ValueError('settings.opencode_version must be "auto", "1.x" or "2.x"')
+    return setting
+
+
+def reported_version(command, allow):
+    """Ask the selected CLI for its version using the model's limited environment."""
     try:
-        completed = subprocess.run(
+        return subprocess.run(
             [*command, "--version"],
             env=opencode_cli.environment(allow),
             stdin=subprocess.DEVNULL,
@@ -47,9 +57,9 @@ def select(setting, command, allow=()):
         )
     except (OSError, subprocess.TimeoutExpired) as error:
         raise ValueError(
-            "Cannot detect opencode interface; set settings.opencode_version explicitly"
+            f"Cannot detect opencode interface via {command[0]}: {error}; "
+            "set settings.opencode_version explicitly"
         ) from error
-    return detected(completed)
 
 
 def detected(completed):

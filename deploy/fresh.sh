@@ -6,6 +6,9 @@ reset_state() {
 reset_options=()
 executor_reset=no
 service_was_active=no
+if [[ "$fresh" == yes ]]; then
+    reset_options+=(--incoming-settings "$staging/config/settings.json")
+fi
 if [[ "$force_update" == yes ]]; then
     reset_options+=(--keep-config "$staging/config/settings.json")
     if systemctl --user is-active --quiet "$service"; then service_was_active=yes; fi
@@ -13,6 +16,7 @@ fi
 if [[ "$fresh" == yes || "$force_update" == yes ]]; then
     reset_state check
 fi
+check_connection
 if [[ "$fresh" == yes ]]; then
     if [[ "$autostart" == keep ]]; then
         if systemctl --user is-enabled --quiet "$service"; then autostart=yes; else autostart=no; fi

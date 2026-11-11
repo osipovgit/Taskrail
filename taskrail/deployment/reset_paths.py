@@ -2,11 +2,11 @@
 
 import json
 import os
-import shutil
 from pathlib import Path
 
 from taskrail.application.instruction_sources import ROLES
 from taskrail.infrastructure.opencode_cli import agent_directory
+from taskrail.infrastructure.opencode_settings import command_paths
 
 MAIN = (".local/share/taskrail", ".config/taskrail", ".local/state/taskrail")
 PRESERVED_STATE = frozenset(("live.lock",))
@@ -109,17 +109,14 @@ class ResetPaths:
         if roles != bundled:
             yield roles.resolve()
             yield from ((roles / f"{role}.md").resolve() for role in ROLES)
-        yield from command_paths(options.get("command", ["opencode"]))
+        yield from protected_command_paths(options.get("command", ["opencode"]))
 
 
-def command_paths(command):
-    """Paths in the saved argv must survive replacement of application files."""
-    executable = shutil.which(command[0])
-    if executable:
-        yield Path(executable).resolve()
-    for argument in map(Path, command[1:]):
-        if argument.is_absolute():
-            yield argument.resolve()
+def protected_command_paths(command):
+    """Both the configured name and its target must survive a reset."""
+    for path in command_paths(command):
+        yield path
+        yield path.resolve()
 
 
 def validate_history_destination(path):
@@ -136,7 +133,10 @@ def validate_target(target, forbidden, protected, preserved):
     """Check one concrete removal target without expanding a preserved directory."""
     if target.resolve() != target or target in forbidden:
         raise ValueError(f"Unsafe reset path; no files deleted: {target}")
-    if any(overlaps(target, source) for source in protected):
-        raise ValueError("Extract release and supplied settings outside reset directories")
-    if any(overlaps(target, source) for source in preserved):
+    for source in protected:
+        if overlaps(target, source):
+            raise ValueError(
+                f"Keep installation inputs outside reset directories: {source} overlaps {target}"
+            )
+    if any(overlaps(target, tree) for tree in preserved):
         raise ValueError("Reset paths overlap preserved worktrees; no files deleted")

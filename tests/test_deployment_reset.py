@@ -203,7 +203,7 @@ class DeploymentImportPreflightTests(unittest.TestCase):
         self.imported = self.home / "imported.json"
         self.command = [str(self.fixture.binaries / "opencode")]
 
-    def install_fresh(self):
+    def install_fresh(self, *options):
         return subprocess.run(
             [
                 "bash",
@@ -211,6 +211,7 @@ class DeploymentImportPreflightTests(unittest.TestCase):
                 str(self.imported),
                 "--fresh",
                 "--autostart=keep",
+                *options,
             ],
             env=self.environment,
             capture_output=True,
@@ -271,6 +272,25 @@ class DeploymentImportPreflightTests(unittest.TestCase):
         result = self.install_fresh()
         self.assert_preserved(result)
         self.assertIn("Missing source agent: planner", result.stderr)
+
+    def test_fresh_preserves_the_selected_cli_and_its_file_arguments(self):
+        inside = self.config / "backend"
+        inside.symlink_to(self.command[0])
+        self.imported.write_text(json.dumps(dict(command=self.command)))
+        result = self.install_fresh(f"--opencode={inside}")
+        self.assert_preserved(result)
+        self.assertIn("outside reset directories", result.stderr)
+        self.assertTrue(inside.is_symlink())
+
+        inside.unlink()
+        shutil.copy2(self.command[0], inside)
+        argument = self.home / "backend argument"
+        argument.symlink_to(inside)
+        self.imported.write_text(json.dumps(dict(command=["/bin/sh", str(argument)])))
+        result = self.install_fresh()
+        self.assert_preserved(result)
+        self.assertIn("outside reset directories", result.stderr)
+        self.assertTrue(inside.is_file())
 
     def test_invalid_runtime_settings_and_empty_role_tree_fail_before_stop(self):
         roles = self.home / "empty-roles"

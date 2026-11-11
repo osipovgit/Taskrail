@@ -24,6 +24,10 @@ def run_storage(settings=None, explicit=None):
         return Path(explicit).expanduser().resolve()
     settings = settings_path(settings)
     options = json.loads(settings.read_text()) if settings.is_file() else {}
+    return configured_storage(options, settings.parent)
+
+
+def configured_storage(options, base):
+    """Resolve run storage against the directory owning the effective settings."""
     path = Path(options.get("run_base", Path.home() / ".local/state/taskrail/runs"))
-    path = path.expanduser()
-    return path.resolve() if path.is_absolute() else (settings.parent / path).resolve()
+    return (base / path.expanduser()).resolve()

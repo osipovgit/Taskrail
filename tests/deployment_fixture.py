@@ -2,7 +2,9 @@
 
 import os
 import re
+import shlex
 import shutil
+import sys
 from pathlib import Path
 
 BASE = Path(__file__).resolve().parents[1]
@@ -32,10 +34,18 @@ class DeploymentFixture:
                 '#!/bin/sh\nprintf "%s\\n" "$0 $*" >> "$HOME/privilege.log"\nexit 0\n'
             )
             executable.chmod(0o755)
+        runner = self.binaries / "systemd-run"
+        emulator = shlex.join((sys.executable, str(Path(__file__).resolve())))
+        runner.write_text(f'#!/bin/sh\nexec {emulator} "$@"\n')
+        runner.chmod(0o755)
         opencode = self.binaries / "opencode"
+        listing = shlex.join((sys.executable, str(BASE / "tests/fake_live.py")))
         opencode.write_text(
             '#!/bin/sh\nif [ "$#" -eq 1 ] && [ "$1" = --version ]; then\n'
             "    printf '1.19.3\\n'\n    exit 0\nfi\n"
+            'if [ "$#" -eq 2 ] && [ "$1 $2" = "agent list" ]; then\n'
+            '    echo list >> "$HOME/permission-probes.log"\n'
+            f'    exec {listing} --profiles "$OPENCODE_CONFIG_DIR/agent" --mode ok "$@"\nfi\n'
             "printf 'Deployment fixture must not call a model\\n' >&2\nexit 1\n"
         )
         opencode.chmod(0o755)
@@ -71,3 +81,20 @@ class DeploymentFixture:
                 )
                 script.write_text(text)
         return self.release
+
+
+if __name__ == "__main__":
+    # Emulate just the transient unit's environment and cwd with private fixture paths.
+    arguments = iter(sys.argv[1:])
+    for option in arguments:
+        if option.startswith("--property=EnvironmentFile="):
+            environment = Path(option.split("=", 2)[2])
+            for line in environment.read_text().splitlines():
+                for assignment in shlex.split(line, comments=True):
+                    name, value = assignment.split("=", 1)
+                    os.environ[name] = value
+        elif option.startswith("--working-directory="):
+            os.chdir(option.split("=", 1)[1])
+        elif not option.startswith("--"):
+            os.execv(option, [option, *arguments])
+    sys.exit("Missing transient command")

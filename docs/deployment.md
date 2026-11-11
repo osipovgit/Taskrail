@@ -25,6 +25,18 @@ To replace the complete settings of an existing installation while keeping histo
 use `bash deploy/install.sh /path/settings.json --apply-settings`. Relative
 paths in the replacement refer to the installed configuration directory.
 
+On first install, after a CLI configuration change, and on `--fresh`, the installer
+queries the CLI version, checks the effective rules of a temporary agent profile
+and verifies write access to the run directory. The probe runs in a transient
+systemd user service. Both units load `service.env`. Drop-ins for `taskrail.service`
+apply only to the installed service, so place CLI environment overrides in
+`service.env` to include them in the probe. A failed check reports the cause
+before the service stops or history is cleared. After the service starts, Taskrail
+saves a fingerprint in `~/.config/taskrail/cli-check.sha256`. Updates with the
+same CLI and connection settings reuse it. Run `taskrail check` under the service
+account to repeat the diagnostics at any time. Each workflow still verifies its
+own permission profile before using a model.
+
 Interactive installation asks about startup at login only when `--autostart` is
 omitted (and boot startup was not requested). Explicit `--autostart=keep` skips the startup question. Unattended installs need
 `--autostart=yes` to enable it; `keep` preserves an existing choice. The service

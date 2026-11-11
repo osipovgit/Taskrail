@@ -7,7 +7,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from taskrail.onboarding import check, init
+from taskrail.onboarding import CHECK_MARKER, check, check_connection, init
 
 BASE = Path(__file__).resolve().parents[1]
 
@@ -48,7 +48,7 @@ class OnboardingTests(unittest.TestCase):
         self.assertTrue((self.root / "runs").is_dir())
 
     def test_check_reports_missing_cli_and_invalid_settings(self):
-        with mock.patch("taskrail.onboarding.permission_result") as permission:
+        with mock.patch("taskrail.cli_health.permission_result") as permission:
             report = check(self.settings(command=[str(self.root / "missing-opencode")]))
         permission.assert_not_called()
         failures = [message for passed, message in report if not passed]
@@ -68,6 +68,87 @@ class OnboardingTests(unittest.TestCase):
                 report = check(str(broken))
                 failures = [message for passed, message in report if not passed]
                 self.assertTrue(any(expected in message for message in failures), report)
+
+    def test_installation_checks_effective_paths_and_keeps_existing_probe_profile(self):
+        options = json.loads(
+            Path(self.settings(agent_directory="profiles", run_base="runs")).read_text()
+        )
+        self.profiles.mkdir()
+        existing = self.profiles / "taskrail-check.md"
+        original = '---\n{"permission": {}}\n---\nMy own agent.\n'
+        existing.write_text(original)
+
+        current = check_connection(options, self.root)
+        self.assertTrue((self.root / "runs").is_dir())
+        self.assertEqual(existing.read_text(), original)
+        self.assertEqual(list(self.profiles.iterdir()), [existing])
+        marker = self.root / CHECK_MARKER
+        self.assertFalse(marker.exists())
+        marker.write_text(current + "\n")
+        with mock.patch("taskrail.cli_health.Connection.diagnostics") as diagnostics:
+            self.assertIsNone(check_connection(dict(options, stage_timeout=55), self.root))
+            diagnostics.assert_not_called()
+            diagnostics.return_value = [(False, "Permission enforcement failed")]
+            for change in (
+                {"models": {"planner": "provider/research"}},
+                {"agent_env_allow": ["CUSTOM_CLI_TOKEN"]},
+                {"agent_directory": "new-profiles"},
+                {"run_base": "other-runs"},
+            ):
+                with (
+                    self.subTest(change=change),
+                    self.assertRaisesRegex(ValueError, "Permission enforcement failed"),
+                ):
+                    check_connection(dict(options, **change), self.root)
+            with self.assertRaisesRegex(ValueError, "Permission enforcement failed"):
+                check_connection(options, self.root, force=True)
+        self.assertEqual(marker.read_text(), current + "\n")
+
+    def test_checked_cli_file_replacement_invalidates_success_marker(self):
+        script = self.root / "runner.py"
+        script.write_text("pass")
+        options = {"command": [sys.executable, str(script)]}
+        marker = self.root / CHECK_MARKER
+        with mock.patch(
+            "taskrail.cli_health.Connection.diagnostics", return_value=[(True, "OK")]
+        ) as checks:
+            first = check_connection(options, self.root)
+            marker.write_text(first)
+            self.assertIsNone(check_connection(options, self.root))
+            script.chmod(0o700)
+            changed = check_connection(options, self.root)
+            self.assertNotEqual(changed, first)
+            marker.write_text(changed)
+            script.unlink()
+            self.assertNotEqual(check_connection(options, self.root), changed)
+            self.assertEqual(checks.call_count, 3)
+
+    def test_cli_environment_changes_trigger_a_new_probe(self):
+        options = json.loads(Path(self.settings(agent_env_allow=["CUSTOM_CLI_TOKEN"])).read_text())
+        config = self.root / "cli.json"
+        config.write_text("{}")
+        with (
+            mock.patch.dict(os.environ, {"OPENCODE_CONFIG": str(config)}),
+            mock.patch("taskrail.cli_health.Connection.diagnostics", return_value=[(True, "OK")]),
+        ):
+            saved = check_connection(options, self.root)
+            (self.root / CHECK_MARKER).write_text(saved)
+            for name in ("OPENCODE_CONFIG_CONTENT", "OPENCODE_CONFIG_DIR", "CUSTOM_CLI_TOKEN"):
+                with (
+                    self.subTest(name=name),
+                    mock.patch.dict(os.environ, {name: "another-selection"}),
+                ):
+                    self.assertNotEqual(check_connection(options, self.root), saved)
+            config.write_text('{"agent": {}}')
+            self.assertNotEqual(check_connection(options, self.root), saved)
+
+    def test_installation_rejects_unsafe_effective_rules(self):
+        options = json.loads(Path(self.settings()).read_text())
+        options["command"][-1] = "unsafe"
+        with self.assertRaisesRegex(ValueError, "Effective opencode permissions differ"):
+            check_connection(options, self.root)
+        self.assertFalse((self.root / CHECK_MARKER).exists())
+        self.assertEqual(list(self.profiles.glob("*.md")), [])
 
     def test_init_writes_private_settings_once(self):
         fake = self.root / "opencode"
