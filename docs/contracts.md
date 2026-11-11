@@ -37,8 +37,11 @@ Each source names an input field and a verbatim quote, plus a one-based occurren
 the quote repeats. The server checks those references, resolves character spans and
 assigns IDs. These checks prove provenance, not semantic completeness: the planner and
 independent reviewer also compare the complete original task. Background does not become
-an obligation merely because it occupies a paragraph. Conditions, ordering and conflicting
-instructions must survive extraction. Explicit runtime check identities stay server-owned.
+an obligation merely because it occupies a paragraph. If no requested outcome is present,
+the summary asks what the user wants to achieve. The server records `NEEDS_GOAL` and
+stops before planning. Constraints and deferred checks alone cannot start work.
+Conditions, ordering and conflicting instructions must survive extraction.
+Explicit runtime check identities stay server-owned.
 The understanding role uses the planner's configured model unless `models.understanding`
 is set.
 

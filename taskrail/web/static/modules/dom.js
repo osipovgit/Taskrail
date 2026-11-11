@@ -17,6 +17,7 @@ export const statuses = {
   READY_FOR_REVIEW: 'Ready for your review',
   RESULT_VALID: 'Result validated',
   UNDERSTOOD: 'Task understood',
+  NEEDS_GOAL: 'Goal needed',
   REINTERPRET_TASK: 'Understanding correction required',
   PLAN_READY: 'Ready for plan review',
   APPROVE: 'Approved',

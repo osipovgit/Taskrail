@@ -113,9 +113,10 @@ def context_view(run, submission, state):
     """Conversation, draft, actions and text artifacts of the run and its launcher."""
     started = run.joinpath(history.TASK_FILE).is_file()
     task = contained(run, history.TASK_FILE) if started else contained(submission, "task.md")
+    indexed = run.joinpath("run.json").exists()
     return dict(
         conversation=history.previous_messages(run) if started else [],
-        draft=history.task_draft(run) if run.joinpath("run.json").exists() else None,
+        draft=history.task_draft(run, editable=True) if indexed else None,
         actions=lifecycle.actions(run, state, activity(run)),
         auto_approve=split_approvals.shown(run, state),
         delivery=delivery_state.view(run, state),

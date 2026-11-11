@@ -268,6 +268,7 @@ function actionButtons(data, embedded = false) {
   for (const [action, label] of ACTIONS) {
     const assignedRestart = action === 'restart' && Boolean(assigned);
     const button = el('button', assignedRestart ? assigned[0] : label);
+    if (action === 'restart' && data.status === 'NEEDS_GOAL') button.textContent = 'Add a goal';
     const available = data.actions?.[action] && !(embedded && PARENT_ONLY.has(action));
     button.disabled = state.actionPending || !available;
     // Unavailable actions are hidden rather than shown disabled.
@@ -281,11 +282,10 @@ function actionButtons(data, embedded = false) {
         : runAction(action, {}, data.id);
     actions.append(button);
   }
-  // Continuing waits for another run on the same project; the other controls stay usable.
-  if (data.actions?.waiting_for)
-    actions.append(
-      el('p', data.actions.waiting_for + '. Continue becomes available when it stops.', 'muted'),
-    );
+  if (data.actions?.waiting_for) {
+    const hint = data.status === 'NEEDS_GOAL' ? '' : '. Continue becomes available when it stops.';
+    actions.append(el('p', data.actions.waiting_for + hint, 'muted'));
+  }
   if (data.actions?.resume) {
     const note = el('textarea', undefined, 'resume-note');
     note.id = 'resume-note';
@@ -539,10 +539,13 @@ export async function submitFollowup(event) {
   document.getElementById('send-reply').disabled = true;
   document.getElementById('reply-error').textContent = '';
   try {
+    const { roots, constraints, verification, auto_approve } = state.currentRun.draft;
     const payload = {
-      ...state.currentRun.draft,
+      roots,
+      constraints,
+      verification,
+      auto_approve,
       goal: document.getElementById('reply-goal').value,
-      criteria: 'Address the latest Goal with evidence and report verification limits.',
       parent_run: state.currentRun.id,
       submission_mode: document.getElementById('reply-intent').value,
     };

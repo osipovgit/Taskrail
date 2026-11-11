@@ -17,7 +17,7 @@
       "scripts/test.sh": "#!/usr/bin/env bash\nset -euo pipefail\npython3 -m unittest discover -s tests\n",
       "scripts/start.sh": "#!/usr/bin/env bash\nset -euo pipefail\ndocker compose build api\ndocker compose up --no-build\n",
       "notes.txt": "Operator's uncommitted note: preserve verbatim.\n",
-      "tests/test_pricing.py": "import unittest\n\nfrom pricing import order_total\n\n\nclass PricingAcceptanceTests(unittest.TestCase):\n    def test_percentage(self):\n        self.assertEqual(order_total([(2, 10.0)], percent=10), 18.0)\n\n    def test_zero_percentage(self):\n        self.assertEqual(order_total([(1, 5.5), (3, 2.0)]), 11.5)\n",
+      "tests/test_pricing.py": "import unittest\n\nfrom pricing import order_total\n\n\nclass DiscountAcceptanceTests(unittest.TestCase):\n    def test_percentage(self):\n        self.assertEqual(order_total([(2, 10.0)], percent=10), 18.0)\n\n    def test_zero_percentage(self):\n        self.assertEqual(order_total([(1, 5.5), (3, 2.0)]), 11.5)\n",
       "README.md": "# Fixture API\n\nAn example service with configurable retries and timeout.\n"
     },
     "ui": {

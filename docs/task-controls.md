@@ -5,12 +5,13 @@
 | Action | Required state | Result |
 |---|---|---|
 | Restart from scratch (standalone run) | Stopped run | Open the prefilled task form; submit explicitly to create a new run once no run is active on its projects |
+| Add a goal | Goal needed | Edit the original submission, answer the clarification question in the Goal field and submit to start a new run |
 | Restart reviewed task (split child) | Latest attempt of the next unfinished task; no active writer | Start a linked attempt from the approved parent plan, directly at implementation; preserve previous edits and original preimages |
 | Restart this phase (integration review, Jenkins validation, server checks) | Latest stopped attempt of the phase | Start the phase again under the same delivery; the earlier run stays one of its attempts |
 | Correct integration findings | Rejected integration, no unfinished correction, remaining integration corrections | Start a fresh linked task with planning, plan review, implementation, local checks and result review; owned isolated branches also receive a verified commit |
 | Stop task | Running | Write a stop request; the worker cleans up opencode and saves an interruption checkpoint |
 | Continue from checkpoint | Eligible checkpoint, unchanged source, no active run on its projects | Append new attempts to the same run, starting at the interrupted stage; a stage that reported **Blocked** can continue too, with your note answering its question; an interrupted or blocked implementer first inspects its existing edits |
-| Send a follow-up Goal | Previous standalone run stopped, no active run on its projects | Snapshot prior public evidence and start a new run from task understanding; a task or phase run has no follow-up, use Continue with a note or a follow-up of its parent |
+| Send a follow-up Goal | Previous standalone run stopped, no active run on its projects | Start task understanding with the new Goal, inherited constraints and deferred checks. The original task and its public outcomes remain available as conversation history |
 | Answer only | New or follow-up submission | Research and independent review, no implementation; the reviewed answer opens the report and is the `answer` of `taskrail status` |
 | Design discussion | New or follow-up submission | Like Answer only, but the reviewed summary is a design document, saved as `design.md`; follow-ups refine it, a **Develop** follow-up implements it |
 | Confirm changes | A finished code change with planned server checks, after integration review for a split and any Jenkins validation | Accept the change; the server checks start only now |
@@ -36,8 +37,9 @@ The run list groups runs by what they need:
 
 ## Delivery of a code change
 
-A Develop task starts with task understanding, planning and independent plan review.
-A change then goes through implementation, checks and result review. A split dispatches authenticated children in dependency
+Once task understanding identifies a goal, a Develop task proceeds to planning and
+independent plan review. A change then goes through implementation, checks and result
+review. A split dispatches authenticated children in dependency
 order, followed by independent integration review over the combined original and
 corrective diff. Each child receives its complete assignment, prerequisite outcomes
 and immutable `00-input/parent-task.md`. Later work appears under Not ToDo.

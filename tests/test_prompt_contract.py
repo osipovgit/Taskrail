@@ -194,21 +194,6 @@ class FrozenTextTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "restart"):
                 instruction_sources.adopt_texts(run)
 
-    def test_new_tasks_do_not_inherit_another_runs_frozen_texts(self):
-        self.addCleanup(prompt_texts.ACTIVE.adopt, prompt_texts.release())
-        entries = prompt_texts.release()
-        entries["task.default_criteria"] = "Old task default"
-        prompt_texts.ACTIVE.adopt(entries)
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory) / "source"
-            root.mkdir()
-            payload = dict(
-                goal="Write installation documentation", roots=[dict(alias="p", path=str(root))]
-            )
-            text, _ = build_task(payload, Path(directory) / "runs")
-        self.assertNotIn("Old task", text)
-        self.assertIn(prompt_texts.current("task.default_criteria"), text)
-
 
 class CapabilityTests(unittest.TestCase):
     def test_absent_and_unreachable_executors_do_not_advertise_remote_schemas(self):

@@ -60,7 +60,7 @@ source checks, checkpoints and file operations:
 
 | Completed stage | Next boundary |
 |---|---|
-| Task understanding | Validate quotes against the original fields, bind stable requirement IDs, then plan |
+| Task understanding | Validate quotes against the original fields and bind stable requirement IDs. Plan when the user requested an outcome. Otherwise return `NEEDS_GOAL` with a clarification question |
 | Planning or plan review: input interpretation defect | Return the quoted defect to task understanding, retain unchanged IDs and revalidate the plan before approval |
 | Planning | Independent plan review, including no-change proposals and declared blockers |
 | Plan review: changes requested | Return the complete findings to planning, then review the revised plan |

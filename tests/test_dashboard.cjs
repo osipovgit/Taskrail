@@ -671,9 +671,31 @@ async function main() {
   assert.ok(all(nodes.chat).some((node) => node.textContent === 'Mode: Split into tasks'));
   console.log('Checkpoint continuation and deletion controls passed.');
 
+  const missingGoal = {
+    ...state.currentRun,
+    id: 'context',
+    status: 'NEEDS_GOAL',
+    summary: 'What change would you like?',
+    actions: { restart: true },
+    draft: { goal: 'The service runs nightly.', criteria: '', roots: [] },
+  };
+  app.render(missingGoal);
+  const clarification = all(nodes.chat);
+  assert.ok(clarification.some((node) => node.textContent === 'Goal needed'));
+  assert.ok(clarification.some((node) => node.textContent === missingGoal.summary));
+  assert.ok(clarification.find((node) => node.textContent === 'Continue from checkpoint').hidden);
+  const addGoal = clarification.find((node) => node.textContent === 'Add a goal');
+  assert.equal(addGoal.disabled, false);
+  addGoal.onclick();
+  assert.equal(fields.goal.value, missingGoal.draft.goal);
+  assert.equal(fields.criteria.value, '');
+  assert.deepEqual(state.composerContext, { parent_run: 'context', submission_mode: 'restart' });
+  app.closeComposer();
+
   const assigned = {
     ...state.currentRun,
     id: 'child',
+    status: 'TIMEOUT',
     phase: 'task',
     actions: { restart: true },
   };
@@ -702,6 +724,40 @@ async function main() {
   assert.equal(state.selected, 'retry');
   assert.equal(state.composing, false);
   console.log('Assigned task restart uses the action API without opening a detached draft.');
+
+  app.render({
+    ...assigned,
+    id: 'prior',
+    phase: null,
+    actions: { followup: true },
+    draft: {
+      title: 'Implement the original change',
+      criteria: 'Finish the original deliverable',
+      current_behavior: 'Old project state',
+      decompose: true,
+      constraints: 'Keep the public API',
+      verification: 'Run a smoke test',
+      auto_approve: false,
+      roots: [],
+    },
+  });
+  const nextGoal = 'The deployment finished yesterday.';
+  nodes['reply-goal'].value = nextGoal;
+  nodes['reply-intent'] = { value: 'answer' };
+  nodes['reply-error'] = new Node('div');
+  await app.submitFollowup({ preventDefault() {} });
+  const followup = calls.find(([url]) => url === '/api/tasks')[1];
+  assert.deepEqual(followup, {
+    goal: nextGoal,
+    constraints: 'Keep the public API',
+    verification: 'Run a smoke test',
+    auto_approve: false,
+    roots: [],
+    parent_run: 'prior',
+    submission_mode: 'answer',
+    read_only: true,
+    design: false,
+  });
 
   // A task or phase run opens inside its parent's card, with its own decision and actions.
   const { parseHash } = await load('state');

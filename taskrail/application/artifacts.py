@@ -5,6 +5,7 @@ from types import MappingProxyType
 
 from taskrail.application import feedback_files, implementation_submission
 from taskrail.application.stage_console import announce
+from taskrail.core import task_understanding
 from taskrail.core.files import atomic_json
 from taskrail.core.paths import tool_paths
 
@@ -109,6 +110,10 @@ def now():
 
 def rendered(verdict, roots):
     """Original input references are never rewritten as workspace paths."""
-    if isinstance(verdict, dict) and verdict.get(STATUS) in {"UNDERSTOOD", "REINTERPRET_TASK"}:
+    if isinstance(verdict, dict) and verdict.get(STATUS) in {
+        "UNDERSTOOD",
+        task_understanding.NEEDS_GOAL,
+        "REINTERPRET_TASK",
+    }:
         return verdict
     return tool_paths(verdict, roots)

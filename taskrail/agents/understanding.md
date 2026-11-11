@@ -9,6 +9,8 @@ Read the whole submission, including the title, examples and contextual fields.
 Separate requested outcomes, actions and constraints from background. Split independent
 obligations even within a paragraph. Preserve scope, exceptions, dependencies and
 explicit ordering such as "first, in a separate task".
+A direct question is a task. With only background or constraints, keep the constraints
+and ask one focused question in Summary about the desired outcome.
 
 Write each requirement in English and link it to exact quotes with enough context to
 support its meaning. Preserve both sides of a contradiction and explain it in Summary.

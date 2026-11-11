@@ -2,7 +2,9 @@
 
 import copy
 import json
+import tempfile
 import unittest
+from pathlib import Path
 
 from live_fixture import LiveFixture
 
@@ -99,11 +101,21 @@ class TaskUnderstandingTests(unittest.TestCase):
         example, _ = json.JSONDecoder().raw_decode(instruction.partition("Example: ")[2])
         original = "Keep the public API unchanged."
         spec = dict(fields=[dict(name="constraints", text=original)], requirements=[])
-        (requirement,) = task_understanding.resolve(example, spec)["requirements"]
+        verdict = task_understanding.resolve(example, spec)
+        self.assertEqual(verdict["status"], "NEEDS_GOAL")
+        (requirement,) = verdict["requirements"]
         self.assertEqual(requirement["kind"], "constraint")
         self.assertEqual(
             requirement["sources"], [dict(field="constraints", start=0, end=len(original))]
         )
+
+    def test_untouched_understanding_draft_is_not_a_valid_request_for_clarification(self):
+        from taskrail.application import understanding_file
+
+        with tempfile.TemporaryDirectory() as directory:
+            draft = understanding_file.prepare(Path(directory))
+            with self.assertRaisesRegex(ValueError, "Empty text field"):
+                self.resolve(json.loads(draft.read_text()))
 
     def test_requests_in_current_behavior_are_valid_input_sources(self):
         payload = interpreted()
@@ -163,9 +175,31 @@ class TaskUnderstandingTests(unittest.TestCase):
         )
         input_revision.route(flow, state, revision, "plan version")
         self.assertEqual(flow["stage"], "understanding")
-        transitions.understood(flow, state, dict(requirements=[]), "revised interpretation")
+        verdict = dict(
+            status="UNDERSTOOD", summary="Inspect the change", requirements=self.resolve()
+        )
+        transitions.understood(flow, state, verdict, "revised interpretation")
         self.assertEqual(flow["stage"], "planner")
         self.assertEqual(flow["feedback"]["findings_file"], packet["findings_file"])
+
+    def test_reinterpretation_can_remove_the_only_task_and_its_previous_plan(self):
+        from taskrail.application import input_revision, transitions
+
+        state = dict(
+            status="RUNNING", requirements=self.resolve(), results=dict(plan="02-plan/result.json")
+        )
+        flow = dict(stage="plan-reviewer", plan=dict(decision="single"), feedback=None, allowed=[])
+        revision = dict(
+            summary="An example was interpreted as an order.",
+            sources=[dict(field="goal", quote="Example")],
+        )
+        input_revision.route(flow, state, revision, "previous plan")
+        verdict = dict(status="NEEDS_GOAL", summary="Which outcome do you want?", requirements=[])
+        transitions.advance(flow, state, verdict, "04-understand/result.json", "revised input")
+        self.assertEqual(state["status"], "NEEDS_GOAL")
+        self.assertEqual(state["requirements"], [])
+        self.assertEqual(state["results"], {"understanding": "04-understand/result.json"})
+        self.assertIsNone(flow["plan"])
 
     def test_repeated_interpretation_failure_keeps_the_prior_plan_for_checkpoint_resume(self):
         from taskrail.application import input_revision
@@ -183,8 +217,6 @@ class TaskUnderstandingTests(unittest.TestCase):
         self.assertEqual(state["results"]["plan"], "01-plan/result.json")
 
     def test_accepted_input_quotes_are_not_rewritten_as_workspace_paths(self):
-        from pathlib import Path
-
         from taskrail.application.artifacts import rendered
 
         payload = dict(status="UNDERSTOOD", requirements=[dict(text="Inspect project/file.py")])
@@ -192,6 +224,67 @@ class TaskUnderstandingTests(unittest.TestCase):
 
 
 class UnderstandingWorkflowTests(LiveFixture, unittest.TestCase):
+    def test_background_only_stops_then_an_edited_restart_can_answer_a_question(self):
+        from taskrail.application import checkpoints
+        from taskrail.application.live import execute_task
+        from taskrail.web import requests, restarts, task_form
+
+        (self.root / "hello.py").write_text("def hello():\n    return 2\n")
+        self.real_repository()
+        goal = "The service currently runs on Java."
+        roots = [dict(alias="project", path=str(self.root))]
+        runs = self.base / "history"
+        original, _ = task_form.build_task(dict(goal=goal, roots=roots), runs)
+        self.task.write_text(original)
+        run, status, state = self.run_mode("background-only")
+        self.assertEqual(status, "NEEDS_GOAL", state["summary"])
+        self.assertEqual(state["requirements"], [])
+        self.assertEqual(
+            [(row["stage"], row["verdict"]) for row in state["stages"]],
+            [("understanding", "NEEDS_GOAL")],
+        )
+        self.assertEqual(state["summary"], "What outcome would you like for this service?")
+        self.assertFalse(checkpoints.resume_available(run, state)[0])
+
+        draft = restarts.restart(None, run)["draft"]
+        self.assertEqual(draft["goal"], goal)
+        self.assertEqual(draft["criteria"], "")
+        question = "What does hello.py return?"
+        draft.update(goal=question, read_only=True, parent_run=run.name, submission_mode="restart")
+        submission = requests.Submission(draft, run.parent)
+        changed, _ = task_form.build_task(submission.fields, runs)
+        self.task.write_text(submission.decorate(changed))
+        self.configure_mode("no-change")
+        second, status = execute_task(self.task, self.settings, run_dir=self.base / "clarified")
+        after = json.loads((second / "run.json").read_text())
+        self.assertEqual(status, "NO_CHANGES_REQUIRED", after.get("summary"))
+        self.assertEqual(
+            [row["stage"] for row in after["stages"]], ["understanding", "planner", "plan-reviewer"]
+        )
+        self.assertEqual([entry["text"] for entry in after["requirements"]], [question])
+        self.assertEqual((run / "00-input/task.md").read_text(), original)
+
+    def test_only_constraints_and_deferred_checks_do_not_authorize_planning(self):
+        self.task.write_text(
+            self.task.read_text().replace(
+                "Return 2",
+                "## Goal\nThe service currently runs on Java.\n## Constraints\nPreserve its API.\n## Verification\nCheck service availability after release.",
+            )
+        )
+        run, status, state = self.run_mode("background-only")
+        self.assertEqual(status, "NEEDS_GOAL", state["summary"])
+        self.assertEqual([row["stage"] for row in state["stages"]], ["understanding"])
+        self.assertEqual(
+            [entry["kind"] for entry in state["requirements"]], ["constraint", "runtime"]
+        )
+        self.assertEqual(
+            state["requirements"][0]["sources"],
+            [dict(field="constraints", start=0, end=len("Preserve its API."))],
+        )
+        accepted = json.loads((run / state["results"]["understanding"]).read_text())
+        self.assertEqual(state["requirements"], accepted["requirements"])
+        self.assertEqual(state["task_spec"]["requirements"], accepted["requirements"])
+
     def test_planner_can_return_a_missing_obligation_to_understanding(self):
         self.check_revision("planner")
 

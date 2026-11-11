@@ -10,7 +10,7 @@ from taskrail.application import (
     repair_feedback,
     review_outcome,
 )
-from taskrail.core import plan_contract, prompt_texts
+from taskrail.core import plan_contract, prompt_texts, task_understanding
 
 PLAN_REVIEW = "plan-reviewer"
 STATUS = "status"
@@ -24,20 +24,19 @@ BLOCKED = "BLOCKED"
 
 
 def understood(flow, state, verdict, version):
-    """Planning uses the accepted interpretation and rechecks any existing draft."""
+    """Install the interpretation, then plan only when the user requested an outcome."""
     state["requirements"] = verdict["requirements"]
+    flow["effect"] = "understood"
+    if verdict[STATUS] == task_understanding.NEEDS_GOAL:
+        state.update(status=task_understanding.NEEDS_GOAL, summary=verdict[SUMMARY])
+        return
     feedback = (
         dict(summary=prompt_texts.text("understanding.replanned")) if flow["feedback"] else None
     )
     prior = plan_feedback.packet(flow["feedback"])
     if prior:
         feedback.update(prior)
-    flow.update(
-        stage=PLANNER,
-        plan=None,
-        feedback=feedback,
-        effect="understood",
-    )
+    flow.update(stage=PLANNER, plan=None, feedback=feedback)
 
 
 def planning(flow, state, verdict, version):

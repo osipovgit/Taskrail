@@ -33,7 +33,11 @@ def execute(context, run, prompt, mode, emit):
                     sources=[dict(field="goal", quote="Preserve the comment.")],
                 )
             )
-    payload = dict(summary="Extract the fixture's explicit obligations", requirements=entries)
+    summary = "Extract the fixture's explicit obligations"
+    if mode == "background-only":
+        entries = [entry for entry in entries if entry["kind"] == "constraint"]
+        summary = "What outcome would you like for this service?"
+    payload = dict(summary=summary, requirements=entries)
     (run / "understanding.json").write_text(json.dumps(payload, ensure_ascii=False))
     emit(json.dumps(dict(type="text", part=dict(messageID="understood", text="DONE"))))
     emit(

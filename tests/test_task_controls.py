@@ -75,6 +75,28 @@ class TaskControlTests(unittest.TestCase):
         self.configure("ok")
         self.launcher = TaskLauncher(self.runs, self.settings)
 
+    def test_background_only_restart_keeps_original_fields_and_opens_a_new_task(self):
+        original = dict(goal="The server runs nightly.", roots=self.payload["roots"])
+        text, _ = build_task(original, self.runs)
+        (self.run / "00-input/task.md").write_text(text)
+        state = json.loads((self.run / "run.json").read_text())
+        state.update(status="NEEDS_GOAL", summary="What should change?", results={})
+        atomic_json(self.run / "run.json", state)
+        view = run_view(self.runs, self.run.name)
+        self.assertTrue(view["actions"]["restart"])
+        self.assertFalse(view["actions"]["resume"])
+        self.assertIsNone(view["delivery"])
+        self.assertEqual(view["draft"]["goal"], original["goal"])
+        self.assertEqual(view["draft"]["title"], "")
+        self.assertEqual(view["draft"]["criteria"], "")
+        clarified = dict(view["draft"], goal="Run the server hourly.", parent_run=self.run.name)
+        with patch.object(self.launcher, "launch", return_value={"id": "clarified"}) as launch:
+            self.launcher.submit(dict(clarified, submission_mode="restart"))
+        fields = TaskDraft(launch.call_args.args[0]["text"]).fields()
+        self.assertEqual(fields["goal"], clarified["goal"])
+        self.assertEqual(fields["criteria"], "")
+        self.assertEqual((self.run / "00-input/task.md").read_text(), text)
+
     def configure(self, mode):
         self.settings.write_text(
             json.dumps(
