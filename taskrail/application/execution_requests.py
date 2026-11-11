@@ -23,9 +23,8 @@ def available():
         return {UNAVAILABLE: "routes.ssh.unreachable"}
 
 
-def instructions(config, stage, run, catalog=None):
-    """Advertise the same stage capabilities as the request's response schemas."""
-    catalog = available() if catalog is None else catalog
+def instructions(config, stage, run, catalog):
+    """Advertise remote routes and their examples from the same catalog snapshot."""
     if catalog.get(UNAVAILABLE):
         return prompt_texts.text(catalog[UNAVAILABLE])
     routes = [
@@ -76,6 +75,7 @@ def ssh_instructions(targets, scope):
         "routes.ssh",
         scope=scope,
         targets=json.dumps(list(targets)),
+        target=json.dumps(next(iter(targets))),
     )
 
 

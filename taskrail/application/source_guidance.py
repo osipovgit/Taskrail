@@ -3,8 +3,7 @@
 from pathlib import Path
 
 from taskrail.application import source_views, source_windows
-from taskrail.core import protected_paths
-from taskrail.core.paths import tool_paths
+from taskrail.core import protected_paths, read_hints
 
 VIEW_LIMIT = 5
 
@@ -14,7 +13,8 @@ def inputs(config, plan, run):
     views = []
     scope = (config["roots"], run, protected_paths.patterns(config))
     paths = dict.fromkeys(
-        source_path(reference, *scope) for reference in source_windows.requests(config, plan)
+        source_path(reference, *scope)
+        for reference in source_windows.requests(config, plan, (source_views.directory(run),))
     )
     for path in filter(None, paths):
         view = prepared(path, run, config["roots"])
@@ -27,10 +27,10 @@ def inputs(config, plan, run):
 
 def source_path(reference, roots, run, protected):
     """Resolve a source reference under the same access rules as source packets."""
-    match = source_windows.REFERENCE.fullmatch(tool_paths(reference, roots))
-    if match and source_views.directory(run) in Path(match[1]).parents:
-        return Path(match[1])
-    return source_windows.source_path(match[1], roots, protected) if match else None
+    path = Path(read_hints.split_hint(reference)[0])
+    if source_views.directory(run) in path.parents:
+        return path
+    return source_windows.source_path(path, roots, protected)
 
 
 def prepared(path, run, roots):

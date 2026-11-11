@@ -1,9 +1,10 @@
 """Return a concrete interpretation defect to the task-understanding stage."""
 
 import json
+import re
 
 from taskrail.application import plan_feedback, repair_feedback
-from taskrail.core import json_response, schema, task_understanding
+from taskrail.core import json_response, reply_frame, schema, task_understanding
 from taskrail.core.files import digest
 
 STATUS = "REINTERPRET_TASK"
@@ -12,9 +13,19 @@ STAGES = frozenset(("planner", "plan-reviewer"))
 
 def requested(response, context):
     """A quoted input defect is a stage handoff, never an executor operation."""
-    if STATUS not in response:
+    if STATUS not in response or reply_frame.submitted(response):
         return None
-    payload = json_response.extract(response, schema.unique_fields)
+    body = json_response.body(response)
+    if not body.startswith("{"):
+        return None
+    try:
+        payload = json.loads(body, object_pairs_hook=schema.unique_fields)
+    except (ValueError, RecursionError) as error:
+        if re.search(rf'"status"\s*:\s*"{STATUS}"', response):
+            raise ValueError("Expected one complete interpretation correction object") from error
+        return None
+    if payload.get("status") != STATUS:
+        return None
     schema.validate(payload, schema.SCHEMAS["input-revision"])
     schema.require(context["stage"] in STAGES, "Only planning stages can request reinterpretation")
     schema.require(bool(payload["sources"]), "An interpretation correction needs original quotes")

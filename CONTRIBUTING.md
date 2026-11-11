@@ -1,13 +1,11 @@
 # Contributing
 
-Thank you for helping improve Taskrail. Maintainer rules live in
-[AGENTS.md](AGENTS.md); this page covers the practical steps.
+Maintainer rules live in [AGENTS.md](AGENTS.md).
 
 ## Issues
 
-Describe the goal, the observed behavior and the expected behavior. For a failed
-run, attach the files listed under "For a failure" in the [README](README.md) and
-redact secrets and private source. Report security problems privately as described
+Describe the goal, the observed behavior and the expected behavior. For a failed run, include the relevant [stage artifacts](docs/monitoring.md#artifacts).
+Redact secrets and private source before sharing. Report security problems privately as described
 in [SECURITY.md](SECURITY.md).
 
 ## Development setup

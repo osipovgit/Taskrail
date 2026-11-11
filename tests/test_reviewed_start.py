@@ -10,14 +10,22 @@ from run_fixture import current_run
 
 from taskrail.application import (
     check_configuration,
+    citation_review,
+    evidence_scope,
     execution_context,
+    plan_reports,
+    plan_result,
     reviewed_artifacts,
     reviewed_input,
     reviewed_start,
+    source_views,
+    source_windows,
 )
 from taskrail.application.source_guard import SourceGuard
 from taskrail.core import plan_document, task_lineage, task_spec
 from taskrail.core.files import atomic_json, digest
+from taskrail.infrastructure import artifact_access
+from taskrail.interactions import transcripts
 
 
 class ReviewedStartTests(unittest.TestCase):
@@ -99,7 +107,9 @@ class ReviewedStartTests(unittest.TestCase):
         manifest.write_text('{"changed_entries":0}\n')
         path = self.parent / "01-plan/result.json"
         plan = json.loads(path.read_text())
-        plan["steps"][0]["read"] = [f"{manifest}:1-1", f"{self.root}/a.py:1-1"]
+        guide = self.root / "guide with spaces.md"
+        guide.write_text("Independent context for the task.\n")
+        plan["steps"][0]["read"] = [f"{manifest}:1-1", str(guide)]
         atomic_json(path, plan)
         self.parent_state["reviewed_plan_sha256"] = digest(path.read_bytes())
         atomic_json(self.parent / "run.json", current_run(self.parent_state))
@@ -107,11 +117,119 @@ class ReviewedStartTests(unittest.TestCase):
         child_manifest = self.child / "00-input/original/status.jsonl"
         self.assertEqual(child_manifest.read_bytes(), manifest.read_bytes())
         installed = self.workflow.flow["plan"]
-        self.assertEqual(
-            installed["steps"][0]["read"], [f"{child_manifest}:1-1", f"{self.root}/a.py:1-1"]
-        )
-        self.assertEqual(installed["evidence"][0]["path"], str(child_manifest))
+        self.assertEqual(installed["steps"][0]["read"], [f"{child_manifest}:1-1", str(guide)])
+        self.assertEqual(installed["evidence"], [])
+        supplied = source_windows.observations(self.workflow.config, installed)
+        self.assertEqual(supplied[0]["input"]["filePath"], str(guide))
+        self.assertEqual(supplied[0]["output"], "1: Independent context for the task.")
         self.assertEqual(json.loads(path.read_text()), plan)
+
+    def test_child_can_read_only_its_planners_frozen_reports_and_continue(self):
+        folder = self.parent / "01-plan"
+        request = dict(cwd=str(self.root), argv=["lint", "."])
+        stdout = "source.py:51: unused import\n" * 125
+        outcome = dict(status="FAILED", exit_code=2, stdout=stdout, stderr="")
+        for reason in ("T1 report", "T2 report"):
+            transcripts.local_snapshot(self.parent, folder, dict(request, reason=reason), outcome)
+        reports = self.parent / "00-input/local"
+        receipt = reports / "01-plan-0.json"
+        stream = reports / "01-plan-0.stdout.txt"
+        sibling = reports / "01-plan-1.stdout.txt"
+        source = folder / "result.json"
+        text = (
+            "Decision: split\nSummary: Return 2\n## Requirements\nR1 -> T1\nR2 -> T2\n"
+            f"## T1: Return 2\nFiles: project/a.py\nRead: {receipt}\n"
+            "Done when: answer is 2\nVerify: Read the assignment\n"
+            f"## T2: Document\nDepends on: T1\nFiles: project/README.md\nRead: {sibling}:7-12\n"
+            "Done when: The answer is documented\nVerify: Read the documentation\n"
+        )
+        (self.parent / "plan.md").write_text(text)
+        context = dict(
+            run=self.parent,
+            folder=folder,
+            roots=self.workflow.config["roots"],
+            requirements=self.parent_state["requirements"],
+            session_id=None,
+        )
+        plan = plan_result.stage_result(context)
+        plan_reports.bind(plan, context)
+        plan_reports.bind(plan, context, verify=True)
+        atomic_json(source, plan)
+        self.parent_state["reviewed_plan_sha256"] = digest(source.read_bytes())
+        atomic_json(self.parent / "run.json", current_run(self.parent_state))
+        original = receipt.read_bytes()
+        changed = json.loads(original)
+        changed["request"]["argv"] = ["other"]
+        atomic_json(receipt, changed)
+        with self.assertRaisesRegex(ValueError, "Plan report changed"):
+            plan_reports.bind(plan, context, verify=True)
+        receipt.write_bytes(original)
+        stream.write_text("modified output")
+        with self.assertRaisesRegex(ValueError, "executor output changed"):
+            plan_reports.bind(plan, context, verify=True)
+        stream.unlink()
+        receipt.write_text("changed by a later process")
+        reviewed_start.begin(self.workflow)
+        packet = self.child / plan_reports.DIRECTORY
+        files = self.workflow.flow["plan"]["steps"][0]["read"]
+        local_receipt = packet / "local.01-plan-0.json"
+        local_stream = packet / "local.01-plan-0.stdout.txt"
+        self.assertEqual(files, [str(local_receipt), str(local_stream)])
+        self.assertEqual(local_receipt.read_bytes(), original)
+        self.assertEqual(local_stream.read_text(), stdout)
+        self.assertEqual(
+            {path.name for path in packet.iterdir()}, {local_receipt.name, local_stream.name}
+        )
+        readable = artifact_access.model_inputs(self.child, self.child / "01-implement")
+        self.assertIn(packet, readable)
+        self.assertFalse(any(path in receipt.parents or path == receipt for path in readable))
+        reviewed_input.restore(self.workflow)
+        local_stream.write_text("clean")
+        with self.assertRaisesRegex(ValueError, "evidence changed"):
+            reviewed_input.restore(self.workflow)
+        with self.assertRaisesRegex(ValueError, "evidence changed"):
+            evidence_scope.verify_dependencies(
+                dict(run=self.child, check_config=self.workflow.config),
+                [dict(path=str(local_stream))],
+            )
+        local_receipt.write_text(json.dumps({"tampered": list(range(800))}))
+        view = source_views.prepare(self.child, local_receipt, self.workflow.config["roots"])
+        context = dict(
+            run=self.child, check_config=self.workflow.config, roots=self.workflow.config["roots"]
+        )
+        with self.assertRaisesRegex(ValueError, "evidence changed"):
+            citation_review.checked(dict(path=view["path"]), [], context)
+        second = self.base / "second"
+        (second / "00-input").mkdir(parents=True)
+        inherited = plan_reports.inherit(second, plan["steps"][1], self.parent)
+        second_stream = second / plan_reports.DIRECTORY / "local.01-plan-1.stdout.txt"
+        self.assertEqual(inherited["read"][0], f"{second_stream}:7-12")
+        self.assertEqual(second_stream.read_text(), stdout)
+
+    def test_split_refuses_missing_protected_or_redirected_planner_report(self):
+        folder = self.parent / "00-input/git"
+        folder.mkdir()
+        protected = folder / ".env"
+        protected.write_text("test")
+        redirected = folder / "02-plan-0.txt"
+        redirected.symlink_to(self.root / "a.py")
+        for path in (protected, redirected, folder / "missing.txt"):
+            with self.subTest(path=path.name), self.assertRaisesRegex(ValueError, "Invalid report"):
+                plan_reports.bind(
+                    dict(decision="split", steps=[dict(read=[str(path)])]),
+                    dict(run=self.parent),
+                )
+
+    def test_split_reports_redirect_private_hints_before_review(self):
+        for path in ("01-plan/request.md", "00-input/source-views/example.json"):
+            with (
+                self.subTest(path=path),
+                self.assertRaisesRegex(ValueError, "original project file or executor report"),
+            ):
+                plan_reports.bind(
+                    dict(decision="split", steps=[dict(read=[str(self.parent / path)])]),
+                    dict(run=self.parent),
+                )
 
     def test_authenticated_child_starts_writer_with_preimages_and_one_exact_scope(self):
         reviewed_start.begin(self.workflow)

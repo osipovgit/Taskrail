@@ -8,6 +8,8 @@ the command policy, the sandbox and any approval see the resulting argv and cwd.
 import shlex
 from pathlib import Path
 
+from taskrail.core import prompt_texts, schema
+
 STATUS = "LOCAL_REQUEST"
 COMMAND_KEYS = ("argv", "command", "cmd")
 # A command string with these characters needs a shell, as its author wrote it.
@@ -15,13 +17,16 @@ SHELL_SYNTAX = frozenset("|&;<>()$`*?[]{}~\n")
 NO_REASON = "No reason given"
 VERSION = 1
 KEPT = ("cwd", "sandbox")
+OTHER_ROUTES = frozenset(("root", "action", "jenkins"))
 
 
 def looks_like(payload):
     """Whether a status-less object is meant as a local command."""
     if not isinstance(payload, dict) or "status" in payload:
         return False
-    return "argv" in payload or ("cwd" in payload and has_command(payload))
+    return OTHER_ROUTES.isdisjoint(payload) and (
+        "argv" in payload or ("cwd" in payload and has_command(payload))
+    )
 
 
 def has_command(payload):
@@ -31,16 +36,30 @@ def has_command(payload):
 
 def normalized(payload):
     """The request fields the model meant; any other field is dropped."""
-    command = next((payload[key] for key in COMMAND_KEYS if key in payload), None)
+    schema.require(
+        OTHER_ROUTES.isdisjoint(payload), prompt_texts.text("validation.local_route_conflict")
+    )
     reason = payload.get("reason")
     request = dict(
         schema_version=payload.get("schema_version", VERSION),
         status=STATUS,
-        argv=arguments(command),
+        argv=command_argv(payload),
         reason=reason if isinstance(reason, str) and reason.strip() else NO_REASON,
     )
     kept = {key: payload[key] for key in KEPT if key in payload}
     return dict(request, **kept)
+
+
+def command_argv(payload):
+    """Resolve aliases only if they describe one command."""
+    commands = [arguments(payload[key]) for key in COMMAND_KEYS if key in payload]
+    if not commands:
+        return None
+    schema.require(
+        all(command == commands[0] for command in commands[1:]),
+        prompt_texts.text("validation.local_command_conflict"),
+    )
+    return commands[0]
 
 
 def arguments(command):
@@ -63,7 +82,9 @@ def located(payload, roots):
 
 def directory_of(cwd, roots):
     """The directory a relative cwd names, or None to keep the request unchanged."""
-    if not isinstance(cwd, str) or Path(cwd).is_absolute():
+    if not isinstance(cwd, str) or "\x00" in cwd:
+        return None
+    if Path(cwd).is_absolute():
         return None
     alias, _, rest = cwd.partition("/")
     named = roots.get(alias)

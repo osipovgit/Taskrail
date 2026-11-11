@@ -29,7 +29,7 @@ class WorkspacePathTests(unittest.TestCase):
             proposed_change_files=[name],
             files_read=[name],
             evidence=[dict(path=name, line_start=1, line_end=2)],
-            steps=[dict(files=[name], read=[f"{name}:1-2"], notes=name)],
+            steps=[dict(files=[name], read=[f"{name}:1-2", name], notes=name)],
             summary=name,
         )
         original = copy.deepcopy(payload)
@@ -37,7 +37,7 @@ class WorkspacePathTests(unittest.TestCase):
         target = str(self.target / "ansible-playbooks/site.yml")
         self.assertEqual(payload["proposed_change_files"], [target])
         self.assertEqual(payload["steps"][0]["files"], [target])
-        self.assertEqual(payload["steps"][0]["read"], [f"{target}:1-2"])
+        self.assertEqual(payload["steps"][0]["read"], [f"{target}:1-2", target])
         for field in ("files_read", "evidence", "summary"):
             self.assertEqual(payload[field], original[field])
         self.assertEqual(payload["steps"][0]["notes"], name)

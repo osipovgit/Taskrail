@@ -4,6 +4,7 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from taskrail.application import (
     citation_review,
@@ -16,6 +17,7 @@ from taskrail.application import (
     source_windows,
 )
 from taskrail.core import source_claims
+from taskrail.core.files import digest
 from taskrail.infrastructure import artifact_access
 
 
@@ -55,6 +57,35 @@ class SourcePacketTests(unittest.TestCase):
         claim.update(line_start=13, line_end=13)
         with self.assertRaisesRegex(ValueError, "matching observed read"):
             source_claims.validate_claim(claim, evidence.validation_records(self.run))
+
+    def test_replaced_file_never_authenticates_the_old_window_as_current(self):
+        original = b"first\r\nsecond\rlast line"
+        self.path.write_bytes(original)
+        replacement = self.root / "replacement"
+        replacement.write_text("different\n")
+        open_file = Path.open
+
+        def replace_after_open(path, *args, **kwargs):
+            stream = open_file(path, *args, **kwargs)
+            if path == self.path and replacement.exists():
+                replacement.replace(path)
+            return stream
+
+        with patch.object(Path, "open", replace_after_open):
+            observed = source_windows.read_window(self.path, 2, 3)
+        self.assertEqual(observed["output"], "2: second\n3: last line")
+        self.assertEqual(observed["source_sha256"], digest(original))
+        self.assertEqual(
+            source_packet.prepare(self.run, "planner", self.config["roots"], [observed]), []
+        )
+
+    def test_report_pointers_do_not_crowd_project_windows_out_of_the_preview(self):
+        reports = self.run / "00-input/plan-reports"
+        hints = [str(reports / f"{number}.txt") for number in range(source_windows.WINDOW_LIMIT)]
+        hints.append("repo/module.py:10-12")
+        packet = self.prepare("", plan=dict(steps=[dict(read=hints)]))
+        self.assertEqual([entry["path"] for entry in packet], [str(self.path)])
+        self.assertEqual(list(packet[0]["lines"]), ["10", "11", "12"])
 
     def test_a_rejected_citation_brings_its_current_lines_into_the_same_session(self):
         context = dict(

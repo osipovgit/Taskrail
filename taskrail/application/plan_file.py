@@ -25,13 +25,6 @@ def prepare(run, requirements, read_only=False):
     return target
 
 
-def grant(access, run, requirements):
-    """Let the planner's profile read and write plan.md, and only that file."""
-    target = prepare(run, requirements)
-    access["writable"] = [*access["writable"], target]
-    access["readable"].append(target)
-
-
 def instructions(run, roots, protected=protected_paths.DEFAULT_PATTERNS):
     """The format and neutral project map in the planner's request.
 

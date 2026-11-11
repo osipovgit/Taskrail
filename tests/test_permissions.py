@@ -172,10 +172,10 @@ class AccessManifestTests(unittest.TestCase):
                 self.assertNotIn(str(private), permissions["read"])
 
     def test_executor_contracts_are_response_alternatives_not_function_tools(self):
-        from taskrail.application import executor_contracts
+        from taskrail.core.schema import SCHEMAS
         from taskrail.git.requests import extract, instructions
 
-        git = executor_contracts.git_schema()
+        git = SCHEMAS["git-request"]
         payload = dict(
             schema_version=1,
             status="GIT_REQUEST",
@@ -185,10 +185,9 @@ class AccessManifestTests(unittest.TestCase):
         )
         self.assertEqual(set(git["required"]), set(payload))
         self.assertEqual(extract(json.dumps(payload)), payload)
-        self.assertIn("as your entire message", instructions("planner"))
-        self.assertIn("absence from your tool list is expected", instructions("planner"))
+        self.assertIn("GIT_REQUEST", instructions("planner"))
         self.assertNotIn("push", instructions("reviewer"))
         self.assertIn("Push needs personal approval", instructions("implementer"))
         self.assertEqual(
-            executor_contracts.ssh_schema()["properties"]["status"], {"const": "ACTION_REQUEST"}
+            SCHEMAS["ssh-request"]["properties"]["status"], {"const": "ACTION_REQUEST"}
         )

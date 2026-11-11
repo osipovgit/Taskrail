@@ -9,6 +9,7 @@ from pathlib import Path
 
 from taskrail.application import worktree_default
 from taskrail.core import prompt_texts
+from taskrail.core.read_hints import split_hint
 
 
 def mappings(config):
@@ -58,9 +59,9 @@ def plan_targets(payload, config):
 
 
 def read_hint(hint, mapping):
-    """The parser already resolved and validated this path:range, including quoted spaces."""
-    name, lines = hint.rsplit(":", 1)
-    return f"{resolve(name, mapping)}:{lines}"
+    """Translate only the path of a reviewed file or line hint."""
+    name, suffix = split_hint(hint)
+    return f"{resolve(name, mapping)}{suffix}"
 
 
 def instructions(config):

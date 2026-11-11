@@ -7,10 +7,10 @@ requirement does not apply, or `gap:`.
 """
 
 import re
-from pathlib import Path
 from types import MappingProxyType
 
-from taskrail.core import plan_citations, prompt_texts
+from taskrail.core import plan_citations, prompt_texts, read_hints
+from taskrail.core.paths import absolute
 from taskrail.core.plan_keys import numbered
 
 TASK_REFERENCE = re.compile(r"(T\d+)\s*(?:\[([^\]]*)\]|\(([^)]*)\))?\s*", re.IGNORECASE)
@@ -140,7 +140,7 @@ def cited_ranges(coverage, fields):
         if OPTIONAL_HINT.fullmatch(entry):
             continue
         try:
-            windows, reason = plan_citations.read_windows(entry, coverage.roots, absolute)
+            windows, reason = read_hints.parse(entry, coverage.roots)
         except ValueError:
             coverage.problems.append(prompt_texts.text("validation.read_hint", line=line))
             continue
@@ -194,16 +194,3 @@ def classify(text):
     prefix, _, rest = text.partition(":")
     kind = PREFIXES.get(prefix.strip().casefold())
     return (kind, rest.strip()) if kind else (PLANNED, text)
-
-
-def absolute(name, roots):
-    """An absolute path, `alias/relative`, or a path relative to the only root."""
-    path = Path(name)
-    if path.is_absolute():
-        return path
-    alias, _, relative = name.partition("/")
-    if alias in roots and relative:
-        return Path(roots[alias]) / relative
-    if len(roots) == 1:
-        return Path(next(iter(roots.values()))) / name
-    return path

@@ -5,6 +5,7 @@ import subprocess
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from run_fixture import current_run
@@ -24,6 +25,7 @@ from taskrail.git import (
     staging_baseline,
     staging_receipt,
 )
+from taskrail.interactions import actions, request_routes
 from taskrail.interactions.session import StageSession
 
 
@@ -689,12 +691,10 @@ class GitExecutorTests(unittest.TestCase):
                 current_run(dict(expected=self.env["expected"], git_before=self.env["git_before"]))
             )
         )
-        outcome = dict(
-            status="OK",
-            final_text="Now I'll inspect the last three commits.\n\n"
-            + json.dumps(self.payload(["log", "-3", "--format=fuller", "--stat", "--", "."])),
+        message = "Now I'll inspect the last three commits.\n\n" + json.dumps(
+            self.payload(["log", "-3", "--format=fuller", "--stat", "--", "."])
         )
-        effect = dispatch.consume(outcome, (folder, record), state, self.env)
+        effect = dispatch.consume(requests.extract(message), (folder, record), state, self.env)
         self.assertEqual(effect[0], self.env["expected"])
         self.assertEqual(record["status"], "GIT_REQUEST")
         transcript = Path(state["git_jobs"][0]["output_file"])
@@ -748,15 +748,17 @@ class GitExecutorTests(unittest.TestCase):
             ["log", "--output=bad"],
         ]:
             invalid.append("Now\n" + json.dumps(self.payload(argv)))
-        with patch("taskrail.git.process.invoke") as invoke:
+        session = SimpleNamespace(active=(self.run, {"stage": "planner"}))
+        router = SimpleNamespace(session=session, folder=self.run)
+        with (
+            patch.object(request_routes, "feedback", return_value="resubmit"),
+            patch.object(request_routes, "dispatch") as execute,
+        ):
             for text in invalid:
-                self.assertIsNone(requests.extract(text), text)
-                self.assertIsNone(
-                    dispatch.consume(
-                        dict(status="OK", final_text=text), (self.run, {}), {}, self.env
-                    )
-                )
-            invoke.assert_not_called()
+                with self.subTest(text=text):
+                    outcome = dict(status="OK", final_text=text)
+                    self.assertEqual(actions.Actions.route(router, outcome), "resubmit")
+            execute.assert_not_called()
         payload = self.payload(["commit", "-m", "Change"])
         self.assertEqual(requests.extract(json.dumps(payload)), payload)
 
@@ -806,6 +808,7 @@ class GitExecutorTests(unittest.TestCase):
                 completed=True,
                 final_text=json.dumps(payloads[len(requests_seen) - 1]),
                 sessions=["ses_one"],
+                final_message_id=str(len(requests_seen)),
                 tokens=dict(total=10),
             )
 

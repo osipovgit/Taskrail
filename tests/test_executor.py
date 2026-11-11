@@ -247,7 +247,10 @@ class ExecutorTest(unittest.TestCase):
         confirmed = execution_requests.server_scope(server, "planner", run)
         self.assertEqual(confirmed, prompt_texts.text("routes.ssh.server"))
         planning = execution_requests.ssh_instructions(targets, inspect_only)
-        self.assertIn("ACTION_REQUEST", planning)
+        example = planning.split("Example ACTION_REQUEST: ", 1)[1]
+        action = execution_requests.extract(example)
+        self.assertIn(action["targets"][0], targets)
+        self.assertEqual(remote_inspection.inspection(action)["script"], "hostname\n")
         implementing = execution_requests.ssh_instructions(targets, None)
         self.assertNotIn("ACTION_REQUEST", implementing)
         session = self.session(run, "implementer", server)
@@ -309,8 +312,7 @@ class ExecutorTest(unittest.TestCase):
         )
 
     def request(self, script):
-        action = dict(ACTION, script=script)
-        return json.dumps(dict(schema_version=1, status="ACTION_REQUEST", action=action))
+        return dict(ACTION, script=script)
 
     def test_action_contract_is_distinct_from_final_results(self):
         self.assertIsNone(execution_requests.extract('{"status":"PLAN_READY"}'))

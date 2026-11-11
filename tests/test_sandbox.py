@@ -335,6 +335,13 @@ class SandboxExecutionTests(unittest.TestCase):
 
 
 class SandboxRouteTests(unittest.TestCase):
+    def test_network_enabled_sandbox_does_not_send_network_checks_to_the_host(self):
+        with patch.object(sandbox, "mode", return_value=sandbox.NAMESPACE):
+            prompt = local.instructions("reviewer", host_commands="ask", network=True)
+        self.assertIn("network-enabled sandbox", prompt)
+        self.assertIn('For required host files, request "sandbox": false', prompt)
+        self.assertIn("Host commands need approval", prompt)
+
     def test_installed_ansible_lint_request_uses_the_sandbox_without_a_question(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

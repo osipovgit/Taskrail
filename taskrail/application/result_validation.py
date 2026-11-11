@@ -74,7 +74,7 @@ def checked(payload, context):
     else:
         validate_paths(payload, context)
         if context[STAGE] == "plan-reviewer" and "plan_reference" in context:
-            verify_proposal(context)
+            verify_proposal(context, approving=payload["status"] == "APPROVE")
         payload = review_result.settled(payload, records, context)
         validate_coverage(payload, context)
     proofs = citation_review.validate(payload[EVIDENCE], records, context)

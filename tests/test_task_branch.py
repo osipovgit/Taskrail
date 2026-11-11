@@ -46,7 +46,7 @@ class TaskBranchRunTests(LiveFixture, unittest.TestCase):
         self.assertEqual(context["planned_files"], [str(worktree / "hello.py")])
         self.assertEqual(context["writable_roots"], [str(worktree)])
         self.assertNotIn("allowed_files", context)
-        self.assertNotIn("Context.check_catalog lists", request)
+        self.assertNotIn("check_catalog", context)
         self.assertIn("scheduled_checks", context)
         self.assertEqual(state[task_branch.BEYOND], ["project/unrelated.txt"])
         diff = (run / "changes.diff").read_text()

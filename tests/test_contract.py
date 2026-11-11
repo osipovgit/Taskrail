@@ -6,6 +6,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from test_response_contracts import decoded
+
 from taskrail.application import (
     evidence,
     instruction_sources,
@@ -16,20 +18,11 @@ from taskrail.application import (
 from taskrail.core import (
     control,
     coverage,
-    json_response,
     plan_contract,
-    schema,
     source_claims,
     task_markdown,
     task_spec,
 )
-
-
-def decoded(response):
-    """One unambiguous object in the planner's stored shape."""
-    payload = json_response.extract(response, schema.unique_fields)
-    schema.validate(payload, schema.SCHEMAS["planner"])
-    return payload
 
 
 def task_requirements(text, deferred=()):
@@ -448,24 +441,6 @@ class ContractTests(unittest.TestCase):
         frozen.write_text(json.dumps(payload))
         with self.assertRaisesRegex(ValueError, "policy changed"):
             instruction_sources.freeze_contract(self.run, prompts.POLICY, state)
-
-    def test_prose_and_fences_are_removed_without_model_repair(self):
-        raw = json.dumps(self.payload)
-        for response in ("Notes [optional]\n" + raw, "```json\n" + raw + "\n```\nDone"):
-            self.assertEqual(decoded(response), self.payload)
-
-    def test_truncated_or_nested_json_is_never_rescued(self):
-        raw = json.dumps(self.payload)
-        for response in (
-            raw[:-1],
-            "[" + raw,
-            "[" + raw + "]",
-            '{"draft":' + raw,
-            "{}\n" + raw,
-            raw + "\n[1]",
-        ):
-            with self.subTest(response=response[:30]), self.assertRaises(ValueError):
-                decoded(response)
 
     def test_declared_block_cannot_authorize_unvalidated_plan(self):
         self.payload["blocking_gaps"] = ["Local linter execution unavailable"]

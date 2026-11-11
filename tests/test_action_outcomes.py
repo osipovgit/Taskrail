@@ -52,6 +52,8 @@ class LocalJournalTests(unittest.TestCase):
         ):
             self.execute()
         self.payload["reason"] = "A different explanation"
+        self.payload["sandbox"] = True
+        self.payload["cwd"] += "/."
         self.context["expected"] = {"project/a.py": "changed"}
         with patch("taskrail.interactions.local.execute") as execute:
             outcome = self.execute()

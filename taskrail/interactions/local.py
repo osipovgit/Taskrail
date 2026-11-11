@@ -30,7 +30,7 @@ def extract(text):
     request = local_intake.normalized(payload)
     argv = request["argv"]
     schema.require(
-        isinstance(argv, list) and bool(argv), "Invalid local request: argv must be a list"
+        schema.valid_argv(argv), "Invalid local request: argv must list nonempty argument strings"
     )
     requested = request.get(local_sandbox.FIELD, True)
     schema.require(isinstance(requested, bool), "sandbox must be a boolean")
@@ -106,10 +106,12 @@ def monitor(process, streams, context):
 
 def instructions(stage, host_commands="auto", network=False):
     """Diagnostics run in the sandbox, else on the host at once or after personal approval."""
-    route = "routes.local.sandbox.network" if network else "routes.local.sandbox"
-    if not sandbox.mode():
-        route = "routes.local.host" if host_commands == "auto" else "routes.local"
-    advertised = [prompt_texts.text(route)]
+    advertised = [prompt_texts.text("routes.local")]
+    if sandbox.mode():
+        route = "routes.local.sandbox.network" if network else "routes.local.sandbox"
+        advertised.append(prompt_texts.text(route))
+    host = "routes.local.host" if host_commands == "auto" else "routes.local.ask"
+    advertised.append(prompt_texts.text(host))
     if stage != "implementer":
         advertised.append(prompt_texts.text("routes.local.read_only"))
     return " ".join(advertised)

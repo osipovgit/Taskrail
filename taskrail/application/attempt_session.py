@@ -5,6 +5,7 @@ from functools import partial
 from taskrail.application import (
     context_windows,
     followup_selection,
+    plan_reports,
     result_context,
     stage_artifacts,
 )
@@ -100,6 +101,7 @@ def validated(workflow, record, outcome, deliver_lines=False):
     if record["stage"] == "planner":
         verdict = canonical_plan(verdict, roots)
         validate_plan(verdict, roots, workflow.config["task"], workflow.config)
+        plan_reports.bind(verdict, environment)
     return verdict
 
 

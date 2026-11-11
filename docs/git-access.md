@@ -1,7 +1,7 @@
 # Controlled Git access
 
-All roles can inspect Git history, commits, diffs, branches, tags and working-tree
-status. Each declared root must be a Git repository top level with an existing commit.
+Planning, implementation and review can inspect Git history, commits, diffs, branches,
+tags and working-tree status. Each declared root must be a Git repository top level with an existing commit.
 Standalone tasks use linked worktrees; child tasks use their parent branch. Scope
 history with `-- <project>` when only a subdirectory is relevant. The original checkout
 remains unchanged.
@@ -43,31 +43,11 @@ an explicit rejection; it never falls back to shell execution. There is no blank
 Git deny. Additional Git operations require an explicit reviewed parser and scope
 check, not a prompt-only permission change.
 
-Model-requested Git writes must affect only approved files. Staging pre-existing user edits is rejected.
-Commit application requires a clean working tree. The index belongs to the run only
-entry by entry and repository by repository: an `add` records the exact staged modes and blobs
-it produced in its repository, and a later `add` or `commit` there proceeds only
-while every staged entry is one of those blobs. Changes the user staged, in that or
-any other repository, and an entry changed after the run staged it, are rejected even
-inside approved files. A commit or other history write ends that ownership. Merge
-commits are not yet supported for revert/cherry-pick. A rejected request returns
-feedback for further analysis; the task need not stop unless the operation is
-mandatory and unresolved.
-
-After a successful controlled commit, later staging uses that verified committed
-content while original preimages stay immutable. Receipts pin HEAD and validate
-the complete changed-path set, staged content and executable modes. Concurrent index
-or HEAD changes, failed receipt reads and unexpected byte normalization produce an
-unknown outcome rather than adopting another writer's work; inspect before restarting.
-
-The same write is not repeated: an identical request is rejected while its earlier
-outcome is unknown, and other writes are never repeated. An `add`, `commit` or `restore` that
-repeats an earlier one with a known outcome runs only when what it acts on changed:
-the files after further edits, or the staged content to commit. A failed or
-interrupted write is never automatically replayed or rolled back. Conflicts remain
-for inspection. An unknown Git mutation blocks new Git mutations pending reconciliation. Read-only
-Git diagnostics still reach the agent; it reports a precise blocker if the outcome
-cannot be established within the permitted routes.
+On a task branch, staging and committing belong to [server finalization](#automatic-task-commits).
+Before it writes, the executor checks the exact staged modes and blobs against its
+record of the index. Foreign staging and concurrent changes require inspection.
+If a Git mutation has an unknown outcome, new mutations wait for reconciliation.
+Read-only Git diagnostics remain available to the agent.
 
 An agent may recover an interrupted project-file edit with
 `restore --worktree -- <explicit files>` after inspecting the current diff. Restore
@@ -83,7 +63,7 @@ Hooks, external diffs, text conversion, process filters, custom merge drivers, a
 credential helpers and interactive credential prompts are disabled.
 Signature verification helpers are disabled for reads. Pretty formats accept built-in
 names or literal formats; configured aliases and `%G` signature directives are rejected.
-Git must be installed on the server PATH. Commits require a configured user name/email.
+Git must be installed on the service PATH.
 SSH authentication must already work noninteractively with a known host key.
 Agent-requested Git commands have a 60-second timeout and a 4 MiB output limit per stream;
 exhaustion is explicit, never silently truncated. Normal pushes are explicit, non-forced branch pushes; fetch uses explicit,
@@ -117,7 +97,7 @@ It never repeats an uncertain write. Inspect and reconcile an unknown outcome
 before starting new work. An isolated task
 with no remaining diff does not create an empty commit. Automatic commits use the
 configured Git identity, with `Taskrail <taskrail@localhost>` as the fallback when
-no email is configured; explicit model Git requests still require configuration.
+no email is configured.
 
 ## Artifacts and updates
 

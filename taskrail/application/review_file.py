@@ -27,13 +27,6 @@ def prepare(run, requirements, fresh=False):
     return target
 
 
-def grant(access, run, requirements):
-    """Let the reviewer's profile read and write review.md, and only that file."""
-    target = prepare(run, requirements)
-    access["writable"] = [*access["writable"], target]
-    access["readable"].append(target)
-
-
 def instructions(run, stage):
     """The review format and the stage's own rules."""
     rules = prompt_texts.text("review.format", path=path(run))

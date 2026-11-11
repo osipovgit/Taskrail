@@ -318,6 +318,7 @@ async function main() {
             files: ['/repo/a.py'],
             criteria: ['R-000000000001'],
             checks: ['Static review'],
+            required_checks: ['unit-tests'],
             depends_on: [],
           },
         ],
@@ -358,6 +359,9 @@ async function main() {
   assert.ok(
     all(structured).some((n) => n.textContent === 'F3-1 · R1 · closed · Already covered · E1'),
   );
+  for (const text of ['Verify', 'Static review', 'Required check recipes', 'unit-tests']) {
+    assert.ok(all(structured).some((node) => node.textContent === text));
+  }
   assert.ok(all(structured).some((n) => n.textContent === 'S1 · Fix behavior'));
   assert.ok(all(structured).some((n) => n.textContent === 'R1 · Satisfied'));
   assert.ok(all(structured).some((n) => n.textContent === 'R2 · Not evaluated'));

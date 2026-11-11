@@ -55,7 +55,7 @@ usage is reported as zero tokens, so compare models only on runs with telemetry.
 | `00-input/` | Task, settings, role sources, contract, preimages |
 | `NN-stage/stage.json` | Status, duration, provenance, allowance and diagnostics |
 | `request.md`, `agent.md`, `permissions.log` | Effective request/profile/preflight |
-| `events.jsonl`, `stderr.log`, `response.raw.txt` | Raw evidence; response may be invalid JSON |
+| `events.jsonl`, `stderr.log`, `response.raw.txt` | Raw provider events, diagnostics and final response |
 | `result.json`, `evidence-bindings.json` | Validated result and source/event bindings |
 | `plan.md`, `NN-plan/plan.md` | The planner's plan file, and the copy each planning attempt accepted |
 | `00-input/project-map.md` | Neutral file inventory and landmarks the server wrote before planning |
@@ -93,12 +93,11 @@ not an exhaustive substitute scan. Supply needed history as permitted task evide
 when Git execution is unavailable. Model latency and service load require provider
 telemetry; event logs alone cannot separate them.
 
-A single unambiguous JSON object is decoded locally despite surrounding prose or
-Markdown. Semantic coverage and source checks still apply to work proposals.
-Explicit blockers produce a safe BLOCKED result with the unvalidated draft saved;
-they never authorize implementation or approval. A repair call receives the requirements under their `R<n>` labels and cannot research
-or manufacture missing evidence. Automatic compaction is off; an explicit compaction
-marker stops the session, and narrative recap text is not proof of one.
+Planner and reviewer stages submit saved Markdown. Validation feedback names missing
+inputs, citations or contract fields so the agent can correct the draft. A proposed
+planner blocker goes to independent plan review. A provider compaction event ends
+the session. Saved drafts, delivered evidence and public notes support recovery.
+See [context limits](deployment.md#context-limits).
 
 Stage headers display `planner · 5 min 5 s / 1 h`: active time and its limit. The
 clock updates once per second using server clock alignment without rebuilding message

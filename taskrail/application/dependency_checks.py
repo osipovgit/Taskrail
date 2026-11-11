@@ -4,8 +4,8 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from taskrail.application import check_results, feedback_files, reviewed_artifacts
+from taskrail.application.report_packets import fingerprint
 from taskrail.core import delivery_record, schema
-from taskrail.core.files import stream_digest
 from taskrail.executor import protocol
 from taskrail.interactions import local_journal
 
@@ -84,17 +84,6 @@ def copy_receipt(folder, sequence, entry):
         (folder / name).write_text(outcome[key], encoding="utf-8")
         receipt[key] = name
     return receipt
-
-
-def fingerprint(folder):
-    """Bind every filename and its exact contents, rejecting missing or redirected inputs."""
-    message = "Dependency check evidence is missing or redirected"
-    schema.require(folder.is_dir() and folder == folder.resolve(), message)
-    signatures = {}
-    for path in folder.iterdir():
-        schema.require(path.is_file() and not path.is_symlink(), message)
-        signatures[path.name] = stream_digest(path)
-    return protocol.fingerprint(signatures)
 
 
 def index(run, spec):

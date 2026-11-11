@@ -157,6 +157,7 @@ def evidence_roots(workflow):
         inputs / "local",
         inputs / "checks",
         inputs / "dependency-checks",
+        inputs / "plan-reports",
         inputs / "source-views",
         inputs / "preimages",
         inputs / "original",

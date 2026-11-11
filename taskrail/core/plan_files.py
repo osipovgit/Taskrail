@@ -8,8 +8,8 @@ invented `Facts:` key, are kept as more notes instead of rejecting the plan.
 
 import re
 
+from taskrail.core.paths import absolute
 from taskrail.core.plan_keys import EXTRA, NOTES, numbered, uncode
-from taskrail.core.plan_outcomes import absolute
 from taskrail.core.prompt_texts import text
 
 # Wildcards of a pattern; a trailing slash marks a directory.

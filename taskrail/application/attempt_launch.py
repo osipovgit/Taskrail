@@ -1,11 +1,12 @@
 """Prepare one model attempt: record, prompt, closed permission profile and allowance."""
 
+from pathlib import Path
+
 from taskrail.application import (
     attempt_context,
     context_handoff,
     followup_selection,
     result_context,
-    stage_artifacts,
 )
 from taskrail.application.artifacts import new_stage
 from taskrail.application.planned_paths import git_files, writable_roots
@@ -88,13 +89,14 @@ def profile_access(workflow, active, files):
     base = opencode_api.relative_base(workflow.config, workflow.config[ROOTS], files)
     if base is not None:
         record["permission_worktree"] = str(base)
-    access = dict(writable=files, worktree=base)
+    writable = list(map(Path, record["writable_files"]))
+    access = dict(writable=writable, worktree=base)
     if workflow.writable():
         access["preserved"] = followup_selection.paths(workflow, followup_selection.PRESERVED)
     access["protected"] = protected_paths.patterns(workflow.config)
     access[ROOTS] = workflow.config[ROOTS].values()
     access["readable"] = artifact_access.model_inputs(workflow.run, folder)
-    stage_artifacts.grant(access, workflow, record)
+    access["readable"].extend(map(Path, record.get("attached_files", ())))
     return access
 
 

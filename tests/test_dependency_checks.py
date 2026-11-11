@@ -5,12 +5,39 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from taskrail.application import check_results, dependency_checks
+from taskrail.application import (
+    check_artifacts,
+    check_results,
+    dependency_checks,
+    execution_wait,
+    report_sources,
+)
 from taskrail.core.files import atomic_json
 from taskrail.interactions import local_journal
 
 
 class DependencyChecksTests(unittest.TestCase):
+    def test_selected_remote_and_configured_reports_keep_their_own_recorded_streams(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            run = Path(temporary)
+            outcome = dict(stdout="large output\n" * 300, stderr="", exit_code=0)
+            ticket = dict(id="example.ticket", results=[outcome])
+            remote = execution_wait.save_snapshot(run, ticket)
+            check = run / "00-input/checks/example.ticket.json"
+            check.parent.mkdir()
+            atomic_json(check, dict(execution=check_artifacts.stored_output(check, outcome)))
+            remote_output = remote.with_suffix(".1-stdout.txt")
+            check_output = check.with_suffix(".stdout.txt")
+            selected = report_sources.selected(run, [str(remote_output), str(check_output)], ())
+            self.assertEqual(
+                set(selected),
+                {remote, remote_output, check, check_output, check.with_suffix(".stderr.txt")},
+            )
+            orphan = check.with_suffix(".console.txt")
+            orphan.write_text("not produced")
+            with self.assertRaisesRegex(ValueError, "not recorded"):
+                report_sources.selected(run, [str(orphan)], ())
+
     def test_only_finished_direct_dependency_commands_travel_with_the_child(self):
         with tempfile.TemporaryDirectory() as temporary:
             base = Path(temporary)

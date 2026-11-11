@@ -10,6 +10,7 @@ from taskrail.interactions import (
     local_request,
     local_sandbox,
 )
+from taskrail.interactions.read_receipts import index, previous
 
 MISSING_PROGRAM = "{0} is not installed on the orchestrator host. Install it, then Allow to run this exact command; or Deny."
 STILL_MISSING = "Executable is still not installed on the orchestrator host"
@@ -18,7 +19,7 @@ REJECTED = "REJECTED"
 ARGV = "argv"
 
 
-def run_local(actions, outcome, payload):
+def run_local(actions, payload):
     """Keep a visible running call even during approval or process execution."""
     payload = local_intake.located(payload, actions.session.environment["roots"])
     event = events.begin(actions.folder, "local_command", payload)
@@ -72,16 +73,12 @@ def without_decision(actions, payload):
 def refusal(actions, payload):
     """Why a request cannot even be offered for approval, or None."""
     roots = actions.session.environment["roots"]
+    writer = actions.session.active[1]["role"] == "implementer"
     try:
-        local_request.checked_request(payload, roots, writes(actions))
+        local_request.checked_request(payload, roots, writer)
     except ValueError as error:
         return dict(status=REJECTED, reason=str(error))
     return None
-
-
-def writes(actions):
-    """Only the implementer may change files in its roots."""
-    return actions.session.active[1]["role"] == "implementer"
 
 
 def executed(actions, payload, decision):
@@ -93,10 +90,18 @@ def executed(actions, payload, decision):
     actions.session.check_sources()
     context = dict(actions.session.environment, automatic_read=automatic)
     if decision.get("rule") == approval_policy.SANDBOX:
-        context[local_sandbox.WRITES] = writes(actions)
+        context[local_sandbox.WRITES] = actions.session.active[1]["role"] == "implementer"
     context["timeout"] = actions.session.clock.remaining()
+    receipt = index(actions.folder, payload, context)
+    return previous(receipt) or run_approved(actions, payload, decision, context, receipt)
+
+
+def run_approved(actions, payload, decision, context, receipt):
+    """Publish the completed command and its observed source effects."""
     answer = local_actions.execute(actions.run, actions.folder, payload, context, decision)
-    response = actions.local_result(payload, answer) + local_sandbox.offline_note(answer, context)
+    response = actions.local_result(payload, answer, receipt) + local_sandbox.offline_note(
+        answer, context
+    )
     effects = command_effects.adopt(actions.session, answer.get("action_id"))
     return f"{response}\n{effects}" if effects else response
 

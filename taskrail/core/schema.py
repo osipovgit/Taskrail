@@ -72,3 +72,11 @@ def contract_version(version):
     supported = isinstance(version, int) and not isinstance(version, bool)
     require(supported and version == CONTRACT_VERSION, "Unsupported contract version")
     return version
+
+
+def valid_argv(argv):
+    """An explicit argument vector accepted by exec without implicit conversion."""
+    if not isinstance(argv, list) or not argv:
+        return False
+    valid = (isinstance(arg, str) and arg and "\x00" not in arg for arg in argv)
+    return all(valid)
