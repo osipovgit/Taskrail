@@ -25,7 +25,7 @@ To replace the complete settings of an existing installation while keeping histo
 use `bash deploy/install.sh /path/settings.json --apply-settings`. Relative
 paths in the replacement refer to the installed configuration directory.
 
-On first install, after a CLI configuration change, and on `--fresh`, the installer
+On first install, after a CLI configuration change, and on either clean reinstall, the installer
 queries the CLI version, checks the effective rules of a temporary agent profile
 and verifies write access to the run directory. The probe runs in a transient
 systemd user service. Both units load `service.env`. Drop-ins for `taskrail.service`
@@ -51,12 +51,11 @@ loginctl show-user "$USER" -p Linger
 administrator; a denial is reported without sudo or a workaround. `--boot=no`
 leaves lingering unchanged and does not disable other user services.
 
-Updates wait for every active run (runs share the installation lock), prepare an offline
-venv and configuration in a private staging directory, and validate the incoming package
-with isolated Python imports before stopping the service. The installer then switches
-`current` and restarts. It preserves history, settings, custom roles and original
-project edits. They never execute Git, rewrite run artifacts or roll back source
-or application changes. If startup fails, inspect the journal. The update
+An ordinary update waits for the workflow lock, prepares an offline venv and configuration
+in a private staging directory, and validates the incoming package with isolated Python
+imports before stopping the service. The installer switches `current` and restarts.
+History, settings, custom roles and project edits survive the update. If startup fails,
+inspect the journal. The update
 script uses a trusted local release, not an automatic Internet download feed. An
 installed release contains the public Python packages, named runtime assets,
 deployment scripts, README and license. Python modules placed directly in a public
@@ -148,19 +147,19 @@ bash deploy/install.sh --wait=3600 --autostart=keep --agents=bundled
 Switching an existing custom source backs up `settings.json` once per distinct input,
 changes only `agent_source`, and leaves custom role
 files untouched. Subsequent releases update bundled roles through `current`.
-The default `--agents=keep` preserves the existing selection. Role changes apply
-to new tasks; Continue keeps the frozen roles of its run.
+On ordinary updates the default `--agents=keep` preserves the existing selection.
+New tasks use the updated roles. Continue uses the frozen roles of its run.
 
 Bundled roles follow `current/taskrail/agents`. An import copies only the four role Markdown
 files consumed by the workflow. Imported roles are copied once and
-preserved on update: merge their instructions deliberately or point `agent_source`
-to bundled roles. Generated opencode profiles are temporary permissions, not editable
+preserved on ordinary updates. To change them, edit their instructions or point
+`agent_source` to bundled roles. Generated opencode profiles are temporary permissions, not editable
 source templates. See [instruction contracts](contracts.md).
 
 An imported settings file without `agent_source` selects bundled roles, as in
 `taskrail init`. Only an explicit `agent_source` imports a custom directory; relative
 paths resolve beside the supplied settings file. An explicit imported stage timeout is
-preserved. Before a fresh reset, the installer
+preserved. Before either clean reinstall, the installer
 checks runtime settings, the agent executable/version, service environment and every
 custom role contract, then prepares their installable copies. Invalid or incomplete
 roles stop the update; `--agents=bundled` explicitly selects the incoming bundled roles.
@@ -360,66 +359,61 @@ The SSH executor is a separate system service with its own user and root-owned
 installation. It is not installed or granted privileges by the ordinary UI updater.
 See [SSH executor](ssh-executor.md) for installation, host keys and approvals.
 
-## Rebuild the managed application
+## Clean reinstall of the managed application
 
-Run from an extracted release outside the installation and history directories:
+**`--force-update` erases installed configuration and run history**, including
+trash and checkpoints. Run the installer from a checkout or extracted release
+outside the managed installation, configuration and history directories.
 
 ```sh
+# Install the incoming release with its bundled settings and roles
 bash deploy/install.sh --force-update --autostart=keep
+# Or install a new settings file, including its selected models and role sources
+bash deploy/install.sh /path/to/settings.json --force-update --autostart=keep
 ```
 
-**This erases run history**, including trash and saved checkpoints. The installer
-stages and validates the incoming release, stops the managed user service and
-its workers through systemd, then obtains the workflow lock. A standalone CLI
-worker still holding the lock prevents deletion. Use `--wait=SECONDS` to let it
-finish. The installer replaces the old releases, clears Taskrail runtime state
-and generated profiles, and starts a new service against the saved settings.
-Custom roles, service environment and unit drop-ins, CLI credentials, project
-checkouts, linked worktrees and the independent SSH executor survive the rebuild.
-An explicit settings file with `--force-update` also selects `--apply-settings`.
-Keep credentials and local CLI programs outside Taskrail's runtime directories.
+The settings file you supply is imported as on first installation. Relative
+`agent_source`, `agent_directory` and `run_base` paths resolve beside that file.
+Keep the file and its role sources outside the directories being erased.
+The installer removes old releases, the entire Taskrail configuration directory
+(including settings backups and imported roles), runtime state, generated
+profiles, the user unit and its drop-ins, and the launcher. It regenerates
+`service.env` with the installer's PATH and the default port. For generated
+profiles, cleanup uses the previously installed `agent_directory` or the CLI
+profile directory selected by the old service environment. Use
+`--autostart=keep` to retain the service's login startup choice.
 
-## Full reinstallation
+The installer validates the replacement and probes its CLI before stopping the
+managed service and its workers. If an independent CLI worker holds the workflow
+lock, use `--wait=SECONDS` to allow time for it to finish. If the lock stays busy,
+the installer restores the previously active service and keeps the installation.
 
-From an extracted release **outside** the managed installation/config/history paths:
+Both clean reinstall modes check the ownership of custom history and protect
+project checkouts, linked worktrees, the selected CLI and external provider
+credentials. Mixed history or a deletion path that overlaps a protected input
+blocks the reset. Held locks retain their inodes throughout installation.
+The separate SSH executor keeps its installation and configuration on `--force-update`.
+
+## Reinstall the application and its SSH executor
 
 ```sh
 bash deploy/install.sh --fresh --wait=3600 --autostart=keep --agents=bundled
 ```
 
-`--fresh` is destructive and opt-in. It waits for the workflow lock, completely prepares
-and validates the replacement application/configuration, then stops the user
-service and any installed executor before deleting anything. It removes installed releases, settings, imported roles, history/trash,
-managed profiles, the unit/drop-ins and launcher, then installs fresh defaults.
-A configured custom history directory is removed only after its contents and
-recorded project roots pass ownership checks. Live runs, archived runs and launcher
-records all protect their declared roots. The same inventory covers unit
-drop-ins, launcher and generated profile files; mixed, redirected or overlapping
-paths abort before deletion. Keep source projects and the extracted release outside
-those paths.
-Task worktrees live outside resettable application storage. A recorded project or
-worktree inside a deletion target also prevents the reset.
-A custom `worktree_base` overlapping a deletion target refuses the reset; move that
-storage deliberately before retrying. Worktrees are never pruned with old releases.
-Locked files retain their inodes during installation to prevent concurrent writers.
-The underlying opencode application, provider credentials and unrelated profiles
-are not owned by this application and are preserved. Old unmanaged directories that
-are not recorded in configuration are never guessed or recursively searched for deletion.
-
-If the isolated SSH executor is installed, the same flag requires `sudo` and resets
+`--fresh` performs the same clean application reinstall. It waits for the workflow
+lock before stopping the service. If the isolated SSH executor is installed, this flag
+also requires `sudo` and resets
 its service, code, tickets, inventory/passwords and known host keys. Failure to stop
 the application leaves the executor untouched; failure to stop the executor preserves
 both installations and their data. RUNNING or UNKNOWN
 remote tickets must first be reconciled. The executor is reinstalled disabled;
 configure its inventory and verified host keys again before starting it. Dedicated
-system account/group identities are retained. Application source edits are never
-reverted. `--autostart=keep` retains the previous user-service enablement choice.
-The ordinary update preserves settings and history.
+system account/group identities are retained.
 
 ## Run storage updates
 
 The dashboard lists current-format runs. Ordinary updates leave existing run directories in
-place. Use `--fresh` for the full reset described above. Continue requires the
+place. Use `--force-update` for a clean application reinstall. Continue requires the
 same build. Runs from another build can Restart if their format is current.
 The installer removes known retired settings from its staged configuration and prints
 the removed keys. Settings cleanup does not create a backup.

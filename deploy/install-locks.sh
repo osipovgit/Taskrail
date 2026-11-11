@@ -21,6 +21,6 @@ lock_workflows() {
         return 1
     }
 }
-if [[ "$force_update" == no ]]; then
+if [[ "$reset_mode" != force-update ]]; then
     lock_workflows
 fi
