@@ -21,13 +21,18 @@ module_main='import importlib, sys; sys.path.insert(0, sys.argv.pop(1)); importl
 run_module() {
     "$python_bin" -I -B -c "$module_main" "$source_dir" "$@"
 }
+service_python() {
+    local environment=$1
+    shift
+    systemd-run --user --pipe --wait --quiet --collect \
+        --property="EnvironmentFile=$environment" --property=UMask=0077 --working-directory="$release" \
+        "$release/venv/bin/python" -I -B -c "$@"
+}
 check_connection() {
     local environment=$config_dir/service.env
     if [[ -f "$staging/config/service.env" ]]; then environment=$staging/config/service.env; fi
-    systemd-run --user --pipe --wait --quiet --collect \
-        --property="EnvironmentFile=$environment" --property=UMask=0077 --working-directory="$release" \
-        "$release/venv/bin/python" -I -B -c "$module_main" "$release" taskrail.deployment.settings_check \
-        "$config_dir" "$staging/config" "$fresh"
+    service_python "$environment" "$module_main" "$release" taskrail.deployment.settings_check \
+        "$config_dir" "$staging/config" "$reset_mode"
 }
 # Serialize installers. Never switch releases underneath an active workflow.
 # shellcheck source=deploy/install-locks.sh
@@ -53,7 +58,7 @@ version=$("$release/venv/bin/python" -I -B -c \
     'import sys; sys.path.insert(0, sys.argv[1]); from taskrail.web.service import ApplicationService; from taskrail.core.release import VERSION; print(VERSION)' "$release")
 # Configuration, copied roles and the environment are prepared before any reset.
 prepare_options=()
-[[ "$fresh" == yes ]] && prepare_options+=(--fresh)
+[[ -n "$reset_mode" ]] && prepare_options+=(--fresh)
 [[ "$apply_settings" == yes ]] && prepare_options+=(--apply-settings)
 [[ -n "$opencode_path" ]] && prepare_options+=("--opencode=$opencode_path")
 run_module taskrail.deployment.settings_stage "$source_dir" "$config_dir" "$initial_settings" "$app_dir" "$agent_mode" "${prepare_options[@]}" "$staging/config"
@@ -78,11 +83,13 @@ mv -Tf "$app_dir/current.next.$$" "$app_dir/current"
 install -m 644 "$release/deploy/taskrail.service" "$unit_dir/$service"
 install -m 755 "$release/deploy/taskrail" "$HOME/.local/bin/taskrail"
 systemctl --user daemon-reload
-if [[ "$fresh" == yes || "$force_update" == yes ]]; then
+if [[ -n "$reset_mode" ]]; then
     systemctl --user reset-failed "$service"
 fi
 case "$autostart" in
-    yes) systemctl --user enable "$service" ;;
+    yes)
+        if [[ -n "$reset_mode" ]]; then systemctl --user reenable "$service"; else systemctl --user enable "$service"; fi
+        ;;
     no) systemctl --user disable "$service" ;;
 esac
 # Workers must not inherit the installer's workflow lock.

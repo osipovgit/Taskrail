@@ -2,11 +2,11 @@
 
 import json
 import os
+import sys
 from pathlib import Path
 
-from taskrail.application.instruction_sources import ROLES
+from taskrail.infrastructure.agent_profile import FRONTMATTER, MANAGED_DESCRIPTION
 from taskrail.infrastructure.opencode_cli import agent_directory
-from taskrail.infrastructure.opencode_settings import command_paths
 
 MAIN = (".local/share/taskrail", ".config/taskrail", ".local/state/taskrail")
 PRESERVED_STATE = frozenset(("live.lock",))
@@ -23,37 +23,46 @@ def overlaps(first, second):
     return first == second or first in second.parents or second in first.parents
 
 
-def owned_profiles(options, config):
+def owned_profiles(options, config, default):
     """Only generated files are removed, never the CLI directory or credentials."""
-    configured = Path(options.get("agent_directory", agent_directory())).expanduser()
+    configured = Path(options.get("agent_directory", default)).expanduser()
     directory = (config / configured).resolve()
     if directory.is_dir():
         for profile in directory.glob("taskrail-*.md"):
-            if generated(profile):
+            if profile.is_file() and not profile.is_symlink() and generated(profile):
                 yield profile
 
 
 def generated(profile):
-    """A filename alone cannot authorize deletion of a custom role."""
-    if profile.is_symlink() or not profile.is_file():
+    """Only the generated role's named JSON frontmatter identifies it as ours."""
+    header, closing, _ = profile.read_bytes().partition(b"\n---\n")
+    opening = FRONTMATTER.encode()
+    if not closing or not header.startswith(opening):
         return False
-    return "Managed Taskrail workflow" in profile.read_text(encoding="utf-8")
+    try:
+        front = json.loads(header.removeprefix(opening))
+    except ValueError:
+        return False
+    return (
+        isinstance(front, dict)
+        and front.get("description") == MANAGED_DESCRIPTION.format(profile.stem)
+        and front.get("mode") == "primary"
+        and isinstance(front.get("permission"), dict)
+    )
 
 
 class ResetPaths:
     """A complete inventory shared by the preflight and the removal step."""
 
-    def __init__(self, home, keep_config=None):
+    def __init__(self, home, profile_directory=None):
         self.home = home.resolve()
         self.main = tuple(self.home / name for name in MAIN)
         self.options = self.read_options()
         self.history = self.history_directory(self.options)
-        self._profiles = tuple(owned_profiles(self.options, self.main[1]))
-        self.retained = None
-        if keep_config:
-            self.retained = (
-                json.loads(keep_config.read_text()) if keep_config.is_file() else self.options
-            )
+        if profile_directory is not None and not profile_directory.is_absolute():
+            raise ValueError("Service profile directory must be absolute")
+        default = profile_directory or agent_directory()
+        self._profiles = tuple(owned_profiles(self.options, self.main[1], default))
         self.targets = self.removal_paths()
 
     def read_options(self):
@@ -75,48 +84,23 @@ class ResetPaths:
         state = self.main[2]
         children = state.iterdir() if state.exists() else ()
         removable = tuple(child for child in children if child.name not in PRESERVED_STATE)
-        installation = [self.main[0]]
-        if self.retained is None:
-            installation.append(self.main[1])
-            installation.extend(self.home / name for name in EXTRA)
+        installation = list(self.main[:2])
+        installation.extend(self.home / name for name in EXTRA)
         return (*installation, *removable, self.history, *self._profiles)
 
-    def validate(self, protected):
+    def validate(self, protected, incoming):
         """Reject redirected storage and all release/settings intersections."""
         forbidden = (self.home, Path("/"))
         if self.main[2].resolve() != self.main[2]:
             raise ValueError("Unsafe reset state directory; no files deleted")
         preserved = [self.home / ".local/share/taskrail-worktrees"]
-        if self.options.get(WORKTREE_BASE):
-            preserved.append(Path(self.options[WORKTREE_BASE]).expanduser().resolve())
-        if self.retained is not None:
-            protected = [*protected, *self.config_inputs()]
-            validate_history_destination(self.history_directory(self.retained))
+        for options in (self.options, incoming):
+            if options.get(WORKTREE_BASE):
+                worktrees = Path(options[WORKTREE_BASE]).expanduser()
+                preserved.extend((worktrees, worktrees.resolve()))
+        validate_history_destination(self.history_directory(incoming))
         for target in self.targets:
             validate_target(target, forbidden, protected, preserved)
-
-    def config_inputs(self):
-        """Protect settings, the selected executable and custom roles during a force update."""
-        config = self.main[1]
-        yield config / "settings.json"
-        yield config / "service.env"
-        yield from (self.home / name for name in EXTRA)
-        options = self.retained
-        if options.get(WORKTREE_BASE):
-            yield Path(options[WORKTREE_BASE]).expanduser().resolve()
-        bundled = self.main[0] / "current/taskrail/agents"
-        roles = config / Path(options.get("agent_source", bundled)).expanduser()
-        if roles != bundled:
-            yield roles.resolve()
-            yield from ((roles / f"{role}.md").resolve() for role in ROLES)
-        yield from protected_command_paths(options.get("command", ["opencode"]))
-
-
-def protected_command_paths(command):
-    """Both the configured name and its target must survive a reset."""
-    for path in command_paths(command):
-        yield path
-        yield path.resolve()
 
 
 def validate_history_destination(path):
@@ -140,3 +124,10 @@ def validate_target(target, forbidden, protected, preserved):
             )
     if any(overlaps(target, tree) for tree in preserved):
         raise ValueError("Reset paths overlap preserved worktrees; no files deleted")
+
+
+def main():
+    """Return the CLI's default profile directory in the previous service environment."""
+    config = Path(sys.argv[1])
+    directory = config / agent_directory().expanduser()
+    sys.stdout.write(str(directory.resolve()))

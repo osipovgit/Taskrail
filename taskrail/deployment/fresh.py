@@ -1,22 +1,24 @@
 """Validate and remove application-owned storage for an explicit fresh install."""
 
 import argparse
-import json
 import shutil
 import sys
 from pathlib import Path
 
 from taskrail.application.instruction_sources import ROLES
 from taskrail.deployment.reset_history import history_roots
-from taskrail.deployment.reset_paths import ResetPaths, overlaps, protected_command_paths
+from taskrail.deployment.reset_paths import ResetPaths, overlaps
+from taskrail.deployment.settings_stage import read_settings
+from taskrail.infrastructure.opencode_cli import validate_command
+from taskrail.infrastructure.opencode_settings import command_paths
 
 LOCKS = ((".local/share/taskrail", "install.lock"), (".local/state/taskrail", "live.lock"))
 
 
-def prepare(home, protected, keep_config=None):
+def prepare(home, protected, incoming=None, profile_directory=None):
     """Validate all evidence before any service is stopped or any file is removed."""
-    inventory = ResetPaths(home, keep_config)
-    inventory.validate(protected)
+    inventory = ResetPaths(home, profile_directory)
+    inventory.validate(protected, incoming or {})
     histories = {inventory.main[2] / "runs", inventory.history}
     for history in histories:
         for source in history_roots(history):
@@ -44,18 +46,19 @@ def erase(inventory):
                     remove(child)
         else:
             remove(target)
-    if inventory.retained is not None:
-        inventory.history_directory(inventory.retained).mkdir(parents=True, exist_ok=True)
 
 
-def imported_sources(supplied):
+def imported_sources(supplied, incoming):
     """A fresh import must not erase either its settings or its explicit role source."""
-    source = Path(supplied).expanduser().resolve()
-    protected = [source]
-    roles = json.loads(source.read_text()).get("agent_source")
-    if roles is not None:
+    specified = Path(supplied).expanduser().absolute()
+    source = specified.resolve()
+    protected = [specified, source]
+    if incoming.get("agent_source") == str(Path.home() / ".config/taskrail/agents"):
+        roles = read_settings(source).get("agent_source")
+        if not isinstance(roles, str) or not roles:
+            raise ValueError(f"Supplied settings no longer name the imported role source: {source}")
         directory = source.parent / Path(roles).expanduser()
-        protected.append(directory.resolve())
+        protected.extend((directory, directory.resolve()))
         protected.extend((directory / f"{role}.md").resolve() for role in ROLES)
     return protected
 
@@ -63,33 +66,31 @@ def imported_sources(supplied):
 def validated(arguments):
     """Release, imported configuration and project roots must survive every deletion."""
     protected = [arguments.source.resolve()]
-    if arguments.incoming_settings:
-        incoming = json.loads(arguments.incoming_settings.read_text())
-        protected.extend(protected_command_paths(incoming["command"]))
-    if (
-        arguments.supplied
-        and arguments.keep_config
-        and (Path.home() / ".config/taskrail/settings.json").is_file()
-    ):
-        protected.append(Path(arguments.supplied).expanduser().resolve())
-    elif arguments.supplied:
-        protected.extend(imported_sources(arguments.supplied))
-    return prepare(Path.home(), protected, arguments.keep_config)
+    incoming = read_settings(arguments.incoming_settings)
+    for path in command_paths(validate_command(incoming.get("command"))):
+        protected.extend((path, path.resolve()))
+    if arguments.supplied:
+        protected.extend(imported_sources(arguments.supplied, incoming))
+    return prepare(Path.home(), protected, incoming, arguments.profile_directory)
 
 
-def main():
-    """Revalidate under the lock. Exit 2 means no deletion has started."""
+def argument_parser():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("operation", choices=("check", "remove"))
     parser.add_argument("source", type=Path)
     parser.add_argument("supplied")
-    mode = parser.add_mutually_exclusive_group(required=True)
-    for option in ("--keep-config", "--incoming-settings"):
-        mode.add_argument(option, type=Path, metavar="STAGED_SETTINGS")
+    parser.add_argument("--incoming-settings", required=True, type=Path, metavar="STAGED_SETTINGS")
+    parser.add_argument("--profile-directory", type=Path)
+    return parser
+
+
+def main():
+    """Revalidate under the lock. Exit 2 means no deletion has started."""
+    parser = argument_parser()
     arguments = parser.parse_args()
     try:
         inventory = validated(arguments)
-    except (OSError, ValueError) as error:
+    except (OSError, ValueError, TypeError) as error:
         parser.error(str(error))
     else:
         if arguments.operation == "remove":

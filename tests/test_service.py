@@ -22,6 +22,7 @@ from run_fixture import current_run
 from taskrail.application.task_config import configuration
 from taskrail.core.release import VERSION
 from taskrail.core.runtime import run_storage, settings_path
+from taskrail.infrastructure.agent_profile import make_profile
 from taskrail.web.config_watch import ConfigurationWatch
 from taskrail.web.health import ready
 
@@ -222,8 +223,17 @@ class ServiceTests(unittest.TestCase):
         self.assertNotIn("--user stop", log.read_text())
         self.assertEqual((settings.read_bytes(), marker.read_bytes()), original)
         self.assertEqual(current.resolve(), previous_release)
-        self.assertEqual(list((config / "wrong-profiles").glob("*.md")), [])
+        self.assertEqual(list((replacement.parent / "wrong-profiles").glob("*.md")), [])
 
+        # An ordinary update still probes with the installed service environment.
+        profile_root = config / "service-only"
+        with (config / "service.env").open("a") as environment:
+            environment.write(f'OPENCODE_CONFIG_DIR="{profile_root}"\n')
+        settings.write_text(
+            json.dumps(
+                dict(json.loads(settings.read_text()), agent_directory=str(profile_root / "agent"))
+            )
+        )
         binaries = self.deployment.binaries
         selected = shutil.copy(binaries / "opencode", binaries / "opencode-myfork")
         systemctl = binaries / "systemctl"
@@ -368,9 +378,12 @@ class ServiceTests(unittest.TestCase):
         options = json.loads(config.read_text())
         options.update(run_base=str(history), timeout_seconds=9)
         config.write_text(json.dumps(options))
-        profile = self.home / "profiles/taskrail-planner.md"
-        profile.parent.mkdir(exist_ok=True)
-        profile.write_text("Managed Taskrail workflow test")
+        profile, _ = make_profile(
+            BASE / "taskrail/agents/planner.md",
+            self.home / "profiles",
+            "taskrail-planner",
+            dict(roots=[self.repo], readable=[], writable=[], worktree=self.repo),
+        )
         credential = self.home / ".config/opencode/auth.json"
         credential.parent.mkdir(parents=True)
         credential.write_text("synthetic credential")
@@ -386,8 +399,8 @@ class ServiceTests(unittest.TestCase):
         self.assertEqual(options["command"][0], str(self.deployment.binaries / "opencode"))
         self.assertTrue((app / "current/venv/bin/python").is_file())
 
-    def test_force_update_rebuilds_only_managed_runtime_after_the_workflow_lock_is_free(self):
-        initial = self.installer(str(self.settings), "--autostart=no")
+    def test_force_update_reinstalls_from_incoming_release_after_the_workflow_lock_is_free(self):
+        initial = self.installer(str(self.settings), "--autostart=yes")
         self.assertEqual(initial.returncode, 0, initial.stderr)
         app = self.home / ".local/share/taskrail"
         state = self.home / ".local/state/taskrail"
@@ -395,14 +408,20 @@ class ServiceTests(unittest.TestCase):
         release = (app / "current").resolve()
         settings = config / "settings.json"
         installed = json.loads(settings.read_text())
-        installed.update(
-            agent_directory="profiles/agent",
-            command=[str(self.deployment.binaries / "opencode")],
-            run_base="runs",
-        )
+        installed.pop("agent_directory")
+        installed["command"] = [str(self.deployment.binaries / "opencode")]
+        installed.update(run_base="runs", models={"planner": "example/old"}, old_setting=True)
+        old_cli_config = self.home / "operator CLI config"
         with (config / "service.env").open("a") as environment:
-            environment.write(f'OPENCODE_CONFIG_DIR="{config / "profiles"}"\n')
+            environment.write(f'OPENCODE_CONFIG_DIR="{old_cli_config}"\n')
         settings.write_text(json.dumps(installed))
+        backup = config / "settings.json.backup-old"
+        backup.write_text(settings.read_text())
+        unit = self.home / ".config/systemd/user/taskrail.service"
+        unit.write_text("[Service]\nEnvironment=OLD_SETTING=1\n")
+        drop_in = unit.with_suffix(".service.d") / "override.conf"
+        drop_in.parent.mkdir()
+        drop_in.write_text("[Service]\nEnvironment=OLD_SETTING=1\n")
         run = config / "runs/completed"
         run.mkdir(parents=True)
         (run / "run.json").write_text(json.dumps(current_run(dict(roots={"p": str(self.repo)}))))
@@ -412,15 +431,18 @@ class ServiceTests(unittest.TestCase):
         executor = self.deployment.system / "opt/taskrail-executor"
         executor.mkdir(parents=True)
         (executor / "approval").write_text("pending decision")
-        profile = config / "profiles/agent/taskrail-test.md"
-        profile.parent.mkdir(parents=True)
-        profile.write_text('---\n{"permission":{}}\n---\nManaged Taskrail workflow')
-        credentials = self.home / ".config/opencode/auth.json"
-        credentials.parent.mkdir(parents=True)
+        profile, _ = make_profile(
+            BASE / "taskrail/agents/planner.md",
+            old_cli_config / "agent",
+            "taskrail-test",
+            dict(roots=[self.repo], readable=[], writable=[], worktree=self.repo),
+        )
+        operator_profile = profile.with_name("taskrail-personal.md")
+        operator_profile.write_text("Operator's profile")
+        credentials = old_cli_config / "auth.json"
         credentials.write_text("test credential")
         retained = (
-            config / "service.env",
-            config / "agents/planner.md",
+            operator_profile,
             credentials,
             worktree / "pending.txt",
             executor / "approval",
@@ -435,24 +457,60 @@ class ServiceTests(unittest.TestCase):
             self.assertNotEqual(blocked.returncode, 0)
             self.assertTrue(run.is_dir())
             self.assertTrue(release.is_dir())
+            self.assertEqual(json.loads(settings.read_text()), installed)
+            self.assertTrue(drop_in.is_file())
             self.assertIn("--user stop taskrail.service", log.read_text())
             self.assertIn("--user start taskrail.service", log.read_text())
-        supplied = self.home / "replacement.json"
-        replacement = dict(installed, timeout_seconds=19)
-        replacement.pop("agent_directory")
-        supplied.write_text(json.dumps(replacement))
-        result = self.installer(str(supplied), "--force-update", "--opencode=opencode")
+        incoming = self.deployment.source() / "taskrail/settings.json"
+        defaults = json.loads(incoming.read_text())
+        defaults["models"] = {"planner": "example/new"}
+        incoming.write_text(json.dumps(defaults))
+        result = self.installer("--force-update", "--autostart=keep")
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertTrue((app / "current/venv/bin/python").is_file())
-        self.assertEqual(list(run.parent.iterdir()), [])
-        self.assertFalse(release.exists())
-        self.assertFalse(profile.exists())
+        for obsolete in (run, release, profile, backup, drop_in.parent, config / "agents"):
+            self.assertFalse(obsolete.exists(), obsolete)
+        self.assertNotIn(str(old_cli_config), (config / "service.env").read_text())
+        self.assertEqual(unit.read_bytes(), (BASE / "deploy/taskrail.service").read_bytes())
         self.assertEqual([path.read_bytes() for path in retained], original)
         self.assertNotIn("sudo", log.read_text())
+        self.assertIn("--user reenable taskrail.service", log.read_text())
         selected = json.loads(settings.read_text())
-        self.assertEqual(selected["command"], [str(self.deployment.binaries / "opencode")])
-        self.assertEqual(selected["timeout_seconds"], 19)
-        self.assertEqual(selected["run_base"], "runs")
+        self.assertEqual(
+            selected,
+            dict(
+                defaults,
+                command=[str(self.deployment.binaries / "opencode")],
+                agent_source=str(app / "current/taskrail/agents"),
+            ),
+        )
+
+    def test_force_update_imports_replacement_roles_and_paths_beside_supplied_settings(self):
+        config = self.home / ".config/taskrail"
+        imported = self.home / "new preset"
+        roles = shutil.copytree(BASE / "taskrail/agents", imported / "roles")
+        replacement = dict(agent_source="roles", models={"planner": "example/new"}, run_base="runs")
+        supplied = imported / "settings.json"
+        supplied.write_text(json.dumps(replacement))
+        initial = self.installer(str(supplied), "--opencode=opencode")
+        self.assertEqual(initial.returncode, 0, initial.stderr)
+        planner = roles / "planner.md"
+        planner.write_text(planner.read_text() + "\nUpdated role instructions.\n")
+        probes = self.home / "permission-probes.log"
+        self.assertEqual(probes.read_text().splitlines(), ["list"])
+        result = self.installer(str(supplied), "--force-update", "--opencode=opencode")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(
+            json.loads((config / "settings.json").read_text()),
+            dict(
+                replacement,
+                command=[str(self.deployment.binaries / "opencode")],
+                agent_source=str(config / "agents"),
+                run_base=str(imported / "runs"),
+            ),
+        )
+        self.assertEqual((config / "agents/planner.md").read_bytes(), planner.read_bytes())
+        self.assertEqual(probes.read_text().splitlines(), ["list", "list"])
 
     def test_fresh_refuses_a_mixed_custom_history_before_deletion(self):
         binaries = self.home / "bin"

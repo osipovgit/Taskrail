@@ -45,7 +45,7 @@ def main():
     digest = onboarding.check_connection(
         json.loads(candidate.read_text()),
         config,
-        force=sys.argv[3] == "yes" or not current.is_file(),
+        force=bool(sys.argv[3]) or not current.is_file(),
     )
     if digest is not None:
         atomic_write(prepared / onboarding.CHECK_MARKER, f"{digest}\n".encode())

@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 # Sourced by install.sh; preserve service enablement on unattended updates.
-fresh=no
-force_update=no
+reset_mode=
 apply_settings=no
 opencode_path=
 autostart=keep
@@ -12,8 +11,13 @@ wait_seconds=0
 initial_settings=
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        --fresh) fresh=yes ;;
-        --force-update) force_update=yes ;;
+        --fresh | --force-update)
+            if [[ -n "$reset_mode" && "$reset_mode" != "${1#--}" ]]; then
+                echo 'Choose either --fresh or --force-update' >&2
+                exit 2
+            fi
+            reset_mode=${1#--}
+            ;;
         --apply-settings) apply_settings=yes ;;
         --opencode=?*) opencode_path=${1#*=} ;;
         --autostart=yes | --autostart=no | --autostart=keep)
@@ -35,6 +39,8 @@ while [[ $# -gt 0 ]]; do
             ;;
         --help)
             echo 'Usage: bash deploy/install.sh [settings.json] [--apply-settings] [--opencode=PATH] [--force-update|--fresh] [--autostart=yes|no|keep] [--agents=keep|bundled] [--boot=yes|no] [--wait=SECONDS]'
+            echo '  --force-update  Reinstall the user service from the supplied settings or release defaults. Erase installed configuration and run history.'
+            echo '  --fresh         Wait for active work, reinstall the user service and reset any installed SSH executor.'
             exit 0
             ;;
         --*)
@@ -51,13 +57,8 @@ while [[ $# -gt 0 ]]; do
     esac
     shift
 done
-if [[ "$force_update" == yes && -n "$initial_settings" ]]; then apply_settings=yes; fi
 if [[ "$apply_settings" == yes && -z "$initial_settings" ]]; then
     echo '--apply-settings requires a settings file' >&2
-    exit 2
-fi
-if [[ "$fresh" == yes && "$force_update" == yes ]]; then
-    echo 'Choose either --fresh or --force-update' >&2
     exit 2
 fi
 if [[ "$autostart_explicit" == no && "$boot" == no && -t 0 ]]; then

@@ -7,6 +7,7 @@ from taskrail.core.files import atomic_write
 from taskrail.infrastructure import profile_rules
 
 FRONTMATTER = "---\n"
+MANAGED_DESCRIPTION = "Managed Taskrail workflow {0}"
 
 
 def make_profile(source, destination, name, access):
@@ -42,7 +43,7 @@ def closed_permissions(access):
 
 def profile_text(name, permissions, instructions):
     """JSON frontmatter (valid YAML without a YAML dependency), instructions, runtime rules."""
-    front = dict(description=f"Managed Taskrail workflow {name}", mode="primary")
+    front = dict(description=MANAGED_DESCRIPTION.format(name), mode="primary")
     front["permission"] = permissions
     header = json.dumps(front, ensure_ascii=False, indent=2)
     rules = prompt_texts.text("profile.runtime_rules")

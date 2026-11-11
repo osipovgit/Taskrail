@@ -13,6 +13,7 @@ from deployment_fixture import DeploymentFixture
 
 from taskrail.core import approval_marks
 from taskrail.deployment.fresh import erase, prepare
+from taskrail.infrastructure.agent_profile import make_profile
 
 BASE = Path(__file__).resolve().parents[1]
 
@@ -39,6 +40,12 @@ class DeploymentResetTests(unittest.TestCase):
         path = self.history / relative / "run.json"
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(dict(roots=dict(project=str(root)))))
+        return path
+
+    def generated_profile(self, directory, name="taskrail-planner"):
+        role = BASE / "taskrail/agents/planner.md"
+        access = dict(roots=[self.project], readable=[], writable=[])
+        path, _ = make_profile(role, directory, name, access)
         return path
 
     def test_archived_roots_protect_every_recursive_deletion_target(self):
@@ -115,19 +122,31 @@ class DeploymentResetTests(unittest.TestCase):
         self.assertFalse(policy.exists())
 
     def test_generated_profile_inside_a_declared_source_is_protected(self):
-        profile = self.profiles / "taskrail-planner.md"
-        profile.write_text("Managed Taskrail workflow")
+        profile = self.generated_profile(self.profiles)
         self.record("completed", self.profiles)
         with self.assertRaisesRegex(ValueError, "overlap a declared project"):
             prepare(self.home, [BASE])
         self.assertTrue(profile.is_file())
 
+    def test_prior_service_profile_directory_is_used_only_as_the_default(self):
+        default = self.home / "old service profile directory"
+        default.mkdir()
+        generated = self.generated_profile(default, "taskrail-previous")
+        keep = default / "taskrail-personal.md"
+        keep.write_text(
+            '---\n{"mode":"primary"}\n---\nInstructions about Managed Taskrail workflow'
+        )
+        self.assertNotIn(generated, prepare(self.home, [BASE], profile_directory=default).targets)
+        (self.config / "settings.json").write_text("{}")
+        erase(prepare(self.home, [BASE], profile_directory=default))
+        self.assertFalse(generated.exists())
+        self.assertTrue(keep.exists())
+
     def test_apply_preserves_locked_inodes_sources_and_unmanaged_profiles(self):
         self.record(".trash/old/run", self.project)
         keep = self.profiles / "custom.md"
         keep.write_text("custom role")
-        generated = self.profiles / "taskrail-planner.md"
-        generated.write_text("Managed Taskrail workflow")
+        generated = self.generated_profile(self.profiles)
         locks = [self.app / "install.lock", self.state / "live.lock"]
         for lock in locks:
             lock.touch()
@@ -203,13 +222,13 @@ class DeploymentImportPreflightTests(unittest.TestCase):
         self.imported = self.home / "imported.json"
         self.command = [str(self.fixture.binaries / "opencode")]
 
-    def install_fresh(self, *options):
+    def install_reset(self, *options, mode="--fresh"):
         return subprocess.run(
             [
                 "bash",
                 str(self.release / "deploy/install.sh"),
                 str(self.imported),
-                "--fresh",
+                mode,
                 "--autostart=keep",
                 *options,
             ],
@@ -233,23 +252,44 @@ class DeploymentImportPreflightTests(unittest.TestCase):
         ):
             with self.subTest(content=content):
                 self.imported.write_text(content)
-                self.assert_preserved(self.install_fresh())
+                self.assert_preserved(self.install_reset())
 
     def test_imported_roles_cannot_be_destroyed_by_the_requested_reset(self):
         roles = self.config / "agents"
         shutil.copytree(BASE / "taskrail/agents", roles)
         custom = (roles / "planner.md").read_text()
         self.imported.write_text(json.dumps(dict(command=self.command, agent_source=str(roles))))
-        result = self.install_fresh()
+        for mode in ("--fresh", "--force-update"):
+            with self.subTest(mode=mode):
+                result = self.install_reset(mode=mode)
+                self.assert_preserved(result)
+                self.assertIn("outside reset directories", result.stderr)
+                self.assertEqual((roles / "planner.md").read_text(), custom)
+        result = self.install_reset("--agents=bundled", mode="--force-update")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        selected = Path(json.loads(self.settings.read_text())["agent_source"])
+        self.assertEqual(selected, self.home / ".local/share/taskrail/current/taskrail/agents")
+        self.assertTrue((selected / "planner.md").is_file())
+        self.assertFalse(roles.exists())
+
+    def test_incoming_worktree_directory_survives_a_force_reinstall(self):
+        worktrees = self.config / "pending-worktrees"
+        worktrees.mkdir()
+        edits = worktrees / "uncommitted"
+        edits.write_text("keep my edits")
+        self.imported.write_text(
+            json.dumps(dict(command=self.command, worktree_base=str(worktrees)))
+        )
+        result = self.install_reset(mode="--force-update")
         self.assert_preserved(result)
-        self.assertIn("outside reset directories", result.stderr)
-        self.assertEqual((roles / "planner.md").read_text(), custom)
+        self.assertIn("preserved worktrees", result.stderr)
+        self.assertEqual(edits.read_text(), "keep my edits")
 
     def test_service_environment_is_validated_before_reset(self):
         self.imported.write_text(json.dumps(dict(command=self.command)))
         (self.config / "service.env").write_text("PATH=/previous\n")
         self.environment["PATH"] += ":invalid\nentry"
-        result = self.install_fresh()
+        result = self.install_reset()
         self.assert_preserved(result)
         self.assertIn("PATH must not contain newlines", result.stderr)
         self.assertEqual((self.config / "service.env").read_text(), "PATH=/previous\n")
@@ -264,12 +304,12 @@ class DeploymentImportPreflightTests(unittest.TestCase):
         link.unlink()
         link.symlink_to(target)
         self.imported.write_text(json.dumps(dict(command=self.command, agent_source=str(roles))))
-        result = self.install_fresh()
+        result = self.install_reset()
         self.assert_preserved(result)
         self.assertIn("outside reset directories", result.stderr)
         self.assertEqual(target.read_text(), custom)
         target.unlink()
-        result = self.install_fresh()
+        result = self.install_reset()
         self.assert_preserved(result)
         self.assertIn("Missing source agent: planner", result.stderr)
 
@@ -277,7 +317,7 @@ class DeploymentImportPreflightTests(unittest.TestCase):
         inside = self.config / "backend"
         inside.symlink_to(self.command[0])
         self.imported.write_text(json.dumps(dict(command=self.command)))
-        result = self.install_fresh(f"--opencode={inside}")
+        result = self.install_reset(f"--opencode={inside}")
         self.assert_preserved(result)
         self.assertIn("outside reset directories", result.stderr)
         self.assertTrue(inside.is_symlink())
@@ -287,7 +327,7 @@ class DeploymentImportPreflightTests(unittest.TestCase):
         argument = self.home / "backend argument"
         argument.symlink_to(inside)
         self.imported.write_text(json.dumps(dict(command=["/bin/sh", str(argument)])))
-        result = self.install_fresh()
+        result = self.install_reset()
         self.assert_preserved(result)
         self.assertIn("outside reset directories", result.stderr)
         self.assertTrue(inside.is_file())
@@ -298,7 +338,7 @@ class DeploymentImportPreflightTests(unittest.TestCase):
         for options in (dict(max_integration_corrections="invalid"), dict(agent_source=str(roles))):
             with self.subTest(options=options):
                 self.imported.write_text(json.dumps(dict(command=self.command, **options)))
-                self.assert_preserved(self.install_fresh())
+                self.assert_preserved(self.install_reset())
 
     def test_venv_failure_keeps_old_install_and_cleans_its_staging_directory(self):
         self.imported.write_text(json.dumps(dict(command=self.command)))
@@ -309,7 +349,7 @@ class DeploymentImportPreflightTests(unittest.TestCase):
         )
         python.chmod(0o755)
         self.environment["PYTHON"] = str(python)
-        self.assert_preserved(self.install_fresh())
+        self.assert_preserved(self.install_reset())
         self.assertEqual(list((self.home / ".local/share").glob(".taskrail-stage-*")), [])
 
     def test_force_update_revalidates_after_stop_and_restores_service_on_refusal(self):
@@ -344,28 +384,33 @@ class DeploymentImportPreflightTests(unittest.TestCase):
                 self.imported.write_text(
                     json.dumps(dict(command=self.command, run_base=str(history)))
                 )
-                result = subprocess.run(
-                    [
-                        "bash",
-                        str(self.release / "deploy/install.sh"),
-                        str(self.imported),
-                        "--force-update",
-                    ],
-                    env=self.environment,
-                    capture_output=True,
-                    text=True,
-                    timeout=15,
-                )
+                result = self.install_reset(mode="--force-update")
                 self.assert_preserved(result)
                 self.assertIn("Run history requires a writable directory", result.stderr)
         self.assertEqual(existing.read_text(), "operator data")
+        self.assertFalse((self.home / "missing").exists())
+
+    def test_force_reinstall_restores_service_if_imported_role_source_disappears_on_stop(self):
+        roles = self.home / "external-roles"
+        shutil.copytree(BASE / "taskrail/agents", roles)
+        self.imported.write_text(json.dumps(dict(command=self.command, agent_source=str(roles))))
+        systemctl = self.fixture.binaries / "systemctl"
+        systemctl.write_text(
+            '#!/bin/sh\nprintf "%s\\n" "$*" >> "$HOME/privilege.log"\n'
+            'if [ "$1 $2" = "--user stop" ]; then echo "{}" > "$HOME/imported.json"; fi\n'
+        )
+        result = self.install_reset(mode="--force-update")
+        self.assertEqual(result.returncode, 2, result.stderr)
+        self.assertIn("no longer name the imported role source", result.stderr)
+        self.assertTrue(self.sentinel.is_file())
+        self.assertIn("--user start taskrail.service", (self.home / "privilege.log").read_text())
 
     def test_release_import_failure_keeps_old_install_and_cleans_staging(self):
         self.imported.write_text(json.dumps(dict(command=self.command)))
         (self.release / "taskrail/web/service.py").write_text(
             "raise ImportError('broken release')\n"
         )
-        result = self.install_fresh()
+        result = self.install_reset()
         self.assert_preserved(result)
         self.assertIn("broken release", result.stderr)
         self.assertEqual(list((self.home / ".local/share").glob(".taskrail-stage-*")), [])
@@ -380,7 +425,7 @@ class DeploymentImportPreflightTests(unittest.TestCase):
             '#!/bin/sh\nprintf "%s\\n" "$*" >> "$HOME/privilege.log"\n'
             'if [ "$1 $2" = "--user stop" ]; then exit 1; fi\nexit 0\n'
         )
-        result = self.install_fresh()
+        result = self.install_reset()
         self.assertNotEqual(result.returncode, 0)
         self.assertEqual(self.sentinel.read_text(), "previous release")
         self.assertEqual((executor / "keep").read_text(), "executor retained")
