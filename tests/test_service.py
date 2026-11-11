@@ -25,6 +25,7 @@ from taskrail.core.runtime import run_storage, settings_path
 from taskrail.infrastructure.agent_profile import make_profile
 from taskrail.web.config_watch import ConfigurationWatch
 from taskrail.web.health import ready
+from taskrail.web.service import CONFIG_POLL_SECONDS
 
 BASE = Path(__file__).resolve().parents[1]
 
@@ -158,6 +159,11 @@ class ServiceTests(unittest.TestCase):
             token = session["token"]
         with opener.open(url + "/") as response:
             self.assertIn(VERSION, response.read().decode())
+        # A clean installation must stay online through an idle delivery poll.
+        time.sleep(CONFIG_POLL_SECONDS + 0.5)
+        self.assertIsNone(process.poll(), (self.home / "service.log").read_text())
+        with opener.open(url + "/api/runs") as response:
+            self.assertEqual(json.load(response), [])
         payload = dict(
             title="Stop test",
             goal="Return 2",
@@ -241,6 +247,7 @@ class ServiceTests(unittest.TestCase):
         systemctl.write_text('#!/bin/sh\n[ "$1 $2" != "--user restart" ]\n')
         failed = self.installer(f"--opencode={selected}")
         self.assertNotEqual(failed.returncode, 0)
+        self.assertIn("journalctl --user -u taskrail.service", failed.stderr)
         self.assertEqual(json.loads(settings.read_text())["command"], [str(selected)])
         self.assertEqual(marker.read_bytes(), original[1])
         systemctl.write_bytes(original_systemctl)
@@ -475,6 +482,7 @@ class ServiceTests(unittest.TestCase):
         self.assertEqual([path.read_bytes() for path in retained], original)
         self.assertNotIn("sudo", log.read_text())
         self.assertIn("--user reenable taskrail.service", log.read_text())
+        self.assertIn("--user reset-failed taskrail.service", log.read_text())
         selected = json.loads(settings.read_text())
         self.assertEqual(
             selected,
@@ -498,8 +506,17 @@ class ServiceTests(unittest.TestCase):
         planner.write_text(planner.read_text() + "\nUpdated role instructions.\n")
         probes = self.home / "permission-probes.log"
         self.assertEqual(probes.read_text().splitlines(), ["list"])
+        # A disabled, unloaded unit rejects reset-failed but can start normally.
+        log = self.home / "systemctl.log"
+        (self.deployment.binaries / "systemctl").write_text(
+            '#!/bin/sh\nprintf "%s\\n" "$*" >> "$HOME/systemctl.log"\n'
+            'case "$2" in is-enabled|is-failed|reset-failed) exit 1 ;; esac\n'
+        )
         result = self.installer(str(supplied), "--force-update", "--opencode=opencode")
         self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("--user disable taskrail.service", log.read_text())
+        self.assertIn("--user restart taskrail.service", log.read_text())
+        self.assertNotIn("--user reset-failed", log.read_text())
         self.assertEqual(
             json.loads((config / "settings.json").read_text()),
             dict(

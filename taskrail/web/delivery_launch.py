@@ -42,7 +42,12 @@ STEP = "step"
 
 def advance(launcher):
     """Move every delivery to its next automatic step."""
-    for run in launcher.base.iterdir():
+    try:
+        runs = list(launcher.base.iterdir())
+    except FileNotFoundError:
+        # The first submission creates the history directory.
+        return
+    for run in runs:
         if not run.is_symlink() and run.joinpath(INDEX).is_file():
             proceed_quietly(launcher, run)
 
