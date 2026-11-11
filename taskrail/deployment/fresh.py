@@ -8,7 +8,7 @@ from pathlib import Path
 
 from taskrail.application.instruction_sources import ROLES
 from taskrail.deployment.reset_history import history_roots
-from taskrail.deployment.reset_paths import ResetPaths, overlaps
+from taskrail.deployment.reset_paths import ResetPaths, overlaps, protected_command_paths
 
 LOCKS = ((".local/share/taskrail", "install.lock"), (".local/state/taskrail", "live.lock"))
 
@@ -63,6 +63,9 @@ def imported_sources(supplied):
 def validated(arguments):
     """Release, imported configuration and project roots must survive every deletion."""
     protected = [arguments.source.resolve()]
+    if arguments.incoming_settings:
+        incoming = json.loads(arguments.incoming_settings.read_text())
+        protected.extend(protected_command_paths(incoming["command"]))
     if (
         arguments.supplied
         and arguments.keep_config
@@ -80,7 +83,9 @@ def main():
     parser.add_argument("operation", choices=("check", "remove"))
     parser.add_argument("source", type=Path)
     parser.add_argument("supplied")
-    parser.add_argument("--keep-config", type=Path, metavar="STAGED_SETTINGS")
+    mode = parser.add_mutually_exclusive_group(required=True)
+    for option in ("--keep-config", "--incoming-settings"):
+        mode.add_argument(option, type=Path, metavar="STAGED_SETTINGS")
     arguments = parser.parse_args()
     try:
         inventory = validated(arguments)

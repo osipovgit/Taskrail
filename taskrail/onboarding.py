@@ -2,22 +2,18 @@
 
 import json
 import shutil
-import subprocess
 import sys
-import tempfile
 from pathlib import Path
 from types import MappingProxyType
 
-from taskrail.core.runtime import run_storage, settings_path
-from taskrail.infrastructure import opencode_cli
-from taskrail.infrastructure.agent_profile import make_profile
+from taskrail import cli_health
+from taskrail.core.files import bounded_bytes
+from taskrail.core.runtime import settings_path
 from taskrail.infrastructure.opencode_settings import launch_settings
-from taskrail.infrastructure.permission_check import verify_launch
 
 ROLES = ("planner", "implementer", "reviewer")
-PROBE = "taskrail-check"
+CHECK_MARKER = "cli-check.sha256"
 COMMAND = "command"
-VERSION_SECONDS = 30
 PRIVATE_FILE = 0o600
 MODEL_QUESTIONS = MappingProxyType(
     {role: f"{role} model (provider/model, Enter = opencode default)" for role in ROLES}
@@ -31,63 +27,29 @@ def check(explicit=None):
     try:
         options = json.loads(path.read_text()) if path.is_file() else {}
     except (OSError, ValueError) as error:
-        return [found, (False, f"Settings are unreadable: {error}")]
-    if not isinstance(options, dict):
-        return [found, (False, "Settings are invalid: expected a JSON object")]
+        return [found, (False, f"Settings are unreadable: {error}"), *cli_health.host_results()]
     try:
-        launch = launch_settings(options, path.parent)
-    except (OSError, TypeError, ValueError) as error:
-        return [found, (False, f"Settings are invalid: {error}")]
-    command = options.get(COMMAND, list(opencode_cli.DEFAULT_COMMAND))
-    return [
-        found,
-        version_result(command, launch["opencode_version"], launch["agent_env_allow"]),
-        permission_result(launch),
-        storage_result(explicit),
-    ]
+        connection = cli_health.Connection.from_settings(options, path.parent)
+    except ValueError as error:
+        return [found, (False, str(error)), *cli_health.host_results()]
+    return [found, *connection.diagnostics()]
 
 
-def version_result(command, version, allow=()):
-    try:
-        completed = subprocess.run(
-            [*command, "--version"],
-            env=opencode_cli.environment(allow),
-            stdin=subprocess.DEVNULL,
-            capture_output=True,
-            text=True,
-            timeout=VERSION_SECONDS,
-            check=False,
-        )
-    except (OSError, subprocess.TimeoutExpired) as error:
-        return False, f"opencode is not runnable ({command[0]}): {error}"
-    reported = completed.stdout.strip().partition("\n")[0] or "no version output"
-    message = f"opencode CLI {reported} via {command[0]} ({version} interface)"
-    return completed.returncode == 0, message
+def check_connection(options, base, *, force=False):
+    """Verify installation settings and return the digest to publish after a successful install."""
+    connection = cli_health.Connection.from_settings(options, base)
+    current = connection.fingerprint()
+    if not force and checked(base / CHECK_MARKER, current):
+        return None
+    failures = [message for passed, message in connection.diagnostics() if not passed]
+    if failures:
+        raise ValueError("\n".join(failures))
+    return current
 
 
-def permission_result(launch):
-    """A closed throwaway profile must come back exactly as written."""
-    with tempfile.TemporaryDirectory() as directory:
-        workspace = Path(directory)
-        (workspace / "role.md").write_text("Health check profile; never used for a model run.\n")
-        access = dict(roots=[workspace], readable=[], writable=[])
-        profile, rules = make_profile(workspace / "role.md", launch["destination"], PROBE, access)
-        try:
-            verify_launch(launch, workspace, PROBE, rules, workspace / "log")
-        except (OSError, ValueError) as error:
-            return False, f"Permission enforcement could not be verified: {error}"
-        finally:
-            profile.unlink(missing_ok=True)
-    return True, "Permission rules enforced; profiles in {}".format(launch["destination"])
-
-
-def storage_result(explicit):
-    runs = run_storage(explicit)
-    try:
-        runs.mkdir(parents=True, exist_ok=True)
-    except OSError as error:
-        return False, f"Run history is not writable ({runs}): {error}"
-    return True, f"Run history: {runs}"
+def checked(marker, current):
+    previous = bounded_bytes(marker, len(current) + 1)
+    return previous in (current.encode(), f"{current}\n".encode())
 
 
 def init(opencode=None, models=(), force=False):
