@@ -86,11 +86,12 @@ def main():
         inventory = validated(arguments)
     except (OSError, ValueError) as error:
         parser.error(str(error))
-    if arguments.operation == "remove":
-        erase(inventory)
     else:
-        sys.stdout.write("Installation will remove:\n")
-        sys.stdout.writelines(f"  {target}\n" for target in inventory.targets)
+        if arguments.operation == "remove":
+            erase(inventory)
+        else:
+            sys.stdout.write("Installation will remove:\n")
+            sys.stdout.writelines(f"  {target}\n" for target in inventory.targets)
 
 
 if __name__ == "__main__":
