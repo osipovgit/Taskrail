@@ -10,12 +10,20 @@ required. The UI binds to `127.0.0.1:8787`; it is not a public multi-user servic
 ```sh
 # From a trusted extracted release:
 bash deploy/install.sh
-# Import existing settings/custom roles on FIRST installation only:
+# Import settings/custom roles on first installation:
 # bash deploy/install.sh /absolute/path/settings.json
 
 # Update, preserve configuration, wait for active work, restart automatically:
 bash deploy/install.sh --wait=3600 --autostart=keep
 ```
+
+To select the opencode executable when the service starts, pass
+`--opencode=/absolute/path/to/opencode-myfork` to the installer. This replaces
+the entire `command` argv in the installed settings, including on update.
+For a fixed argv prefix with extra arguments, set `command` in settings.
+To replace the complete settings of an existing installation while keeping history,
+use `bash deploy/install.sh /path/settings.json --apply-settings`. Relative
+paths in the replacement refer to the installed configuration directory.
 
 Interactive installation asks about startup at login only when `--autostart` is
 omitted (and boot startup was not requested). Explicit `--autostart=keep` skips the startup question. Unattended installs need
@@ -62,11 +70,16 @@ taskrail check
 taskrail serve
 ```
 
+Use `taskrail init --opencode /absolute/path/to/opencode-myfork` to select the
+executable for a foreground installation. Run `taskrail check` under the same
+account to verify the CLI version, permissions and profile location.
+
 ## Run on a remote server
 
 Taskrail can run on a Linux server while you use the browser on your workstation:
 
-1. Install on the server as the account that owns the projects, with opencode and its model credentials configured for that account.
+1. Install on the server as the account that owns the projects, with opencode
+   and its model credentials configured for that account.
    Use `--autostart=yes --boot=yes` so the service runs without an open login session.
 2. Keep the UI on the server's loopback address and reach it through SSH:
 
@@ -146,7 +159,7 @@ reset directories.
 
 | Setting | Default | Meaning |
 |---|---|---|
-| `command` | `["opencode"]` | opencode argv prefix; the installer resolves it to an absolute path |
+| `command` | `["opencode"]` | opencode argv prefix; the installer resolves the executable to an absolute path |
 | `opencode_version` | `auto` | `1.x` or `2.x`; `auto` accepts an exact bare or single-name-prefixed semantic version of either supported major; failed, timed-out or ambiguous probes stop instead of guessing |
 | `models` | `{}` | Role to `provider/model`; a missing role uses opencode's configured default model |
 | `agent_directory` | opencode agent directory | Where managed role profiles are written; relative to the settings file |
@@ -174,7 +187,7 @@ untouched 2.x stream in `events.raw.jsonl`. Every call sets
 secret-shaped variables (`*_TOKEN`, `*_KEY`, `*_SECRET`, `*_PASSWORD`, their `*_FILE`
 locators, `SSH_AUTH_SOCK`, `GIT_ASKPASS` and similar); opencode alone keeps common
 provider keys and the names in `agent_env_allow`.
-Taskrail preserves the configured argv prefix for version detection, permission checks, capability probes, servers and
+The configured argv prefix is preserved for version detection, permission checks, capability probes, servers and
 clients. All these calls use the same credential allowlist. A successful help
 response without `--attach` selects separate 1.x processes; a failed or timed-out
 probe stops explicitly. It never silently disables the shared session server.
@@ -182,7 +195,8 @@ probe stops explicitly. It never silently disables the shared session server.
 The 2.x readiness announcement has a bounded timeout within the stage's remaining
 budget and responds to Stop, including when no complete line arrives. Malformed
 announcements close the private process before reporting failure. Unknown major
-versions are unsupported; set an explicit interface only after checking the CLI supports that interface.
+versions are unsupported; select an explicit interface only after verifying the
+CLI supports it.
 
 Managed profiles default to `$OPENCODE_CONFIG_DIR/agent`, else
 `$XDG_CONFIG_HOME/opencode/agent`. opencode names a file either absolutely or relative
@@ -334,6 +348,25 @@ The SSH executor is a separate system service with its own user and root-owned
 installation. It is not installed or granted privileges by the ordinary UI updater.
 See [SSH executor](ssh-executor.md) for installation, host keys and approvals.
 
+## Rebuild the managed application
+
+Run from an extracted release outside the installation and history directories:
+
+```sh
+bash deploy/install.sh --force-update --autostart=keep
+```
+
+**This erases run history**, including trash and saved checkpoints. The installer
+stages and validates the incoming release, stops the managed user service and
+its workers through systemd, then obtains the workflow lock. A standalone CLI
+worker still holding the lock prevents deletion. Use `--wait=SECONDS` to let it
+finish. The installer replaces the old releases, clears Taskrail runtime state
+and generated profiles, and starts a new service against the saved settings.
+Custom roles, service environment and unit drop-ins, CLI credentials, project
+checkouts, linked worktrees and the independent SSH executor survive the rebuild.
+An explicit settings file with `--force-update` also selects `--apply-settings`.
+Keep credentials and local CLI programs outside Taskrail's runtime directories.
+
 ## Full reinstallation
 
 From an extracted release **outside** the managed installation/config/history paths:
@@ -369,13 +402,13 @@ remote tickets must first be reconciled. The executor is reinstalled disabled;
 configure its inventory and verified host keys again before starting it. Dedicated
 system account/group identities are retained. Application source edits are never
 reverted. `--autostart=keep` retains the previous user-service enablement choice.
-Without `--fresh`, installation remains a history/config-preserving update.
+The ordinary update preserves settings and history.
 
 ## Run storage updates
 
-The dashboard lists current-format runs. Updates leave existing run directories in
+The dashboard lists current-format runs. Ordinary updates leave existing run directories in
 place. Use `--fresh` for the full reset described above. Continue requires the
 same build. Runs from another build can Restart if their format is current.
 The installer removes known retired settings from its staged configuration and prints
 the removed keys. Settings cleanup does not create a backup.
-Custom command settings and extension keys remain unchanged.
+Configured commands and operator extension keys are retained during ordinary updates.

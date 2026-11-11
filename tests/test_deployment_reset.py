@@ -292,6 +292,54 @@ class DeploymentImportPreflightTests(unittest.TestCase):
         self.assert_preserved(self.install_fresh())
         self.assertEqual(list((self.home / ".local/share").glob(".taskrail-stage-*")), [])
 
+    def test_force_update_revalidates_after_stop_and_restores_service_on_refusal(self):
+        history = self.home / ".local/state/taskrail/runs"
+        history.mkdir(parents=True)
+        systemctl = self.fixture.binaries / "systemctl"
+        systemctl.write_text(
+            '#!/bin/sh\nprintf "%s\\n" "$*" >> "$HOME/privilege.log"\n'
+            'if [ "$1 $2" = "--user stop" ]; then\n'
+            '    touch "$HOME/.local/state/taskrail/runs/unknown"\nfi\n'
+        )
+        result = subprocess.run(
+            ["bash", str(self.release / "deploy/install.sh"), "--force-update"],
+            env=self.environment,
+            capture_output=True,
+            text=True,
+            timeout=15,
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("unrecognized", result.stderr)
+        self.assertTrue((history / "unknown").is_file())
+        self.assertEqual(self.sentinel.read_text(), "previous release")
+        self.assertIn("--user start taskrail.service", (self.home / "privilege.log").read_text())
+
+    def test_unusable_replacement_history_blocks_force_update_before_service_stop(self):
+        existing = self.home / "regular-file"
+        existing.write_text("operator data")
+        dangling = self.home / "dangling"
+        dangling.symlink_to(self.home / "missing")
+        for history in (existing, existing / "subdir/history", dangling / "history"):
+            with self.subTest(history=history):
+                self.imported.write_text(
+                    json.dumps(dict(command=self.command, run_base=str(history)))
+                )
+                result = subprocess.run(
+                    [
+                        "bash",
+                        str(self.release / "deploy/install.sh"),
+                        str(self.imported),
+                        "--force-update",
+                    ],
+                    env=self.environment,
+                    capture_output=True,
+                    text=True,
+                    timeout=15,
+                )
+                self.assert_preserved(result)
+                self.assertIn("Run history requires a writable directory", result.stderr)
+        self.assertEqual(existing.read_text(), "operator data")
+
     def test_release_import_failure_keeps_old_install_and_cleans_staging(self):
         self.imported.write_text(json.dumps(dict(command=self.command)))
         (self.release / "taskrail/web/service.py").write_text(

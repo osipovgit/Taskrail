@@ -35,6 +35,7 @@ mkdir "$release"
 cleanup() {
     rm -rf -- "$staging"
     rm -f -- "$app_dir/current.next.$$"
+    if [[ -n ${next_settings:-} ]]; then rm -f -- "$next_settings"; fi
     if [[ -n ${installed_release:-} && ! "$app_dir/current" -ef "$installed_release" ]]; then
         rm -rf -- "$installed_release"
     fi
@@ -47,26 +48,30 @@ version=$("$release/venv/bin/python" -I -B -c \
 # Configuration, copied roles and the environment are prepared before any reset.
 prepare_options=()
 [[ "$fresh" == yes ]] && prepare_options+=(--fresh)
+[[ "$apply_settings" == yes ]] && prepare_options+=(--apply-settings)
+[[ -n "$opencode_path" ]] && prepare_options+=("--opencode=$opencode_path")
 run_module taskrail.deployment.settings_stage "$source_dir" "$config_dir" "$initial_settings" "$app_dir" "$agent_mode" "${prepare_options[@]}" "$staging/config"
 # shellcheck source=deploy/fresh.sh
 source "$source_dir/deploy/fresh.sh"
-# Stop the UI only after validating the new release and obtaining the execution lock.
-systemctl --user stop "$service" 2>/dev/null || {
-    if systemctl --user is-active --quiet "$service"; then
-        echo 'Service could not be stopped; release was not switched' >&2
-        exit 1
-    fi
-}
 installed_release=$(mktemp -d "$app_dir/releases/$version-XXXXXXXX")
 rmdir "$installed_release"
 mv -- "$release" "$installed_release"
 release=$installed_release
+if [[ -f "$staging/config/settings.json" ]]; then
+    next_settings=$(mktemp "$config_dir/.settings-XXXXXXXX")
+    install -m 600 "$staging/config/settings.json" "$next_settings"
+    rm -- "$staging/config/settings.json"
+fi
 cp -a -- "$staging/config/." "$config_dir/"
+if [[ -n ${next_settings:-} ]]; then mv -Tf -- "$next_settings" "$config_dir/settings.json"; fi
 ln -s "$release" "$app_dir/current.next.$$"
 mv -Tf "$app_dir/current.next.$$" "$app_dir/current"
 install -m 644 "$release/deploy/taskrail.service" "$unit_dir/$service"
 install -m 755 "$release/deploy/taskrail" "$HOME/.local/bin/taskrail"
 systemctl --user daemon-reload
+if [[ "$fresh" == yes || "$force_update" == yes ]]; then
+    systemctl --user reset-failed "$service"
+fi
 case "$autostart" in
     yes) systemctl --user enable "$service" ;;
     no) systemctl --user disable "$service" ;;

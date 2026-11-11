@@ -34,11 +34,11 @@ class SettingsStageTests(unittest.TestCase):
         path.start()
         self.addCleanup(path.stop)
 
-    def initialize(self, supplied="", agents="keep"):
+    def initialize(self, supplied="", agents="keep", *flags):
         arguments = [str(BASE), str(self.config), supplied, str(self.app), agents]
         with tempfile.TemporaryDirectory() as stage, redirect_stdout(io.StringIO()) as output:
             prepared = Path(stage) / "settings"
-            main([*arguments, str(prepared)])
+            main([*arguments, str(prepared), *flags])
             shutil.copytree(prepared, self.config, dirs_exist_ok=True)
         return output.getvalue()
 
@@ -58,6 +58,24 @@ class SettingsStageTests(unittest.TestCase):
             f'PATH="{self.binaries}:/usr/bin:/x\\"y\\\\z"\nTASKRAIL_WEB_PORT=8787\n',
         )
         self.assertEqual(environment.stat().st_mode & 0o777, 0o600)
+
+    def test_select_executable_on_install_and_update(self):
+        selected = self.binaries / "opencode-myfork"
+        shutil.copy(self.binaries / "opencode", selected)
+        supplied = self.home / "input.json"
+        supplied.write_text('{"command":["missing","--old"],"timeout_seconds":7}')
+        self.initialize(str(supplied), "keep", "--opencode=opencode-myfork")
+        self.assertEqual(self.settings()["command"], [str(selected)])
+        self.initialize("", "keep", "--opencode=opencode")
+        self.assertEqual(self.settings()["command"], [str(self.binaries / "opencode")])
+        with self.assertRaisesRegex(ValueError, "not found"):
+            self.initialize("", "keep", "--opencode=absent-cli")
+        self.assertEqual(self.settings()["timeout_seconds"], 7)
+        self.assertEqual(self.settings()["command"], [str(self.binaries / "opencode")])
+        supplied.write_text('{"command":["opencode"],"timeout_seconds":9,"run_base":"runs"}')
+        self.initialize(str(supplied), "keep", "--apply-settings")
+        self.assertEqual(self.settings()["timeout_seconds"], 9)
+        self.assertEqual(self.settings()["run_base"], "runs")
 
     def test_imported_settings_copy_roles_once_and_keep_relative_folders_meaningful(self):
         imported = self.home / "imported"
