@@ -52,6 +52,11 @@ a cited plan defect, replans, obtains approval, implements, checks and reviews t
 result. Executor continuations retain the exact stage; proposal evidence cannot become
 completion evidence or cross into final review.
 
+Executor tests replay a provider message through all four routes, including an
+interruption after reservation. A real local file read covers reuse after a format
+correction and fresh output after the inputs change. Both recorded opencode versions
+preserve the final message ID used to identify a delivery.
+
 Native error regressions exercise read, edit, write, unavailable-tool and permission
 failures without error-specific exemptions. Completed turns still face result and
 source validation; interrupted turns retain their session, inspect partial source,

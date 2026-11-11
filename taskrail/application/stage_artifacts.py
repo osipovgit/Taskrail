@@ -34,20 +34,6 @@ def record_access(workflow, record):
         record[ATTACHED] = [str(target)]
 
 
-def grant(access, workflow, record):
-    """Let the stage's profile read and write its run file."""
-    if record[STAGE] == understanding_file.STAGE:
-        target = understanding_file.prepare(workflow.run)
-        access["writable"].append(target)
-        access["readable"].append(target)
-    if record[STAGE] == PLANNER:
-        plan_file.grant(access, workflow.run, workflow.state[REQUIREMENTS])
-    if record[STAGE] == IMPLEMENTER:
-        progress_file.grant(access, workflow.run)
-    if record[STAGE] in REVIEWS:
-        review_file.grant(access, workflow.run, workflow.state[REQUIREMENTS])
-
-
 def new(workflow):
     """A review that starts after another stage writes a fresh review file."""
     recent = workflow.state["stages"][-2:]

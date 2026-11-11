@@ -219,8 +219,8 @@ class DeliveryApprovalTests(unittest.TestCase):
                 self.assertEqual(execution_requests.remote_mode(run, config, stage), "server")
                 request = prompts.make_request(config, (stage, None, [], None), state, run)
             self.assertIn(prompt_texts.text("routes.ssh.server"), request)
-            self.assertIn('"status":{"const":"ACTION_REQUEST"}', request)
-            self.assertIn('"status":{"const":"JENKINS_REQUEST"}', request)
+            self.assertIn("Example ACTION_REQUEST:", request)
+            self.assertIn("Example JENKINS_REQUEST:", request)
             assert_request_budget(self, request, stage, self.base)
         (self.repo / "app.py").write_text("changed after confirmation\n")
         with (

@@ -39,9 +39,22 @@ class ResponseContractTests(unittest.TestCase):
     def test_exact_envelope_is_presentation_only(self):
         payload = self.payload()
         encoded = json.dumps(payload)
-        for response in (encoded, "```json\n" + encoded + "\n```", "```\n" + encoded + "\n```"):
-            self.assertEqual(decoded(response), payload)
         for response in (
+            encoded,
+            "```json\n" + encoded + "\n```",
+            "```\n" + encoded + "\n```",
+            "Notes [optional]\n" + encoded,
+            "```json\n" + encoded + "\n```\nDone",
+        ):
+            with self.subTest(response=response):
+                self.assertEqual(decoded(response), payload)
+        for response in (
+            encoded[:-1],
+            "[" + encoded,
+            "[" + encoded + "]",
+            '{"draft":' + encoded,
+            "{}\n" + encoded,
+            encoded + "\n[1]",
             encoded + "\n" + encoded,
             "```json\n" + encoded + "\n" + encoded + "\n```",
             '```json\n{"status":"PLAN_READY","steps":["Old format"]}\n```',

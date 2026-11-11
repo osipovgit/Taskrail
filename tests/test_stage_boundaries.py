@@ -94,10 +94,26 @@ class StageBoundaryTests(unittest.TestCase):
     def test_language_modules_follow_the_plan_and_disjoint_ones_stay_absent(self):
         catalog = json.loads(instruction_modules.CATALOG.read_text())
         plan = dict(proposed_change_files=[f"/repo/{index}.sh" for index in range(4)])
-        selected = instruction_modules.select(catalog, ("plan-reviewer", plan), {})
+        selected = instruction_modules.select(catalog, ("plan-reviewer", plan))
         self.assertEqual({entry["id"] for entry in selected}, {"reading", "shell", "verification"})
-        selected = instruction_modules.select(catalog, ("implementer", None), {})
+        selected = instruction_modules.select(catalog, ("implementer", None))
         self.assertEqual([entry["id"] for entry in selected], ["reading"])
+
+    def test_module_selection_hashes_repeated_reads_once_and_ignores_stale_versions(self):
+        source = self.run / "source.py"
+        source.write_text("current")
+        evidence = instruction_modules.evidence
+        current = evidence.fingerprint(source)
+        reads = [
+            dict(input=dict(filePath=str(source)), source_sha256=version)
+            for version in ("older", current, current)
+        ]
+        (self.run / "evidence.json").write_text(json.dumps({"records": reads}))
+        with patch.object(evidence, "fingerprint", wraps=evidence.fingerprint) as hashed:
+            self.assertEqual(instruction_modules.observed_files(self.run), [source])
+            hashed.assert_called_once_with(source)
+        source.write_text("changed")
+        self.assertEqual(instruction_modules.observed_files(self.run), [])
 
     def test_tasks_run_in_dependency_order_and_cycles_are_named(self):
         steps = [

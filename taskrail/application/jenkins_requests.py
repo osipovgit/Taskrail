@@ -3,7 +3,6 @@
 import json
 
 from taskrail.core import json_response, prompt_texts, schema
-from taskrail.executor import jenkins_schema
 
 STATUS = "JENKINS_REQUEST"
 VERSION_FIELD = "schema_version"
@@ -16,7 +15,14 @@ def instructions(servers):
     """The contract and the configured servers and jobs, or nothing without Jenkins."""
     if not servers:
         return ""
-    return prompt_texts.text("routes.jenkins", servers=json.dumps(prompt_catalog(servers)))
+    catalog = prompt_catalog(servers)
+    server = next(iter(catalog))
+    return prompt_texts.text(
+        "routes.jenkins",
+        servers=json.dumps(catalog),
+        server=json.dumps(server),
+        job=json.dumps(next(iter(catalog[server]))),
+    )
 
 
 def extract(response):
@@ -34,13 +40,6 @@ def extract(response):
     schema.require(set(payload) == ENVELOPE, "Invalid Jenkins request envelope")
     schema.contract_version(payload[VERSION_FIELD])
     return payload
-
-
-def validate(payload, servers):
-    """The exact envelope, the contract version and the configured job allowlist."""
-    schema.require(set(payload) == ENVELOPE, "Invalid envelope")
-    schema.contract_version(payload[VERSION_FIELD])
-    return jenkins_schema.validate(payload[JENKINS], servers)
 
 
 def prompt_catalog(servers):

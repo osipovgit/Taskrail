@@ -2,7 +2,13 @@
 
 import json
 
-from taskrail.application import child_brief, dependency_checks, reviewed_artifacts
+from taskrail.application import (
+    child_brief,
+    dependency_checks,
+    plan_reports,
+    report_packets,
+    reviewed_artifacts,
+)
 from taskrail.core import prompt_texts, requirements, schema, task_spec
 from taskrail.core.files import atomic_json, digest
 
@@ -25,6 +31,9 @@ def capture(workflow, parent, step):
         task_sha256=digest(workflow.config["task_text"].encode()),
     )
     spec.update(dependency_checks.capture(workflow.run, parent, step))
+    signature = step.get(plan_reports.SIGNATURE)
+    if signature:
+        spec[plan_reports.SIGNATURE] = signature
     install(workflow, spec)
 
 
@@ -83,6 +92,9 @@ def restore(workflow):
     spec = json.loads(encoded)
     validate(spec, workflow)
     dependency_checks.index(workflow.run, spec)
+    signature = spec.get(plan_reports.SIGNATURE)
+    if signature:
+        report_packets.verified(workflow.run / plan_reports.DIRECTORY, signature)
     expected = spec.get("findings_sha256")
     if expected is not None:
         schema.require(

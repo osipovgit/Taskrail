@@ -42,15 +42,12 @@ def model_inputs(run, folder):
     ]
     if (run / "00-input/original").is_dir():
         paths.append(run / "00-input/original")
-    dependency = run / "00-input/dependency-checks"
-    if dependency.is_dir() and not dependency.is_symlink():
-        paths.append(dependency)
+    for name in ("dependency-checks", "plan-reports"):
+        packet = run / "00-input" / name
+        if packet.is_dir() and packet.resolve() == packet:
+            paths.append(packet)
     paths.extend(result_inputs(run))
-    paths.extend(
-        path
-        for path in sorted(run.joinpath("00-input/progress-archive").glob("*.md"))
-        if path.is_file() and not path.is_symlink()
-    )
+    paths.extend(progress_archives(run))
     optional_files = (
         run / "00-input/findings.json",
         run / "plan.md",
@@ -64,6 +61,12 @@ def model_inputs(run, folder):
         if optional.is_file() and not optional.is_symlink():
             paths.append(optional)
     return paths
+
+
+def progress_archives(run):
+    """Exact archived notes readable by the active run."""
+    paths = sorted(run.joinpath("00-input/progress-archive").glob("*.md"))
+    return [path for path in paths if path.is_file() and not path.is_symlink()]
 
 
 def task_inputs(run):

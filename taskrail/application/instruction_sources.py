@@ -1,10 +1,9 @@
 """Freeze and attribute effective instructions independently of installed profiles."""
 
-import hashlib
 import json
 
 from taskrail.core import prompt_texts
-from taskrail.core.files import atomic_json
+from taskrail.core.files import atomic_json, digest
 from taskrail.core.schema import SCHEMAS, require
 from taskrail.infrastructure.agent_sync import atomic_write
 
@@ -15,16 +14,13 @@ TEXTS = "texts"
 
 def validate_role_source(path):
     """Reject unreviewed role contracts before paying for source research."""
+    source = path.read_bytes()
     require(
-        "Instruction contract: 1." in path.read_text(encoding="utf-8").splitlines(),
+        "Instruction contract: 1." in source.decode("utf-8").splitlines(),
         f"Outdated role instructions: {path}. Use deploy/install.sh --agents=bundled "
         "or update the custom role against taskrail/agents/ before declaring Instruction contract: 1.",
     )
-
-
-def fingerprint(source_bytes):
-    """A source_bytes identity does not depend on role filenames or release labels."""
-    return hashlib.sha256(source_bytes).hexdigest()
+    return source
 
 
 def capture(run, state, source):
@@ -32,18 +28,16 @@ def capture(run, state, source):
     state["agent_sources"] = {}
     state["agent_source_directory"] = str(source)
     for role in ROLES:
-        validate_role_source(source / f"{role}.md")
-        source_bytes = (source / f"{role}.md").read_bytes()
+        source_bytes = validate_role_source(source / f"{role}.md")
         atomic_write(run / "00-input/agents" / f"{role}.md", source_bytes)
-        state["agent_sources"][role] = fingerprint(source_bytes)
+        state["agent_sources"][role] = digest(source_bytes)
 
 
 def verify(run, state):
     """Changed frozen instructions cannot silently alter a continuation."""
     for role, expected in state.get("agent_sources", {}).items():
-        validate_role_source(run / "00-input/agents" / f"{role}.md")
-        source_bytes = (run / "00-input/agents" / f"{role}.md").read_bytes()
-        if fingerprint(source_bytes) != expected:
+        source_bytes = validate_role_source(run / "00-input/agents" / f"{role}.md")
+        if digest(source_bytes) != expected:
             raise ValueError("Saved agent instructions changed; restart required")
 
 
@@ -56,11 +50,12 @@ def freeze_contract(run, policy, state):
     path = run / CONTRACT
     if not path.exists():
         atomic_json(path, dict(policy=policy, texts=prompt_texts.release(), schemas=SCHEMAS))
-    signature = fingerprint(path.read_bytes())
+    saved_bytes = path.read_bytes()
+    signature = digest(saved_bytes)
     if state.get("contract_sha256", signature) != signature:
         raise ValueError("Saved instruction policy changed; restart required")
     state["contract_sha256"] = signature
-    saved = json.loads(path.read_text())
+    saved = json.loads(saved_bytes)
     if saved["schemas"] != SCHEMAS or saved[TEXTS] != prompt_texts.release():
         raise ValueError("Saved contract differs from this release; restart for fresh validation")
     prompt_texts.ACTIVE.adopt(saved[TEXTS])

@@ -22,8 +22,8 @@ formatting. Both come from the same pinned environment. No new findings are allo
 there is no debt baseline: fix every finding instead of suppressing it.
 
 Tests use fake opencode 1.x and 2.x subprocesses, temporary source trees and real
-local HTTP workers. They exercise contracts, permissions, workflow and recovery,
-checkpoints, recovery, telemetry, UI DOM behavior and deployment. Deployment tests use
+local HTTP workers. They exercise contracts, permissions, workflow transitions, checkpoint recovery,
+telemetry, UI DOM behavior and deployment. Deployment tests use
 private release copies and system paths, with unconditional privilege-command stubs;
 they never invoke the host's sudo, systemd or executor reset. Regression tests use
 fixture CLI settings and a deployment stub; they do not require an installed opencode.

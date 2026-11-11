@@ -11,10 +11,12 @@ from types import SimpleNamespace
 from run_fixture import current_run
 
 from taskrail.application import (
+    check_catalog,
     check_planning,
     check_results,
     evidence,
     execution_evidence,
+    plan_projection,
     plan_validation,
     planned_checks,
     result_context,
@@ -107,6 +109,27 @@ class PlannedRuntimeTests(unittest.TestCase):
         plan_validation.canonical_plan(plan, self.roots)
         plan_validation.validate_plan(plan, self.roots, self.base / "task.md", self.config)
         return plan
+
+    def test_step_owns_ordinary_verify_command_with_empty_recipe_catalog(self):
+        command = "ansible-playbook --syntax-check site.yml"
+        self.requirements[1].update(kind="task", text="Check playbook syntax")
+        self.config["check_recipes"] = {}
+        text = PLAN.replace("## Check selections\n- unit-tests: R2\n", "")
+        plan = self.parsed(text.replace("Run the unit-tests recipe", command))
+        execution = ("plan-reviewer", plan)
+        projection = plan_projection.plan_context(execution, self.config["task_spec"], self.roots)
+        step = projection["steps"][0]
+        self.assertEqual((step["id"], step["verify"]), ("T1", [command]))
+        self.assertNotIn("required_checks", step)
+        self.assertEqual(
+            check_catalog.context(self.config, execution[0], projection)["check_catalog"], []
+        )
+        (self.run / "review.md").write_text(
+            "## Requirements\nR1: planned\nR2: planned\nR3: planned\n"
+        )
+        review = result_validation.validate("DONE", self.context(plan))
+        self.assertEqual(review["status"], "APPROVE")
+        self.assertEqual(review["coverage"][1]["outcome"], "planned")
 
     def test_planner_must_answer_each_open_id_even_on_checkpoint_continuation(self):
         folder = self.run / "03-plan-review"

@@ -21,7 +21,10 @@ def text(requirements, read_only=False):
         LINE.format(number, prefilled(entry, read_only))
         for number, entry in enumerate(requirements, 1)
     ]
-    return prompt_texts.text("plan.template", requirements="\n".join(lines))
+    section_key = "plan.template_answer" if read_only else "plan.template_tasks"
+    return prompt_texts.text(
+        "plan.template", requirements="\n".join(lines), sections=prompt_texts.text(section_key)
+    )
 
 
 def prefilled(requirement, read_only):

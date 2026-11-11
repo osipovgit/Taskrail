@@ -1,25 +1,21 @@
 """Route intermediate operations while retaining the original stage/session."""
 
-import re
 from pathlib import Path
 
-from taskrail.core import json_response, prompt_texts, protected_paths
+from taskrail.core import prompt_texts, protected_paths, reply_frame
 from taskrail.git import dispatch
 from taskrail.interactions import (
     approval_policy,
     command_effects,
-    events,
-    local_request,
+    request_envelope,
     request_routes,
     transcripts,
-    turn_recovery,
 )
 from taskrail.interactions.clock import ApprovalPause
 
 PUSH_NOTICE = (
     "Pushes the current commit to a remote repository. Allow all actions does not cover pushes."
 )
-REQUEST_NAME = re.compile(r"(?:GIT|LOCAL|ACTION|JENKINS)_REQUEST")
 
 
 class Actions:
@@ -34,17 +30,15 @@ class Actions:
 
     def route(self, outcome):
         """An executor request or a near-miss request; otherwise None."""
-        if outcome["status"] != "OK":
+        if outcome["status"] != "OK" or reply_frame.submitted(outcome["final_text"]):
             return None
         routed = request_routes.route(self, outcome)
         return routed or incomplete_request(self, outcome) if outcome["status"] == "OK" else None
 
-    def git_action(self, outcome):
+    def git_action(self, payload):
         """Use the existing policy and checkpointed Git executor."""
         session = self.session
-        effect = dispatch.consume(outcome, session.active, session.state, session.environment)
-        if not effect:
-            return None
+        effect = dispatch.consume(payload, session.active, session.state, session.environment)
         session.environment.update(expected=effect[0], git_before=effect[1])
         session.state[command_effects.SOURCE_EFFECT] = effect
         path = Path(session.state["git_jobs"][-1]["output_file"])
@@ -73,9 +67,9 @@ class Actions:
         with ApprovalPause(self.session):
             return approval_policy.decision(self.run, request, self.session.state, scope, personal)
 
-    def local_result(self, payload, answer):
+    def local_result(self, payload, answer, index=None):
         """Keep command results in the public transcript and evidence ledger."""
-        return transcripts.local_snapshot(self.run, self.folder, payload, answer)
+        return transcripts.local_snapshot(self.run, self.folder, payload, answer, index)
 
 
 def incomplete_request(actions, outcome):
@@ -85,34 +79,7 @@ def incomplete_request(actions, outcome):
     markup, would otherwise fail validation and end the session. Every role answers in
     prose and its run file, so only request markup counts as narration.
     """
-    text = outcome["final_text"]
-    if local_request.incomplete(text):
-        feedback = local_request.correction(text)
-    elif not_json(text) and narrated(text):
-        feedback = prompt_texts.text("feedback.narration", request=actions.folder / "request.md")
-    else:
+    feedback = request_envelope.correction(outcome["final_text"], actions.folder / "request.md")
+    if feedback is None:
         return None
-    if turn_recovery.repeated_feedback(actions.session, "request", feedback):
-        outcome.update(status="INVALID_RESULT", contract_error=feedback)
-        return None
-    events.correction(actions.session, "request", text, feedback)
-    return feedback
-
-
-def narrated(text):
-    """Every role answers in prose, so only a request written as markup counts."""
-    return bool(REQUEST_NAME.search(text))
-
-
-def not_json(text):
-    """Text without one JSON object: narration or a request written as markup.
-
-    A single JSON object, even an invalid request, goes to request routing and validation.
-    """
-    if not text.strip():
-        return False
-    try:
-        json_response.extract(text, dict)
-    except ValueError:
-        return True
-    return False
+    return request_routes.feedback(actions, outcome, "request", feedback)

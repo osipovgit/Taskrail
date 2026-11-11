@@ -33,6 +33,8 @@ Stable requirement IDs stay server-side; the model uses labels.
 
 Task understanding writes `understanding.json`, a resumable draft containing a summary
 and obligations with `text`, `kind` (`task` or `constraint`) and exact source quotes.
+An obligation citing the Constraints field uses `kind: "constraint"`. Understanding
+can edit its draft and correct validation errors. It has no executor routes.
 Each source names an input field and a verbatim quote, plus a one-based occurrence when
 the quote repeats. The server checks those references, resolves character spans and
 assigns IDs. These checks prove provenance, not semantic completeness: the planner and
@@ -48,16 +50,17 @@ unchanged obligations retain IDs, and the saved plan must pass validation and in
 review again. It cannot alter an authenticated child's assignment. Continue retains
 the accepted requirement list and resumes its checkpointed stage.
 
-The planner writes `plan.md` and a reviewer `review.md`,
-both in the run directory and attached to every turn. The planner replies
-`Ready for server plan checks.` and the reviewer replies `DONE`. The
-implementer ends with `DONE:` or `BLOCKED:`. The server derives the canonical stored
-result, version 1, from them. Executor requests keep version 1; an input-correction
-message is a workflow transition and executes no command. Unknown wire versions and unsupported run or checkpoint versions are
-rejected. Continuations and validation feedback retain the stage's original format.
-The request parser also accepts one unambiguous object surrounded by prose or
-Markdown; the surrounding text is neither evidence nor instructions.
-Multiple objects, incomplete JSON, unknown fields and duplicate keys are invalid.
+| Stage | What the model submits |
+| --- | --- |
+| Understanding | Write `understanding.json` and reply `DONE`. |
+| Planning | Write `plan.md` and reply `Ready for server plan checks.` |
+| Plan or result review | Write `review.md` and reply `DONE`. |
+| Implementation | Reply `DONE: <summary and commit rationale>` or `BLOCKED: <missing prerequisite>`. |
+
+The run attaches the stage's writable draft on each turn. The server validates the
+submission and derives the stored result. Corrections retain the same contract.
+A completion can describe a command it ran or quote a request without dispatching
+that command. A separate executor message requests exactly one operation.
 All result and tool paths are canonical absolute paths. Root aliases in task
 metadata are labels; the engine resolves them.
 
@@ -71,7 +74,8 @@ task projection, while untrusted original task and history files remain archival
 artifacts outside the model's readable inputs. Each ID needs one outcome: satisfied, planned, contradicted, gap,
 deferred, not_applicable or not_evaluated. `not_evaluated` is allowed only in BLOCKED results, when
 a shared blocker prevented validation. Only runtime requirements may be deferred.
-Required missing evidence means BLOCKED, even when the result format is valid. A plan names
+A confirmed missing prerequisite blocks the run. A repairable gap in a plan goes
+back to the planner. A plan names
 checks that must run after the change in unverified, one per entry, prefixed
 `Jenkins check: <server>/<job>: <parameters and expected result>` or
 `Server check: <what to run and the expected result>`; the server starts Jenkins
@@ -144,8 +148,7 @@ tests or documentation from the implementation that owes them. Each task still n
 observable acceptance criteria, planned files and appropriate verification. On an
 authenticated task branch, necessary additional files within permitted roots remain
 allowed; Not ToDo names later work to leave alone unless the task needs a part of it,
-which the summary names. In-place runs
-retain their exact approved file boundary.
+which the summary names.
 
 Review lines use the assigned requirement labels. A failure needs its problem;
 `gap`, `n/a` and `later` need their explanations. An explained `n/a` is valid in
@@ -226,8 +229,8 @@ seed a new source packet, but are not proof that its receiver read them.
 observations needed for validation. An oversized record is skipped without dropping other useful
 records. Changed or unseen content cannot justify approval. A
 matching citation proves provenance, not the model's interpretation, so independent
-review remains necessary. Only server records prove executed checks. The exact
-schema is supplied in each request; do not copy it into custom roles.
+review remains necessary. Only server records prove executed checks. Each stage
+receives its output instructions and an example of each available executor request.
 
 Recovery never upgrades a failed or partial read to source evidence. Required
 unresolved proof remains a blocking gap. The session receives the complete validation feedback. Repeated failures on
@@ -272,48 +275,53 @@ Transport retry, context handoff, timeouts and output delivery are described in
 The planner writes `<run>/plan.md`, attached at every turn. It survives interruption.
 A ready proposal recovered after a context stop still passes complete validation and
 independent plan review. The server labels requirement blocks with `R<n>`.
-The planner and the next reviewer receive the same complete findings file. Address each finding or document an evidence-backed disagreement for the reviewer to resolve. Long strings use lossless `text_chunks` and the file can be read by line ranges.
-Read ranges identify evidence, never edit coordinates. Use freshly read content for
-edits. The format:
+The planner and the next reviewer receive the same complete [findings file](#findings-across-plan-revisions).
+Each task describes its intended result and how to verify it. For example:
 
 ```markdown
-Decision: split | single | no change | blocked
-Summary: one or two sentences (an answer or design document goes in ## Answer)
+Decision: single
+Summary: Correct the invalid variable name in the NTP role.
 
 ## Requirements
-- R1 → T1 [roles/ntp], T2 [roles/web]
-- R2 → done: project/README.md:12-18
-- R3 → runtime
-- R4 → all tasks
-- R5 → gap: the Jenkins job name is not in the task
+- R1 → T1
+- R2 → T1
 
-## T1: Fix lint in roles/ntp
+## T1: Correct the NTP role variable
 Depends on: none
-Files: project/roles/ntp/tasks/main.yml, project/roles/ntp/defaults/main.yml (new)
-Read: project/roles/ntp/tasks/main.yml:1-40, project/.ansible-lint:1-12
-Done when:
-- ansible-lint roles/ntp reports no var-naming findings
+Files:
+- project/roles/ntp/tasks/main.yml
+- project/roles/ntp/defaults/main.yml
+Read:
+- project/roles/ntp/tasks/main.yml
+- project/.ansible-lint:1-12
+Done when: The default and all references use the corrected name and retain its value.
 Verify:
-- ansible-lint roles/ntp
-Notes: optional pointers for the implementer
-
-## After the change
-- Jenkins check: ci/ansible-lint: BRANCH=main passes
-- Server check: run ansible-playbook --check site.yml on the controller
+- Run ansible-lint roles/ntp and inspect any remaining findings.
 ```
 
-A `done:` or `contradicted:` outcome uses the citation syntax described above for
-review lines, including optional explanations after each citation.
-`/exact/read/path:7-42,43-156,157-169` cites all three ranges of the same file.
-Requirement labels do not substitute for source ranges. `Read:` accepts only citation
-lists with optional parenthesized explanations, which also reach the child in Notes. Invalid hints are reported on their own line. Paths are absolute, root-alias-relative, or relative
-to the only declared root; basenames are never searched for or guessed. Every
-range cited as evidence still needs matching observed current lines. A diff alone does not
-establish that an unrun check passed.
+`Read` is optional. Use a file, a file with a line or range, or a list of these
+references. Paths can be absolute, root-alias-relative, or relative to the only
+root. Backtick-quote names with spaces or punctuation. A trailing `:N` or
+`:N-M` selects lines even inside backticks. For a literal name ending in
+`:N`, put an explicit range outside the quoted name, as in `` `report:2`:1-20 ``.
+A parenthesized note stays with the task. A bare source path gives the child a
+starting point for a bounded read. For `done` and `contradicted`, cite observed
+lines that support the claim using the review citation format above.
+
+A split task can name a parent executor report under `00-input/local`, `git`, `ssh`
+or `checks` in its `Read` list. Taskrail binds selected report material to the
+reviewed plan and gives the assigned child a read-only copy under
+`00-input/plan-reports/`. Relevant command receipts and captured streams travel
+with the report. A line range is a starting window into it. For a large JSON
+report, use its original path in `Read`. The child can make its own readable view.
+The receipt describes the original execution. Claims about the changed tree need
+current verification.
 
 `Files` contains exact paths only. A rejected pattern or inline explanation reports
 the actual bullet's line number, including blank lines; valid bullets stay intact.
 Replace patterns with discovered files and move scope explanations to `Notes`. Backtick-quote literal paths with spaces, commas or brackets. A bulleted task field such as `- Required checks: none` starts that field. Put local verification in the owning task’s `Verify` field.
+The model sees those instructions in `Context.plan.steps[].verify`. The stored
+plan retains them under `steps[].checks`. See [check ownership](checks.md#select-and-bind-checks).
 
 Run instructions and result artifacts (`request.md`, `plan.md`, `review.md`,
 `recovery.md`) never prove completion, even if observed. Path feedback names the
@@ -324,10 +332,7 @@ snapshots for completed work, or declare a blocking evidence gap.
 `runtime` may be followed by `: <check>`; without it the requirement text is the check.
 `all tasks` (optionally followed by a parenthesized reason) makes the requirement an
 obligation of every task; it needs at least one task and is not a completed claim.
-`Read:` lists `path:from-to` hints for the implementer's first reads; these hints are
-not evidence that the planner observed the source. A split task starts from the
-reviewed plan and its independently validated citations. Launch-snapshot read windows
-resolve to the child’s inherited snapshot at the same line numbers.
+Launch-snapshot read hints resolve to the child’s inherited snapshot.
 
 Plan syntax, dependency parsing, scopes and field diagnostics are specified in
 [task format](task-format.md). Invalid plans receive all line-specific errors before
@@ -346,31 +351,38 @@ engine. Stages record role source/hash, contract hash and request hash for UI pr
 
 ## Executor requests
 
-Executor requests replace the final result for one turn: return one complete
-GIT_REQUEST, LOCAL_REQUEST or (when advertised) ACTION_REQUEST or JENKINS_REQUEST object as the entire
-response and end the turn. They are not model function tools. The server validates
-the request, waits for any required approval, records the result and resumes the
-same opencode session in the same stage. Final schemas and evidence checks are
-unchanged. See [access](access.md) and [Git access](git-access.md).
+To request an operation, send one JSON object as the entire message. The examples
+use a declared working root for Git and local commands. SSH and Jenkins examples
+use configured aliases and appear only when the route is available. The server
+validates the request, obtains any required approval, records the result and resumes
+the same opencode session. See [access](access.md) and [Git access](git-access.md).
 
 ```json
 {"schema_version":1,"status":"LOCAL_REQUEST","cwd":"/absolute/declared/root","argv":["python3","-m","unittest"],"reason":"Run the unit tests without changing source"}
 ```
 
-Every request type is recognized the same way (`interactions/request_envelope.py`):
-exactly one JSON object whose `status` names a request, with prose or a Markdown fence
-around it ignored. Only a Git request that can change state must be the entire
-response. A local command is taken as the model meant it (`interactions/local_intake.py`):
-a missing `status` (when `argv` is given) or `schema_version` is filled in, other fields
-are dropped, `command` or `cmd` may name the command, a command string is split, or run
-with `bash -c` when it uses shell syntax, and a missing or relative `cwd` resolves
-inside the single root or the named root alias. The command policy, the sandbox and any
-approval see the resulting argv and cwd. A request that still has a wrong shape (a wrong
-version, a non-list command, a wrong status, a wrapped Git write) runs nothing: the same
-session is told what to fix, with the same progress detection as result validation. Multiple objects, duplicate
-keys and malformed JSON are not requests. `cwd` must end up a declared root or an
-existing directory inside one. Planner and reviewer stages cannot request `--fix`,
-`--write`, in-place or `sed -i` options; such a request is rejected before approval.
+Git writes require bare JSON. Local, SSH and Jenkins requests also accept a single
+Markdown fence around the entire object. A read-only Git request can include
+surrounding prose. Quoting an operation in a submission never starts it.
+Ambiguous or malformed command messages receive correction in the same session.
+This includes duplicate keys, several objects, invalid versions, conflicting
+command aliases and fields from two different executors. Corrections run no command.
+
+For an unambiguous local request, the server can infer the status and version,
+accept `command` or `cmd` for `argv`, and resolve a relative `cwd` against an
+explicit root alias or the sole declared root. A command string becomes an argument
+list or, for shell syntax, a Bash command. The effective `cwd` and `argv` go through
+the same policy and approval as the canonical form. Inspection stages reject fix
+and in-place options before approval.
+
+A provider session and final message ID identify a delivery independently of its
+contents. The server reserves that identity before dispatch and stores the reply.
+Redelivery of the same operation returns its recorded reply. If dispatch was
+interrupted before a reply was saved, the agent inspects the action journal and
+current state. A new message can request a fresh observation. Within a stage,
+successful reads of unchanged project files with eligible system commands can
+return a pointer to the earlier receipt. Linters, builds and queries of current
+external state can produce new observations.
 
 Command permissions, sandbox boundaries, approvals and source/Git checks are owned
 by [access](access.md). Remote request examples and executor setup are in
@@ -397,8 +409,8 @@ These bindings are reviewed with the plan. The engine materializes a closed
 `check_specs` record per selection: `id`, `recipe_id`, assigned runtime `criteria`,
 `phase` and empty `parameters`. Task headers may supply the same typed records.
 Tasks cannot introduce recipes, override commands or supply parameter overrides.
-Written verification remains explicit deferred work where no configured recipe is
-selected. The existing approval route still decides whether an exact
+Explicit runtime criteria without a selected recipe remain deferred when the plan
+assigns them to their delivery phase. The existing approval route still decides whether an exact
 configured request may execute; selection grants no permission. Local checks run
 after edits, Jenkins validation uses its delivery phase, and server checks require
 the operator's confirmation of the changes.

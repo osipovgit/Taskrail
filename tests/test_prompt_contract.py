@@ -231,6 +231,8 @@ class RequestBudgetTests(LiveFixture, unittest.TestCase):
     def test_capabilities_modes_and_language_modules_keep_the_same_stage_budgets(self):
         run, status, state = self.run_mode()
         self.assertEqual(status, "READY_FOR_REVIEW", state.get("summary"))
+        with self.subTest(requests="saved stage instructions"):
+            self.check_saved_requests(run)
         config = task_config.configuration(self.task, self.settings)
         plan = dict(files_read=["project/hello.py", "project/check.sh", "project/ui.js"])
         plan["proposed_change_files"] = []
@@ -287,18 +289,16 @@ class RequestBudgetTests(LiveFixture, unittest.TestCase):
                             "understanding",
                             "implementer",
                         }
-                        self.assertEqual('"status":{"const":"ACTION_REQUEST"}' in request, ssh)
+                        self.assertEqual("Example ACTION_REQUEST:" in request, ssh)
                         self.assertEqual(
-                            '"status":{"const":"JENKINS_REQUEST"}' in request,
+                            "Example JENKINS_REQUEST:" in request,
                             bool(catalog.get("jenkins")) and stage != "understanding",
                         )
 
     def check_budget(self, request, stage):
         assert_request_budget(self, request, stage, self.base)
 
-    def test_each_stage_reads_only_its_own_instructions_within_budget(self):
-        run, status, state = self.run_mode()
-        self.assertEqual(status, "READY_FOR_REVIEW", state.get("summary"))
+    def check_saved_requests(self, run):
         requests = {}
         for stage, budget in BUDGETS.items():
             request = (run / stage / "request.md").read_text()
@@ -309,6 +309,8 @@ class RequestBudgetTests(LiveFixture, unittest.TestCase):
             self.assertIsNone(STABLE_ID.search(request), stage)
             self.assertNotIn("{'", request)
             requests[stage] = request
+        self.assertNotIn("Use LOCAL_REQUEST", requests["01-understand"])
+        self.assertIn("even with an empty check_catalog", requests["03-plan-review"])
         self.assertIn("Your only writable file is the plan file", requests["02-plan"])
         self.assertIn("The planner was given these rules", requests["03-plan-review"])
         self.assertNotIn("The planner was given these rules", requests["02-plan"])
@@ -326,7 +328,7 @@ class RequestBudgetTests(LiveFixture, unittest.TestCase):
         self.assertIn("Push needs personal approval", requests["04-implement"])
         self.assertNotIn("push", requests["06-review"].split("Local commands:")[0])
         self.assertNotIn('"findings"', requests["04-implement"])
-        self.assertEqual(requests["02-plan"].count("as your entire message"), 3)
+        self.assertEqual(requests["02-plan"].count("as your entire message"), 1)
         progress = run / "progress.md"
         self.assertIn(
             f"PROGRESS FILE: {progress}", requests["04-implement"].replace("/B", str(self.base))

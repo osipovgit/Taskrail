@@ -11,13 +11,8 @@ from taskrail.git import execution, requests, source_scope
 LEDGER = "git-execution.json"
 
 
-def consume(outcome, active, state, environment):
+def consume(payload, active, state, environment):
     """Return updated fingerprints only for a completed, scope-checked Git request."""
-    if outcome["status"] != "OK":
-        return None
-    payload = requests.extract(outcome["final_text"])
-    if payload is None:
-        return None
     run = active[0].parent
     entries = requests.history(run)
     entry = dict(request=payload, stage=active[0].name, status="RUNNING")

@@ -5,7 +5,7 @@ import json
 from taskrail.application import evidence, evidence_delivery
 from taskrail.core import prompt_texts
 from taskrail.core.files import atomic_json
-from taskrail.interactions import output_digest, output_preview
+from taskrail.interactions import output_digest, output_preview, read_receipts
 
 INLINE_LIMIT = 24000
 # With full text files beside the snapshot, a shorter inline copy saves model context.
@@ -50,7 +50,7 @@ def snapshot_text(path, visible, clipped, outputs):
     return "{}\n{}\n{}".format(prompt_texts.text("output.snapshot", path=path), notice, visible)
 
 
-def local_snapshot(run, folder, request, outcome):
+def local_snapshot(run, folder, request, outcome, index=None):
     """The ledger binds a result to its exact request and immutable snapshot."""
     ledger = run / "local-execution.json"
     entries = json.loads(ledger.read_text()) if ledger.exists() else []
@@ -62,6 +62,8 @@ def local_snapshot(run, folder, request, outcome):
     atomic_json(path, entry)
     entries.append(entry)
     atomic_json(ledger, entries)
+    if index and outcome.get("status") == "SUCCEEDED":
+        read_receipts.remember(index, path)
     if entry[OUTPUTS] or path.stat().st_size > INLINE_LIMIT:
         return output_preview.render(path, outcome, entry[OUTPUTS])
     return delivered(run, folder, path, path.read_text(), entry[OUTPUTS])

@@ -10,6 +10,7 @@ from unittest.mock import patch
 from live_fixture import LiveFixture
 from sandbox_fixture import without_sandbox
 
+from taskrail.application import input_revision
 from taskrail.application.live import execute_task
 from taskrail.core import prompt_texts
 from taskrail.interactions import (
@@ -17,6 +18,7 @@ from taskrail.interactions import (
     approval_policy,
     local_intake,
     local_policy,
+    local_request,
     request_envelope,
     request_routes,
 )
@@ -26,6 +28,86 @@ ACTION = dict(targets=["web"], script="uptime\n", files={}, reason="Check", time
 
 
 class RequestEnvelopeTests(unittest.TestCase):
+    def test_submissions_may_describe_or_quote_requests_without_routing_another_operation(self):
+        router = actions.Actions.__new__(actions.Actions)
+        router.folder = Path("/run/stage")
+        example = json.dumps(dict(status="LOCAL_REQUEST", argv=["ls"]))
+        for text in (
+            "The recorded LOCAL_REQUEST confirmed there are no changes.",
+            "DONE: The previous request was " + example,
+            example + "\nDone.",
+            "Ready for server plan checks.\n" + example,
+            "**BLOCKED:** I need a decision about " + example,
+        ):
+            with self.subTest(text=text), patch.object(request_routes, "dispatch") as dispatch:
+                self.assertIsNone(router.route(dict(status="OK", final_text=text)))
+                dispatch.assert_not_called()
+
+    def test_quoted_operations_need_resubmission_while_whole_requests_can_dispatch(self):
+        local = dict(status="LOCAL_REQUEST", cwd="/r", argv=["ls"])
+        remote = dict(schema_version=1, status="ACTION_REQUEST", action=ACTION)
+        for payload in (local, remote):
+            raw = json.dumps(payload)
+            kind = payload["status"]
+            with self.subTest(kind=kind):
+                expected = request_envelope.parsed(kind, raw)
+                for envelope in (raw, f"```json\n{raw}\n```", f"```\r\n{raw}\r\n```"):
+                    self.assertEqual(request_envelope.parsed(kind, envelope), expected)
+                for narrative in (
+                    "Previously I ran " + raw + ".",
+                    raw + " was the earlier request",
+                ):
+                    with self.assertRaisesRegex(ValueError, "did not run"):
+                        request_envelope.parsed(kind, narrative)
+
+    def test_malformed_or_ambiguous_command_is_correctable_without_dispatch(self):
+        router = actions.Actions.__new__(actions.Actions)
+        router.folder = Path("/run/stage")
+        router.session = SimpleNamespace(active=(router.folder, {"stage": "planner"}))
+        git = dict(status="GIT_REQUEST", schema_version=1, root="/r", reason="Inspect")
+        malformed = (
+            '{"status": []}',
+            '{"status": "LOCEL_REQUEST"}',
+            '<tool_call>{"name":"GIT_REQUEST", "arguments":{}}</tool_call>',
+            '{"status": {}, "argv": ["ls"]}',
+            '{"status":"LOCAL_REQUEST", "argv":["ls"], "argv":["pwd"]}',
+            '{"status":"GIT_REQUEST",',
+            '{"root":"/r", "argv":["status"]}',
+            '{"status":"LOCAL_REQUEST", "argv":["pwd"], "root":"/other"}',
+            '{"cwd":"/r", "argv":["ls"], "cmd":"pwd"}',
+            '{"argv":["ls"]} {"argv":["pwd"]}',
+            "<LOCAL_REQUEST>ls</LOCAL_REQUEST>",
+            json.dumps(dict(git, argv=[])),
+            json.dumps(dict(git, argv=[{}])),
+        )
+        with (
+            patch.object(request_routes, "feedback", side_effect=lambda *args: args[-1]),
+            patch.object(request_routes, "dispatch") as dispatch,
+        ):
+            for text in malformed:
+                with self.subTest(text=text):
+                    self.assertTrue(router.route(dict(status="OK", final_text=text)))
+            dispatch.assert_not_called()
+        equivalent = '{"argv":["ls","-a"],"cmd":"ls -a"}'
+        self.assertEqual(request_envelope.parsed("LOCAL_REQUEST", equivalent)["argv"], ["ls", "-a"])
+        roots = {"a": Path("/a"), "b": Path("/b")}
+        with self.assertRaisesRegex(ValueError, "cwd"):
+            local_request.checked_request(local_intake.located(dict(argv=["pwd"]), roots), roots)
+
+    def test_only_a_top_level_revision_status_hands_control_to_task_understanding(self):
+        name = input_revision.STATUS
+        nested = json.dumps({"summary": {"status": name}})
+        for text in (
+            name + " was unnecessary.",
+            "Earlier I requested: " + json.dumps({"status": name}),
+            nested,
+            'DONE: {"status":"REINTERPRET_TASK"}',
+        ):
+            self.assertIsNone(input_revision.requested(text, {}))
+        for text in ('{"status":"REINTERPRET_TASK",', '{"status":"REINTERPRET_TASK"}'):
+            with self.assertRaises(ValueError):
+                input_revision.requested(text, {})
+
     def test_every_request_type_is_recognized_inside_prose_or_a_fence(self):
         local = dict(schema_version=1, status="LOCAL_REQUEST", cwd="/r", argv=["ls"], reason="x")
         requests = (
@@ -66,7 +148,9 @@ class InspectingStageTests(unittest.TestCase):
         valid = dict(
             schema_version=1, status="GIT_REQUEST", root="/r", argv=["status"], reason="Inspect"
         )
-        good = dict(status="OK", final_text=json.dumps(valid))
+        good = dict(
+            status="OK", final_text=json.dumps(valid), sessions=["test"], final_message_id="one"
+        )
         with patch.object(request_routes, "ROUTES", {request_envelope.GIT: lambda *_: "ran"}):
             for _ in range(MAX_STALLS):
                 self.assertIn("rejected before anything ran", request_routes.route(router, bad))
@@ -138,13 +222,12 @@ class PushApprovalTests(unittest.TestCase):
             clock = SimpleNamespace(remaining=lambda: 0)
             active = (Path(directory), dict(role="implementer"))
             router.session = SimpleNamespace(state={}, environment={}, clock=clock, active=active)
-            outcome = dict(final_text=json.dumps(push))
             declined = dict(decision="alternative", alternative="Push after my review.")
             with (
                 patch.object(actions.Actions, "approve", return_value=declined) as approve,
                 patch.object(actions.Actions, "git_action") as run,
             ):
-                feedback = request_routes.run_git(router, outcome, push)
+                feedback = request_routes.run_git(router, push)
             self.assertIn("nothing was pushed: Push after my review.", feedback)
             self.assertTrue(approve.call_args.kwargs["personal"])
             run.assert_not_called()
@@ -152,8 +235,8 @@ class PushApprovalTests(unittest.TestCase):
                 patch.object(actions.Actions, "approve", return_value=dict(decision="allow")),
                 patch.object(actions.Actions, "git_action", return_value="pushed") as run,
             ):
-                self.assertEqual(request_routes.run_git(router, outcome, push), "pushed")
-            run.assert_called_once_with(outcome)
+                self.assertEqual(request_routes.run_git(router, push), "pushed")
+            run.assert_called_once_with(push)
 
 
 class LiveRequestTests(LiveFixture, unittest.TestCase):
@@ -203,6 +286,59 @@ class LiveRequestTests(LiveFixture, unittest.TestCase):
             str(Path(state["roots"]["project"]) / "notes.txt"),
             report.split("## Changed by approved")[1],
         )
+
+
+class UnderstandingStageTests(unittest.TestCase):
+    def test_unadvertised_requests_return_to_the_interpreter_without_dispatch(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            folder = Path(temporary)
+            session = SimpleNamespace(
+                context={},
+                active=(folder, {"stage": "understanding"}),
+                environment=dict(run=folder, expected={}),
+                launch={},
+            )
+            router = actions.Actions(session)
+            requests = (
+                dict(
+                    schema_version=1,
+                    status="GIT_REQUEST",
+                    root="/r",
+                    argv=["status"],
+                    reason="Inspect",
+                ),
+                dict(
+                    schema_version=1,
+                    status="LOCAL_REQUEST",
+                    cwd="/r",
+                    argv=["ls"],
+                    reason="Inspect",
+                ),
+                dict(schema_version=1, status="ACTION_REQUEST", action=ACTION),
+                dict(
+                    schema_version=1,
+                    status="JENKINS_REQUEST",
+                    jenkins=dict(
+                        operation="status",
+                        server="ci",
+                        job="tests",
+                        build="last",
+                        parameters={},
+                        timeout_seconds=30,
+                        reason="Inspect",
+                    ),
+                ),
+                {"cwd": ".", "argv": ["ls"]},
+            )
+            with patch.object(request_routes, "ROUTES", {}):
+                for request in requests:
+                    with self.subTest(request=request):
+                        message = router.route(dict(status="OK", final_text=json.dumps(request)))
+                        self.assertIn("understanding.json", message)
+                        self.assertNotIn("corrected request", message)
+                markup = router.route(dict(status="OK", final_text="<GIT_REQUEST>status"))
+                self.assertIn("understanding.json", markup)
+                self.assertIsNone(router.route(dict(status="OK", final_text="DONE")))
 
 
 if __name__ == "__main__":

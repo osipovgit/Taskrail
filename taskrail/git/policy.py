@@ -4,7 +4,7 @@ import re
 from types import MappingProxyType
 
 from taskrail.core import prompt_texts
-from taskrail.core.schema import require
+from taskrail.core.schema import require, valid_argv
 
 READ_FLAGS = MappingProxyType(
     {
@@ -31,11 +31,7 @@ PRETTY_FLAGS = frozenset(("--format", "--pretty"))
 
 def validate(argv, role, config=None):
     """No aliases, global options, shell strings, abbreviations or unknown commands."""
-    require(isinstance(argv, list) and bool(argv), "Git argv must be a nonempty list")
-    require(
-        all(isinstance(arg, str) and arg and "\x00" not in arg for arg in argv),
-        "Invalid Git argument",
-    )
+    require(valid_argv(argv), "Invalid Git argument list")
     command = argv[0]
     if command in READ_FLAGS:
         read_arguments(argv)

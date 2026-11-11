@@ -18,8 +18,8 @@ bash deploy/install.sh --wait=3600 --autostart=keep
 ```
 
 Interactive installation asks about startup at login only when `--autostart` is
-omitted (and boot startup was not requested). Explicit `--autostart=keep` never
-prompts, including in a terminal. Unattended installs need
+omitted (and boot startup was not requested). Explicit `--autostart=keep` skips the startup question. Interactive updates may
+also offer to archive unsupported runs. Unattended installs need
 `--autostart=yes` to enable it; `keep` preserves an existing choice. The service
 starts immediately either way. Boot startup without login is explicit:
 
@@ -47,6 +47,17 @@ the installer retains the current and previous successful release and any older 
 explicitly used by `agent_source`. Older successful releases are pruned only when they
 carry this installer's exact success marker; legacy or unrecognized directories remain
 for manual inspection. A failed startup keeps the switched release for diagnosis.
+
+### Foreground installation
+
+For a local session without systemd, install from the checkout or extracted release:
+
+```sh
+pipx install .
+taskrail init
+taskrail check
+taskrail serve
+```
 
 ## Run on a remote server
 
@@ -87,7 +98,7 @@ Root approval of SSH actions happens in a terminal on the server.
 Sources remain in their declared roots. The application does not copy entire
 projects. `run_base` may override history storage; relative paths resolve from the
 settings directory. Settings precedence: explicit CLI path, `TASKRAIL_SETTINGS`, installed
-user settings, source defaults. See [budgets](monitoring.md) for timeout controls.
+user settings, source defaults. See [recovery settings](monitoring.md#recovery-settings) for stage timeouts.
 
 To switch from imported custom roles to the maintained bundled roles:
 
@@ -178,8 +189,8 @@ models (a missing `default` is `94208`):
 
 Each stage uses the window of its role's model from `models`. Keep each window no
 higher than the model's real context window. `context_reserve_tokens` (default `8192`)
-must be positive and smaller than every window. A session ends at the window minus
-the reserve, kept between 90 and 95 percent of the window. Keep the provider's own
+must be positive and smaller than every window. The handoff boundary is the window minus the reserve, constrained to 90–95%
+of the model window. Keep the provider's own
 model limits accurate.
 
 The server records request, frozen role and attachment sizes in bytes
@@ -255,10 +266,9 @@ scan:
 }
 ```
 
-Settings define the exact argv; task files, imported drafts and models cannot add
-commands. Execution follows the [local command policy](access.md#local-commands):
-sandboxed commands run at once; commands outside the sandbox require personal
-approval per command or the operator's Allow all actions for the run. A command
+Settings own the exact commands in this list. Agents can also request task-specific
+diagnostics through `LOCAL_REQUEST`. Both routes follow the
+[local command policy](access.md#local-commands). A verification command
 runs only for runs whose declared roots include its `cwd`; in a
 [worktree-isolated](task-format.md#worktree-isolation) run it runs in that root's worktree. It runs without a shell,
 as the service user, with the filtered environment and the local command policy (no

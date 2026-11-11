@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from taskrail.application import citation_delivery, executor_streams, source_views
+from taskrail.application import citation_delivery, evidence_scope, executor_streams, source_views
 from taskrail.core import citation_errors, prompt_texts, source_claims
 
 ERROR_LIMIT = 5
@@ -61,6 +61,8 @@ def checked(claim, records, context):
     path = Path(claim["path"])
     derived = source_views.directory(run) in path.parents
     provenance = source_views.validate(run, path, context["roots"]) if derived else None
+    if provenance:
+        evidence_scope.verify_dependencies(context, [dict(path=provenance["source_path"])])
     proof = source_claims.validate_claim(claim, records)
     if provenance:
         proof["source_view"] = provenance

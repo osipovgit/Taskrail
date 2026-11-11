@@ -366,7 +366,7 @@ class InteractionTests(unittest.TestCase):
                     now = [100.0]
                     calls = []
 
-                    def invoke(options, *, calls=calls, now=now):
+                    def invoke(options, *, calls=calls, now=now, stage=folder.name):
                         calls.append(options)
                         now[0] += 2
                         text = json.dumps(self.request([sys.executable, "--version"]))
@@ -374,10 +374,9 @@ class InteractionTests(unittest.TestCase):
                             status="OK",
                             completed=True,
                             sessions=["same-session"],
+                            final_message_id=f"{stage}-{len(calls)}",
                             tokens=dict(total=5),
-                            final_text=("Now let me run ansible-lint.\n\n" + text)
-                            if len(calls) == 1
-                            else "{}",
+                            final_text=f"```json\n{text}\n```" if len(calls) == 1 else "{}",
                         )
 
                     def decide(*_args, now=now, decision=decision):
@@ -451,10 +450,15 @@ class InteractionTests(unittest.TestCase):
                 requests = []
                 installed_now = [False]
 
-                def invoke(_options, *, responses=responses):
+                def invoke(_options, *, responses=responses, stage=folder.name):
                     text = responses.pop(0)
                     return dict(
-                        status="OK", completed=True, sessions=["same"], tokens={}, final_text=text
+                        status="OK",
+                        completed=True,
+                        sessions=["same"],
+                        tokens={},
+                        final_text=text,
+                        final_message_id=f"{stage}-{len(responses)}",
                     )
 
                 def decide(

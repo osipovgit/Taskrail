@@ -9,22 +9,22 @@ import re
 from taskrail.core import prompt_texts
 
 SPAN = r"(\d+)(?:\s*-\s*(\d+))?"
-CITATION = re.compile(rf"(?:`([^`\n]+):{SPAN}`|`([^`\n]+)`:{SPAN}|([^`\s,;()]+):{SPAN})")
+CITATION = re.compile(rf"(?:`([^`\n]+)`:{SPAN}|`([^`\n]+):{SPAN}`|([^`\s,;()]+):{SPAN})")
 RANGE = re.compile(rf"{SPAN}(?=\s*(?:[,;().]|$))")
 SEPARATOR = re.compile(r"\s*([,;])\s*")
 
 
-def parts(text, explanation=True):
+def parts(text, explanation=True, syntax=CITATION):
     """Keep every explicit citation and explanation, including notes between citations."""
-    found, remaining = citation(text.strip(), explanation)
+    found, remaining = citation(text.strip(), syntax)
     details = []
-    while remaining.strip():
+    while remaining.strip() and not (explanation and remaining.strip() == "."):
         note = explanation_prefix(remaining.removeprefix(",")) if explanation else None
         if note is not None:
             details.append(note[0])
             remaining = note[1]
             continue
-        entries, remaining = following(remaining, found[-1][0])
+        entries, remaining = following(remaining, found[-1][0], syntax)
         found.extend(entries)
     return found, "; ".join(filter(None, details))
 
@@ -51,7 +51,7 @@ def explanation_prefix(text):
     return None
 
 
-def following(text, previous):
+def following(text, previous, syntax):
     """A separator introduces a complete path citation or another range of that path."""
     separator = SEPARATOR.match(text)
     if separator is None:
@@ -61,37 +61,18 @@ def following(text, previous):
     if shorthand:
         span = (previous, *shorthand.groups())
         return [span], remaining[shorthand.end() :]
-    return citation(remaining)
+    return citation(remaining, syntax)
 
 
-def citation(text, sentence_period=False):
-    """Read one complete citation, including paths with spaces when backtick-quoted."""
-    if sentence_period:
-        text = text.removesuffix(".")
+def citation(text, syntax):
+    """Only the future-read grammar permits a file without an evidence span."""
     text = re.sub(r"^` ([^`\n]+) `", r"`\1`", text)
-    match = CITATION.match(text)
+    match = syntax.match(text)
     if match is None:
         raise ValueError(prompt_texts.diagnostic("validation.plan_citations"))
     groups = match.groups()
-    span = groups[:3]
-    if not span[0]:
-        span = groups[3:6]
-    if not span[0]:
-        span = groups[6:]
-    return [span], text[match.end() :]
-
-
-def read_windows(entry, roots, resolve):
-    """Read hints allow the same trailing explanations as evidence citations."""
-    matches, explanation = parts(entry)
-    return [window(span, roots, resolve) for span in matches], explanation
-
-
-def window(span, roots, resolve):
-    """One absolute inclusive future read range."""
-    name, start, end = span
-    last = end or start
-    if not 0 < int(start) <= int(last):
-        raise ValueError("Invalid source line range")
-    path = resolve(name, roots)
-    return f"{path}:{start}-{last}"
+    tail = text[match.end() :]
+    for index in (0, 3, 6):
+        if groups[index]:
+            return [groups[index : index + 3]], tail
+    return [(match[0].strip("`"), None, None)], tail

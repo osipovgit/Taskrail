@@ -534,7 +534,10 @@ class RealStreamTests(unittest.TestCase):
                 self.fail(f"No recorded read for {path}")
 
     def test_opencode_1_plan_stream_parses_without_translation(self):
-        result = parse_events(FIXTURES / "opencode-1.19.3-plan.jsonl")
+        recording = FIXTURES / "opencode-1.19.3-plan.jsonl"
+        result = parse_events(recording)
+        last = json.loads(recording.read_text().splitlines()[-1])
+        self.assertEqual(result["final_message_id"], last["part"]["messageID"])
         self.assertTrue(result["completed"])
         self.assertEqual((result["tool_calls"], result["errors"]), (2, []))
         self.assertGreater(result["tokens"]["total"], 0)
@@ -552,6 +555,7 @@ class RealStreamTests(unittest.TestCase):
             reads = [json.loads(line)["part"] for line in lines if '"tool": "read"' in line]
         self.assertTrue(result["completed"])
         self.assertEqual((result["tool_calls"], result["errors"]), (5, []))
+        self.assertEqual(result["final_message_id"], json.loads(raw[-1])["part"]["messageID"])
         self.assertGreater(result["tokens"]["total"], 0)
         self.assertIn("PLAN_READY", result["final_text"])
         self.assertTrue(all(part["state"]["input"]["filePath"].startswith("/") for part in reads))

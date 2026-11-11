@@ -228,6 +228,11 @@
                 "minLength": 1
               }
             },
+            "plan_reports_sha256": {
+              "type": "string",
+              "minLength": 64,
+              "maxLength": 64
+            },
             "read": {
               "type": "array",
               "items": {

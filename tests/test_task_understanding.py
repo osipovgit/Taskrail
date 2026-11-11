@@ -6,7 +6,7 @@ import unittest
 
 from live_fixture import LiveFixture
 
-from taskrail.core import requirements, task_lineage, task_spec, task_understanding
+from taskrail.core import prompt_texts, requirements, task_lineage, task_spec, task_understanding
 
 NARRATIVE = (
     "Сервис написан на Java, раньше он использовал Redis. "
@@ -93,6 +93,17 @@ class TaskUnderstandingTests(unittest.TestCase):
         )
         with self.assertRaisesRegex(ValueError, "global constraints"):
             self.resolve(payload)
+
+    def test_understanding_prompt_example_resolves_to_the_quoted_constraint(self):
+        instruction = prompt_texts.text("understanding.format", path="understanding.json")
+        example, _ = json.JSONDecoder().raw_decode(instruction.partition("Example: ")[2])
+        original = "Keep the public API unchanged."
+        spec = dict(fields=[dict(name="constraints", text=original)], requirements=[])
+        (requirement,) = task_understanding.resolve(example, spec)["requirements"]
+        self.assertEqual(requirement["kind"], "constraint")
+        self.assertEqual(
+            requirement["sources"], [dict(field="constraints", start=0, end=len(original))]
+        )
 
     def test_requests_in_current_behavior_are_valid_input_sources(self):
         payload = interpreted()

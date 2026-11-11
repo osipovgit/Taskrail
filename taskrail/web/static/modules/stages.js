@@ -37,8 +37,8 @@ export function renderPlan(parent, steps, requirements) {
       step.criteria?.map((id) => requirementLine(id, named)),
     );
     list(box, 'Dependencies', step.depends_on);
-    list(box, 'Checks', step.checks);
-    list(box, 'Required checks', step.required_checks);
+    list(box, 'Verify', step.checks);
+    list(box, 'Required check recipes', step.required_checks);
     list(box, 'Not ToDo', step.not_todo);
     parent.append(box);
   }

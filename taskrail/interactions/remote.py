@@ -10,11 +10,8 @@ from taskrail.interactions import remote_inspection
 from taskrail.interactions.clock import ApprovalPause
 
 
-def consume(session, text):
+def consume(session, action):
     """Remote tickets retain their separate timeout and privileged approval authority."""
-    action = execution_requests.extract(text)
-    if action is None:
-        return None
     run = session.environment["run"]
     config = session.environment.get("config", {})
     mode = execution_requests.remote_mode(run, config, session.active[1]["role"])

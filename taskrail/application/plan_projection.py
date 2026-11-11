@@ -3,8 +3,8 @@
 from taskrail.core.paths import tool_paths
 
 PLAN_FIELDS = ("decision", "summary", "proposed_change_files", "unverified")
-# The plan line is for problem messages; the action repeats the title and results.
-HIDDEN_STEP_FIELDS = frozenset(("line", "action"))
+# Parser locations, storage seals and the derived action have no role in the request.
+HIDDEN_STEP_FIELDS = frozenset(("line", "action", "plan_reports_sha256"))
 EMPTY = (None, "", [], {})
 
 
@@ -37,6 +37,8 @@ def labelled_criteria(entry, named):
 def step_context(step, named):
     """A task as its implementer reads it: requirement labels, no plan line or empty fields."""
     shown = {key: entry for key, entry in step.items() if key not in HIDDEN_STEP_FIELDS}
+    if "checks" in shown:
+        shown["verify"] = shown.pop("checks")
     criteria = step.get("criteria", [])
     shown["criteria"] = [named.get(name, name) for name in criteria]
     scopes = step.get("scopes", [])

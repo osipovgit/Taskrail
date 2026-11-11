@@ -1,25 +1,29 @@
 """Read bounded, explicit source entry points without asking a model to fetch them."""
 
-import re
+from itertools import islice
 from pathlib import Path
 
-from taskrail.application import evidence, project_files
-from taskrail.core import protected_paths
+from taskrail.application import project_files
+from taskrail.core import protected_paths, read_hints
+from taskrail.core.files import bounded_bytes, digest
 from taskrail.core.paths import tool_paths
 
-REFERENCE = re.compile(r"(.+?)(?::([1-9]\d*)(?:-([1-9]\d*))?)?")
 WINDOW_LINES = 40
 WINDOW_LIMIT = 40
 
 
-def requests(config, plan):
+def requests(config, plan, extra=()):
     """Prefer approved citation windows, then exact entry points and changed paths."""
     chosen = plan or {}
     cited = [
         "{path}:{line_start}-{line_end}".format(**claim) for claim in chosen.get("evidence", [])
     ]
-    explicit = entry_points(config.get("task_spec", {}))
-    return (cited + explicit + chosen.get("proposed_change_files", []))[:WINDOW_LIMIT]
+    for step in chosen.get("steps", []):
+        cited.extend(step.get("read", []))
+    cited.extend(entry_points(config.get("task_spec", {})))
+    cited.extend(chosen.get("proposed_change_files", []))
+    eligible = read_hints.scoped(dict.fromkeys(cited), config["roots"], extra)
+    return islice(eligible, WINDOW_LIMIT)
 
 
 def entry_points(spec):
@@ -33,14 +37,13 @@ def entry_points(spec):
 def observations(config, plan):
     """Ignore ambiguous or unavailable hints; normal model reads remain available."""
     scope = (config["roots"], protected_paths.patterns(config))
-    references = dict.fromkeys(requests(config, plan))
-    records = [observe(reference, *scope) for reference in references]
+    records = [observe(reference, *scope) for reference in requests(config, plan)]
     return [record for record in records if record is not None]
 
 
 def observe(reference, roots, protected):
     """Resolve one optional bounded line range within declared roots."""
-    match = REFERENCE.fullmatch(tool_paths(reference, roots))
+    match = read_hints.REFERENCE.fullmatch(tool_paths(reference, roots))
     if match is None:
         return None
     start = int(match[2] or 1)
@@ -68,21 +71,17 @@ def permitted(path, protected=protected_paths.DEFAULT_PATTERNS):
 
 def read_window(path, start, end):
     """A current exact text window; large, binary and invalid UTF-8 files stay unread."""
-    if path is None or not path.is_file():
-        return None
-    if path.stat().st_size > project_files.MAX_BYTES:
+    raw = bounded_bytes(path, project_files.MAX_BYTES)
+    if raw is None or b"\x00" in raw or end < start:
         return None
     try:
-        text = path.read_text(encoding="utf-8")
-    except (OSError, UnicodeError):
-        return None
-    if "\x00" in text or end < start:
+        text = raw.decode("utf-8")
+    except UnicodeError:
         return None
     selected = enumerate(text.splitlines()[start - 1 : end], start)
-    output = "\n".join(f"{number}: {line}" for number, line in selected)
     return dict(
         tool="source_packet",
         input=dict(filePath=str(path), offset=start),
-        output=output,
-        source_sha256=evidence.fingerprint(path),
+        output="\n".join(f"{number}: {line}" for number, line in selected),
+        source_sha256=digest(raw),
     )

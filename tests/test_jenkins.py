@@ -141,6 +141,9 @@ class JenkinsTest(unittest.TestCase):
         self.assertEqual(jenkins_schema.validate(copy.deepcopy(READ), self.servers), READ)
         jenkins_schema.validate(copy.deepcopy(BUILD), self.servers)
         for change in (
+            dict(server=[]),
+            dict(job={}),
+            dict(operation=[]),
             dict(job="unknown"),
             dict(operation="delete"),
             dict(build=True),
@@ -261,27 +264,30 @@ class JenkinsTest(unittest.TestCase):
             dict(status="SUCCEEDED", build={}),
         ]
         with patch.object(client, "request", side_effect=answers) as request:
-            response = jenkins.consume(actions, json.dumps(envelope))
+            response = jenkins.consume(actions, envelope)
         self.assertEqual(decisions[0]["jenkins"], READ)
         self.assertEqual(request.call_args.args[0]["operation"], "jenkins-read")
         self.assertIn("00-input/local", response)
-        self.assertIsNone(jenkins.consume(actions, '{"status": "PLAN_READY"}'))
         bad = dict(envelope, jenkins=dict(READ, job="unknown"))
         with patch.object(client, "request", return_value=answers[0]):
-            self.assertIn("rejected", jenkins.consume(actions, json.dumps(bad)))
+            self.assertIn("rejected", jenkins.consume(actions, bad))
         envelope["jenkins"] = BUILD
         with (
             patch.object(client, "request", return_value=answers[0]),
             patch.object(execution_wait, "resume", return_value="built") as resume,
             patch("taskrail.interactions.jenkins.ApprovalPause"),
         ):
-            self.assertEqual(jenkins.consume(actions, json.dumps(envelope)), "built")
+            self.assertEqual(jenkins.consume(actions, envelope), "built")
         resume.assert_called_once()
         self.assertEqual(execution_wait.read(run)[0]["request"]["jenkins"], BUILD)
 
     def test_instructions_appear_only_when_jenkins_is_configured(self):
         self.assertEqual(jenkins_requests.instructions({}), "")
         text = jenkins_requests.instructions(jenkins_config.public(self.servers))
-        self.assertIn("JENKINS_REQUEST", text)
-        self.assertIn("shop-tests", text)
+        example = text.split("Example JENKINS_REQUEST: ", 1)[1]
+        payload = jenkins_requests.extract(example)
+        read = jenkins_schema.validate(payload["jenkins"], self.servers)
+        self.assertEqual(
+            (read["server"], read["job"], read["operation"]), ("ci", "shop-tests", "status")
+        )
         self.assertNotIn("REPLACE_WITH_JENKINS_API_TOKEN", text)

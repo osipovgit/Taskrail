@@ -42,7 +42,7 @@ Any other `#` or `##` heading, a repeated section, and text outside the sections
 **More details** also holds current behavior and errors, known entry points,
 additional constraints, and deferred verification (one check per line). Task input may
 use the user's language; generated explanations, instructions and section labels are
-English. The planner normally discovers related files and exact edits; no
+English. The planner discovers likely change files and the implementer determines the edits; no
 implementation plan or exhaustive file list is needed.
 
 Example goal: "Rebuild the API image without Docker layer cache for every local
@@ -82,7 +82,7 @@ the agents' input.
 | `phase` | Server-generated for delivery runs (`task`, `integration`, `correction`, `validation`, `server`); do not set it by hand |
 | `task_scope` | Required for server-generated `task` phases: exact reviewed file paths; child planning cannot widen them or create another split |
 | `design` | `true` for a design discussion (the browser's **Design discussion**); implies `read_only` |
-| `auto_approve` | `true` approves local commands and read access of this run without asking (the browser's **Allow all actions**); SSH keeps its root-only approval |
+| `auto_approve` | `true` approves local command decisions for this run (the browser's **Allow all actions**); SSH keeps its root-only approval |
 | `task_spec` | Generated typed input: version 1, literal named fields, a display integrity reference and optional child context/requirement lineage; do not edit only its Markdown display |
 | `assigned_contract` | Generated child reference (`parent_run`, `task_id`); the workflow authenticates it against the sealed reviewed parent before skipping child planning |
 | `check_specs` | Selected server recipe IDs and runtime criterion IDs; commands and approval policy remain server-owned |
@@ -125,17 +125,13 @@ names it in its summary. A necessary additional file is allowed on an owned task
 gates run before that task can finish and again on the combined integration result.
 Unknown recipes, remote recipes and model-authored commands are rejected. `Verify`
 remains human-readable verification guidance and never authorizes arbitrary commands.
-Optional `## Check selections` lines have the form `recipe-id: R2, R4`; only advertised
-recipes and runtime requirements are accepted. This selects existing server actions,
-not model-authored commands. A write-before-read rejection for this exact plan file
-gets bounded same-session feedback to read it; source writers are never retried by
-this correction.
+Optional `## Check selections` lines bind an advertised recipe to runtime criteria
+as `recipe-id: R2, R4`. For ordinary local commands in `Verify`, the executor
+checks each request when the agent submits it. See [verification](checks.md).
 
-A native exact-match edit failure changes nothing. For the same approved file and
-session, an actual read remains usable across repeated no-match edits until a
-successful write. A later successful write before the final response resolves those
-failures as warnings; missing writes, unknown errors and permission denials still
-block. A completed mutation invalidates the earlier read for any later failure.
+Native tool errors return to the agent in the same session. It can inspect the
+current file and correct an edit. The server validates the saved result and its evidence
+after the turn. See [recovery and tool errors](contracts.md).
 
 ## Worktree isolation
 
@@ -216,12 +212,9 @@ An authenticated isolated task is a unit of change rather than a list of files:
   [automatic commits](git-access.md#automatic-task-commits). The next task starts
   only after successful finalization.
 
-Without approval, automatic finalization leaves changes uncommitted. Explicit
-task-requested Git operations can already have created commits before review;
-those commits are preserved, never squashed or rolled back automatically. You
-review and merge each branch and finally `git worktree remove` it yourself. A browser
-follow-up starts in new worktrees with the prior result; a standalone restart starts
-from the original source checkouts in new worktrees. Restarting a reviewed split child keeps the
+Review and merge each task branch when ready, then remove its linked worktree with
+`git worktree remove`. A Follow-up starts in new worktrees with the prior result.
+A standalone restart starts from the original source checkouts in new worktrees. Restarting a reviewed split child keeps the
 parent's effective roots, including its existing worktrees.
 
 ## Execution boundaries
@@ -232,13 +225,14 @@ back automatically. It runs built-in syntax checks, the operator's
 [verification commands](deployment.md#verification-commands) and static review.
 Agents run project tests and linters through `LOCAL_REQUEST`, without a decision in
 the [local command sandbox](access.md#local-commands) where the host has one.
-Commands outside it, containers, deployments and CI run only after your approval,
-SSH and Jenkins through the executor; otherwise they remain deferred. A
+Host execution follows `host_commands`. Remote operations use the
+[SSH and Jenkins executor](ssh-executor.md) and its approval rules. A
 no-change result requires independent plan review and sufficient evidence.
 
-An answer-only task rejects any implementation plan and never reaches the
-implementer, even with an imported plan. The answer appears in the planner
-conclusion and is independently reviewed.
+Answer-only and design tasks start with a requirements list and an `## Answer`
+section. Use `Decision: no change` for a supported answer or `Decision: blocked`
+with a precise gap when required input is missing. Both go through independent
+review. These modes never start implementation, even with an imported plan.
 
 Each submission creates a separate run. After a run stops, a new Goal starts another
 complete planning pass with explicit prior evidence; it never messages an in-flight

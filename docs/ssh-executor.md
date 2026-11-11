@@ -112,8 +112,7 @@ Once approved, targets execute sequentially. On the first failure, remaining tar
 are not executed. Results return to the same stage, which may request a separate
 verification action or finish its report. Each additional action needs approval.
 Continuation turns remain inside one stage and session; waiting itself does
-not consume model tokens. This executor adds controlled **remote** execution; local
-commands use the separate `LOCAL_REQUEST` approval in the UI.
+not consume model tokens. Local commands use the separate [local command policy](access.md#local-commands).
 
 ## Jenkins
 
