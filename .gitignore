@@ -9,3 +9,4 @@ node_modules/
 .upgrade-backup/
 .idea/
 tmp/
+/local/

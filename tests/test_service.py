@@ -342,6 +342,66 @@ class ServiceTests(unittest.TestCase):
         self.assertEqual(options["command"][0], str(self.deployment.binaries / "opencode"))
         self.assertTrue((app / "current/venv/bin/python").is_file())
 
+    def test_force_update_rebuilds_only_managed_runtime_after_the_workflow_lock_is_free(self):
+        initial = self.installer(str(self.settings), "--autostart=no")
+        self.assertEqual(initial.returncode, 0, initial.stderr)
+        app = self.home / ".local/share/taskrail"
+        state = self.home / ".local/state/taskrail"
+        config = self.home / ".config/taskrail"
+        release = (app / "current").resolve()
+        settings = config / "settings.json"
+        installed = json.loads(settings.read_text())
+        installed.update(agent_directory="profiles", run_base="runs")
+        settings.write_text(json.dumps(installed))
+        run = config / "runs/completed"
+        run.mkdir(parents=True)
+        (run / "run.json").write_text(json.dumps(current_run(dict(roots={"p": str(self.repo)}))))
+        worktree = self.home / ".local/share/taskrail-worktrees/task/project"
+        worktree.mkdir(parents=True)
+        (worktree / "pending.txt").write_text("pending edit")
+        executor = self.deployment.system / "opt/taskrail-executor"
+        executor.mkdir(parents=True)
+        (executor / "approval").write_text("pending decision")
+        profile = config / "profiles/taskrail-test.md"
+        profile.parent.mkdir()
+        profile.write_text("Managed Taskrail workflow")
+        credentials = self.home / ".config/opencode/auth.json"
+        credentials.parent.mkdir(parents=True)
+        credentials.write_text("test credential")
+        retained = (
+            config / "service.env",
+            config / "agents/planner.md",
+            credentials,
+            worktree / "pending.txt",
+            executor / "approval",
+            self.repo / "hello.py",
+        )
+        original = [path.read_bytes() for path in retained]
+        log = self.home / "privilege.log"
+        log.write_text("")
+        with (state / "live.lock").open("a") as lock:
+            fcntl.flock(lock, fcntl.LOCK_SH)
+            blocked = self.installer("--force-update")
+            self.assertNotEqual(blocked.returncode, 0)
+            self.assertTrue(run.is_dir())
+            self.assertTrue(release.is_dir())
+            self.assertIn("--user stop taskrail.service", log.read_text())
+            self.assertIn("--user start taskrail.service", log.read_text())
+        supplied = self.home / "replacement.json"
+        supplied.write_text(json.dumps(dict(installed, timeout_seconds=19)))
+        result = self.installer(str(supplied), "--force-update", "--opencode=opencode")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertTrue((app / "current/venv/bin/python").is_file())
+        self.assertEqual(list(run.parent.iterdir()), [])
+        self.assertFalse(release.exists())
+        self.assertFalse(profile.exists())
+        self.assertEqual([path.read_bytes() for path in retained], original)
+        self.assertNotIn("sudo", log.read_text())
+        selected = json.loads(settings.read_text())
+        self.assertEqual(selected["command"], [str(self.deployment.binaries / "opencode")])
+        self.assertEqual(selected["timeout_seconds"], 19)
+        self.assertEqual(selected["run_base"], "runs")
+
     def test_fresh_refuses_a_mixed_custom_history_before_deletion(self):
         binaries = self.home / "bin"
         binaries.mkdir()

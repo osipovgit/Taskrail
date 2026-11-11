@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 # Sourced by install.sh; preserve service enablement on unattended updates.
 fresh=no
+force_update=no
+apply_settings=no
+opencode_path=
 autostart=keep
 autostart_explicit=no
 agent_mode=keep
@@ -10,6 +13,9 @@ initial_settings=
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --fresh) fresh=yes ;;
+        --force-update) force_update=yes ;;
+        --apply-settings) apply_settings=yes ;;
+        --opencode=?*) opencode_path=${1#*=} ;;
         --autostart=yes | --autostart=no | --autostart=keep)
             autostart=${1#*=}
             autostart_explicit=yes
@@ -28,7 +34,7 @@ while [[ $# -gt 0 ]]; do
             }
             ;;
         --help)
-            echo 'Usage: bash deploy/install.sh [settings.json] [--fresh] [--autostart=yes|no|keep] [--agents=keep|bundled] [--boot=yes|no] [--wait=SECONDS]'
+            echo 'Usage: bash deploy/install.sh [settings.json] [--apply-settings] [--opencode=PATH] [--force-update|--fresh] [--autostart=yes|no|keep] [--agents=keep|bundled] [--boot=yes|no] [--wait=SECONDS]'
             exit 0
             ;;
         --*)
@@ -45,6 +51,15 @@ while [[ $# -gt 0 ]]; do
     esac
     shift
 done
+if [[ "$force_update" == yes && -n "$initial_settings" ]]; then apply_settings=yes; fi
+if [[ "$apply_settings" == yes && -z "$initial_settings" ]]; then
+    echo '--apply-settings requires a settings file' >&2
+    exit 2
+fi
+if [[ "$fresh" == yes && "$force_update" == yes ]]; then
+    echo 'Choose either --fresh or --force-update' >&2
+    exit 2
+fi
 if [[ "$autostart_explicit" == no && "$boot" == no && -t 0 ]]; then
     read -r -p 'Start Taskrail automatically at login? [y/n/Enter=keep current setting] ' answer
     case "$answer" in

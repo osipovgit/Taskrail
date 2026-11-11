@@ -1,33 +1,52 @@
 #!/usr/bin/env bash
-# Sourced with the installer and workflow locks held. Never infer project ownership.
-[[ "$fresh" == yes ]] || return 0
-if [[ "$autostart" == keep ]]; then
-    if systemctl --user is-enabled --quiet "$service"; then autostart=yes; else autostart=no; fi
-fi
-fresh_reset() {
-    run_module taskrail.deployment.fresh "$1" "$source_dir" "$initial_settings"
+# Switch only after validating the incoming release and draining the managed service.
+reset_state() {
+    run_module taskrail.deployment.fresh "$1" "$source_dir" "$initial_settings" "${reset_options[@]}"
 }
-# Validate the complete deletion set before stopping or deleting anything.
-fresh_reset check
+reset_options=()
 executor_reset=no
-if [[ -e /etc/systemd/system/taskrail-executor.service || -d /opt/taskrail-executor ]]; then
-    executor_reset=yes
-    sudo -v
-    sudo bash "$source_dir/deploy/reset-executor.sh" --replacement="$source_dir" --check
+service_was_active=no
+if [[ "$force_update" == yes ]]; then
+    reset_options+=(--keep-config "$staging/config/settings.json")
+    if systemctl --user is-active --quiet "$service"; then service_was_active=yes; fi
 fi
-systemctl --user stop "$service" 2>/dev/null || {
-    if systemctl --user is-active --quiet "$service"; then
-        echo 'Cannot stop service; reset aborted' >&2
+if [[ "$fresh" == yes || "$force_update" == yes ]]; then
+    reset_state check
+fi
+if [[ "$fresh" == yes ]]; then
+    if [[ "$autostart" == keep ]]; then
+        if systemctl --user is-enabled --quiet "$service"; then autostart=yes; else autostart=no; fi
+    fi
+    if [[ -e /etc/systemd/system/taskrail-executor.service || -d /opt/taskrail-executor ]]; then
+        executor_reset=yes
+        sudo -v
+        sudo bash "$source_dir/deploy/reset-executor.sh" --replacement="$source_dir" --check
+    fi
+fi
+if ! systemctl --user stop "$service"; then
+    # A first install may not have a unit. A failure to stop a loaded unit is fatal.
+    if [[ $(systemctl --user show "$service" --property=LoadState --value) != not-found ]]; then
+        echo 'Could not stop the service; release was not switched' >&2
         exit 1
     fi
-}
-# No deletion occurs until both services have stopped successfully. Executor reset
-# performs its own journal and stop checks before deleting any executor files.
+fi
+if [[ "$force_update" == yes ]] && ! lock_workflows; then
+    # A standalone task still holds the lock. Restore the previous managed service.
+    if [[ "$service_was_active" == yes ]]; then systemctl --user start "$service"; fi
+    exit 1
+fi
 if [[ "$executor_reset" == yes ]]; then
     sudo bash "$source_dir/deploy/reset-executor.sh" --replacement="$source_dir"
 fi
-systemctl --user disable "$service" 2>/dev/null || true
-fresh_reset remove
-systemctl --user daemon-reload
-systemctl --user reset-failed "$service" 2>/dev/null || true
-mkdir -p "$app_dir/releases" "$config_dir"
+if [[ "$fresh" == yes ]]; then
+    systemctl --user disable "$service" 2>/dev/null || true
+fi
+if [[ "$fresh" == yes || "$force_update" == yes ]]; then
+    reset_state remove || {
+        status=$?
+        # Validation under the workflow lock can see files created during shutdown.
+        if [[ "$status" == 2 && "$service_was_active" == yes ]]; then systemctl --user start "$service"; fi
+        exit "$status"
+    }
+    mkdir -p "$app_dir/releases" "$config_dir"
+fi

@@ -65,6 +65,10 @@ class Installation:
             options = self.first_settings()
         else:
             options = self.existing_settings(original.copy())
+        if self.arguments.opencode:
+            options["command"] = [self.arguments.opencode]
+        if not existing or self.arguments.opencode or self.arguments.apply_settings:
+            options["command"] = resolved_command(options)
         remove_obsolete(options)
         settings_check.validate(options, self.config, self.roles)
         if options != original:
@@ -73,6 +77,8 @@ class Installation:
 
     def existing_settings(self, options):
         """Select incoming bundled roles or validate the configured operator sources."""
+        if self.arguments.apply_settings:
+            options = read_settings(Path(self.arguments.supplied).expanduser())
         source = options.get(AGENT_SOURCE, self.bundled)
         selected = self.config / Path(source).expanduser()
         if selected == self.bundled:
@@ -104,7 +110,6 @@ class Installation:
             else self.arguments.source / "taskrail" / SETTINGS
         )
         options = read_settings(initial)
-        options["command"] = resolved_command(options)
         source = options.get(AGENT_SOURCE)
         if self.arguments.supplied and source is not None and self.arguments.agents == "keep":
             self.import_roles(initial.parent / Path(source).expanduser())
@@ -147,7 +152,7 @@ def resolved_command(options):
     executable = shutil.which(command[0])
     if executable is None:
         raise ValueError(f"Agent CLI command not found on PATH: {command[0]}")
-    return [executable, *command[1:]]
+    return [str(Path(executable).absolute()), *command[1:]]
 
 
 def read_settings(path):
@@ -176,13 +181,15 @@ def write_private(path, text):
 def main(argv=None):
     """Installable files remain private in staging until the update is ready."""
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("source", type=Path)
-    parser.add_argument("config", type=Path)
+    for name in ("source", "config"):
+        parser.add_argument(name, type=Path)
     parser.add_argument("supplied")
     parser.add_argument("app", type=Path)
     parser.add_argument("agents", choices=("keep", "bundled"))
     parser.add_argument("prepared", type=Path)
-    parser.add_argument("--fresh", action="store_true")
+    for name in ("--fresh", "--apply-settings"):
+        parser.add_argument(name, action="store_true")
+    parser.add_argument("--opencode", metavar="PATH", help="Use this executable for opencode")
     Installation(parser.parse_args(argv)).prepare()
 
 
