@@ -34,7 +34,7 @@ def open_record(workflow, mode):
     details["model"] = workflow.config["models"].get(role)
     active = new_stage(workflow.run, workflow.state, stage, details)
     workflow.open_record(active)
-    attempt_context.prepare(workflow.run, active[1], workflow.config, workflow.state)
+    attempt_context.prepare(active[1], workflow.config, workflow.state)
     active[1]["timeout_seconds"] = attempt_context.remaining(workflow, stage)
     return active
 

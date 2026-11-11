@@ -173,7 +173,14 @@ class PlannedRuntimeTests(unittest.TestCase):
         (self.run / "review.md").write_text(f"## Requirements\n{lines}")
         review = result_validation.validate("DONE", self.context(plan))
         self.assertEqual(review["status"], "APPROVE")
-        state = dict(requirements=self.requirements, status="TASKS_READY", plan_review=review)
+        state = current_run(
+            dict(
+                requirements=self.requirements,
+                status="TASKS_READY",
+                plan_review=review,
+                attempts=[],
+            )
+        )
         parent = SimpleNamespace(
             run=self.run, config=self.config, state=state, flow=dict(plan=plan, allowed=[])
         )

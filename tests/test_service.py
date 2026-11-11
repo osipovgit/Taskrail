@@ -30,26 +30,31 @@ BASE = Path(__file__).resolve().parents[1]
 
 class ServiceTests(unittest.TestCase):
     def test_configuration_watch_tracks_role_edits_and_recovers_invalid_json(self):
-        with tempfile.TemporaryDirectory() as temp:
-            folder = Path(temp)
-            settings = folder / "settings.json"
-            agents = folder / "agents"
-            agents.mkdir()
-            role = agents / "planner.md"
-            role.write_text("first")
-            settings.write_text('{"agent_source":"agents"}')
-            watch = ConfigurationWatch(settings)
+        agents = shutil.copytree(BASE / "taskrail/agents", self.home / "agents")
+        self.settings.write_text('{"agent_source":"agents"}')
+        watch = ConfigurationWatch(self.settings)
+        watch.poll()
+        (agents / "notes.md").write_text("Unrelated documentation")
+        with self.assertNoLogs():
             watch.poll()
-            role.write_text("second")
-            with self.assertLogs(level="INFO") as logs:
-                watch.poll()
-            self.assertIn("new tasks load new settings", logs.output[0])
-            with self.assertNoLogs():
-                watch.poll()
-            settings.write_text("{")
-            with self.assertLogs(level="WARNING"):
-                watch.poll()
-            settings.write_text('{"timeout_seconds": 3600}')
+        (agents / "planner.md").write_text("Updated role")
+        with self.assertLogs(level="INFO") as logs:
+            watch.poll()
+        self.assertIn("new tasks load new settings", logs.output[0])
+        self.settings.write_text("{")
+        with self.assertLogs(level="WARNING"):
+            watch.poll()
+        self.settings.write_text("{}")
+        with self.assertLogs(level="INFO"):
+            watch.poll()
+
+    def test_configuration_watch_uses_bundled_roles_for_settings_without_agent_source(self):
+        agents = shutil.copytree(BASE / "taskrail/agents", self.home / "release/agents")
+        self.settings.write_text("{}")
+        with patch("taskrail.application.instruction_sources.BUNDLED_AGENTS", agents):
+            watch = ConfigurationWatch(self.settings)
+            watch.poll()
+            (agents / "understanding.md").write_text("Updated bundled role")
             with self.assertLogs(level="INFO"):
                 watch.poll()
 

@@ -89,6 +89,7 @@ class ReviewedStartTests(unittest.TestCase):
             results={},
             preimages={},
         )
+        check_configuration.capture(frozen, state)
         config = dict(
             phase="task",
             assigned_contract=dict(parent_run="parent", task_id="T1"),

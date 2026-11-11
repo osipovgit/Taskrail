@@ -21,16 +21,17 @@ class AttemptProvenanceTests(unittest.TestCase):
     def test_provenance_uses_recorded_role_source(self):
         inputs = self.run / "00-input"
         inputs.mkdir()
-        (inputs / "contract.json").write_text("{}")
         record = dict(self.record(1), role="planner")
         state = {
             "agent_sources": {"planner": "saved-hash"},
+            "contract_sha256": "sealed-contract",
             "run_format": 3,
             "agent_source_directory": str(inputs / "agents"),
         }
         config = dict(timeout=60)
         for _ in range(8):
-            attempt_context.prepare(self.run, record, config, state)
+            attempt_context.prepare(record, config, state)
             self.assertEqual(record["timeout_seconds"], 60)
+            self.assertEqual(record["contract_sha256"], "sealed-contract")
         self.assertEqual(record["agent_source"], str(inputs / "agents/planner.md"))
         self.assertEqual(record["agent_sha256"], "saved-hash")

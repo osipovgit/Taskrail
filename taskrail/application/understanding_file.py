@@ -32,7 +32,7 @@ def stage_result(context):
     payload = json.loads((run / NAME).read_text(), object_pairs_hook=schema.unique_fields)
     verdict = task_understanding.resolve(payload, spec)
     shutil.copyfile(run / NAME, context["folder"] / NAME)
-    return dict(verdict, status="UNDERSTOOD")
+    return verdict
 
 
 def install(workflow, verdict):

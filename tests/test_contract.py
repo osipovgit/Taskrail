@@ -11,7 +11,6 @@ from test_response_contracts import decoded
 from taskrail.application import (
     evidence,
     instruction_sources,
-    prompts,
     result_paths,
     result_validation,
 )
@@ -434,13 +433,13 @@ class ContractTests(unittest.TestCase):
     def test_frozen_policy_tampering_is_not_accepted_on_continue(self):
         state = {}
         (self.run / "00-input").mkdir(parents=True)
-        instruction_sources.freeze_contract(self.run, prompts.POLICY, state)
+        instruction_sources.capture(self.run, state, instruction_sources.BUNDLED_AGENTS)
         frozen = self.run / "00-input/contract.json"
         payload = json.loads(frozen.read_text())
         payload["policy"] = "Different execution policy"
         frozen.write_text(json.dumps(payload))
-        with self.assertRaisesRegex(ValueError, "policy changed"):
-            instruction_sources.freeze_contract(self.run, prompts.POLICY, state)
+        with self.assertRaisesRegex(ValueError, "instruction contract"):
+            instruction_sources.verify_contract(self.run, state)
 
     def test_declared_block_cannot_authorize_unvalidated_plan(self):
         self.payload["blocking_gaps"] = ["Local linter execution unavailable"]

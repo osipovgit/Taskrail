@@ -930,7 +930,6 @@ class LiveTests(LiveFixture, unittest.TestCase):
                 "checkpoint.json",
                 "evidence.json",
                 "observations.json",
-                "local-preflight.json",
                 "git-execution.json",
                 "plan.md",
                 "progress.md",
@@ -1167,6 +1166,35 @@ class LiveTests(LiveFixture, unittest.TestCase):
         self.assertEqual(status, "BLOCKED")
         state = json.loads((run / "run.json").read_text())
         self.assertEqual(len(state["stages"]), old_steps)
+
+    def test_resume_requires_original_task_and_all_role_fingerprints(self):
+        run, _, state = self.run_mode("writer-timeout")
+        checkpoint_path = run / "checkpoint.json"
+        checkpoint = json.loads(checkpoint_path.read_text())
+        without_reviewer = dict(state["agent_sources"])
+        del without_reviewer["reviewer"]
+        cases = (
+            (
+                {key: value for key, value in checkpoint.items() if key != "task_hash"},
+                state,
+                "Task fingerprint",
+            ),
+            (checkpoint, dict(state, agent_sources=without_reviewer), "role fingerprints"),
+            (
+                dict(checkpoint, stage="check"),
+                {key: value for key, value in state.items() if key != "contract_sha256"},
+                "instruction contract",
+            ),
+        )
+        for saved, index, reason in cases:
+            with self.subTest(reason=reason):
+                checkpoint_path.write_text(json.dumps(saved))
+                (run / "run.json").write_text(json.dumps(index))
+                _, status = self.continue_with_ok_model(run)
+                self.assertEqual(status, "BLOCKED")
+                stopped = json.loads((run / "run.json").read_text())
+                self.assertIn(reason, stopped["summary"])
+                self.assertEqual(stopped["stages"], state["stages"])
 
     def test_resume_refuses_changed_source(self):
         run, status, state = self.run_mode("writer-timeout")

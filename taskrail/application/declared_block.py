@@ -7,11 +7,9 @@ GAPS = "blocking_gaps"
 
 def present(payload):
     """Only explicit structured blockers can trigger the conservative stop."""
-    return (
-        bool(payload[GAPS])
-        or any(entry["outcome"] == "gap" for entry in payload["coverage"])
-        or payload.get("input_complete") is False
-    )
+    if payload[GAPS]:
+        return True
+    return any(entry["outcome"] == "gap" for entry in payload["coverage"])
 
 
 def stop_result(payload, context):

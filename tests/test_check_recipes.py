@@ -350,12 +350,14 @@ class CheckRecipesTest(unittest.TestCase):
 
     def test_resume_uses_frozen_recipes_and_rejects_tampering(self):
         config = self.workflow().config
-        saved = {name: config[name] for name in ("check_recipes", "check_specs", "verify_commands")}
+        saved = {name: config[name] for name in check_configuration.FIELDS}
         directory = self.run / "00-input"
         directory.mkdir(exist_ok=True)
         atomic_json(directory / "settings.json", saved)
         check_configuration.capture(config, self.state)
         modified = dict(config, check_recipes={})
+        with self.assertRaisesRegex(ValueError, "Missing selected checks in run index"):
+            check_configuration.restore(modified, self.run, self.state)
         self.state["check_specs"] = [self.spec]
         check_configuration.restore(modified, self.run, self.state)
         self.assertEqual(modified["check_recipes"], config["check_recipes"])

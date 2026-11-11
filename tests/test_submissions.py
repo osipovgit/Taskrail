@@ -43,10 +43,10 @@ class SubmissionTests(unittest.TestCase):
         self.assertEqual(meta["roots"], {"project": str(self.repo)})
         self.assertEqual(meta["verification"], ["Manually exercise the caller"])
         self.assertIn("# Return two", text)
-        self.assertIn("## Acceptance criteria", text)
+        self.assertIn(f"## Acceptance criteria\n{self.payload['criteria']}", text)
         self.assertEqual(title, "Return two")
 
-    def test_title_criteria_and_alias_have_defaults(self):
+    def test_display_title_and_root_alias_defaults_preserve_original_fields(self):
         other = self.base / "other repo"
         other.mkdir()
         payload = dict(
@@ -57,7 +57,10 @@ class SubmissionTests(unittest.TestCase):
         meta = json.loads(text.split("```taskrail-task\n")[1].split("```")[0])
         self.assertEqual(meta["roots"], {"repo": str(self.repo), "other-repo": str(other)})
         self.assertEqual(title, "Return 2 from hello.")
-        self.assertIn("## Acceptance criteria\nThe Goal is achieved", text)
+        fields = {field["name"]: field["text"] for field in meta["task_spec"]["fields"]}
+        self.assertEqual(fields["title"], "")
+        self.assertEqual(fields["criteria"], "")
+        self.assertNotIn("## Acceptance criteria", text)
         long_goal = "word " * 40
         self.assertEqual(build_task(dict(payload, goal=long_goal), self.runs)[1][-3:], "...")
         clash = [dict(path=str(self.repo)), dict(alias="repo", path=str(other))]

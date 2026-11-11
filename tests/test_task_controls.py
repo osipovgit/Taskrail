@@ -11,7 +11,12 @@ from unittest.mock import patch
 from git_fixture import repository
 from run_fixture import current_run, workflow_workspace
 
-from taskrail.application import delivery_confirmation, execution_context, mode_rules
+from taskrail.application import (
+    check_configuration,
+    delivery_confirmation,
+    execution_context,
+    mode_rules,
+)
 from taskrail.application.live import execute_task
 from taskrail.application.source_guard import SourceGuard
 from taskrail.core.files import atomic_json
@@ -74,6 +79,28 @@ class TaskControlTests(unittest.TestCase):
         atomic_json(self.run / "00-input/settings.json", dict(max_integration_corrections=0))
         self.configure("ok")
         self.launcher = TaskLauncher(self.runs, self.settings)
+
+    def test_background_only_restart_keeps_original_fields_and_opens_a_new_task(self):
+        original = dict(goal="The server runs nightly.", roots=self.payload["roots"])
+        text, _ = build_task(original, self.runs)
+        (self.run / "00-input/task.md").write_text(text)
+        state = json.loads((self.run / "run.json").read_text())
+        state.update(status="NEEDS_GOAL", summary="What should change?", results={})
+        atomic_json(self.run / "run.json", state)
+        view = run_view(self.runs, self.run.name)
+        self.assertTrue(view["actions"]["restart"])
+        self.assertFalse(view["actions"]["resume"])
+        self.assertIsNone(view["delivery"])
+        self.assertEqual(view["draft"]["goal"], original["goal"])
+        self.assertEqual(view["draft"]["title"], "")
+        self.assertEqual(view["draft"]["criteria"], "")
+        clarified = dict(view["draft"], goal="Run the server hourly.", parent_run=self.run.name)
+        with patch.object(self.launcher, "launch", return_value={"id": "clarified"}) as launch:
+            self.launcher.submit(dict(clarified, submission_mode="restart"))
+        fields = TaskDraft(launch.call_args.args[0]["text"]).fields()
+        self.assertEqual(fields["goal"], clarified["goal"])
+        self.assertEqual(fields["criteria"], "")
+        self.assertEqual((self.run / "00-input/task.md").read_text(), text)
 
     def configure(self, mode):
         self.settings.write_text(
@@ -273,10 +300,10 @@ class TaskControlTests(unittest.TestCase):
             requirements=[],
         )
         execution_context.capture(epic, dict(roots={"project": self.repo}, worktrees={}), index)
-        (epic / "run.json").write_text(json.dumps(current_run(index)))
-        (epic / "00-input/settings.json").write_text(
-            json.dumps(dict(max_integration_corrections=0))
-        )
+        settings = dict(max_integration_corrections=0, verify_commands=[], check_recipes={})
+        check_configuration.capture(settings, index)
+        atomic_json(epic / "run.json", current_run(index))
+        atomic_json(epic / "00-input/settings.json", settings)
         return epic
 
     def launching(self, name):

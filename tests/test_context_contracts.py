@@ -6,7 +6,7 @@ import unittest
 from pathlib import Path
 from types import SimpleNamespace
 
-from taskrail.application import execution_wait, prompts, response_format
+from taskrail.application import execution_wait, instruction_sources, prompts, response_format
 from taskrail.core import prompt_texts, task_markdown, task_spec
 from taskrail.core.files import atomic_json
 from taskrail.core.plan_document import payload
@@ -173,6 +173,7 @@ class ContextContractTests(unittest.TestCase):
             preimages={},
         )
         config = dict(task_text=text, task_spec=spec, roots={"project": root})
+        instruction_sources.capture(self.run, state, instruction_sources.BUNDLED_AGENTS)
         request = prompts.make_request(config, ("planner", None, [], None), state, self.run)
         self.assertEqual(request.count("Reject invalid names."), 1)
         self.assertEqual(request.count("Run the integration check"), 1)

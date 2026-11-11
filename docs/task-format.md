@@ -35,9 +35,9 @@ Any other `#` or `##` heading, a repeated section, and text outside the sections
 |---|---|
 | Projects | Required. One to eight existing absolute directories; `~` is supported. An empty name becomes the directory name (numbered on a clash) |
 | Goal | Required. Expected behavior and its purpose |
-| Acceptance criteria | Observable conditions for a satisfactory result; empty means the Goal itself, with verification limits reported |
+| Acceptance criteria | Optional observable conditions for a satisfactory result |
 | Mode | **Develop** (large work is split into tasks), **Answer only** or **Design discussion** |
-| Title | Under **More details**; one line, up to 160 characters, default the Goal's first line |
+| Title | Under **More details**, one line up to 160 characters. An omitted title displays the first line of the Goal in the run list |
 
 **More details** also holds current behavior and errors, known entry points,
 additional constraints, and deferred verification (one check per line). Task input may
@@ -234,10 +234,10 @@ section. Use `Decision: no change` for a supported answer or `Decision: blocked`
 with a precise gap when required input is missing. Both go through independent
 review. These modes never start implementation, even with an imported plan.
 
-Each submission creates a separate run. After a run stops, a new Goal starts another
-complete planning pass with explicit prior evidence; it never messages an in-flight
-model session. Follow-up goals inherit roots, entry points and constraints; the new
-Goal takes precedence and prior findings are rechecked. Server-generated
+Each submission creates a separate run. A browser follow-up starts task
+understanding with the new Goal and carries forward the project roots, constraints
+and deferred checks. Previous tasks and their starting files stay in conversation
+history. Server-generated
 `Conversation history` sections are reserved; do not add them to form fields. The
 task file is saved as `.submissions/<id>/task.md` and snapshotted into the run's
 `00-input/task.md`. History blocks never become requirements; a large history reaches

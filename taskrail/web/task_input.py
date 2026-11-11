@@ -2,10 +2,12 @@
 
 from taskrail.core import input_rendering, task_spec
 
+TITLE_WORDS = 80
+
 
 def metadata(payload, form, roots, rendered):
-    """The typed fields preserve user strings; empty optional fields use form defaults."""
-    spec = task_spec.from_fields(original_fields(payload, form))
+    """Keep the original source fields verbatim, including omitted optional text."""
+    spec = task_spec.from_fields(payload)
     body = rendered.partition("\n```\n")[2]
     spec["body"] = input_rendering.signature(body)
     lines = map(str.strip, form["verification"].splitlines())
@@ -13,9 +15,10 @@ def metadata(payload, form, roots, rendered):
     return dict(roots=roots, verification=checks, task_spec=spec)
 
 
-def original_fields(payload, form):
-    """A nonempty user value retains its whitespace, including indentation."""
-    original = {}
-    for key, text in form.items():
-        original[key] = payload.get(key) or text
-    return original
+def display_title(goal, fallback=""):
+    """The goal's first line, shortened at a word boundary for display."""
+    lines = goal.strip().splitlines()
+    line = lines[0].strip() if lines else fallback
+    if len(line) <= TITLE_WORDS:
+        return line
+    return "{}...".format(line[:TITLE_WORDS].rsplit(" ", 1)[0])

@@ -79,13 +79,13 @@ class Coverage:
             self.problems.append("line {line}: {label} has no outcome".format(**entry))
             return
         if kind in CITED and not detail:
-            self.problems.append(prompt_texts.diagnostic("validation.plan_outcome", **entry))
+            self.problems.append(prompt_texts.text("validation.plan_outcome", **entry))
             return
         if kind == PLANNED:
             self.assign(requirement, entry)
         if kind == DEFERRED:
             if requirement["kind"] != "runtime":
-                self.problems.append(prompt_texts.diagnostic("validation.plan_runtime", **entry))
+                self.problems.append(prompt_texts.text("validation.plan_runtime", **entry))
             detail = detail or requirement[TEXT]
             self.found["unverified"].append(detail)
         if kind == "not_applicable" and not detail:
@@ -105,7 +105,7 @@ class Coverage:
             return
         references = task_references(entry[TEXT])
         if not references:
-            self.problems.append(prompt_texts.diagnostic("validation.plan_outcome", **entry))
+            self.problems.append(prompt_texts.text("validation.plan_outcome", **entry))
         for task, scope in references:
             owned = self.owners.setdefault(task.upper(), [])
             owned.append(dict(id=requirement[IDENTIFIER], scope=scope.strip()))

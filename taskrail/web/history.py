@@ -7,6 +7,7 @@ from taskrail.application import run_store, worktree_isolation
 from taskrail.core import task_markdown, task_spec
 from taskrail.core.input_header import HEADER
 from taskrail.interactions import approval_policy
+from taskrail.web import task_input
 
 HISTORY = "\n## Conversation history\n"
 TASK_FILE = "00-input/task.md"
@@ -57,16 +58,19 @@ class TaskDraft:
         return {field["name"]: field["text"] for field in self.typed["fields"]}
 
     def title(self, fallback):
-        """The explicit task title, or the run name."""
-        return self.fields().get("title") or fallback
+        """The label displayed for this task."""
+        fields = self.fields()
+        goal = fields.get(GOAL, "")
+        return fields.get("title") or task_input.display_title(goal, fallback)
 
 
-def task_draft(run):
+def task_draft(run, *, editable=False):
     """Reconstruct editable fields from the current task format."""
     index = run_store.read(run)
     parsed = TaskDraft.submitted(run)
     draft = parsed.fields()
-    draft["title"] = parsed.title(run.name)
+    if not editable:
+        draft["title"] = parsed.title(run.name)
     draft["read_only"] = parsed.metadata.get("read_only") is True
     draft[DESIGN] = parsed.metadata.get(DESIGN) is True
     draft[DECOMPOSE] = parsed.metadata.get(DECOMPOSE) is True
@@ -78,7 +82,7 @@ def task_draft(run):
 
 def saved_turn(run, original):
     """Snapshot public outcomes and the diff, never hidden model context."""
-    index = json.loads(read_artifact(run, "run.json"))
+    index = run_store.read(run)
     conclusions = {
         key: json.loads(read_artifact(run, relative))
         for key, relative in index.get("results", {}).items()
@@ -87,7 +91,7 @@ def saved_turn(run, original):
     return dict(
         run=run.name,
         task=original,
-        goal=task_draft(run)[GOAL],
+        goal=TaskDraft(original).fields()[GOAL],
         summary=index.get("summary", ""),
         conclusions=conclusions,
         diff=diff,

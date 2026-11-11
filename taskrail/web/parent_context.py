@@ -21,7 +21,7 @@ def field(text, label):
     """Large inherited fields stay complete in the artifact instead of breaking launch."""
     if len(text) <= FIELD_BUDGET:
         return text
-    return prompt_texts.current("child.field", label=label)
+    return prompt_texts.text("child.field", label=label)
 
 
 def write(folder, text):

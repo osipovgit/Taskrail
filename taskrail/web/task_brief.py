@@ -36,17 +36,20 @@ def assigned_requirements(state, task):
 
 def part(text, scope):
     """Preserve the requirement exactly; scope is separate server-owned metadata."""
-    return prompt_texts.current("child.part", requirement=text, scope=scope) if scope else text
+    return prompt_texts.text("child.part", requirement=text, scope=scope) if scope else text
 
 
 def brief(run, draft, entries, current):
     """A bounded index; the immutable artifact holds every full contract and outcome."""
-    lines = [prompt_texts.current("child.scope")]
-    lines.extend(
-        [prompt_texts.current("child.position", parent=run.name, task=current[IDENTIFIER])]
-    )
-    lines.append(prompt_texts.current("child.reference"))
-    lines.extend(["", current_contract(current), "", prompt_texts.current("child.prerequisites")])
+    lines = [
+        prompt_texts.text("child.scope"),
+        prompt_texts.text("child.position", parent=run.name, task=current[IDENTIFIER]),
+        prompt_texts.text("child.reference"),
+        "",
+        current_contract(current),
+        "",
+        prompt_texts.text("child.prerequisites"),
+    ]
     needed = task_graph.ancestors(entries, current[IDENTIFIER])
     remaining = min(INDEX_BUDGET, BRIEF_BUDGET - len("\n".join(lines)))
     for task in entries:
@@ -55,7 +58,7 @@ def brief(run, draft, entries, current):
             if len(line) <= remaining:
                 lines.append(line)
                 remaining -= len(line)
-    lines.append(prompt_texts.current("child.outside"))
+    lines.append(prompt_texts.text("child.outside"))
     return "\n".join(lines)
 
 
@@ -63,7 +66,7 @@ def current_contract(task):
     """Checks and notes are essential input and cannot silently become a truncated pointer."""
     checks = "\n".join(task["checks"])
     notes = task.get("notes", "")
-    text = prompt_texts.current(
+    text = prompt_texts.text(
         "child.contract",
         task=task_line(task, task),
         action=task["goal"],

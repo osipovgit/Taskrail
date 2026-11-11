@@ -7,22 +7,32 @@ from operator import itemgetter
 from taskrail.core import schema, task_lineage
 
 STAGE = "understanding"
+NEEDS_GOAL = "NEEDS_GOAL"
 REQUIREMENTS = "requirements"
 SOURCES = "sources"
 TEXT = "text"
+KIND = "kind"
 HASH_LENGTH = 12
 
 
 def resolve(payload, spec):
     """Validate references; interpretation remains a model and independent-review duty."""
     schema.validate(payload, schema.SCHEMAS[STAGE])
-    schema.require(bool(payload[REQUIREMENTS]), "Task understanding needs at least one obligation")
-    fields = {field["name"]: field[TEXT] for field in spec["fields"]}
-    entries = [obligation(entry, fields) for entry in payload[REQUIREMENTS]]
-    identities = [entry["id"] for entry in entries]
-    schema.require(len(set(identities)) == len(entries), "Repeated extracted requirement")
-    preserved = [entry for entry in spec[REQUIREMENTS] if entry["kind"] == "runtime"]
-    return dict(payload, requirements=task_lineage.distinct([*entries, *preserved]))
+    entries = extracted(payload[REQUIREMENTS], spec["fields"])
+    preserved = [entry for entry in spec[REQUIREMENTS] if entry[KIND] == "runtime"]
+    kinds = {entry[KIND] for entry in entries}
+    status = "UNDERSTOOD" if "task" in kinds else NEEDS_GOAL
+    combined = task_lineage.distinct([*entries, *preserved])
+    return dict(payload, requirements=combined, status=status)
+
+
+def extracted(requirements, fields):
+    """Bind the model's obligations to user input and reject duplicate identities."""
+    original = {field["name"]: field[TEXT] for field in fields}
+    entries = [obligation(entry, original) for entry in requirements]
+    identities = {entry["id"] for entry in entries}
+    schema.require(len(identities) == len(entries), "Repeated extracted requirement")
+    return entries
 
 
 def obligation(entry, fields):
@@ -31,11 +41,11 @@ def obligation(entry, fields):
     sources = [reference(source, fields) for source in entry[SOURCES]]
     explicit_constraint = any(source["field"] == "constraints" for source in sources)
     schema.require(
-        not explicit_constraint or entry["kind"] == "constraint",
+        not explicit_constraint or entry[KIND] == "constraint",
         "Constraints-field obligations must stay global constraints",
     )
     ordered = sorted(sources, key=itemgetter("field", "start", "end"))
-    identity = [entry["kind"], entry[TEXT], ordered]
+    identity = [entry[KIND], entry[TEXT], ordered]
     identity = json.dumps(identity, sort_keys=True).encode()
     fingerprint = hashlib.sha256(identity).hexdigest()[:HASH_LENGTH]
     return dict(entry, id=f"R-{fingerprint}", sources=sources)

@@ -25,7 +25,7 @@ STEP = "step"
 
 def view(run, state):
     """The delivery of a code-changing run, or None for answers, designs and phase runs."""
-    if not container(run):
+    if state.get("status") == "NEEDS_GOAL" or not container(run):
         return None
     epic = epic_tasks.record(run)
     split = epic_progress.view(run, state)

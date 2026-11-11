@@ -1,7 +1,7 @@
 """Record sandbox fallback and missing verification tools before expensive model work."""
 
 from taskrail.application import check_runner, check_selection, check_stage
-from taskrail.core.files import atomic_json
+from taskrail.application.artifacts import save_run
 from taskrail.infrastructure import sandbox
 from taskrail.interactions import approval_policy, local, local_request
 from taskrail.observability.progress import say
@@ -16,9 +16,9 @@ def prepare(workflow):
     explanation = sandbox.health(allowed)[1]
     report = dict(sandbox=sandbox.mode(), explanation=explanation, tools=tools)
     if workflow.state.get(KEY) != report:
+        workflow.state[KEY] = report
+        save_run(workflow.run, workflow.state)
         say(report["explanation"])
-    workflow.state[KEY] = report
-    atomic_json(workflow.run / "local-preflight.json", report)
     missing = [entry["program"] for entry in tools if entry["executable"] is None]
     if missing:
         raise ValueError(

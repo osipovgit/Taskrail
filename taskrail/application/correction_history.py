@@ -78,7 +78,7 @@ def required(parent, selected, config, exclude=None):
     """Reviewed corrective gates accumulate without changing the original parent plan."""
     names = list(selected)
     for run, state in completed(parent, exclude):
-        settings = check_configuration.parent_settings(run, state)
+        settings = check_configuration.frozen(run, state)
         require(
             check_configuration.fingerprint(settings) == check_configuration.fingerprint(config),
             "Correction check catalog changed",

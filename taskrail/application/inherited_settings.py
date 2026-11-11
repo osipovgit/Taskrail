@@ -38,10 +38,7 @@ def for_request(request):
 def parent_settings(parent):
     """Read only authenticated commands; execution still requires the phase's parent link."""
     state = reviewed_artifacts.document(parent, "run.json")
-    saved = check_configuration.parent_settings(parent, state)
-    return dict(
-        saved, permission_worktree=execution_context.frozen(parent, state)["permission_worktree"]
-    )
+    return continued(parent, state)
 
 
 def continued(run, state):

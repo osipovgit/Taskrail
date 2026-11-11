@@ -9,7 +9,13 @@ from unittest.mock import patch
 
 from run_fixture import current_run
 
-from taskrail.application import check_configuration, check_recipes, execution_context, run_setup
+from taskrail.application import (
+    check_configuration,
+    check_recipes,
+    execution_context,
+    inherited_settings,
+    run_setup,
+)
 from taskrail.core.files import atomic_json
 from taskrail.core.requirements import requirement
 
@@ -39,9 +45,7 @@ class ResumeCheckConfigurationTests(unittest.TestCase):
         catalog = check_recipes.parse_catalog(
             dict(check_recipes={"health": recipe}, verify_commands=[command])
         )
-        self.frozen = dict(
-            check_recipes=catalog, verify_commands=[command], check_specs=[self.spec]
-        )
+        self.frozen = dict(check_recipes=catalog, verify_commands=[command])
         state = dict(roots={"project": str(self.root)}, status="TIMEOUT", check_specs=[self.spec])
         check_configuration.capture(self.frozen, state)
         execution_context.capture(self.run, dict(roots={"project": self.root}, worktrees={}), state)
@@ -92,6 +96,23 @@ class ResumeCheckConfigurationTests(unittest.TestCase):
         atomic_json(self.settings, options)
         config, _ = run_setup.configure(self.request)
         self.assertIsNone(config["permission_worktree"])
+
+    def test_resume_and_parent_require_the_seal_even_for_an_empty_catalog(self):
+        index = self.run / "run.json"
+        state = json.loads(index.read_text())
+        state.pop(check_configuration.SIGNATURE)
+        atomic_json(self.run / "00-input/settings.json", dict(check_recipes={}, verify_commands=[]))
+        for fields in ({}, {"check_config_sha256": None}, {"check_config_sha256": "forged"}):
+            with self.subTest(fields=fields):
+                atomic_json(index, dict(state, **fields))
+                for load, arg in (
+                    (run_setup.configure, self.request),
+                    (inherited_settings.parent_settings, self.run),
+                ):
+                    with self.assertRaisesRegex(
+                        ValueError, "Missing check settings seal|Frozen check settings changed"
+                    ):
+                        load(arg)
 
     def test_generated_phase_resolves_parent_catalog_before_current_settings(self):
         text = self.task.read_text()

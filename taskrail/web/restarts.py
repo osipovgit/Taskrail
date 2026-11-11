@@ -12,7 +12,7 @@ def restart(launcher, run):
     if phase in check_parents.PHASES:
         return restart_phase(launcher, run, phase)
     if phase != "task":
-        return dict(id=run.name, draft=history.task_draft(run))
+        return dict(id=run.name, draft=history.task_draft(run, editable=True))
     metadata = history.TaskDraft(history.read_artifact(run, history.TASK_FILE)).metadata
     assignment = metadata.get("assigned_contract")
     require(isinstance(assignment, dict), "Missing child assignment; open the parent split")

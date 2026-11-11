@@ -93,7 +93,8 @@ approval ledger with `"rule": "sandbox"`:
 
 `"sandbox": false` requests host execution. Without working bubblewrap, commands also
 use the host route (`rule: host`); `host_commands: "ask"` requires approval there.
-`taskrail check` and `local-preflight.json` report the effective boundary and tool paths.
+`taskrail check` reports the effective sandbox boundary. The `local_preflight` field
+in `run.json` records that boundary and the executable paths of required checks.
 The local journal records RUNNING before process creation. A reported failure to start
 (such as a vanished executable or working directory) permits a fresh request under
 the current permissions. A timeout or lost result after an actual start leaves uncertain

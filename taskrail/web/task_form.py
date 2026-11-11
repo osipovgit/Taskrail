@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 from types import MappingProxyType
 
-from taskrail.core import input_header, prompt_texts
+from taskrail.core import input_header
 from taskrail.web import history, task_input
 from taskrail.web.form_roots import checked_roots
 
@@ -21,7 +21,6 @@ FIELDS = (
     CONSTRAINTS,
     "verification",
 )
-TITLE_WORDS = 80
 FIELD_LIMIT = 16000
 TITLE_LIMIT = 160
 FENCE = input_header.FENCE
@@ -50,23 +49,14 @@ def build_task(payload, runs):
 
 
 def form_text(payload):
-    """Stripped text fields; only the goal is required, title and criteria have defaults."""
+    """Validate text fields and supply a display title for the rendered task."""
     form = {key: field_text(payload, key) for key in FIELDS}
     if not form[GOAL]:
         raise ValueError("Required field: goal")
-    form[TITLE] = form[TITLE] or default_title(form[GOAL])
-    form[CRITERIA] = form[CRITERIA] or prompt_texts.current("task.default_criteria")
+    form[TITLE] = form[TITLE] or task_input.display_title(form[GOAL])
     check_title(form[TITLE])
     check_reserved(form.values())
     return form
-
-
-def default_title(goal):
-    """The goal's first line, shortened at a word boundary."""
-    line = goal.splitlines()[0].strip()
-    if len(line) <= TITLE_WORDS:
-        return line
-    return "{}...".format(line[:TITLE_WORDS].rsplit(" ", 1)[0])
 
 
 def check_title(title):

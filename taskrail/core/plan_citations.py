@@ -55,7 +55,7 @@ def following(text, previous, syntax):
     """A separator introduces a complete path citation or another range of that path."""
     separator = SEPARATOR.match(text)
     if separator is None:
-        raise ValueError(prompt_texts.diagnostic("validation.plan_citations"))
+        raise ValueError(prompt_texts.text("validation.plan_citations"))
     remaining = text[separator.end() :]
     shorthand = RANGE.match(remaining) if separator[1] == "," else None
     if shorthand:
@@ -69,7 +69,7 @@ def citation(text, syntax):
     text = re.sub(r"^` ([^`\n]+) `", r"`\1`", text)
     match = syntax.match(text)
     if match is None:
-        raise ValueError(prompt_texts.diagnostic("validation.plan_citations"))
+        raise ValueError(prompt_texts.text("validation.plan_citations"))
     groups = match.groups()
     tail = text[match.end() :]
     for index in (0, 3, 6):

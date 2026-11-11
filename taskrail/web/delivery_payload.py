@@ -22,8 +22,8 @@ def payload(run, state, name):
     written = delivery_checks.written(run, state)[CHECK_KEYS[name]]
     fields = dict(
         title=title[:TITLE_LIMIT],
-        goal=prompt_texts.current(f"delivery.{name}"),
-        criteria=prompt_texts.current("delivery.criteria"),
+        goal=prompt_texts.text(f"delivery.{name}"),
+        criteria=prompt_texts.text("delivery.criteria"),
         verification="\n".join(written),
         constraints=draft["constraints"],
         split_context=brief(run, state, draft),
@@ -52,7 +52,7 @@ def typed_checks(run, state, name):
 def brief(run, state, draft):
     """The overall goal and criteria and the files the change touched."""
     changed = ", ".join(changed_files(run, state)) or "none recorded"
-    scope = prompt_texts.current("delivery.scope", run=run.name)
+    scope = prompt_texts.text("delivery.scope", run=run.name)
     lines = [scope, "", "Overall goal:", draft["goal"], ""]
     lines.extend(["Overall acceptance criteria:", draft["criteria"], ""])
     lines.append(f"Changed files: {changed}")

@@ -36,7 +36,7 @@ def accepts(claim, payload, context):
         identifier in decision["evidence_ids"] for decision in payload.get("finding_checks", ())
     )
     permitted = (bool(owners) or rechecked) and kinds <= {"planned", "contradicted"}
-    schema.require(permitted, prompt_texts.diagnostic("validation.plan_review_evidence"))
+    schema.require(permitted, prompt_texts.text("validation.plan_review_evidence"))
     return True
 
 
@@ -45,12 +45,12 @@ def verify(context, *, approving=False):
     files = sources(context)
     schema.require(
         files and all(map(regular, files)),
-        prompt_texts.diagnostic("validation.plan_review_changed"),
+        prompt_texts.text("validation.plan_review_changed"),
     )
     recorded = reviewed_artifacts.document(context["run"], context["plan_reference"])
     expected = tool_paths(context["plan"], context["roots"])
     matching = recorded == expected and markdown_matches(files)
-    schema.require(matching, prompt_texts.diagnostic("validation.plan_review_changed"))
+    schema.require(matching, prompt_texts.text("validation.plan_review_changed"))
     if approving:
         plan_reports.bind(recorded, context, verify=True)
 

@@ -3,7 +3,8 @@
 import hashlib
 import json
 import logging
-from pathlib import Path
+
+from taskrail.application import instruction_sources
 
 
 def fingerprint(settings):
@@ -12,13 +13,11 @@ def fingerprint(settings):
     options = json.loads(raw)
     if not isinstance(options, dict):
         raise ValueError("Settings must be an object")
-    folder = Path(options.get("agent_source", settings.parent / "agents")).expanduser()
-    if not folder.is_absolute():
-        folder = settings.parent / folder
+    folder = instruction_sources.role_directory(options, settings.parent)
     digest = hashlib.sha256(raw)
-    for path in sorted(folder.glob("*.md")):
-        digest.update(path.name.encode())
-        digest.update(path.read_bytes())
+    for role in instruction_sources.ROLES:
+        digest.update(role.encode())
+        digest.update((folder / f"{role}.md").read_bytes())
     return digest.hexdigest()
 
 

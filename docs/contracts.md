@@ -15,7 +15,7 @@ policy, texts and schemas in `00-input/`; their hashes must remain unchanged.
 and parent context require a current-format run. For other formats, start a new task.
 Continue additionally requires the same runtime build. Its identity hashes the
 package-relative paths and contents of the Python modules, runtime configuration,
-agent instructions and dashboard assets. Frozen catalogs must match the release catalog.
+agent instructions and dashboard assets. Before resuming any stage or building a model request, Taskrail verifies the saved contract and its fingerprint against the current build. A missing or altered contract requires Restart.
 
 The executor catalog advertises only configured, stage-permitted routes; the
 implementer never receives SSH actions. Prompt-budget tests cover capability and
@@ -37,8 +37,11 @@ Each source names an input field and a verbatim quote, plus a one-based occurren
 the quote repeats. The server checks those references, resolves character spans and
 assigns IDs. These checks prove provenance, not semantic completeness: the planner and
 independent reviewer also compare the complete original task. Background does not become
-an obligation merely because it occupies a paragraph. Conditions, ordering and conflicting
-instructions must survive extraction. Explicit runtime check identities stay server-owned.
+an obligation merely because it occupies a paragraph. If no requested outcome is present,
+the summary asks what the user wants to achieve. The server records `NEEDS_GOAL` and
+stops before planning. Constraints and deferred checks alone cannot start work.
+Conditions, ordering and conflicting instructions must survive extraction.
+Explicit runtime check identities stay server-owned.
 The understanding role uses the planner's configured model unless `models.understanding`
 is set.
 

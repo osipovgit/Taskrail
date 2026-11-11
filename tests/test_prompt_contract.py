@@ -102,112 +102,67 @@ class LabelTests(unittest.TestCase):
 
 
 class FrozenTextTests(unittest.TestCase):
-    def test_declined_and_unknown_feedback_keep_a_continued_runs_catalog(self):
-        self.addCleanup(prompt_texts.ACTIVE.adopt, prompt_texts.release())
-        frozen = prompt_texts.release()
-        frozen.update(
-            {
-                "feedback.remote_declined": "Frozen denial: skip the action",
-                "feedback.remote_unknown": "Frozen uncertainty: inspect before another action",
-            }
-        )
-        with tempfile.TemporaryDirectory() as directory:
+    def test_declined_and_unknown_feedback_does_not_replay_a_remote_action(self):
+        with (
+            tempfile.TemporaryDirectory() as directory,
+            mock.patch.object(
+                execution_wait.client, "request", side_effect=AssertionError("No replay")
+            ),
+        ):
             run = Path(directory)
-            (run / "00-input").mkdir()
-            with mock.patch.object(prompt_texts, "release", return_value=frozen):
-                instruction_sources.freeze_contract(run, prompts.POLICY, {})
-            contract = (run / "00-input/contract.json").read_bytes()
-            with (
-                mock.patch.object(prompt_texts, "release", return_value=frozen),
-                mock.patch.object(
-                    execution_wait.client, "request", side_effect=AssertionError("No replay")
-                ),
+            ledger = run / execution_wait.LEDGER
+            ledger.write_text(json.dumps([dict(status="REJECTED")]))
+            self.assertEqual(
+                execution_wait.resume(run, dict(attempts=[])),
+                prompt_texts.text("feedback.remote_declined"),
+            )
+            ledger.write_text(json.dumps([dict(status="UNKNOWN")]))
+            with self.assertRaisesRegex(
+                ValueError, re.escape(prompt_texts.text("feedback.remote_unknown"))
             ):
-                instruction_sources.adopt_texts(run)
-                (run / execution_wait.LEDGER).write_text(json.dumps([dict(status="REJECTED")]))
-                self.assertEqual(
-                    execution_wait.resume(run, dict(attempts=[])),
-                    frozen["feedback.remote_declined"],
-                )
-                (run / execution_wait.LEDGER).write_text(json.dumps([dict(status="UNKNOWN")]))
-                with self.assertRaisesRegex(ValueError, "Frozen uncertainty"):
-                    execution_wait.resume(run, dict(attempts=[]))
-            self.assertEqual((run / "00-input/contract.json").read_bytes(), contract)
+                execution_wait.resume(run, dict(attempts=[]))
 
-    def test_runtime_artifacts_and_feedback_use_the_frozen_catalog(self):
-        self.addCleanup(prompt_texts.ACTIVE.adopt, prompt_texts.release())
-        entries = prompt_texts.release()
-        entries.update(
-            {
-                "recovery.header": ["Frozen recovery instructions"],
-                "recovery.index": ["", "Frozen recovery index"],
-                "manifest.search": "Frozen manifest instructions",
-                "citation.source_view": "Frozen view guidance: $path ($lines)",
-            }
-        )
-        prompt_texts.ACTIVE.adopt(entries)
+    def test_runtime_artifacts_and_feedback_render_catalog_templates(self):
         with tempfile.TemporaryDirectory() as directory:
             run = Path(directory)
             evidence = dict(source="events.jsonl", records=[], omitted=0)
             recovery.write_evidence(run / "recovery.md", evidence)
             text = (run / "recovery.md").read_text()
-            self.assertIn("Frozen recovery instructions", text)
-            self.assertIn("Frozen recovery index", text)
+            self.assertIn(prompt_texts.text("recovery.header"), text)
+            self.assertIn(prompt_texts.text("recovery.index"), text)
             manifest = artifact_access.manifest(run, run, {})
-            self.assertEqual(manifest["search"], "Frozen manifest instructions")
+            self.assertEqual(manifest["search"], prompt_texts.text("manifest.search"))
             view = dict(path=str(run / "view.json"), lines=8)
-            with mock.patch(
-                "taskrail.application.citation_review.source_views.prepare", return_value=view
-            ):
+            with mock.patch.object(citation_review.source_views, "prepare", return_value=view):
                 feedback = citation_review.guidance(
                     dict(path="/source.json"), dict(run=run, roots={}), "clipped", {}
                 )
-            self.assertEqual(feedback, f"Frozen view guidance: {view['path']} (8)")
-
-    def test_changed_saved_catalog_cannot_be_adopted(self):
-        self.addCleanup(prompt_texts.ACTIVE.adopt, prompt_texts.release())
-        with tempfile.TemporaryDirectory() as directory:
-            run = Path(directory)
-            (run / "00-input").mkdir()
-            instruction_sources.freeze_contract(run, prompts.POLICY, {})
-            contract = run / "00-input/contract.json"
-            saved = json.loads(contract.read_text())
-            saved["texts"]["stage.planner"] = "Stage: planning (frozen)."
-            contract.write_text(json.dumps(saved))
-            with self.assertRaisesRegex(ValueError, "differs from this release"):
-                instruction_sources.freeze_contract(run, prompts.POLICY, {})
-            del saved["texts"]
-            contract.write_text(json.dumps(saved))
-            with self.assertRaises(KeyError):
-                instruction_sources.freeze_contract(run, prompts.POLICY, {})
-
-    def test_missing_catalog_keys_require_restart_on_both_resume_paths(self):
-        self.addCleanup(prompt_texts.ACTIVE.adopt, prompt_texts.release())
-        with tempfile.TemporaryDirectory() as directory:
-            run = Path(directory)
-            (run / "00-input").mkdir()
-            saved = instruction_sources.freeze_contract(run, prompts.POLICY, {})
-            del saved["texts"]["citation.source_view"]
-            (run / "00-input/contract.json").write_text(json.dumps(saved))
-            with self.assertRaisesRegex(ValueError, "restart"):
-                instruction_sources.freeze_contract(run, prompts.POLICY, {})
-            with self.assertRaisesRegex(ValueError, "restart"):
-                instruction_sources.adopt_texts(run)
-
-    def test_new_tasks_do_not_inherit_another_runs_frozen_texts(self):
-        self.addCleanup(prompt_texts.ACTIVE.adopt, prompt_texts.release())
-        entries = prompt_texts.release()
-        entries["task.default_criteria"] = "Old task default"
-        prompt_texts.ACTIVE.adopt(entries)
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory) / "source"
-            root.mkdir()
-            payload = dict(
-                goal="Write installation documentation", roots=[dict(alias="p", path=str(root))]
+            self.assertEqual(
+                feedback, prompt_texts.text("citation.source_view", error="clipped", **view)
             )
-            text, _ = build_task(payload, Path(directory) / "runs")
-        self.assertNotIn("Old task", text)
-        self.assertIn(prompt_texts.current("task.default_criteria"), text)
+
+    def test_new_stage_rejects_changed_contract_even_with_its_fingerprint(self):
+        from taskrail.core.files import atomic_json, digest
+
+        with tempfile.TemporaryDirectory() as directory:
+            run = Path(directory)
+            state = {}
+            instruction_sources.capture(run, state, instruction_sources.BUNDLED_AGENTS)
+            path = run / instruction_sources.CONTRACT
+            original = path.read_bytes()
+            for section in ("policy", "texts", "schemas"):
+                with self.subTest(section=section):
+                    document = json.loads(original)
+                    del document[section]
+                    atomic_json(path, document)
+                    state[instruction_sources.SIGNATURE] = digest(path.read_bytes())
+                    with self.assertRaisesRegex(ValueError, "instruction contract"):
+                        prompts.make_request({}, ("planner", None, [], None), state, run)
+            path.unlink()
+            state[instruction_sources.SIGNATURE] = digest(original)
+            with self.assertRaisesRegex(ValueError, "instruction contract"):
+                prompts.make_request({}, ("planner", None, [], None), state, run)
+            self.assertFalse(path.exists())
 
 
 class CapabilityTests(unittest.TestCase):
