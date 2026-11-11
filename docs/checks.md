@@ -149,16 +149,13 @@ recipe keep the ordinary planning path.
 An invalid mandatory recipe or `cwd` outside the effective roots stops the task.
 The check stage records only criterion IDs explicitly bound to that recipe.
 
-`00-input/settings.json` freezes the catalog and mandatory commands; the run index
-records their digest. Continue verifies and restores that snapshot. A linked
-child or delivery phase authenticates its parent, roots and exact criterion
-bindings before inheriting the frozen catalog. Generated delivery phases resolve
-check references against that catalog even if current settings removed or changed
-the recipe; they never substitute a different command. An interrupted run restores its own
-frozen configuration before parsing check references, independently of live
-recipe changes. An adopted delivery phase also records its exact parent, phase,
-roots, criteria and catalog digest, so continuation can verify those inputs
-without reopening the parent. SSH server actions still recheck the parent's
+`00-input/settings.json` freezes the catalog and mandatory commands. Every run
+index records their digest, including for an empty catalog, and the selected
+check IDs and criterion bindings. Continue verifies the digest before resolving
+check IDs, so later settings changes cannot alter the commands. A linked child
+or delivery phase authenticates its parent, roots, criterion bindings and catalog
+before inheriting the recipes. A delivery phase records these inputs and its
+phase for an independent continuation. SSH actions also recheck the parent's
 live confirmation and linked server phase before execution.
 
 Each execution writes an immutable JSON artifact under `00-input/checks/` and a

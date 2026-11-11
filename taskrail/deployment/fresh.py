@@ -6,7 +6,7 @@ import shutil
 import sys
 from pathlib import Path
 
-from taskrail.application.task_config import ROLES
+from taskrail.application.instruction_sources import ROLES
 from taskrail.deployment.reset_history import history_roots
 from taskrail.deployment.reset_paths import ResetPaths, overlaps
 

@@ -15,7 +15,7 @@ def selected(parent, state, exclude=None):
     completed = correction_history.completed(parent, exclude)
     if not completed:
         return specs
-    settings = check_configuration.parent_settings(parent, state)
+    settings = check_configuration.frozen(parent, state)
     for run in completed:
         extra = additions(*run, settings, state["requirements"])
         specs = planned_checks.merge(specs, extra)
@@ -24,7 +24,7 @@ def selected(parent, state, exclude=None):
 
 def additions(run, completed, settings, requirements):
     """A correction cannot substitute commands, criteria or bindings from mutable state."""
-    frozen = check_configuration.parent_settings(run, completed)
+    frozen = check_configuration.frozen(run, completed)
     require(
         check_configuration.fingerprint(settings) == check_configuration.fingerprint(frozen),
         "Correction check catalog changed",

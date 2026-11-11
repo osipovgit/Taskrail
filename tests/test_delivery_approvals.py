@@ -19,6 +19,7 @@ from taskrail.application import (
     delivery_confirmation,
     execution_requests,
     execution_wait,
+    instruction_sources,
     prompts,
     task_config,
 )
@@ -207,6 +208,7 @@ class DeliveryApprovalTests(unittest.TestCase):
             requirements=config["task_spec"]["requirements"],
             run_format=3,
         )
+        instruction_sources.capture(run, state, instruction_sources.BUNDLED_AGENTS)
         for stage in ("planner", "reviewer"):
             with (
                 self.subTest(stage=stage),

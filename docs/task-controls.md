@@ -92,8 +92,10 @@ validation and confirmation while preserving prior phase attempts.
 Stop is cooperative: it saves a checkpoint and cleans up the owned provider process
 group, without signalling stored PIDs. Short checks may finish first. Closing the
 page does not stop work; stopping the managed service requests interruption.
-Continue retains frozen inputs, original preimages and approved scope. Source/Git
-must match its checkpoint. Notes are passed verbatim but cannot change authority.
+Continue retains frozen inputs, original preimages and approved scope. It verifies
+the task text, all four saved roles, project files and Git state before resuming.
+A missing or changed fingerprint requires Restart. Notes reach the agent verbatim
+within the existing permissions.
 For a changed split child use Restart reviewed task; for a standalone run use Restart.
 None of these operations rolls back edits.
 

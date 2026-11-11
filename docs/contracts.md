@@ -15,7 +15,7 @@ policy, texts and schemas in `00-input/`; their hashes must remain unchanged.
 and parent context require a current-format run. For other formats, start a new task.
 Continue additionally requires the same runtime build. Its identity hashes the
 package-relative paths and contents of the Python modules, runtime configuration,
-agent instructions and dashboard assets. Frozen catalogs must match the release catalog.
+agent instructions and dashboard assets. Before resuming any stage or building a model request, Taskrail verifies the saved contract and its fingerprint against the current build. A missing or altered contract requires Restart.
 
 The executor catalog advertises only configured, stage-permitted routes; the
 implementer never receives SSH actions. Prompt-budget tests cover capability and

@@ -117,7 +117,8 @@ class ProtectedPathTests(unittest.TestCase):
         frozen = dict(check_recipes={}, verify_commands=[], protected_paths=["*.p12"])
         (run / "00-input/settings.json").write_text(json.dumps(frozen))
         config = dict(protected_paths=["*.pem"])
-        check_configuration.restore(config, run, {})
+        state = check_configuration.capture(frozen, dict(check_specs=[]))
+        check_configuration.restore(config, run, state)
         self.assertEqual(config["protected_paths"], ["*.p12", "*.pem"])
 
 

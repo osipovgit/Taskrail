@@ -153,7 +153,7 @@ class Submission:
             sections.append(f"\n## Task split context\n{self.delivery[CONTEXT]}\n")
         if self.mode in CONTINUING:
             sections.extend(
-                [prompt_texts.current("task.history"), history.conversation(self.previous)]
+                [prompt_texts.text("task.history"), history.conversation(self.previous)]
             )
         return "".join(sections)
 

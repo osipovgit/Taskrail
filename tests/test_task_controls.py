@@ -11,7 +11,12 @@ from unittest.mock import patch
 from git_fixture import repository
 from run_fixture import current_run, workflow_workspace
 
-from taskrail.application import delivery_confirmation, execution_context, mode_rules
+from taskrail.application import (
+    check_configuration,
+    delivery_confirmation,
+    execution_context,
+    mode_rules,
+)
 from taskrail.application.live import execute_task
 from taskrail.application.source_guard import SourceGuard
 from taskrail.core.files import atomic_json
@@ -295,10 +300,10 @@ class TaskControlTests(unittest.TestCase):
             requirements=[],
         )
         execution_context.capture(epic, dict(roots={"project": self.repo}, worktrees={}), index)
-        (epic / "run.json").write_text(json.dumps(current_run(index)))
-        (epic / "00-input/settings.json").write_text(
-            json.dumps(dict(max_integration_corrections=0))
-        )
+        settings = dict(max_integration_corrections=0, verify_commands=[], check_recipes={})
+        check_configuration.capture(settings, index)
+        atomic_json(epic / "run.json", current_run(index))
+        atomic_json(epic / "00-input/settings.json", settings)
         return epic
 
     def launching(self, name):

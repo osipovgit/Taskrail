@@ -3,7 +3,7 @@
 import hashlib
 import sys
 
-from taskrail.application import source_packet
+from taskrail.application import instruction_sources, source_packet
 from taskrail.application.artifacts import save_run
 from taskrail.core import prompt_texts, protected_paths
 from taskrail.core.files import atomic_json
@@ -13,7 +13,7 @@ from taskrail.observability.progress import clock
 STAGE = "stage"
 
 
-def prepare(run, record, config, state):
+def prepare(record, config, state):
     """Reserve durable resources and disclose the effective instruction source."""
     role = record["role"]
     role_directory = state["agent_source_directory"]
@@ -21,7 +21,7 @@ def prepare(run, record, config, state):
         timeout_seconds=config["timeout"],
         contract_version=1,
         agent_source=f"{role_directory}/{role}.md",
-        contract_sha256=hashlib.sha256((run / "00-input/contract.json").read_bytes()).hexdigest(),
+        contract_sha256=state[instruction_sources.SIGNATURE],
         agent_sha256=state["agent_sources"][role],
     )
     return record

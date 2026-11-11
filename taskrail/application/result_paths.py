@@ -39,10 +39,10 @@ def path_feedback(payload, claim, error, stage):
     matching = (entry for entry in rows if claim["id"] in entry["evidence_ids"])
     owners = ", ".join(entry["id"] for entry in matching)
     if stage == "plan-reviewer":
-        return f"{owners}: {error}. {prompt_texts.diagnostic('validation.plan_review_path')}"
-    message = prompt_texts.diagnostic("validation.evidence_path", owners=owners, error=error)
+        return f"{owners}: {error}. {prompt_texts.text('validation.plan_review_path')}"
+    message = prompt_texts.text("validation.evidence_path", owners=owners, error=error)
     if stage == "planner":
-        message = f"{message} {prompt_texts.diagnostic('validation.plan_evidence_path')}"
+        message = f"{message} {prompt_texts.text('validation.plan_evidence_path')}"
     return message
 
 
@@ -66,7 +66,7 @@ def approved_path(filename, roots, scope="declared roots or executor snapshots")
     inside = any(root in path.parents for root in roots.values())
     schema.require(
         inside,
-        prompt_texts.diagnostic(
+        prompt_texts.text(
             "validation.path_scope",
             scope=scope,
             path=path,

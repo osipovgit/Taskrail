@@ -26,7 +26,7 @@ def bind(plan, context, *, verify=False):
 def _bind_step(step, paths, store, verify):
     signature = report_packets.signature(paths)
     if verify:
-        message = prompt_texts.diagnostic("validation.split_report_changed", step=step["id"])
+        message = prompt_texts.text("validation.split_report_changed", step=step["id"])
         schema.require(signature == step.get(SIGNATURE), message)
     elif signature:
         files = {report_packets.qualified(path): path for path in paths}

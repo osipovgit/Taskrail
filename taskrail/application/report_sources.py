@@ -30,7 +30,7 @@ def selected(run, hints, protected):
         elif run in path.parents:
             schema.require(
                 run / "00-input/original" in path.parents,
-                prompt_texts.diagnostic("validation.split_read_private", path=path),
+                prompt_texts.text("validation.split_read_private", path=path),
             )
     return files
 

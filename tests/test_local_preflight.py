@@ -22,7 +22,7 @@ class LocalPreflightTests(unittest.TestCase):
         root = Path(temporary.name)
         self.workflow = SimpleNamespace(
             config=dict(roots={"p": root}, verify_commands=[]),
-            state=dict(requirements=[]),
+            state=dict(requirements=[], attempts=[]),
             run=root,
         )
 
@@ -39,7 +39,7 @@ class LocalPreflightTests(unittest.TestCase):
         ):
             local_preflight.prepare(self.workflow)
         asked.assert_not_called()
-        report = json.loads((self.workflow.run / "local-preflight.json").read_text())
+        report = json.loads((self.workflow.run / "run.json").read_text())[local_preflight.KEY]
         self.assertIsNone(report["tools"][0]["executable"])
 
     def test_installed_tool_records_host_approval_fallback_without_asking(self):
@@ -78,5 +78,5 @@ class PreflightWorkflowTests(LiveFixture, unittest.TestCase):
         self.assertEqual(status, "BLOCKED")
         self.assertIn("Required local tools are unavailable", state["summary"])
         self.assertFalse(state["attempts"])
-        self.assertTrue((run / "local-preflight.json").is_file())
+        self.assertIsNone(state[local_preflight.KEY]["tools"][0]["executable"])
         self.assertTrue(resume_available(run, state)[0])

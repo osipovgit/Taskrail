@@ -302,8 +302,9 @@ must not write inside declared roots (generated folders such as `__pycache__`,
 ## Configuration changes
 
 New tasks read current settings and roles. Continue retains frozen task, role and
-policy snapshots. The service
-watches settings/role changes and logs them without revealing contents. A change
+policy snapshots. The service watches the settings file and the four active role
+files in `agent_source`, using bundled roles when that setting is omitted. It logs
+changes without revealing file contents. A change
 to `run_base`, the port or environment requires a service restart.
 
 Systemd does not source shell startup files. Add required proxy/runtime variables

@@ -1,54 +1,27 @@
-"""Model-facing instruction texts: one release catalog, frozen for each run.
-
-Every instruction a model reads comes from prompt-texts.json. A run freezes the
-catalog with its contract, and continuing the run adopts that frozen copy, so an
-update of the application never changes the instructions of a running task.
-"""
+"""Read the release's model-facing texts once and render their placeholders."""
 
 import json
 from pathlib import Path
 from string import Template
-
-CATALOG = Path(__file__).with_name("prompt-texts.json")
-
-
-def release():
-    """The catalog of this release: key -> text or list of lines."""
-    return json.loads(CATALOG.read_text(encoding="utf-8"))
+from types import MappingProxyType
 
 
-class Catalog:
-    """The texts of the running workflow: the release catalog or a run's frozen copy."""
-
-    def __init__(self, entries):
-        """Start with the given entries."""
-        self.entries = dict(entries)
-
-    def adopt(self, entries):
-        """Use a run's frozen texts from now on."""
-        self.entries = dict(entries)
-
-    def text(self, key, **fields):
-        """One text with its $placeholders filled in; a missing value is an error."""
-        entry = self.entries[key]
+def load():
+    """Keep the catalog's strings and line sequences immutable."""
+    path = Path(__file__).with_name("prompt-texts.json")
+    entries = json.loads(path.read_text(encoding="utf-8"))
+    for key, entry in entries.items():
         if isinstance(entry, list):
-            entry = "\n".join(entry)
-        return Template(entry).substitute(fields)
+            entries[key] = tuple(entry)
+    return MappingProxyType(entries)
 
 
-ACTIVE = Catalog(release())
+ENTRIES = load()
 
 
 def text(key, **fields):
-    """A text of the active catalog."""
-    return ACTIVE.text(key, **fields)
-
-
-def diagnostic(key, **fields):
-    """Validators use the current diagnostic catalog."""
-    return current(key, **fields)
-
-
-def current(key, **fields):
-    """New task inputs use the release catalog, independent of any active run."""
-    return Catalog(release()).text(key, **fields)
+    """One release text with its placeholders filled in; missing values are errors."""
+    entry = ENTRIES[key]
+    if isinstance(entry, tuple):
+        entry = "\n".join(entry)
+    return Template(entry).substitute(fields)

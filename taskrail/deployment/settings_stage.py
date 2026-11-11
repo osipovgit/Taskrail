@@ -8,7 +8,7 @@ import shutil
 import sys
 from pathlib import Path
 
-from taskrail.application import task_config
+from taskrail.application.instruction_sources import ROLES
 from taskrail.cli_service import DEFAULT_PORT
 from taskrail.deployment import settings_check
 from taskrail.infrastructure.opencode_cli import DEFAULT_COMMAND, validate_command
@@ -125,7 +125,7 @@ class Installation:
             return
         self.roles = self.prepared / AGENTS
         self.roles.mkdir()
-        for role in task_config.ROLES:
+        for role in ROLES:
             name = f"{role}.md"
             if not (source / name).is_file():
                 raise ValueError(f"Missing source agent: {role}")

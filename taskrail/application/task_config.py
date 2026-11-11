@@ -13,10 +13,8 @@ from taskrail.core.runtime import DEFAULT_TIMEOUT, run_storage, settings_path
 from taskrail.infrastructure.opencode_settings import launch_settings
 
 HEADER = input_header.HEADER
-ROLES = ("understanding", "planner", "implementer", "reviewer")
 HOST_AUTO = "auto"
 HOST_MODES = frozenset((HOST_AUTO, "ask"))
-BUNDLED_AGENTS = Path(__file__).resolve().parents[1] / "agents"
 VERIFICATION = "verification"
 DESIGN = "design"
 PHASES = frozenset(("task", "integration", "validation", "server", "correction"))
@@ -82,8 +80,8 @@ def task_header(text, options, roots_override):
 
 def agent_source(options, base):
     """Every role must exist and declare the supported instruction contract."""
-    source = base.joinpath(Path(options.get("agent_source", BUNDLED_AGENTS)).expanduser())
-    for role in ROLES:
+    source = instruction_sources.role_directory(options, base)
+    for role in instruction_sources.ROLES:
         role_file = source / f"{role}.md"
         if not role_file.is_file():
             raise ValueError(f"Missing source agent: {role}")

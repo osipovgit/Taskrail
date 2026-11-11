@@ -51,9 +51,9 @@ def file_bytes(name, label):
     """A directory or a vanished file is citation feedback, not a stage failure."""
     path = Path(name)
     if not path.exists():
-        raise ValueError(prompt_texts.diagnostic("validation.missing_source", label=label))
+        raise ValueError(prompt_texts.text("validation.missing_source", label=label))
     if not path.is_file():
-        raise ValueError(prompt_texts.diagnostic("validation.regular_source", label=label))
+        raise ValueError(prompt_texts.text("validation.regular_source", label=label))
     return path.read_bytes()
 
 

@@ -56,7 +56,7 @@ def validate_outcome(outcome, requirement, evidence, executed_evidence=(), plann
         runtime_outcome(outcome, requirement, executed_evidence, planned_runtime)
     elif outcome[OUTCOME] == "deferred":
         raise ValueError(
-            prompt_texts.diagnostic("validation.task_deferred", requirement=requirement[IDENTIFIER])
+            prompt_texts.text("validation.task_deferred", requirement=requirement[IDENTIFIER])
         )
 
 

@@ -38,7 +38,6 @@ SETTINGS_SNAPSHOT = (
     "context_reserve_tokens",
     "verify_commands",
     "check_recipes",
-    "check_specs",
     "protected_paths",
     "host_commands",
     "sandbox_network",

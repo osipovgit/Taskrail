@@ -6,8 +6,6 @@ and response format) and the Context JSON. Every model-facing text comes from th
 frozen policy and prompt catalog.
 """
 
-from pathlib import Path
-
 from taskrail.application import (
     execution_requests,
     instruction_modules,
@@ -23,22 +21,21 @@ from taskrail.application.feedback_files import context_json
 from taskrail.application.understanding_prompt import request as understand
 from taskrail.core import prompt_texts
 
-POLICY = Path(__file__).with_name("policy.md").read_text()
 INSTRUCTIONS_HEADING = "# Orchestrator instructions"
 
 
 def make_request(config, execution, state, run):
     """The complete request of one stage attempt."""
-    frozen = instruction_sources.freeze_contract(run, POLICY, state)
+    instruction_sources.verify_contract(run, state)
     stage = execution[0]
     if stage == "understanding":
-        return understand(config, execution, state, run, frozen["policy"])
+        return understand(config, execution, state, run, instruction_sources.POLICY)
     catalog = execution_requests.available()
     if not catalog.get("unavailable"):
         state["jenkins_configured"] = bool(catalog.get("jenkins"))
     task = task_text(config, run, state.get("requirements", []))
     parts = (
-        policy_sections.for_stage(frozen["policy"], stage),
+        policy_sections.for_stage(instruction_sources.POLICY, stage),
         prompt_texts.text(f"stage.{stage}"),
         workspace_paths.instructions(config),
         task_block.render(config, execution),

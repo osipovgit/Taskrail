@@ -29,7 +29,6 @@ def start(workflow, resume):
     Allowing all actions comes from the task header unless the operator revoked it; a
     choice made on an approval card lasts until the worker exits.
     """
-    instruction_sources.adopt_texts(workflow.run)
     if resume:
         restore(workflow, validated_checkpoint(workflow))
     else:
@@ -64,9 +63,10 @@ def validated_checkpoint(workflow):
     workflow.guard.before = json.loads(run.joinpath(INPUTS, "manifest.json").read_text())
     workflow.guard.adopt(checkpoint["expected"], checkpoint["git_before"])
     workflow.guard.verify(checkpoint_source_error(workflow.config))
-    task_hash = checkpoint.get("task_hash")
-    if task_hash and digest(workflow.config["task_text"].encode()) != task_hash:
-        raise ValueError("Task changed since checkpoint; continuation refused")
+    if digest(workflow.config["task_text"].encode()) != checkpoint.get("task_hash"):
+        raise ValueError(
+            "Task fingerprint missing or changed since checkpoint; continuation refused"
+        )
     reviewed_input.restore(workflow)
     restore_understanding(workflow)
     instruction_sources.verify(run, workflow.state)
