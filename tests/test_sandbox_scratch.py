@@ -126,10 +126,13 @@ class StageScratchTests(unittest.TestCase):
         self.assertEqual(target.read_text(), "original")
 
     def test_interruption_restores_the_scratch_directory_without_following_its_replacement(self):
-        with self.assertRaises(KeyboardInterrupt), stage_scratch.command_files(self.scratch):
-            self.scratch.rmdir()
-            self.scratch.symlink_to(self.project, target_is_directory=True)
-            raise KeyboardInterrupt
+        def interrupt_command():
+            with stage_scratch.command_files(self.scratch):
+                self.scratch.rmdir()
+                self.scratch.symlink_to(self.project, target_is_directory=True)
+                raise KeyboardInterrupt
+
+        self.assertRaises(KeyboardInterrupt, interrupt_command)
         self.assertEqual(self.scratch.resolve(), self.scratch)
         self.assertTrue(self.scratch.is_dir())
         self.assertTrue(self.project.is_dir())
