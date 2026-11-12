@@ -47,6 +47,12 @@ their corrections), failed attempts, rejections (corrections sent back to the se
 with the most frequent reasons, paths and numbers blanked), recoveries, tokens and time. Runs in the trash are not counted. Missing
 usage is reported as zero tokens, so compare models only on runs with telemetry.
 
+During a live session, two consecutive file reads that return only previously delivered
+complete lines trigger a hint in the next model request. It also detects alternating
+files and narrower windows. The hint appears once per streak; new lines, changed text
+or an intervening action let research proceed. Each stage uses its own visible context.
+The activity counter separately counts calls with identical arguments.
+
 ## Artifacts
 
 | File | Purpose |

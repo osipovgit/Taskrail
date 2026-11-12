@@ -4,8 +4,8 @@
   "type": "module",
   "scripts": {
     "lint": "eslint . && stylelint 'taskrail/web/static/*.css'",
-    "test": "node tests/test_dashboard.cjs",
-    "format:check": "prettier --check 'taskrail/web/static/**/*.{html,css,js}' 'tests/*.cjs' eslint.config.mjs"
+    "test": "node tests/test_dashboard.cjs && node --test tests/test_read_feedback.mjs",
+    "format:check": "prettier --check 'taskrail/web/static/**/*.{html,css,js}' 'tests/*.cjs' 'tests/*.mjs' 'taskrail/infrastructure/read_feedback/*.{js,mjs}' eslint.config.mjs"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",

@@ -16,6 +16,7 @@ from taskrail.infrastructure import (
     opencode_cli,
     opencode_server,
     permission_probe,
+    read_feedback_config,
 )
 from taskrail.infrastructure.event_summary import parse_events
 from taskrail.infrastructure.opencode_events import EventTranslator
@@ -165,6 +166,25 @@ class LaunchTests(unittest.TestCase):
 
 
 class EnvironmentTests(unittest.TestCase):
+    def test_stage_feedback_preserves_nested_and_inline_cli_configuration(self):
+        source = '{/* existing */ "model":"plugin","nested":{"plugin":[]}, "plugin": ["file:///other",],}'
+        variables = {read_feedback_config.CONFIG_TEXT: source}
+        with mock.patch.dict(os.environ, variables):
+            variables = read_feedback_config.environment((), False, False)
+        entry = (read_feedback_config.PLUGIN_DIR / "v1.mjs").as_uri()
+        self.assertEqual(
+            variables[read_feedback_config.CONFIG_TEXT],
+            source.replace('["file:///other"', f'["{entry}","file:///other"'),
+        )
+        self.assertTrue((read_feedback_config.PLUGIN_DIR / "v1.mjs").is_file())
+        for version, command in (
+            ("plugin", ["cli"]),
+            ("plugins", opencode_api.launch_command(["cli"], "2.x")),
+        ):
+            with mock.patch.dict(os.environ, {read_feedback_config.CONFIG_TEXT: "{}"}):
+                env = read_feedback_config.environment((), False, opencode_api.ADAPTER in command)
+            self.assertEqual(list(json.loads(env[read_feedback_config.CONFIG_TEXT])), [version])
+
     def test_cli_receives_the_same_limited_environment_for_version_and_preflight(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
