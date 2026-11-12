@@ -536,6 +536,10 @@ if mode == "structured-steps" and role == "planner":
 if mode == "review-preimage" and role == "reviewer":
     target = run / "00-input/preimages/project/hello.py"
 value = enrich(value, context, target, role, read_wrapper=mode == "wrapped-no-change")
+if mode == "reviewed-local-check" and role == "planner":
+    value["steps"][0]["checks"] = [
+        'run: {"root":"project","argv":["grep","-F","return 2","hello.py"]}'
+    ]
 if mode == "integration-fix" and role == "planner":
     value["steps"][0]["required_checks"] = ["audit"]
 if mode == "wrapped-no-change":

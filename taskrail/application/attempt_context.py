@@ -42,9 +42,7 @@ def save_request(folder, record, request, workflow):
     atomic_json(access, manifest(folder.parent, folder, *rights, protected))
     request = request.replace(
         "# Orchestrator instructions\n",
-        "# Orchestrator instructions\n{}\n".format(
-            prompt_texts.text("request.manifest", path=access)
-        ),
+        f"# Orchestrator instructions\n{access_notice(access, record)}\n",
         1,
     )
     (folder / "request.md").write_text(request, encoding="utf-8")
@@ -53,6 +51,16 @@ def save_request(folder, record, request, workflow):
     record["instruction_sha256"] = hashlib.sha256(request.encode()).hexdigest()
     atomic_json(folder / "stage.json", record)
     save_run(folder.parent, state)
+
+
+def access_notice(access, record):
+    """Name the manifest and the temporary directory actually granted to this stage."""
+    notice = prompt_texts.text("request.manifest", path=access)
+    path = record.get("scratch_directory")
+    if path:
+        scratch = prompt_texts.text("request.scratch", path=path)
+        return f"{notice}\n{scratch}"
+    return notice
 
 
 def record_outcome(run, state, record, outcome):

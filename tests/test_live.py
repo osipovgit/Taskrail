@@ -406,8 +406,13 @@ class LiveTests(LiveFixture, unittest.TestCase):
         self.assertFalse(list(self.profiles.glob("taskrail-*.md")))
 
     def test_live_success_keeps_dirty_and_only_selected_preimages(self):
-        run, status, state = self.run_mode()
-        self.assertEqual(status, "READY_FOR_REVIEW")
+        run, status, state = self.run_mode("reviewed-local-check")
+        self.assertEqual(status, "READY_FOR_REVIEW", state.get("summary"))
+        (receipt,) = json.loads((run / "check-results.json").read_text())
+        self.assertEqual(receipt["command"]["argv"], ["grep", "-F", "return 2", "hello.py"])
+        self.assertEqual(receipt["execution"]["exit_code"], 0)
+        self.assertEqual(receipt["assessment"]["status"], "passed")
+        self.assertIn(Path(receipt["path"]).name, (run / "06-review/request.md").read_text())
         self.assertIn("return 2", (self.root / "hello.py").read_text())
         self.assertEqual((self.root / "unrelated.txt").read_text(), "user dirty work\n")
         self.assertIn("# user comment", (self.root / "hello.py").read_text())

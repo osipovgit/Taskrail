@@ -16,6 +16,7 @@ from taskrail.application import (
     check_results,
     evidence,
     execution_evidence,
+    plan_commands,
     plan_projection,
     plan_validation,
     planned_checks,
@@ -109,6 +110,18 @@ class PlannedRuntimeTests(unittest.TestCase):
         plan_validation.canonical_plan(plan, self.roots)
         plan_validation.validate_plan(plan, self.roots, self.base / "task.md", self.config)
         return plan
+
+    def test_verify_bullet_keeps_argv_literal_through_plan_and_review_projection(self):
+        executable = 'Run: {"root":"project","argv":["check","project/data,a;b"]}'
+        with self.assertRaisesRegex(ValueError, "T1 Verify promises"):
+            self.parsed(PLAN.replace("Run the unit-tests recipe", "lint --json exits 0"))
+        text = PLAN.replace("Verify: Run the unit-tests recipe", "Verify:\n- " + executable)
+        plan = self.parsed(text)
+        chosen = plan_commands.entries(plan, self.roots)
+        self.assertEqual(chosen[0]["recipe"]["request"]["argv"], ["check", "project/data,a;b"])
+        execution = ("plan-reviewer", plan)
+        view = plan_projection.plan_context(execution, self.config["task_spec"], self.roots)
+        self.assertEqual(view["steps"][0]["verify"], [executable])
 
     def test_step_owns_ordinary_verify_command_with_empty_recipe_catalog(self):
         command = "ansible-playbook --syntax-check site.yml"

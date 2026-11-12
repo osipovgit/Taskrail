@@ -1,8 +1,9 @@
 # Access and executor routes
 
 `access.json` and the runtime profile share one input manifest: canonical project,
-task, source, recovery and executor paths. Each role writes only its designated
-artifact; approved implementers may also edit source. Declared roots grant scope,
+task, source, recovery and executor paths. Each role writes its designated artifact.
+Roles with local commands also have stage scratch space. Approved implementers may
+edit source. Declared roots grant scope,
 not OS privileges or authentication. Native permission errors return to the agent
 without stopping the turn or creating a read-grant prompt. The agent corrects its
 path or uses an allowed source; it reports a gap if required evidence is inaccessible.
@@ -90,6 +91,14 @@ approval ledger with `"rule": "sandbox"`:
   sockets, including host abstract sockets; graphical-session variables are unset.
   [Deployment](deployment.md#local-command-sandbox) describes these limits.
 
+Each planning, implementation and review attempt has a private `scratch/` directory
+outside the project. The request gives its absolute path for native reads and edits.
+Model-requested local commands receive the same directory in `TMPDIR` on both the
+host and sandbox routes. Keep the working directory inside the project and pass the
+absolute script or report path as an argument. Files survive successive commands in
+the attempt. Taskrail removes them when the attempt closes. Use stdout for results
+that review or recovery needs. The executor records the producing command, status,
+exit code when available, and output in `00-input/local/`.
 
 `"sandbox": false` requests host execution. Without working bubblewrap, commands also
 use the host route (`rule: host`); `host_commands: "ask"` requires approval there.

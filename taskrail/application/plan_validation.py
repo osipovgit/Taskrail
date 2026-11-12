@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from taskrail.application import planned_checks, task_scope
+from taskrail.application import plan_commands, planned_checks, task_scope
 from taskrail.application.planned_paths import safe_file
 from taskrail.core import control, protected_paths
 from taskrail.core.paths import readable_source
@@ -38,6 +38,7 @@ def validate_plan(plan, roots, task, config=None):
     control.check_plan(plan, config or {})
     task_scope.check(plan, config or {})
     planned_checks.validate(plan, config or {})
+    plan_commands.entries(plan, roots)
     proposed = unique_names(plan.get("proposed_change_files"))
     control.check_reads(plan.get("files_read"), plan.get("evidence"))
     protected = protected_paths.patterns(config or {})

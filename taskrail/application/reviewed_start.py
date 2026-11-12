@@ -19,7 +19,7 @@ from taskrail.application.plan_validation import canonical_plan
 from taskrail.application.step_checks import install as install_step_checks
 from taskrail.application.workspace_paths import read_hint
 from taskrail.core import schema, task_lineage
-from taskrail.core.files import atomic_json
+from taskrail.core.files import atomic_json, digest
 
 PLAN = "plan"
 REQUIREMENTS = "requirements"
@@ -99,5 +99,6 @@ def install(workflow, plan, stage):
     workflow.state["contract_start"] = dict(stage=stage, origin="reviewed-contract")
     workflow.flow.update(plan=plan, allowed=plan["proposed_change_files"], stage=stage)
     if stage == "implementer":
+        workflow.state[reviewed_artifacts.SEAL] = digest((workflow.run / REFERENCE).read_bytes())
         install_step_checks(workflow, plan)
         capture(workflow)

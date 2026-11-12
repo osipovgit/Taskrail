@@ -6,6 +6,7 @@ never rejects its overwrite as unread.
 """
 
 from taskrail.application import plan_file, progress_file, review_file, understanding_file
+from taskrail.infrastructure import stage_scratch
 
 PLANNER = "planner"
 IMPLEMENTER = "implementer"
@@ -21,6 +22,10 @@ def record_access(workflow, record):
     stage = record[STAGE]
     if stage == understanding_file.STAGE:
         target = understanding_file.prepare(workflow.run)
+    else:
+        scratch = stage_scratch.prepare(workflow.run / record["directory"])
+        record["scratch_directory"] = str(scratch)
+        record["writable_files"].append(str(scratch))
     if stage == PLANNER:
         read_only = bool(workflow.config.get("read_only"))
         target = plan_file.prepare(workflow.run, workflow.state[REQUIREMENTS], read_only)

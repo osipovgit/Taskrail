@@ -65,7 +65,7 @@ source checks, checkpoints and file operations:
 | Planning | Independent plan review, including no-change proposals and declared blockers |
 | Plan review: changes requested | Return the complete findings to planning, then review the revised plan |
 | Plan review: approved | Implementation with captured preimages; a split becomes `TASKS_READY`; a no-change proposal finishes or runs applicable checks and result review |
-| Implementation | Built-in/configured checks, then independent result review |
+| Implementation | Built-in, configured and executable plan checks, then independent result review |
 | Checks: failed | Return failing checks to the authorized writer. Read-only failure ends as `CHECK_FAILED` |
 | Result review: changes requested | Return all findings to the authorized writer. Read-only phases end as `CHANGES_REQUESTED` |
 | Result review: approved | Final status and, on a task branch, a controlled commit of reviewed changes |
@@ -91,7 +91,7 @@ Recovery preserves the current stage; an interrupted writer is never blindly ret
 | `integration_changes.py`, `inherited_preimages.py` | Original source identities for retried tasks and combined integration diffs |
 | `evidence_delivery.py`, `citation_review.py`, `source_packet.py` | Exact source delivery and citations bound to the receiving attempt and session |
 | `stage_attempts.py`, `attempt_*.py` | One model stage: profile, launch, validation and bounded retries |
-| `check_stage.py`, `builtin_checks.py`, `verify_*.py` | Syntax checks and settings verification commands |
+| `check_stage.py`, `builtin_checks.py`, `verify_*.py` | Syntax checks and configured or reviewed verification commands |
 | `source_tree.py`, `git_state.py`, `planned_paths.py`, `plan_validation.py`, `changes.py` | Fingerprints, path safety, plan checks, preimages and the diff |
 
 The application uses the Python 3.10+ standard library and browser-native JavaScript.

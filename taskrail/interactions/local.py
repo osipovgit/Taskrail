@@ -1,15 +1,13 @@
 """Local diagnostics, sandboxed or personally approved; no implicit shell expansion."""
 
-import os
-import shutil
 import subprocess
 import tempfile
 import time
 
 from taskrail.core import control, json_response, prompt_texts, protected_paths, schema
 from taskrail.git import transport
+from taskrail.infrastructure import command_status, sandbox, stage_scratch
 from taskrail.infrastructure import environment as host_environment
-from taskrail.infrastructure import sandbox
 from taskrail.infrastructure.process_group import stop_group
 from taskrail.interactions import local_intake, local_request, local_sandbox, read_only
 
@@ -44,8 +42,7 @@ def validate(payload, roots, automatic=False, protected=protected_paths.DEFAULT_
     if automatic:
         still = read_only.command(payload, roots, protected)
         schema.require(still, "Automatic read no longer qualifies")
-    search_path = os.defpath if automatic else None
-    executable = shutil.which(argv[0], path=search_path)
+    executable = local_request.executable(argv, payload["cwd"], automatic)
     schema.require(bool(executable), "Executable not installed on the orchestrator host")
     return [executable, *argv[1:]]
 
@@ -63,14 +60,15 @@ def execute(payload, context):
     if not argv:
         argv = validate(payload, context["roots"], *recheck(context))
     with (
+        stage_scratch.command_files(context.get("scratch_directory")),
         local_sandbox.launch(argv, payload, context) as launch,
         tempfile.TemporaryFile() as output,
         tempfile.TemporaryFile() as errors,
     ):
         process = subprocess.Popen(
-            **launch,
+            **launch[0],
             cwd=payload["cwd"],
-            env=context.get("execution_env", host_environment.filtered()),
+            env=context.get("execution_env", host_environment.local_command(context)),
             stdin=subprocess.DEVNULL,
             stdout=output,
             stderr=errors,
@@ -84,10 +82,9 @@ def execute(payload, context):
             raise
         reap(process)
         return dict(
-            exit_code=process.returncode,
+            command_status.process_outcome(payload["argv"][0], process.returncode, launch[1]),
             stdout=transport.read(output),
             stderr=transport.read(errors),
-            status="SUCCEEDED" if process.returncode == 0 else "FAILED",
         )
 
 

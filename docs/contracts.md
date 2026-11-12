@@ -297,7 +297,8 @@ Read:
 - project/.ansible-lint:1-12
 Done when: The default and all references use the corrected name and retain its value.
 Verify:
-- Run ansible-lint roles/ntp and inspect any remaining findings.
+- run: {"root":"project","argv":["ansible-lint","roles/ntp"]}
+- Inspect any remaining findings.
 ```
 
 `Read` is optional. Use a file, a file with a line or range, or a list of these
@@ -392,6 +393,28 @@ Each approved SSH action or Jenkins build has one ticket object in
 `00-input/remote/<ticket-id>.json`. Jenkins reads have numbered command receipts
 in the same directory. Reobservation verifies the ticket and its long-output files.
 UNKNOWN remote outcomes require inspection and are never replayed automatically.
+
+### Executable Verify bullets
+
+An executable `Verify` bullet belongs to its plan step. Once the plan is approved,
+the check stage runs the exact argv with the ordinary local approval policy and
+source guards. Its receipt in `00-input/checks/` records the command, exit code,
+assessment and output for the submitted revision. Plain-text bullets describe manual
+observations. Put numeric exit assertions in executable bullets. Use `manual:` for
+a source or documentation inspection that mentions a numeric exit. Keep separate programs in separate executable bullets. A shell command
+requested for diagnostics reports the exit status of the shell itself.
+
+```text
+Verify:
+- run: {"root":"project","cwd":"app","argv":["make","test"]}
+- run: {"root":"project","cwd":"app","argv":["lint-tool","--json"],"expect":{"exit_code":0,"json_counts":{"field":"rule","equals":{"known-warning":15}}}}
+```
+
+`cwd` defaults to the named project root. The default expected exit code is zero.
+`json_counts` checks the complete JSON array on stdout, including unexpected categories.
+A missing code or an unreadable report leaves the assertion unverified.
+
+### Configured checks
 
 Configured checks can run without model-authored execution requests. Server
 settings own `check_recipes`, each with `kind`, `phase`, an exact `request`, an output

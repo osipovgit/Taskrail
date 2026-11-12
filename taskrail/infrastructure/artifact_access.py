@@ -3,7 +3,7 @@
 import re
 
 from taskrail.core import prompt_texts, protected_paths
-from taskrail.infrastructure import sandbox
+from taskrail.infrastructure import sandbox, stage_scratch
 
 
 def result_inputs(run):
@@ -40,10 +40,12 @@ def model_inputs(run, folder):
         run / "00-input/checks",
         run / "00-input/source-views",
     ]
-    if (run / "00-input/original").is_dir():
-        paths.append(run / "00-input/original")
-    for name in ("dependency-checks", "plan-reports"):
-        packet = run / "00-input" / name
+    for packet in (
+        folder / stage_scratch.DIRECTORY,
+        run / "00-input/original",
+        run / "00-input/dependency-checks",
+        run / "00-input/plan-reports",
+    ):
         if packet.is_dir() and packet.resolve() == packet:
             paths.append(packet)
     paths.extend(result_inputs(run))

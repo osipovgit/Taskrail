@@ -43,6 +43,14 @@ def filtered(allow=()):
     return {name: text for name, text in os.environ.items() if name not in secrets}
 
 
+def local_command(context):
+    """Use the attempt's temporary storage for model-requested commands."""
+    variables = filtered()
+    if context.get("scratch_directory"):
+        variables["TMPDIR"] = str(context["scratch_directory"])
+    return variables
+
+
 def secret(name):
     upper = name.upper()
     stem = upper.removesuffix(FILE_SUFFIX)
