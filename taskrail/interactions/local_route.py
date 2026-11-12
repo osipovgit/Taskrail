@@ -1,5 +1,7 @@
 """A local command request: checked, sandboxed or approved, executed, effects adopted."""
 
+from pathlib import Path
+
 from taskrail.interactions import (
     approval_policy,
     command_effects,
@@ -63,7 +65,9 @@ def without_decision(actions, payload):
     )
     if answer is not None:
         return actions.local_result(payload, answer)
-    if local_request.missing_executable(payload[ARGV]) or not local_sandbox.sandboxed(payload):
+    if local_request.missing_executable(
+        payload[ARGV], cwd=payload["cwd"]
+    ) or not local_sandbox.sandboxed(payload):
         return None
     request = dict(stage=actions.folder.name, **payload)
     decision = approval_policy.automatic(actions.run, request, approval_policy.SANDBOX)
@@ -85,10 +89,13 @@ def executed(actions, payload, decision):
     """Run an approved command and adopt what it changed in the roots."""
     actions.rule = decision.get("rule")
     automatic = actions.rule == approval_policy.READ_ONLY
-    if local_request.missing_executable(payload[ARGV], automatic):
+    if local_request.missing_executable(payload[ARGV], automatic, cwd=payload["cwd"]):
         return actions.local_result(payload, dict(status=REJECTED, reason=STILL_MISSING))
     actions.session.check_sources()
     context = dict(actions.session.environment, automatic_read=automatic)
+    scratch = actions.session.active[1].get("scratch_directory")
+    if scratch:
+        context["scratch_directory"] = Path(scratch)
     if decision.get("rule") == approval_policy.SANDBOX:
         context[local_sandbox.WRITES] = actions.session.active[1]["role"] == "implementer"
     context["timeout"] = actions.session.clock.remaining()
@@ -108,7 +115,7 @@ def run_approved(actions, payload, decision, context, receipt):
 
 def install_notice(payload):
     """Let the operator install a missing program and allow the same command."""
-    program = local_request.missing_executable(payload[ARGV])
+    program = local_request.missing_executable(payload[ARGV], cwd=payload["cwd"])
     if program is None:
         return {}
     return dict(notice=MISSING_PROGRAM.format(program))

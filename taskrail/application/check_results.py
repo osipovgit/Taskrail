@@ -35,6 +35,8 @@ def record(run, spec, request, outcome, context):
         execution=check_artifacts.stored_output(path, outcome),
         path=str(path),
     )
+    if request.get("status") == "LOCAL_REQUEST":
+        entry["command"] = {key: request[key] for key in ("cwd", "argv")}
     atomic_json(path, entry)
     entries.append(entry)
     atomic_json(run / LEDGER, entries)

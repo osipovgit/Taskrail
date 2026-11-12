@@ -1,8 +1,8 @@
 """The plan file a planner writes: its template, its instructions and its result.
 
 plan.md lives in the run directory, so an interrupted or overflowing session leaves
-it behind and the next attempt continues it. The planner may write only this file;
-the server reads it, derives the plan result and names every problem by line.
+it behind and the next attempt continues it. The server derives the plan result
+from this file and names every problem by line.
 """
 
 from taskrail.application import plan_template, project_map

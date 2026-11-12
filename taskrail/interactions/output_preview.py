@@ -9,7 +9,16 @@ from taskrail.interactions import output_digest
 LINE_LIMIT = 2000
 OUTPUT_FIELDS = ("stdout", "stderr", "console")
 PREVIEW_CHARS = 500
-RESULT_FIELDS = ("status", "target", "exit_code", "detail", "reason")
+RESULT_FIELDS = (
+    "status",
+    "target",
+    "exit_code_of",
+    "exit_code",
+    "launcher_exit_code",
+    "signal",
+    "detail",
+    "reason",
+)
 DIGEST_STREAMS = 8
 PREVIEW_LIMIT = 24000
 

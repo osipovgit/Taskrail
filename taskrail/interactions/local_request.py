@@ -56,7 +56,14 @@ def correction(payload):
     return prompt_texts.text("feedback.incomplete_local", shown=shown)
 
 
-def missing_executable(argv, automatic=False):
+def executable(argv, cwd, automatic=False):
+    """Resolve a relative executable against the requested cwd, just as exec would."""
+    program = argv[0]
+    if os.path.dirname(program) and not os.path.isabs(program):
+        program = os.path.join(cwd, program)
+    return shutil.which(program, path=os.defpath if automatic else None)
+
+
+def missing_executable(argv, automatic=False, *, cwd="."):
     """The program name when it is not installed on the host, else None."""
-    search_path = os.defpath if automatic else None
-    return None if shutil.which(argv[0], path=search_path) else argv[0]
+    return None if executable(argv, cwd, automatic) else argv[0]

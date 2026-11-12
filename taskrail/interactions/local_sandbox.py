@@ -39,11 +39,13 @@ def launch(argv, payload, context):
     """Popen arguments of the command: sandboxed when the context says so."""
     writes = context.get(WRITES)
     if writes is None:
-        return contextlib.nullcontext(dict(args=argv, pass_fds=()))
+        return contextlib.nullcontext((dict(args=argv, pass_fds=()), None))
     config = context.get("config", {})
     policy = dict(
         protected=protected_paths.patterns(config), network=config.get("sandbox_network") is True
     )
     if context.get("run"):
         policy["original"] = context["run"] / "00-input/original"
+    if context.get("scratch_directory"):
+        policy["scratch_directory"] = context["scratch_directory"]
     return sandbox.command(argv, payload["cwd"], context["roots"], writes, policy)

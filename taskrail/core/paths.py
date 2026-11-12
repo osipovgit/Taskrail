@@ -3,6 +3,7 @@
 import re
 from pathlib import Path
 
+from taskrail.core.plan_keys import RUN_COMMAND
 from taskrail.core.schema import require
 
 
@@ -12,7 +13,7 @@ def tool_paths(payload, roots):
         return {key: tool_paths(element, roots) for key, element in payload.items()}
     if isinstance(payload, list):
         return [tool_paths(element, roots) for element in payload]
-    if isinstance(payload, str):
+    if isinstance(payload, str) and not payload.lower().startswith(RUN_COMMAND):
         for alias, root in roots.items():
             payload = re.sub(
                 rf"(?<![\w/.-]){re.escape(alias)}/",

@@ -40,7 +40,7 @@ def execute(run, folder, payload, context, decision):
 def execution_identity(payload, context):
     """Freeze executable resolution and environment identity before execution."""
     argv = local.validate(payload, context["roots"], *local.recheck(context))
-    execution_env = environment.filtered()
+    execution_env = environment.local_command(context)
     encoded = json.dumps(execution_env, sort_keys=True).encode()
     return dict(
         effective_argv=argv, execution_env=execution_env, environment_sha256=digest(encoded)

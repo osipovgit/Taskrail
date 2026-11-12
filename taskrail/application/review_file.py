@@ -2,8 +2,8 @@
 
 review.md lives in the run directory, so an interrupted session leaves it behind and
 the next attempt of the same review continues it. A review that starts after another
-stage gets a fresh template. The reviewer may write only this file; the server reads
-it, derives the review result and names every problem by line.
+stage gets a fresh template. The server derives the review result from this file
+and names every problem by line.
 """
 
 from taskrail.core import prompt_texts

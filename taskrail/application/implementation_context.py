@@ -1,6 +1,6 @@
 """Effective task scope and scheduled local checks for the implementation stage."""
 
-from taskrail.application import check_selection, followup_selection
+from taskrail.application import check_selection, followup_selection, plan_commands
 from taskrail.application.planned_paths import writable_roots
 from taskrail.core.paths import tool_paths
 
@@ -11,6 +11,7 @@ def writer(config, execution, state):
     roots = config["roots"]
     grants = writable_roots(config, execution[2])
     checks = check_selection.applicable(config, state.get("requirements", []))
+    checks.extend(plan_commands.entries(plan, roots))
     scheduled = [check["spec"] for check in checks]
     return dict(
         planned_files=tool_paths(plan.get("proposed_change_files", []), roots),

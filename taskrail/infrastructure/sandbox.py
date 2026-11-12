@@ -14,7 +14,7 @@ import shutil
 import subprocess
 
 from taskrail.core import protected_paths
-from taskrail.infrastructure import sandbox_mounts, socket_filter
+from taskrail.infrastructure import command_status, sandbox_mounts, socket_filter, stage_scratch
 
 NAMESPACE = socket_filter.NAMESPACE
 SOCKET_FILTER = socket_filter.FILTER
@@ -120,6 +120,7 @@ def command(argv, cwd, roots, writable, policy=None):
         *sandbox_mounts.project(
             roots, writable, protected, overlays(), (policy or {}).get("original")
         ),
+        *stage_scratch.mount((policy or {}).get("scratch_directory"), protected),
         *sandbox_mounts.credentials(argv[0], protected),
         *(sandbox_mounts.RESOLVER if network else ()),
         *UNSET_DESKTOP,
@@ -128,6 +129,8 @@ def command(argv, cwd, roots, writable, policy=None):
         "--",
         *argv,
     ]
-    with socket_filter.isolation(None if network else mode()) as launch:
-        arguments = [*BASE, *launch["args"], *mounts]
-        yield dict(launch, args=[executable(), *arguments])
+    with (
+        socket_filter.isolation(None if network else mode()) as launch,
+        command_status.capture(executable(), BASE, launch, mounts) as observed,
+    ):
+        yield observed

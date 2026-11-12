@@ -263,10 +263,22 @@ class RequestBudgetTests(LiveFixture, unittest.TestCase):
             self.assertLess(len(instructions.encode()), budget, stage)
             self.assertIsNone(STABLE_ID.search(request), stage)
             self.assertNotIn("{'", request)
+            scratch = run / stage / "scratch"
+            access = json.loads((scratch.parent / "access.json").read_text())
+            expected = stage != "01-understand"
+            self.assertEqual(str(scratch) in request, expected)
+            self.assertEqual(str(scratch) in access["writable_files"], expected)
+            self.assertEqual(str(scratch) in access["readable_artifacts"], expected)
+            self.assertFalse(scratch.exists())
+            profile = json.loads((scratch.parent / "agent.md").read_text().split("---")[1])
+            for tool in ("read", "edit", "external_directory"):
+                self.assertEqual(
+                    profile["permission"][tool].get(f"{scratch}/*") == "allow", expected
+                )
             requests[stage] = request
         self.assertNotIn("Use LOCAL_REQUEST", requests["01-understand"])
         self.assertIn("even with an empty check_catalog", requests["03-plan-review"])
-        self.assertIn("Your only writable file is the plan file", requests["02-plan"])
+        self.assertIn("Write the plan to the plan file", requests["02-plan"])
         self.assertIn("The planner was given these rules", requests["03-plan-review"])
         self.assertNotIn("The planner was given these rules", requests["02-plan"])
         for stage in ("02-plan", "03-plan-review"):

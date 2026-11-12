@@ -45,7 +45,7 @@ def availability(workflow, check):
     request = check_runner.request_for(check)
     argv = local_request.checked_request(request, workflow.config["roots"])
     program = None
-    if not local_request.missing_executable(argv):
+    if not local_request.missing_executable(argv, cwd=request["cwd"]):
         program = local.validate(request, workflow.config["roots"])[0]
     identifier = check["spec"]["id"]
     return dict(check_id=identifier, program=argv[0], executable=program)

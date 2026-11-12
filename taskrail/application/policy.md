@@ -37,12 +37,13 @@ the evidence is complete or the gap is precise.
 
 ## planner, plan-reviewer
 
-Each step owns its Verify entries (Context.plan.steps[].verify). Local commands use
-LOCAL_REQUEST even with an empty check_catalog. required_checks names server recipes.
+Each step owns its Verify entries (Context.plan.steps[].verify). The server executes
+run: bullets after implementation even with an empty check_catalog. Put each checked
+program in its own argv. Local diagnostics use LOCAL_REQUEST. required_checks names server recipes.
 
 ## planner
 
-Your only writable file is the plan file. Blocked plans authorize nothing. Each planned
+Write the plan to the plan file. Blocked plans authorize nothing. Each planned
 requirement has an owning task with its tests and documentation. No-change plans have no
 tasks and still need independent review.
 

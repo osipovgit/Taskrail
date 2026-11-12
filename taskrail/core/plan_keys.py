@@ -12,6 +12,7 @@ NOTES = "notes"
 EXTRA = "extra"
 ENTRY_LINES = "entry_lines"
 VERIFY = "verify"
+RUN_COMMAND = "run:"
 READ = "read"
 KEYS = MappingProxyType(
     {

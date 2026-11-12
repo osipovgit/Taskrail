@@ -8,6 +8,7 @@ from taskrail.application.stage_console import announce
 from taskrail.core import task_understanding
 from taskrail.core.files import atomic_json
 from taskrail.core.paths import tool_paths
+from taskrail.infrastructure import stage_scratch
 
 PHASES = MappingProxyType(
     {
@@ -87,11 +88,14 @@ def stage_record(number, folder, stage, attempt, inputs):
 def finish_stage(run, state, active, outcome):
     """Close a stage; outcome holds status and optionally result and diagnostics."""
     path, record = active
-    record.update(status=outcome[STATUS], finished_at=now())
+    stage_scratch.discard(run, path)
     diagnostics = outcome.get("diagnostics") or {}
-    record.update({key: diagnostics[key] for key in DIAGNOSTICS if key in diagnostics})
-    verdict = outcome.get("result")
-    verdict = rendered(verdict, state.get("roots", {}))
+    record.update(
+        status=outcome[STATUS],
+        finished_at=now(),
+        **{key: diagnostics[key] for key in DIAGNOSTICS if key in diagnostics},
+    )
+    verdict = rendered(outcome.get("result"), state.get("roots", {}))
     announce(record, verdict)
     if verdict is not None:
         atomic_json(path / "result.json", verdict)

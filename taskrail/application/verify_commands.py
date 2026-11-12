@@ -1,4 +1,4 @@
-"""Run verification commands from server settings in the check stage.
+"""Run configured and independently approved verification commands in the check stage.
 
 They run without a shell, as the service user, with a filtered environment, and
 must not change files inside declared roots.
@@ -6,7 +6,7 @@ must not change files inside declared roots.
 
 import shlex
 
-from taskrail.application import check_outcomes, check_runner, check_selection
+from taskrail.application import check_outcomes, check_runner, check_selection, plan_commands
 from taskrail.core import prompt_texts
 
 TAIL_CHARACTERS = 2000
@@ -20,10 +20,12 @@ RECIPE = "recipe"
 def run_commands(workflow, folder, *, prerequisite_failed=False):
     """Run the commands whose cwd is a declared root of this run, in settings order."""
     selected = check_selection.applicable(workflow.config, workflow.state["requirements"])
+    selected.extend(plan_commands.approved(workflow))
     if prerequisite_failed:
         return [not_started(check) for check in selected]
+    completed = {}
     return [
-        run_command(workflow, folder / LOG_NAME.format(number), chosen)
+        run_command(workflow, folder / LOG_NAME.format(number), chosen, completed)
         for number, chosen in enumerate(selected, 1)
     ]
 
@@ -36,11 +38,11 @@ def not_started(check):
     return dict(row, check_id=check["spec"]["id"], started=False)
 
 
-def run_command(workflow, log, check):
+def run_command(workflow, log, check, completed):
     """Return a check record; the output is kept in the check stage folder."""
     command = check[RECIPE]["request"]
     try:
-        outcome, recorded = check_runner.execute(workflow, log.parent, check)
+        outcome, recorded = check_runner.execute(workflow, log.parent, check, completed)
     except (ValueError, OSError) as error:
         return dict(
             check_record(command, "UNVERIFIED", str(error)),

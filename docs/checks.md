@@ -1,8 +1,9 @@
 # Deterministic verification
 
 A task can require an ordinary local command or a configured verification gate.
-Agents run ordinary diagnostics via `LOCAL_REQUEST`. Taskrail runs selected recipes,
-records their output and evaluates it with the configured adapter. The reviewer
+Agents run exploratory diagnostics via `LOCAL_REQUEST`. Taskrail runs the approved
+step’s executable checks and selected recipes, records their output and evaluates
+their assertions. The reviewer
 uses those records to judge whether the task meets its acceptance criteria.
 
 ## Configure exact recipes
@@ -109,7 +110,7 @@ changes. The other tasks can verify their own scope.
 
 | What the task needs | Where to put it | Who runs it |
 | --- | --- | --- |
-| A local syntax check, linter or test | Owning task's `Verify`, including the command and expected outcome | The agent requests `LOCAL_REQUEST` under the local command policy. An empty recipe catalog is fine. |
+| A local syntax check, linter or test | An executable [Verify bullet](contracts.md#executable-verify-bullets) in the owning task | Taskrail runs the declared program after implementation and records its own exit code, including with an empty recipe catalog. |
 | An automatic gate for this task | A configured local recipe ID under `Required checks` | Taskrail schedules it for the owner and repeats it during integration. |
 | Acceptance of an explicit runtime criterion | A configured or selected matching recipe bound to its criterion ID | Taskrail records the execution and its assessment in the appropriate phase. |
 
