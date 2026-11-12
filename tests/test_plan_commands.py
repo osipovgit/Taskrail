@@ -5,6 +5,7 @@ import tempfile
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
+from unittest.mock import patch
 
 from run_fixture import current_run
 
@@ -32,6 +33,11 @@ class ReviewedCommandTests(unittest.TestCase):
         self.run = base / "run"
         self.stage = self.run / "03-check"
         self.stage.mkdir(parents=True)
+        (self.run / "00-input").mkdir()
+        (self.run / "00-input/task.md").write_text("Verify the submitted change.\n")
+        approval = patch("taskrail.interactions.approvals.wait", side_effect=AssertionError)
+        approval.start()
+        self.addCleanup(approval.stop)
         self.root = base / "project"
         self.app = self.root / "app"
         self.app.mkdir(parents=True)
