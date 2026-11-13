@@ -2,7 +2,7 @@
 
 from itertools import islice
 
-from taskrail.infrastructure import opencode_cli
+from taskrail.infrastructure import opencode_api, opencode_cli, read_feedback_config
 from taskrail.observability.telemetry import Telemetry
 
 
@@ -37,7 +37,12 @@ class TurnIO:
             argv += ["--model", model]
         if self.session_id:
             argv += ["--session", self.session_id]
-        environment = dict(opencode_cli.environment(self._allow, self._compact), **self._attachment)
+        environment = dict(
+            read_feedback_config.environment(
+                self._allow, self._compact, opencode_api.ADAPTER in command
+            ),
+            **self._attachment,
+        )
         environment[opencode_cli.RAW_EVENTS] = str(self.path.with_name("events.raw.jsonl"))
         return argv, environment
 

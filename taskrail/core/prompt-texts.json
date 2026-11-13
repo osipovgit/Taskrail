@@ -1,4 +1,5 @@
 {
+  "reading.loop": "Your last two reads returned only lines already visible in this session. Reuse those lines and continue the task. If evidence is missing, read the specific missing window or use a readable source view.",
   "checks.summary": "File syntax: $passed passed, $failed failed, $skipped skipped. Project commands: $selected selected, $started started, $not_started not started, $uncertain start unknown.",
   "checks.prerequisite": "Not started because a file syntax or added-line check failed.",
   "stage.planner": "Stage: planning.",

@@ -27,6 +27,10 @@ RESOURCES = (
     "application/instruction-modules.json",
     "core/prompt-texts.json",
     "core/result-schemas.json",
+    "infrastructure/read_feedback/package.json",
+    "infrastructure/read_feedback/server.js",
+    "infrastructure/read_feedback/v1.mjs",
+    "infrastructure/read_feedback/windows.mjs",
 )
 WEB_ASSETS = (
     "dashboard.html",

@@ -34,6 +34,7 @@ namespaces = false
     "agents/reviewer.md",
 ]
 "taskrail.core" = ["prompt-texts.json", "result-schemas.json"]
+"taskrail.infrastructure" = ["read_feedback/*.mjs", "read_feedback/server.js", "read_feedback/package.json"]
 "taskrail.application" = ["policy.md", "instruction-modules.json"]
 "taskrail.web" = [
     "static/dashboard.html", "static/dashboard.css", "static/dashboard.js", "static/favicon.svg",

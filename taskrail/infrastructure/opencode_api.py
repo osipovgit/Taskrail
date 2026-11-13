@@ -11,7 +11,12 @@ import subprocess
 import sys
 from pathlib import Path
 
-from taskrail.infrastructure import opencode_cli, opencode_serve, opencode_server
+from taskrail.infrastructure import (
+    opencode_cli,
+    opencode_serve,
+    opencode_server,
+    read_feedback_config,
+)
 from taskrail.infrastructure.profile_rules import permission_worktree
 
 ONE_X = "1.x"
@@ -88,7 +93,7 @@ def stage_server(command, workspace, allow, compact=True, **options):
     options: startup, the readiness deadline and Stop check, and attach, False to keep
     one 1.x process a turn.
     """
-    environment = opencode_cli.environment(allow, compact)
+    environment = read_feedback_config.environment(allow, compact, ADAPTER in command)
     startup = options.get("startup")
     if ADAPTER not in command:
         attach = options.get("attach", True) and bool(command)
