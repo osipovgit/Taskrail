@@ -1,11 +1,10 @@
-"""Answer-only turns share a dashboard card. Each launch keeps its own audit trail."""
+"""Conversation turns share a dashboard card. Each launch keeps its own audit trail."""
 
 import contextlib
 import fcntl
 
 from taskrail.application import run_locks
 from taskrail.core import delivery_record
-from taskrail.web import history
 from taskrail.web.run_sources import launch_record
 
 ROOT = "discussion_root"
@@ -25,7 +24,7 @@ def link(folder):
     return None
 
 
-def discussions(base):
+def replies_by_root(base):
     """Group original reply launches, including those waiting for their worker."""
     folders = base / SUBMISSIONS
     groups = {}
@@ -46,46 +45,21 @@ def chain(root, links):
     return ordered
 
 
-def cards(base, entries):
-    """Use the current turn's status and keep the original task title and permalink."""
-    by_id = {entry["id"]: entry for entry in entries}
-    for root, links in discussions(base).items():
-        if root not in by_id:
-            continue
-        group_card(by_id, root, chain(root, links)[1:])
-    return by_id.values()
+def root_of(run):
+    """A follow-up keeps the first turn's permanent task ID."""
+    origin = link(run.parent / SUBMISSIONS / run.name)
+    return origin[0] if origin else run.name
 
 
-def group_card(by_id, root, names):
-    """A missing or removed member never hides a surviving run."""
-    members = list(filter(by_id.__contains__, names))
-    if members:
-        latest = members[-1]
-        current = by_id[latest]
-        for name in members:
-            by_id.pop(name)
-        by_id[root] = dict(
-            current,
-            id=root,
-            title=by_id[root]["title"],
-            mode="answer",
-            latest=latest,
-            members=members,
+def current_turn(base, name):
+    """A CLI discussion ID addresses the latest turn; an explicit turn stays pinned."""
+    links = replies_by_root(base).get(name, {})
+    current = chain(name, links)[-1]
+    if links and not (base / current / "run.json").is_file():
+        raise ValueError(
+            f"The latest turn {current} has not started. Check its launch before replying."
         )
-
-
-def discussion_for(submission, index):
-    """Only an answer to a standalone research task continues its discussion."""
-    if submission.mode != "answer" or submission.flags["design"] or submission.delivery["phase"]:
-        return None
-    metadata = history.TaskDraft.submitted(submission.previous).metadata
-    if metadata.get("read_only") and not metadata.get("design"):
-        if index.get("status") == "RUNNING":
-            raise ValueError("Wait for the current answer before sending another question")
-        run = submission.previous
-        origin = link(run.parent / SUBMISSIONS / run.name)
-        return origin[0] if origin else run.name
-    return None
+    return current
 
 
 @contextlib.contextmanager
@@ -96,7 +70,7 @@ def posting(base, launch):
         yield
         return
     with run_locks.resource("discussion", base / root, fcntl.LOCK_EX):
-        links = discussions(base).get(root, {})
+        links = replies_by_root(base).get(root, {})
         if chain(root, links)[-1] != launch["restart_from"]:
             raise ValueError("The discussion has a newer turn. Open it before replying.")
         yield

@@ -13,6 +13,7 @@ import sys
 from pathlib import Path
 
 from taskrail import cli_requests, cli_runs
+from taskrail.core import task_modes
 
 ERROR_PREFIX = "Error: "
 FAILURES = (ValueError, OSError, KeyError)
@@ -21,7 +22,7 @@ FAILURES = (ValueError, OSError, KeyError)
 def submit_command(argv):
     """Start a task in a detached worker; prints {"id", "status"}."""
     args = submit_parser().parse_args(argv[1:])
-    return answered(lambda: cli_runs.launcher(args).submit(cli_requests.task_payload(args)))
+    return answered(lambda: cli_runs.submit(args))
 
 
 def decide_command(argv):
@@ -62,7 +63,11 @@ def submit_parser():
     for field in (*cli_requests.FIELDS, "verification"):
         option = "--{}".format(field.replace("_", "-"))
         parser.add_argument(option, help="Text, or @FILE to read it from a file")
-    parser.add_argument("--mode", choices=tuple(cli_requests.MODES), default="develop")
+    parser.add_argument(
+        "--mode",
+        choices=tuple(task_modes.FLAGS),
+        help="Default: the current mode for a follow-up, develop for a new task",
+    )
     parser.add_argument("--allow-all", action="store_true", help="Allow all actions of the run")
     parser.add_argument("--followup", metavar="RUN", help="Continue the conversation of RUN")
     parser.add_argument("--restart", metavar="RUN", help="Start RUN again from scratch")

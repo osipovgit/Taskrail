@@ -110,7 +110,7 @@
       "roots": [
         "service"
       ],
-      "mode": "answer",
+      "mode": "discussion",
       "goal": "Explain the currently configured retry count and timeout with source line citations.",
       "criteria": "State the current values and their units.",
       "constraints": "Do not change any source file or Git metadata.",
@@ -129,7 +129,7 @@
         "service",
         "ui"
       ],
-      "mode": "design",
+      "mode": "plan",
       "goal": "Design a backwards-compatible timeout configuration shared by API and UI.",
       "criteria": "Describe units, migration, default values and tests.",
       "constraints": "Write only the reviewed design artifact; preserve source files.",

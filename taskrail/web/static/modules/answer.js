@@ -58,9 +58,9 @@ export function answerContent(text) {
   return body;
 }
 
-export function answerCard(text, goal) {
+export function answerCard(text, goal, title = 'Answer') {
   const section = el('section', undefined, 'reviewed-answer');
   if (goal) section.append(el('h3', 'Question'), el('p', goal, 'text'));
-  section.append(el('h3', 'Answer'), answerContent(text));
+  section.append(el('h3', title), answerContent(text));
   return section;
 }

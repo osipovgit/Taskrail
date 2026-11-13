@@ -56,7 +56,10 @@ export function menu() {
   nav.replaceChildren();
   const query = document.getElementById('filter').value.toLowerCase();
   const visible = state.runs.filter((run) =>
-    [run.title, run.id, ...(run.members || [])].join(' ').toLowerCase().includes(query),
+    [run.title, run.id, ...(run.members || []), ...(run.related || [])]
+      .join(' ')
+      .toLowerCase()
+      .includes(query),
   );
   for (const [group, label] of GROUPS) {
     const runs = visible.filter((run) => (run.group || 'attention') === group);
@@ -98,22 +101,23 @@ function runButton(run) {
   return button;
 }
 
-function select(id, focus = '') {
+function select(id, focus = '', turn = '') {
   state.selected = id;
   state.focus = focus;
-  const parts = focus ? [id, focus] : [id];
+  state.turn = turn;
+  const parts = turn ? [id, focus, turn] : focus ? [id, focus] : [id];
   location.hash = parts.map(encodeURIComponent).join('/');
   state.last = '';
 }
 
 // Show a task or phase run, or a planned node, inside the parent card; again to close.
 function pick(focus) {
-  select(state.selected, focus === state.focus ? '' : focus);
+  select(state.selected, focus === state.focus ? '' : focus, state.turn);
   refreshRun().catch(showError);
 }
 
-export async function showRun(id, focus = '') {
-  select(id, focus);
+export async function showRun(id, focus = '', turn = '') {
+  select(id, focus, turn);
   state.runs = await get('/api/runs');
   menu();
   await refreshRun();
@@ -172,27 +176,35 @@ const CHECKBOXES = new Set(['auto_approve']);
 
 const MODE_LABELS = {
   develop: 'Develop',
-  answer: 'Answer only',
-  design: 'Design discussion',
-  decompose: 'Split into tasks',
+  discussion: 'Discussion',
+  plan: 'Plan',
+  split: 'Split into tasks',
 };
 
 function draftMode(draft) {
-  if (draft.design) return 'design';
-  return draft.read_only ? 'answer' : 'develop';
+  if (draft?.decompose) return 'split';
+  if (draft?.design) return 'plan';
+  return draft?.read_only ? 'discussion' : 'develop';
+}
+
+function selectMode(id, draft) {
+  const select = document.getElementById(id);
+  const split = select.querySelector('option[value="split"]');
+  if (split) split.hidden = !draft?.decompose;
+  select.value = draftMode(draft);
 }
 
 export function openComposer(draft = null, context = {}) {
   state.composerContext = context;
   const form = document.getElementById('task-form');
   form.reset();
+  selectMode('task-mode', draft);
   document.getElementById('project-roots').replaceChildren();
   if (draft) {
     for (const [key, value] of Object.entries(draft)) {
       const input = form.elements.namedItem(key);
       if (input && !CHECKBOXES.has(key)) input.value = value;
     }
-    document.getElementById('task-mode').value = draftMode(draft);
     document.getElementById('task-auto-approve').checked = !!draft.auto_approve;
     draft.roots.forEach((root) => addRoot(root.alias, root.path));
   } else addRoot();
@@ -274,7 +286,10 @@ function actionButtons(data, embedded = false) {
     button.disabled = state.actionPending || !available;
     // Unavailable actions are hidden rather than shown disabled.
     button.hidden = !available;
-    if (action === 'delete') button.className = 'danger';
+    if (action === 'delete') {
+      button.className = 'danger';
+      if (state.turn) button.hidden = true;
+    }
     button.title = action === 'resume' ? data.actions?.resume_reason || '' : ACTION_TITLES[action];
     if (assignedRestart) button.title = assigned[1];
     button.onclick = () =>
@@ -347,15 +362,12 @@ function runHeader(data, embedded) {
   const nodes = embedded
     ? [el('p', data.id, 'muted run-id'), badge(EMBEDDED_LABELS[data.status] || data.status || '')]
     : [
-        el(
-          'h2',
-          state.runs.find((run) => run.id === data.id || run.latest === data.id)?.title || data.id,
-        ),
+        el('h2', state.runs.find((run) => run.id === state.selected)?.title || data.id),
         el('p', data.id, 'muted run-id'),
         badge(data.status || ''),
       ];
   if (data.draft && !embedded) {
-    const mode = data.draft.decompose ? 'decompose' : draftMode(data.draft);
+    const mode = draftMode(data.draft);
     nodes.push(el('span', 'Mode: ' + MODE_LABELS[mode], 'badge'));
   }
   if (data.auto_approve) nodes.push(el('span', 'All actions allowed', 'badge auto-approve'));
@@ -372,6 +384,11 @@ const isRun = (focus) => Boolean(focus) && !focus.includes(':');
 // Everything one run shows; a run inside its parent's card has no delivery of its own.
 export function runBody(data, embedded = false, child = null) {
   const nodes = [...runHeader(data, embedded), actionButtons(data, embedded)];
+  if (state.turn && !embedded) {
+    const latest = el('button', 'Return to the latest turn');
+    latest.onclick = () => showRun(state.selected).catch(showError);
+    nodes.push(latest);
+  }
   if (data.pending_approval) nodes.push(approvalCard(data.pending_approval, data.id));
   const delivery =
     !embedded &&
@@ -388,33 +405,22 @@ export function runBody(data, embedded = false, child = null) {
   if (data.actions?.stop_requested)
     nodes.push(el('p', 'Stop requested. Waiting for process cleanup and checkpoint.', 'muted'));
   for (const turn of data.conversation || []) {
-    if (turn.answer) {
-      const earlier = answerCard(turn.answer, turn.goal);
-      const discussion = state.runs.find((run) => run.latest === data.id);
-      if (discussion && (turn.run === discussion.id || discussion.members.includes(turn.run))) {
-        const show = el(
-          'button',
-          state.focus === turn.run ? 'Hide earlier workflow' : 'View earlier workflow',
-        );
-        show.onclick = () => pick(turn.run);
-        earlier.append(show);
-        if (child?.id === turn.run) earlier.append(...workflowRecords(child));
-      }
-      nodes.push(earlier);
-      continue;
+    const earlier = turn.answer
+      ? answerCard(turn.answer, turn.goal, turn.mode === 'plan' ? 'Design document' : 'Answer')
+      : answerCard(turn.summary || '', turn.goal, 'Conclusion');
+    const discussion = state.runs.find((run) => run.id === state.selected && run.latest);
+    if (discussion && (turn.run === discussion.id || discussion.members.includes(turn.run))) {
+      const show = el('button', 'View earlier workflow');
+      show.onclick = () => showRun(discussion.id, '', turn.run).catch(showError);
+      earlier.append(show);
     }
-    const previous = el('section');
-    previous.append(
-      el('h3', 'Earlier Goal'),
-      el('div', turn.goal, 'text'),
-      el('h3', 'Earlier conclusion'),
-      el('div', turn.summary, 'text'),
-    );
-    nodes.push(previous);
+    nodes.push(earlier);
   }
-  const research = !data.phase && data.draft?.read_only && !data.draft.design;
+  const research = !data.phase && data.draft?.read_only;
   if (data.answer && research) {
-    nodes.push(answerCard(data.answer, data.draft?.goal));
+    nodes.push(
+      answerCard(data.answer, data.draft.goal, data.draft.design ? 'Design document' : 'Answer'),
+    );
   } else if (data.summary) {
     const summary = el('section');
     summary.append(el('h3', 'Conclusion'), el('div', data.summary, 'text'));
@@ -443,15 +449,14 @@ export function render(data, child = null) {
   if (preserveSelection()) return;
   if (state.currentRun?.id !== data.id || (!state.currentRun?.draft && data.draft)) {
     document.getElementById('reply-goal').value = '';
-    document.getElementById('reply-intent').value =
-      data.draft?.read_only && !data.draft.design ? 'answer' : 'followup';
+    selectMode('reply-intent', data.draft);
   }
   state.currentRun = data;
-  document.getElementById('followup-panel').hidden = !data.actions?.followup;
+  document.getElementById('followup-panel').hidden = !data.actions?.followup || Boolean(state.turn);
   document.getElementById('send-reply').disabled = state.actionPending;
   renderMonitor(child || data);
   const timeless = (view) => view && { ...view, server_time: undefined };
-  const signature = JSON.stringify([timeless(data), timeless(child), state.focus]);
+  const signature = JSON.stringify([timeless(data), timeless(child), state.focus, state.turn]);
   if (signature === state.last) return;
   state.last = signature;
   const view = document.getElementById('chat');
@@ -471,15 +476,18 @@ export function render(data, child = null) {
 export async function refreshRun() {
   if (!state.selected || state.composing) return;
   const id = state.selected;
+  const turn = state.turn;
   const thread = state.runs.find(
     (run) => run.latest && (run.id === id || run.members.includes(id)),
   );
   if (thread && id !== thread.id) {
-    select(thread.id, id === thread.latest ? '' : id);
+    select(thread.id, state.focus, id === thread.latest ? '' : id);
     return refreshRun();
   }
-  const data = await get('/api/run?id=' + encodeURIComponent(thread?.latest || id));
-  if (id !== state.selected) return;
+  const earlier = thread && (turn === id || thread.members.includes(turn));
+  const displayed = earlier ? turn : thread?.latest || id;
+  const data = await get('/api/run?id=' + encodeURIComponent(displayed));
+  if (id !== state.selected || turn !== state.turn) return;
   // A task or phase run opens inside its parent's card.
   if (data.parent && data.parent.run !== id) {
     select(data.parent.run, id);
@@ -489,7 +497,16 @@ export async function refreshRun() {
   const child = isRun(focus)
     ? await get('/api/run?id=' + encodeURIComponent(focus)).catch(() => null)
     : null;
-  if (id !== state.selected) return;
+  if (id !== state.selected || turn !== state.turn || focus !== currentFocus(data)) return;
+  if (
+    thread &&
+    child?.parent &&
+    child.parent.run !== displayed &&
+    (child.parent.run === id || thread.members.includes(child.parent.run))
+  ) {
+    select(id, focus, child.parent.run === thread.latest ? '' : child.parent.run);
+    return refreshRun();
+  }
   state.serverClockOffset = new Date(data.server_time).getTime() - Date.now();
   if (!Number.isFinite(state.serverClockOffset)) state.serverClockOffset = 0;
   render(data, child);
@@ -531,7 +548,9 @@ export async function runAction(action, extra = {}, runId = state.selected) {
       document.getElementById('monitor').replaceChildren();
     }
     // A new or continued task run opens inside its parent; the parent keeps its focus.
-    if (action === 'delete' || result.id !== state.selected) select(result.id);
+    const thread = state.runs.find((run) => run.id === state.selected && run.latest);
+    if (action === 'delete') select(thread && runId !== thread.id ? thread.id : result.id);
+    else if (result.id !== runId) select(result.id);
     state.runs = await get('/api/runs');
     menu();
   } catch (error) {
@@ -554,8 +573,9 @@ export async function submitTask(event) {
   try {
     const payload = Object.fromEntries(new FormData(event.target).entries());
     const mode = document.getElementById('task-mode').value;
-    payload.read_only = mode === 'answer';
-    payload.design = mode === 'design';
+    payload.read_only = mode === 'discussion';
+    payload.design = mode === 'plan';
+    if (mode === 'split') payload.decompose = true;
     payload.auto_approve = document.getElementById('task-auto-approve').checked;
     Object.assign(payload, state.composerContext);
     payload.roots = [...document.querySelectorAll('.root-row')].map((row) => ({
@@ -579,7 +599,7 @@ export async function submitTask(event) {
 
 export async function submitFollowup(event) {
   event.preventDefault();
-  if (state.actionPending || !state.currentRun?.actions?.followup) return;
+  if (state.actionPending || !state.currentRun?.actions?.followup || state.turn) return;
   state.actionPending = true;
   document.getElementById('send-reply').disabled = true;
   document.getElementById('reply-error').textContent = '';
@@ -594,8 +614,6 @@ export async function submitFollowup(event) {
       parent_run: state.currentRun.id,
       submission_mode: document.getElementById('reply-intent').value,
     };
-    payload.read_only = payload.submission_mode === 'answer';
-    payload.design = payload.submission_mode === 'design';
     const result = await post('/api/tasks', payload, 'Unable to continue conversation');
     await showRun(result.discussion_root || result.id);
   } catch (error) {

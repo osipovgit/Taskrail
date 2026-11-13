@@ -27,10 +27,11 @@ document.getElementById('followup-form').onsubmit = submitFollowup;
 document.getElementById('filter').oninput = menu;
 // Back/forward and edited addresses change only the hash; follow them to the named run.
 window.addEventListener('hashchange', () => {
-  const { selected, focus } = parseHash(location.hash);
-  if (!selected || (selected === state.selected && focus === state.focus)) return;
+  const { selected, focus, turn } = parseHash(location.hash);
+  if (!selected || (selected === state.selected && focus === state.focus && turn === state.turn))
+    return;
   closeComposer();
-  showRun(selected, focus).catch(showError);
+  showRun(selected, focus, turn).catch(showError);
 });
 addRoot();
 refresh();

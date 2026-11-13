@@ -3,20 +3,10 @@
 import json
 import sys
 from pathlib import Path
-from types import MappingProxyType
+
+from taskrail.core import task_modes
 
 FIELDS = ("title", "goal", "criteria", "current_behavior", "entry_points", "constraints")
-ANSWER = "answer"
-DESIGN = "design"
-MODES = MappingProxyType(
-    {
-        "develop": {},
-        ANSWER: {"read_only": True},
-        DESIGN: {DESIGN: True},
-        "split": {"decompose": True},
-    }
-)
-TURNS = MappingProxyType({ANSWER: ANSWER, DESIGN: DESIGN})
 
 
 def task_payload(args):
@@ -26,7 +16,8 @@ def task_payload(args):
     named = [field for field in (*FIELDS, "verification") if getattr(args, field)]
     payload = {field: field_text(getattr(args, field)) for field in named}
     payload["roots"] = [root_entry(entry) for entry in args.root]
-    payload.update(MODES[args.mode])
+    if args.mode and not args.followup:
+        payload.update(dict.fromkeys(task_modes.FLAGS[args.mode], True))
     if args.allow_all:
         payload["auto_approve"] = True
     return dict(payload, **turn(args))
@@ -44,7 +35,7 @@ def turn(args):
     if args.followup and args.restart:
         raise ValueError("Use either --followup or --restart")
     if args.followup:
-        return dict(parent_run=args.followup, submission_mode=TURNS.get(args.mode, "followup"))
+        return dict(parent_run=args.followup, submission_mode=args.mode or "followup")
     if args.restart:
         return dict(parent_run=args.restart, submission_mode="restart")
     return {}

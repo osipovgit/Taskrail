@@ -5,12 +5,12 @@ import re
 from types import MappingProxyType
 
 from taskrail.application import check_parents, child_inputs, run_store, worktree_isolation
-from taskrail.core import control, delivery_record, prompt_texts, schema, task_spec
-from taskrail.web import answer_threads, history, restarts, task_form
+from taskrail.core import control, delivery_record, prompt_texts, schema, task_modes, task_spec
+from taskrail.web import discussions, history, restarts, task_form
 
 DESIGN = "design"
-CONTINUING = ("followup", "answer", DESIGN)
-MODES = ("new", "restart", *CONTINUING)
+FOLLOWUP = "followup"
+MODES = ("new", "restart", FOLLOWUP, *task_modes.FLAGS)
 READ_ONLY = "read_only"
 AUTO_APPROVE = "auto_approve"
 DECOMPOSE = "decompose"
@@ -86,9 +86,13 @@ class Submission:
         self.validate()
         self.delivery["execution_parent"] = None
         self.previous = history.checked_run(base, self.parent) if self.parent else None
-        self.delivery[answer_threads.ROOT] = None
+        self.delivery[discussions.ROOT] = None
         if self.previous:
-            self.inherit_worktrees(run_store.read(self.previous))
+            index = run_store.read(self.previous)
+            restarts.require_standalone(self.previous, self.mode, index)
+            if self.mode != "restart":
+                self.continue_from(index)
+        self.check_decompose()
 
     def validate(self):
         """Reject ambiguous intent and unexpected metadata types."""
@@ -98,10 +102,7 @@ class Submission:
             raise ValueError("Invalid submission mode")
         if (self.mode == "new") == bool(self.parent):
             raise ValueError("Only a restart or follow-up requires a previous run")
-        self.flags[DESIGN] = self.flags[DESIGN] or self.mode == DESIGN
-        self.flags[READ_ONLY] = self.flags[READ_ONLY] or self.mode == "answer"
         self.check_phase()
-        self.check_decompose()
         check_scope(self.delivery)
         check_assignment(self.delivery)
 
@@ -117,22 +118,43 @@ class Submission:
             raise ValueError("Only a server check names the confirmed change it checks")
 
     def check_decompose(self):
-        """Splitting into tasks plans later code changes, so it starts a new conversation."""
-        if not self.flags[DECOMPOSE]:
-            return
-        if self.flags[READ_ONLY] or self.flags[DESIGN] or self.mode in CONTINUING:
-            raise ValueError("Split into tasks is a separate mode for a new or restarted task")
+        """A read-only turn cannot start implementation tasks."""
+        read_only = self.flags[READ_ONLY] or self.flags[DESIGN]
+        if self.flags[DECOMPOSE] and read_only:
+            raise ValueError("Split into tasks cannot be combined with a read-only mode")
 
-    def inherit_worktrees(self, index):
-        """A follow-up starts from its parent checkout; Restart starts from the original roots."""
-        restarts.require_standalone(self.previous, self.mode, index)
-        self.delivery[answer_threads.ROOT] = answer_threads.discussion_for(self, index)
-        if self.delivery[answer_threads.ROOT] or (
-            self.mode in CONTINUING and index.get("worktrees")
-        ):
-            self.fields["roots"] = worktree_isolation.root_entries(index["roots"])
-        if self.mode in CONTINUING and index.get("worktrees"):
+    def continue_from(self, index):
+        """Choose the next mode and carry the previous checkout and explicit constraints."""
+        if self.delivery[PHASE]:
+            raise ValueError("A delivery phase cannot be submitted as a conversation turn")
+        if index.get("status") in {"STARTING", "RUNNING"}:
+            raise ValueError("Wait for the current turn to finish before replying")
+        previous = history.TaskDraft.submitted(self.previous)
+        self.select_mode(previous.metadata)
+        self.fields.setdefault("constraints", previous.fields()["constraints"])
+        verification = previous.metadata.get("verification", [])
+        self.fields.setdefault("verification", "\n".join(verification))
+        self.fields["roots"] = worktree_isolation.root_entries(index["roots"])
+        if index.get("worktrees"):
             self.delivery["execution_parent"] = self.parent
+        self.delivery[discussions.ROOT] = discussions.root_of(self.previous)
+
+    def select_mode(self, metadata):
+        """Resolve the operator's explicit choice or inherit the current mode."""
+        selected = self.mode
+        if selected == FOLLOWUP:
+            flags = (
+                self.flags
+                if any(self.flags[key] for key in (READ_ONLY, DESIGN, DECOMPOSE))
+                else metadata
+            )
+            selected = task_modes.selected(flags)
+        enabled = task_modes.FLAGS[selected]
+        for flag in (READ_ONLY, DESIGN, DECOMPOSE):
+            if self.flags[flag] and flag not in enabled:
+                raise ValueError(f"The selected mode {selected} conflicts with {flag}")
+            self.flags[flag] = flag in enabled
+        self.mode = FOLLOWUP
 
     def decorate(self, text):
         """Server-owned header options, task split context, then immutable past evidence.
@@ -156,13 +178,11 @@ class Submission:
         sections[0] = assign_requirements(sections[0], self.delivery)
         if self.delivery[CONTEXT]:
             sections.append(f"\n## Task split context\n{self.delivery[CONTEXT]}\n")
-        if self.mode in CONTINUING:
+        if self.mode == FOLLOWUP:
             sections.extend(
                 [
                     prompt_texts.text("task.history"),
-                    history.conversation(
-                        self.previous, answers_only=bool(self.delivery[answer_threads.ROOT])
-                    ),
+                    history.conversation(self.previous),
                 ]
             )
         return "".join(sections)

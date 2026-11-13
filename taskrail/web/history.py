@@ -4,7 +4,7 @@ import json
 import re
 
 from taskrail.application import run_store, worktree_isolation
-from taskrail.core import task_markdown, task_spec
+from taskrail.core import task_markdown, task_modes, task_spec
 from taskrail.core.input_header import HEADER
 from taskrail.interactions import approval_policy
 from taskrail.web import task_input
@@ -14,8 +14,7 @@ TASK_FILE = "00-input/task.md"
 GOAL = "goal"
 SUMMARY = "summary"
 ANSWER = "answer"
-PUBLIC_FIELDS = ("run", GOAL, SUMMARY, ANSWER)
-MAX_HISTORY_BYTES = 256000
+PUBLIC_FIELDS = ("run", "mode", GOAL, SUMMARY, ANSWER)
 DESIGN = "design"
 DECOMPOSE = "decompose"
 
@@ -83,12 +82,14 @@ def task_draft(run, *, editable=False):
     return draft
 
 
-def saved_turn(run, original, answers_only):
+def saved_turn(run, original):
     """Snapshot public outcomes and the diff, never hidden model context."""
     index = run_store.read(run)
     turn = dict(run=run.name, task=original)
-    turn[GOAL] = TaskDraft(original).fields()[GOAL]
-    if answers_only:
+    draft = TaskDraft(original)
+    turn[GOAL] = draft.fields()[GOAL]
+    turn["mode"] = task_modes.selected(draft.metadata)
+    if draft.metadata.get("read_only") or draft.metadata.get(DESIGN):
         key = ANSWER if index.get(ANSWER) else SUMMARY
         return dict(turn, **{key: index.get(key, "")})
     turn["conclusions"] = {
@@ -102,16 +103,14 @@ def saved_turn(run, original, answers_only):
     return turn
 
 
-def conversation(run, *, answers_only=False):
-    """Carry bounded history explicitly; fail instead of silently truncating it."""
+def conversation(run):
+    """Carry every turn. Large histories are indexed outside the model prompt."""
     fragments = read_artifact(run, TASK_FILE).split(HISTORY, 1)
     history = []
     if len(fragments) == 2:
         history = json.loads(fragments[1])
-    history.append(saved_turn(run, fragments[0], answers_only))
+    history.append(saved_turn(run, fragments[0]))
     encoded = json.dumps(history, ensure_ascii=False, indent=2)
-    if not answers_only and len(encoded.encode("utf-8")) > MAX_HISTORY_BYTES:
-        raise ValueError("Conversation exceeds 256 KB. Start a new task with a selected summary.")
     return HISTORY + encoded
 
 

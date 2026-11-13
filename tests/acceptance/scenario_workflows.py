@@ -29,7 +29,7 @@ class ScenarioWorkflows(ScenarioFixture, unittest.TestCase):
                     expected += ["implementer", "reviewer"]
                 self.assertEqual([stage["stage"] for stage in state["attempts"]], expected)
                 verify(self, case, self.roots, self.base)
-                if case["mode"] == "design":
+                if case["mode"] == "plan":
                     design = (run / "design.md").read_text()
                     for heading in (
                         "Context",
@@ -48,7 +48,7 @@ class ScenarioWorkflows(ScenarioFixture, unittest.TestCase):
                         "compatibility",
                     ):
                         self.assertIn(fact, design)
-                if case["mode"] == "answer":
+                if case["mode"] == "discussion":
                     configured = json.loads((self.roots["service"] / "config.json").read_text())
                     self.assertIn(f"retry count is {configured['retries']}", state["answer"])
                     self.assertIn(f"{configured['timeout_seconds']} seconds", state["answer"])

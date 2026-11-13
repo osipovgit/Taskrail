@@ -13,7 +13,6 @@ SIGNATURE = "execution_context_sha256"
 ROOTS = "roots"
 WORKTREES = "worktrees"
 BASE = "permission_worktree"
-FOLLOWUPS = frozenset(("followup", "answer", "design"))
 
 
 def capture(run, config, state):
@@ -74,7 +73,7 @@ def submitted_parent(task, base, name):
     identity = folder.name == launch["launch_id"] == launch["id"] == name
     require(task.name == "task.md" and identity, "Follow-up launch does not identify this run")
     require(
-        not launch["resume"] and launch.get("submission_mode") in FOLLOWUPS,
+        not launch["resume"] and launch.get("submission_mode") == "followup",
         "Invalid follow-up execution relationship",
     )
     return reviewed_artifacts.run_path(base, parent)

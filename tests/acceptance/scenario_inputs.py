@@ -39,9 +39,9 @@ class ScenarioInputs(unittest.TestCase):
                         self.assertTrue(Path(root).is_dir())
                         if alias == "service":
                             self.assertTrue(os.access(Path(root) / "scripts/start.sh", os.X_OK))
-                    if case["mode"] in {"answer", "design"}:
+                    if case["mode"] in {"discussion", "plan"}:
                         self.assertIs(meta["read_only"], True)
-                    if case["mode"] == "design":
+                    if case["mode"] == "plan":
                         self.assertIs(meta["design"], True)
                     if case["mode"] == "split":
                         self.assertIs(meta["decompose"], True)

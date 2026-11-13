@@ -28,9 +28,9 @@ def fields(case, roots):
     payload = {key: case[key] for key in ("goal", "criteria", "constraints", "verification")}
     payload["title"] = case["id"]
     payload["roots"] = [dict(alias=alias, path=str(roots[alias])) for alias in case["roots"]]
-    if case["mode"] in {"answer", "design"}:
+    if case["mode"] in {"discussion", "plan"}:
         payload["read_only"] = True
-    if case["mode"] == "design":
+    if case["mode"] == "plan":
         payload["design"] = True
     if case["mode"] == "split":
         payload["decompose"] = True
