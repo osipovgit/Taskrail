@@ -115,6 +115,11 @@ or transfer an excluded deliverable from another task.
   approve planned work; result and no-change review cannot. `n/a` covers a conditional
   requirement whose condition did not occur and never blocks.
 
+  In Answer only plan review, `R1: done` reuses the source locations of that
+  requirement in the current no-change proposal. Each location still needs a
+  complete observation in the reviewer's session. Use explicit citations when
+  different sources support the decision. The public answer can use ordinary prose.
+
 ### Findings across plan revisions
 
 The server sends the planner all open findings in one pageable packet. Each new defect

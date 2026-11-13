@@ -12,7 +12,7 @@
 | Stop task | Running | Write a stop request; the worker cleans up opencode and saves an interruption checkpoint |
 | Continue from checkpoint | Eligible checkpoint, unchanged source, no active run on its projects | Append new attempts to the same run, starting at the interrupted stage; a stage that reported **Blocked** can continue too, with your note answering its question; an interrupted or blocked implementer first inspects its existing edits |
 | Send a follow-up Goal | Previous standalone run stopped, no active run on its projects | Start task understanding with the new Goal, inherited constraints and deferred checks. The original task and its public outcomes remain available as conversation history |
-| Answer only | New or follow-up submission | Research and independent review, no implementation; the reviewed answer opens the report and is the `answer` of `taskrail status` |
+| Answer only | New or follow-up submission | The reviewed answer appears in the task card, the report and the `answer` field of `taskrail status`. Ask another question in the same card. |
 | Design discussion | New or follow-up submission | Like Answer only, but the reviewed summary is a design document, saved as `design.md`; follow-ups refine it, a **Develop** follow-up implements it |
 | Confirm changes | A finished code change with planned server checks, after integration review for a split and any Jenkins validation | Accept the change; the server checks start only now |
 | Mark as done / Move back from Done | Stopped run | Move the run to the Done group, or return it to its computed group; nothing else changes |
@@ -109,14 +109,24 @@ continuation with a different outcome returns the run to its computed group.
 
 ## Conversation context
 
-Each follow-up has a separate run ID and task file. The task contains the latest
+An **Answer only** task opens with its reviewed answer. Use **Continue the conversation**
+to ask the next question. Answer only is selected automatically. The discussion keeps
+one sidebar entry and the original task link. It shows earlier questions and answers in
+order. Each reply has its own run ID, stages, evidence and independent review. Run
+actions, including deletion, apply to the displayed current turn. Removing the latest
+turn returns the card to the previous one. Choose **Develop** to start a code-changing
+task.
+
+Each follow-up has a separate task file. A research discussion carries the prior
+questions, original task text and full reviewed answers. Other follow-ups contain the latest
 Goal and a snapshot of prior task text, goals, public conclusions, validated stage
 results and diffs. History is reference data; prior goals do not override the latest
 Goal. Current source must be read again. Earlier tool logs and hidden reasoning
 are not copied into the new prompt. The interface displays the earlier public
 messages, then the new workflow stages.
 
-History is flattened across turns and limited to 256 KB. An oversized history
+History is flattened across turns. The 256 KB submission limit applies to histories
+that copy detailed stage results and diffs. An oversized history of that kind
 produces a visible error asking for a new task with selected context. No history is
 silently discarded. `00-input/task.md` always keeps the complete history. When the
 history part is larger than 24,000 bytes, stage prompts show the current task, the

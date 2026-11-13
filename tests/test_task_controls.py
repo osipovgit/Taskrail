@@ -188,6 +188,57 @@ class TaskControlTests(unittest.TestCase):
             ):
                 self.launcher.submit(dict(self.payload, **fields))
 
+    def test_answer_discussion_keeps_its_card_and_full_answers_across_launches(self):
+        with patch.object(submissions, "start_worker", return_value=None):
+            first = self.launcher.submit(dict(self.payload, read_only=True))["id"]
+            path = self.runs / first
+            first_task = self.runs / ".submissions" / first / "task.md"
+            self.finish(first, "NO_CHANGES_REQUIRED")
+            (path / "00-input/task.md").write_bytes(first_task.read_bytes())
+            answer = "## Operations\n" + "Observed result.\n" * 16000
+            index = json.loads((path / "run.json").read_text())
+            atomic_json(
+                path / "run.json", dict(index, answer=answer, roots={"project": str(self.repo)})
+            )
+            self.assertEqual(run_view(self.runs, first)["answer"], answer)
+            payload = dict(
+                self.payload,
+                submission_mode="answer",
+                parent_run=first,
+                goal="Expand on operations.",
+            )
+            second = self.launcher.submit(payload)["id"]
+            with self.assertRaisesRegex(ValueError, "newer turn"):
+                self.launcher.submit(payload)
+            entry = next(row for row in list_runs(self.runs) if row["id"] == first)
+            self.assertEqual(
+                (entry["title"], entry["latest"], entry["group"]), ("Original", second, "running")
+            )
+            self.assertNotIn(second, [row["id"] for row in list_runs(self.runs)])
+            previous = run_view(self.runs, second)["conversation"][0]
+            self.assertEqual(previous, dict(run=first, goal=self.payload["goal"], answer=answer))
+            second_task = self.runs / ".submissions" / second / "task.md"
+            self.finish(second, "NO_CHANGES_REQUIRED")
+            (self.runs / second / "00-input/task.md").write_bytes(second_task.read_bytes())
+            atomic_json(
+                self.runs / second / "run.json",
+                dict(index, roots={"project": str(self.repo)}, answer="Follow-up result"),
+            )
+            third = self.launcher.submit(
+                dict(payload, parent_run=second, goal="What changed next?")
+            )["id"]
+            self.assertEqual(
+                [turn["answer"] for turn in run_view(self.runs, third)["conversation"]],
+                [answer, "Follow-up result"],
+            )
+            card = next(row for row in list_runs(self.runs) if row["id"] == first)
+            self.assertEqual(card["members"], [second, third])
+            manifest = self.runs / ".submissions" / third / "launch.json"
+            atomic_json(manifest, dict(json.loads(manifest.read_text()), status="LAUNCH_ERROR"))
+            self.launcher.delete(self.runs / third)
+            card = next(row for row in list_runs(self.runs) if row["id"] == first)
+            self.assertEqual(card["latest"], second)
+
     def test_followup_and_restart_select_parent_and_original_roots_without_an_isolation_toggle(
         self,
     ):

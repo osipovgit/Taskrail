@@ -646,7 +646,8 @@ async function main() {
   console.log('Delivery graph, in-card runs and collapsed attempts passed.');
 
   // A budget-paused run exposes both continuation choices and reversible deletion.
-  for (const name of ['reply-goal', 'send-reply', 'monitor']) nodes[name] = new Node('div');
+  for (const name of ['reply-goal', 'reply-intent', 'send-reply', 'monitor'])
+    nodes[name] = new Node('div');
   globalThis.scrollY = 0;
   globalThis.scrollTo = () => {};
   app.render({
@@ -758,6 +759,42 @@ async function main() {
     read_only: true,
     design: false,
   });
+
+  const question = {
+    ...assigned,
+    id: 'explanation',
+    phase: null,
+    summary: 'The reviewer approved the answer.',
+    draft: { read_only: true, goal: 'What changed?', roots: [] },
+    answer:
+      '## Storage\n- Kept **snapshots** for `main`.\n\n```html\n<script>literal</script>\n```',
+    actions: { followup: true },
+    conversation: [{ run: 'research', goal: 'Which projects?', answer: 'Two projects.' }],
+  };
+  state.runs = [
+    { id: 'research', latest: 'explanation', members: ['explanation'], title: 'Project history' },
+  ];
+  state.selected = 'research';
+  state.focus = '';
+  const fetched = [];
+  globalThis.fetch = async (url) => {
+    fetched.push(url);
+    return { ok: true, json: async () => question };
+  };
+  await app.refreshRun();
+  assert.deepEqual(fetched, ['/api/run?id=explanation']);
+  assert.equal(state.selected, 'research');
+  assert.equal(nodes['reply-intent'].value, 'answer');
+  const answers = all(nodes.chat).filter((node) => node.className === 'reviewed-answer');
+  assert.equal(answers.length, 2);
+  assert.ok(all(answers[0]).some((node) => node.textContent === 'Two projects.'));
+  assert.ok(answers[1].querySelector('ul'));
+  assert.equal(answers[1].querySelector('strong').textContent, 'snapshots');
+  assert.equal(answers[1].querySelector('code').textContent, 'main');
+  assert.equal(answers[1].querySelector('pre').textContent.trim(), '<script>literal</script>');
+  assert.equal(answers[1].querySelector('script'), undefined);
+  assert.ok(all(nodes.chat).some((node) => node.textContent === 'Task, review and activity'));
+  assert.ok(all(nodes.chat).every((node) => node.textContent !== question.summary));
 
   // A task or phase run opens inside its parent's card, with its own decision and actions.
   const { parseHash } = await load('state');

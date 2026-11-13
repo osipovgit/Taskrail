@@ -43,6 +43,8 @@ class HistoryFile:
         self.body.extend(["", heading])
         ranges = []
         for key, title in SECTIONS:
+            if key == "summary" and "answer" in turn:
+                key, title = "answer", "Answer"
             ranges.append(self.section(title, turn.get(key)))
         self.entries.append(self.entry(number, turn, start, ranges))
 

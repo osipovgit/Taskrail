@@ -7,7 +7,7 @@ Give [opencode](https://opencode.ai) a goal and a Git repository. Taskrail turns
 | Choose a mode | What you get |
 | --- | --- |
 | **Develop** | A reviewed change on a task branch. Larger changes can split into tasks with their own checks and commits. |
-| **Answer only** | An independently reviewed answer grounded in project files and recorded evidence. |
+| **Answer only** | A reviewed research answer in the task card. Ask follow-up questions there to explore the findings. |
 | **Design discussion** | A reviewed design document. Start a Develop follow-up when you want to implement it. |
 
 ## Run your first task

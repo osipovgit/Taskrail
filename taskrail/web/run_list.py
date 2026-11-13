@@ -5,7 +5,15 @@ from operator import itemgetter
 from types import MappingProxyType
 
 from taskrail.application import run_store
-from taskrail.web import delivery_state, history, lifecycle, run_errors, run_family, run_groups
+from taskrail.web import (
+    answer_threads,
+    delivery_state,
+    history,
+    lifecycle,
+    run_errors,
+    run_family,
+    run_groups,
+)
 from taskrail.web.run_files import contained, read_json
 
 SUMMARY_LIMIT = 500
@@ -23,7 +31,7 @@ def list_runs(base):
         return []
     entries = [entry for entry in map(run_entry, base.iterdir()) if entry]
     entries.extend(pending_entries(base, {entry["id"] for entry in entries}))
-    return sorted(entries, key=itemgetter("id"), reverse=True)
+    return sorted(answer_threads.cards(base, entries), key=itemgetter("id"), reverse=True)
 
 
 def run_entry(path):

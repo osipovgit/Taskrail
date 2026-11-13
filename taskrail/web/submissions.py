@@ -10,6 +10,7 @@ from pathlib import Path
 from taskrail.core.files import atomic_json
 from taskrail.core.runtime import settings_path
 from taskrail.web import (
+    answer_threads,
     history,
     lifecycle,
     parent_context,
@@ -75,7 +76,9 @@ class TaskLauncher:
         )
         launch["before_start"] = before_start
         launch["parent_context"] = submission.delivery["parent_context"]
-        return self.launch(launch, sources)
+        launch[answer_threads.ROOT] = submission.delivery[answer_threads.ROOT]
+        with answer_threads.posting(self.base, launch):
+            return self.launch(launch, sources)
 
     def action(self, payload):
         """Restart drafts, stop, delete or continue an existing run."""
@@ -123,7 +126,9 @@ class TaskLauncher:
             process = start_worker(folder, manifest, run, self.settings)
             if process is not None:
                 self.workers[run] = (process, [str(source) for source in sources])
-            return dict(id=manifest[ID], status=manifest["status"])
+            return {
+                key: manifest[key] for key in (ID, "status", answer_threads.ROOT) if key in manifest
+            }
 
 
 def continuation(run, note):
@@ -158,6 +163,8 @@ def create_submission(base, launch):
         summary="Starting the task worker.",
         created_at=datetime.now(timezone.utc).isoformat(),
     )
+    if launch.get(answer_threads.ROOT):
+        manifest[answer_threads.ROOT] = launch[answer_threads.ROOT]
     atomic_json(folder / LAUNCH_FILE, manifest)
     return folder, manifest
 

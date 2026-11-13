@@ -12,6 +12,9 @@ from taskrail.web import task_input
 HISTORY = "\n## Conversation history\n"
 TASK_FILE = "00-input/task.md"
 GOAL = "goal"
+SUMMARY = "summary"
+ANSWER = "answer"
+PUBLIC_FIELDS = ("run", GOAL, SUMMARY, ANSWER)
 MAX_HISTORY_BYTES = 256000
 DESIGN = "design"
 DECOMPOSE = "decompose"
@@ -80,43 +83,44 @@ def task_draft(run, *, editable=False):
     return draft
 
 
-def saved_turn(run, original):
+def saved_turn(run, original, answers_only):
     """Snapshot public outcomes and the diff, never hidden model context."""
     index = run_store.read(run)
-    conclusions = {
+    turn = dict(run=run.name, task=original)
+    turn[GOAL] = TaskDraft(original).fields()[GOAL]
+    if answers_only:
+        key = ANSWER if index.get(ANSWER) else SUMMARY
+        return dict(turn, **{key: index.get(key, "")})
+    turn["conclusions"] = {
         key: json.loads(read_artifact(run, relative))
         for key, relative in index.get("results", {}).items()
     }
-    diff = read_artifact(run, "changes.diff") if (run / "changes.diff").exists() else ""
-    return dict(
-        run=run.name,
-        task=original,
-        goal=TaskDraft(original).fields()[GOAL],
-        summary=index.get("summary", ""),
-        conclusions=conclusions,
-        diff=diff,
-    )
+    turn["diff"] = ""
+    if (run / "changes.diff").exists():
+        turn["diff"] = read_artifact(run, "changes.diff")
+    turn[SUMMARY] = index.get(SUMMARY, "")
+    return turn
 
 
-def conversation(run):
+def conversation(run, *, answers_only=False):
     """Carry bounded history explicitly; fail instead of silently truncating it."""
     fragments = read_artifact(run, TASK_FILE).split(HISTORY, 1)
     history = []
     if len(fragments) == 2:
         history = json.loads(fragments[1])
-    history.append(saved_turn(run, fragments[0]))
+    history.append(saved_turn(run, fragments[0], answers_only))
     encoded = json.dumps(history, ensure_ascii=False, indent=2)
-    if len(encoded.encode("utf-8")) > MAX_HISTORY_BYTES:
+    if not answers_only and len(encoded.encode("utf-8")) > MAX_HISTORY_BYTES:
         raise ValueError("Conversation exceeds 256 KB. Start a new task with a selected summary.")
     return HISTORY + encoded
 
 
-def previous_messages(run):
+def previous_messages(run, filename=TASK_FILE):
     """Expose prior conclusions without requiring deleted ancestor artifacts."""
-    original = read_artifact(run, TASK_FILE)
+    original = read_artifact(run, filename)
     if HISTORY not in original:
         return []
     return [
-        {key: turn.get(key, "") for key in ("run", GOAL, "summary")}
+        {key: turn[key] for key in PUBLIC_FIELDS if key in turn}
         for turn in json.loads(original.split(HISTORY, 1)[1])
     ]

@@ -1,4 +1,5 @@
 import { badge, detail, el, list, showError } from './dom.js';
+import { answerCard } from './answer.js';
 import { renderMonitor } from './monitor.js';
 import { executionCard, stageCard, tickStageTimers } from './stages.js';
 import { deliverySection } from './epic.js';
@@ -346,7 +347,10 @@ function runHeader(data, embedded) {
   const nodes = embedded
     ? [el('p', data.id, 'muted run-id'), badge(EMBEDDED_LABELS[data.status] || data.status || '')]
     : [
-        el('h2', state.runs.find((run) => run.id === data.id)?.title || data.id),
+        el(
+          'h2',
+          state.runs.find((run) => run.id === data.id || run.latest === data.id)?.title || data.id,
+        ),
         el('p', data.id, 'muted run-id'),
         badge(data.status || ''),
       ];
@@ -384,6 +388,21 @@ export function runBody(data, embedded = false, child = null) {
   if (data.actions?.stop_requested)
     nodes.push(el('p', 'Stop requested. Waiting for process cleanup and checkpoint.', 'muted'));
   for (const turn of data.conversation || []) {
+    if (turn.answer) {
+      const earlier = answerCard(turn.answer, turn.goal);
+      const discussion = state.runs.find((run) => run.latest === data.id);
+      if (discussion && (turn.run === discussion.id || discussion.members.includes(turn.run))) {
+        const show = el(
+          'button',
+          state.focus === turn.run ? 'Hide earlier workflow' : 'View earlier workflow',
+        );
+        show.onclick = () => pick(turn.run);
+        earlier.append(show);
+        if (child?.id === turn.run) earlier.append(...workflowRecords(child));
+      }
+      nodes.push(earlier);
+      continue;
+    }
     const previous = el('section');
     previous.append(
       el('h3', 'Earlier Goal'),
@@ -393,21 +412,40 @@ export function runBody(data, embedded = false, child = null) {
     );
     nodes.push(previous);
   }
-  if (data.summary) {
+  const research = !data.phase && data.draft?.read_only && !data.draft.design;
+  if (data.answer && research) {
+    nodes.push(answerCard(data.answer, data.draft?.goal));
+  } else if (data.summary) {
     const summary = el('section');
     summary.append(el('h3', 'Conclusion'), el('div', data.summary, 'text'));
     nodes.push(summary);
   }
   if (data.outside_changes) nodes.push(outsideSection(data.outside_changes));
-  nodes.push(taskSection(data));
-  for (const stage of data.stages) nodes.push(stageCard(stage, data.requirements));
-  nodes.push(materialsSection(data));
+  const records = workflowRecords(data);
+  if (research && data.answer) {
+    const details = el('details', undefined, 'answer-workflow');
+    details.csKey = 'workflow:' + data.id;
+    details.append(el('summary', 'Task, review and activity'), ...records);
+    nodes.push(details);
+  } else nodes.push(...records);
   return nodes;
+}
+
+function workflowRecords(data) {
+  return [
+    taskSection(data),
+    ...data.stages.map((stage) => stageCard(stage, data.requirements)),
+    materialsSection(data),
+  ];
 }
 
 export function render(data, child = null) {
   if (preserveSelection()) return;
-  if (state.currentRun?.id !== data.id) document.getElementById('reply-goal').value = '';
+  if (state.currentRun?.id !== data.id || (!state.currentRun?.draft && data.draft)) {
+    document.getElementById('reply-goal').value = '';
+    document.getElementById('reply-intent').value =
+      data.draft?.read_only && !data.draft.design ? 'answer' : 'followup';
+  }
   state.currentRun = data;
   document.getElementById('followup-panel').hidden = !data.actions?.followup;
   document.getElementById('send-reply').disabled = state.actionPending;
@@ -433,7 +471,14 @@ export function render(data, child = null) {
 export async function refreshRun() {
   if (!state.selected || state.composing) return;
   const id = state.selected;
-  const data = await get('/api/run?id=' + encodeURIComponent(id));
+  const thread = state.runs.find(
+    (run) => run.latest && (run.id === id || run.members.includes(id)),
+  );
+  if (thread && id !== thread.id) {
+    select(thread.id, id === thread.latest ? '' : id);
+    return refreshRun();
+  }
+  const data = await get('/api/run?id=' + encodeURIComponent(thread?.latest || id));
   if (id !== state.selected) return;
   // A task or phase run opens inside its parent's card.
   if (data.parent && data.parent.run !== id) {
@@ -552,7 +597,7 @@ export async function submitFollowup(event) {
     payload.read_only = payload.submission_mode === 'answer';
     payload.design = payload.submission_mode === 'design';
     const result = await post('/api/tasks', payload, 'Unable to continue conversation');
-    await showRun(result.id);
+    await showRun(result.discussion_root || result.id);
   } catch (error) {
     document.getElementById('reply-error').textContent = error.message;
   } finally {

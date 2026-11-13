@@ -99,6 +99,7 @@ def index_view(state, stages):
         requirements=state.get("requirements", []),
         status=state.get("status"),
         summary=tool_paths(state.get("summary", ""), roots),
+        answer=state.get("answer"),
         roots=roots,
         changed_files=tool_paths(state.get("changed_files", []), roots),
         unverified=state.get("unverified", []),
@@ -115,7 +116,7 @@ def context_view(run, submission, state):
     task = contained(run, history.TASK_FILE) if started else contained(submission, "task.md")
     indexed = run.joinpath("run.json").exists()
     return dict(
-        conversation=history.previous_messages(run) if started else [],
+        conversation=history.previous_messages(task.parent, task.name) if task.is_file() else [],
         draft=history.task_draft(run, editable=True) if indexed else None,
         actions=lifecycle.actions(run, state, activity(run)),
         auto_approve=split_approvals.shown(run, state),

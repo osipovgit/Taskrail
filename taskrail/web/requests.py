@@ -6,7 +6,7 @@ from types import MappingProxyType
 
 from taskrail.application import check_parents, child_inputs, run_store, worktree_isolation
 from taskrail.core import control, delivery_record, prompt_texts, schema, task_spec
-from taskrail.web import history, restarts, task_form
+from taskrail.web import answer_threads, history, restarts, task_form
 
 DESIGN = "design"
 CONTINUING = ("followup", "answer", DESIGN)
@@ -86,6 +86,7 @@ class Submission:
         self.validate()
         self.delivery["execution_parent"] = None
         self.previous = history.checked_run(base, self.parent) if self.parent else None
+        self.delivery[answer_threads.ROOT] = None
         if self.previous:
             self.inherit_worktrees(run_store.read(self.previous))
 
@@ -125,8 +126,12 @@ class Submission:
     def inherit_worktrees(self, index):
         """A follow-up starts from its parent checkout; Restart starts from the original roots."""
         restarts.require_standalone(self.previous, self.mode, index)
-        if self.mode in CONTINUING and index.get("worktrees"):
+        self.delivery[answer_threads.ROOT] = answer_threads.discussion_for(self, index)
+        if self.delivery[answer_threads.ROOT] or (
+            self.mode in CONTINUING and index.get("worktrees")
+        ):
             self.fields["roots"] = worktree_isolation.root_entries(index["roots"])
+        if self.mode in CONTINUING and index.get("worktrees"):
             self.delivery["execution_parent"] = self.parent
 
     def decorate(self, text):
@@ -153,7 +158,12 @@ class Submission:
             sections.append(f"\n## Task split context\n{self.delivery[CONTEXT]}\n")
         if self.mode in CONTINUING:
             sections.extend(
-                [prompt_texts.text("task.history"), history.conversation(self.previous)]
+                [
+                    prompt_texts.text("task.history"),
+                    history.conversation(
+                        self.previous, answers_only=bool(self.delivery[answer_threads.ROOT])
+                    ),
+                ]
             )
         return "".join(sections)
 

@@ -234,7 +234,8 @@ section. Use `Decision: no change` for a supported answer or `Decision: blocked`
 with a precise gap when required input is missing. Both go through independent
 review. These modes never start implementation, even with an imported plan.
 
-Each submission creates a separate run. A browser follow-up starts task
+Each submission creates a separate run. Successive Answer only replies share one
+dashboard task and permalink. A browser follow-up starts task
 understanding with the new Goal and carries forward the project roots, constraints
 and deferred checks. Previous tasks and their starting files stay in conversation
 history. Server-generated
