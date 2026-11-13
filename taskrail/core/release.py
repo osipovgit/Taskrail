@@ -39,6 +39,7 @@ WEB_ASSETS = (
     "theme.js",
     "favicon.svg",
     "modules/analytics.js",
+    "modules/answer.js",
     "modules/app.js",
     "modules/dom.js",
     "modules/epic.js",

@@ -23,7 +23,7 @@ def payload(text, context, resolve):
     resolve(name, start, end) returns the absolute path a citation names.
     """
     stage = context["stage"]
-    review = Review(context["requirements"], stage, resolve)
+    review = Review(context, resolve)
     checks = read_lines(review, text)
     if stage == review_lines.PLAN_REVIEW:
         plan_findings.reassess(review, checks, context.get("prior_findings", ()))
@@ -61,9 +61,10 @@ def verdict(gaps, findings):
 class Review:
     """The requirement lines read so far, their evidence and the problems found."""
 
-    def __init__(self, requirements, stage, resolve):
-        self.requirements = requirements
-        self.stage = stage
+    def __init__(self, context, resolve):
+        self.requirements = context["requirements"]
+        self.stage = context["stage"]
+        self._answer_sources = answer_sources(context)
         self._resolve = resolve
         self.summary = ""
         self.rows = {}
@@ -92,7 +93,14 @@ class Review:
             self.problems.append(prompt_texts.text("review.outcome", **entry))
             self.rows[entry[LABEL]] = None
             return
-        cited = self.cite(*decision, entry)
+        if (
+            decision == (review_lines.SATISFIED, "")
+            and requirement[IDENTIFIER] in self._answer_sources
+        ):
+            spans = self._answer_sources[requirement[IDENTIFIER]]
+            cited = [self.evidence(*span) for span in spans], ""
+        else:
+            cited = self.cite(*decision, entry)
         if decision[0] in review_lines.EXPLAINED and not cited[1]:
             self.problems.append(prompt_texts.text("review.reason", **entry))
         row = row_of(entry, requirement, decision[0], cited)
@@ -155,6 +163,27 @@ class Review:
             raise ValueError(f"review.md: {listed}")
         rows = [row for row in self.rows.values() if row]
         return stored(rows, self.found, self.summary, prefix)
+
+
+def answer_sources(context):
+    """Reuse the proposal's source locations for the same requirement, never its verdict."""
+    config = context.get("check_config", {})
+    plan = context.get("plan") or {}
+    if context["stage"] != review_lines.PLAN_REVIEW or plan.get("decision") != "none":
+        return {}
+    if not config.get("read_only"):
+        return {}
+    if config.get("design") or config.get("phase"):
+        return {}
+    spans = {
+        claim["id"]: (claim["path"], claim["line_start"], claim["line_end"])
+        for claim in plan.get(EVIDENCE, ())
+    }
+    sources = {}
+    for row in plan.get("coverage", ()):
+        if row["outcome"] == review_lines.SATISFIED and row["evidence_ids"]:
+            sources[row["id"]] = [spans[key] for key in row["evidence_ids"]]
+    return sources
 
 
 def stored(rows, found, summary, prefix):

@@ -12,8 +12,10 @@ from run_fixture import current_run
 
 from taskrail import cli
 from taskrail.application import run_locks
-from taskrail.core import file_lock
+from taskrail.core import file_lock, task_modes
 from taskrail.core.files import atomic_json
+from taskrail.web.history import HISTORY, TaskDraft
+from taskrail.web.run_list import list_runs
 
 
 class CliApiTests(unittest.TestCase):
@@ -53,7 +55,7 @@ class CliApiTests(unittest.TestCase):
                 "--goal",
                 f"@{goal}",
                 "--mode",
-                "answer",
+                "discussion",
                 "--allow-all",
             )
         self.assertEqual(code, 0, answer)
@@ -66,6 +68,56 @@ class CliApiTests(unittest.TestCase):
         code, error = self.call("submit", "--root", "project", "--goal", "x")
         self.assertEqual(code, 2)
         self.assertIn("Expected --root ALIAS=PATH", error)
+
+    def test_followup_inherits_and_switches_modes_using_one_permanent_id(self):
+        turns = (
+            ("plan", "plan"),
+            (None, "plan"),
+            ("develop", "develop"),
+            ("discussion", "discussion"),
+            (None, "discussion"),
+            ("develop", "develop"),
+        )
+        root = None
+        parent = ""
+        with patch("taskrail.web.submissions.start_worker", return_value=None):
+            for selected, expected in turns:
+                with self.subTest(mode=selected, parent=parent):
+                    args = ["--mode", selected] if selected else []
+                    if root:
+                        args.extend(["--followup", root])
+                    else:
+                        args.extend(
+                            ["--root", f"project={self.repo}", "--constraints", "Keep the API"]
+                        )
+                    code, launched = self.call("submit", "--goal", f"Next after {parent}", *args)
+                    self.assertEqual(code, 0, launched)
+                    run = self.runs / launched["id"]
+                    folder = self.runs / ".submissions" / run.name
+                    text = (folder / "task.md").read_text()
+                    draft = TaskDraft(text.partition(HISTORY)[0])
+                    self.assertEqual(task_modes.selected(draft.metadata), expected)
+                    self.assertEqual(draft.fields()["constraints"], "Keep the API")
+                    if root:
+                        self.assertEqual(launched["discussion_root"], root)
+                        history = json.loads(text.partition(HISTORY)[2])
+                        self.assertEqual(history[-1]["run"], parent)
+                        self.assertEqual(history[0]["answer"], "Reviewed plan")
+                        if history[-1]["mode"] == "develop":
+                            self.assertEqual(history[-1]["diff"], "+implementation")
+                        card = next(row for row in list_runs(self.runs) if row["id"] == root)
+                        self.assertEqual((card["mode"], card["latest"]), (expected, run.name))
+                    root = root or run.name
+                    parent = run.name
+                    (run / "00-input").mkdir(parents=True)
+                    (run / "00-input/task.md").write_text(text)
+                    state = dict(status="NO_CHANGES_REQUIRED", roots={"project": str(self.repo)})
+                    if expected == "develop":
+                        state.update(status="READY_FOR_REVIEW", summary="Implemented the plan")
+                        (run / "changes.diff").write_text("+implementation")
+                    else:
+                        state["answer"] = f"Reviewed {expected}"
+                    atomic_json(run / "run.json", current_run(state))
 
     def test_decide_answers_the_pending_ticket_and_status_shows_it(self):
         atomic_json(self.run / "run.json", current_run(dict(status="RUNNING", summary="Planning")))

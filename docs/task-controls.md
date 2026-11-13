@@ -12,8 +12,8 @@
 | Stop task | Running | Write a stop request; the worker cleans up opencode and saves an interruption checkpoint |
 | Continue from checkpoint | Eligible checkpoint, unchanged source, no active run on its projects | Append new attempts to the same run, starting at the interrupted stage; a stage that reported **Blocked** can continue too, with your note answering its question; an interrupted or blocked implementer first inspects its existing edits |
 | Send a follow-up Goal | Previous standalone run stopped, no active run on its projects | Start task understanding with the new Goal, inherited constraints and deferred checks. The original task and its public outcomes remain available as conversation history |
-| Answer only | New or follow-up submission | Research and independent review, no implementation; the reviewed answer opens the report and is the `answer` of `taskrail status` |
-| Design discussion | New or follow-up submission | Like Answer only, but the reviewed summary is a design document, saved as `design.md`; follow-ups refine it, a **Develop** follow-up implements it |
+| Discussion | New or follow-up submission | The reviewed answer appears in the task card, the report and the `answer` field of `taskrail status`. Ask another question in the same card. |
+| Plan | New or follow-up submission | Like Discussion, but the reviewed summary is a design document, saved as `design.md`; follow-ups refine it, a **Develop** follow-up implements it |
 | Confirm changes | A finished code change with planned server checks, after integration review for a split and any Jenkins validation | Accept the change; the server checks start only now |
 | Mark as done / Move back from Done | Stopped run | Move the run to the Done group, or return it to its computed group; nothing else changes |
 | Delete from history | Stopped/completed run; no active run of its split or delivery | Move run and launcher artifacts to local trash; leave source files untouched |
@@ -22,7 +22,7 @@ A run on the same project holds back only what would start a worker: Continue, a
 follow-up and a task or phase restart. The run page names the active run's project
 instead of hiding the reason; Mark as done, Delete and the restart form stay usable.
 
-Each run page shows its mode (**Develop**, **Answer only** or **Design discussion**;
+Each run page shows its mode (**Develop**, **Discussion** or **Plan**;
 explicit splits show **Split into tasks**); the run list shows the mode when it is
 not Develop.
 
@@ -109,27 +109,27 @@ continuation with a different outcome returns the run to its computed group.
 
 ## Conversation context
 
-Each follow-up has a separate run ID and task file. The task contains the latest
-Goal and a snapshot of prior task text, goals, public conclusions, validated stage
-results and diffs. History is reference data; prior goals do not override the latest
-Goal. Current source must be read again. Earlier tool logs and hidden reasoning
-are not copied into the new prompt. The interface displays the earlier public
-messages, then the new workflow stages.
+Use **Continue the conversation** to ask a question, revise a proposal or request a code
+change. The next message keeps the current mode until you choose another. Each turn
+has its own run, worktree, stages and independent review. The card keeps its original
+title and link and shows previous questions and outcomes. Open **View earlier workflow**
+for the stages and delivery controls of a previous turn. **Return to the latest turn**
+opens the reply form again.
 
-History is flattened across turns and limited to 256 KB. An oversized history
-produces a visible error asking for a new task with selected context. No history is
-silently discarded. `00-input/task.md` always keeps the complete history. When the
-history part is larger than 24,000 bytes, stage prompts show the current task, the
-latest earlier turn's goal and summary (each clipped to 2,000 characters, marked) and
-the path of `00-input/history.md`. That file starts with an index of the turns and
-the line ranges of their goal, summary, task, conclusions and diff, so the model reads
-only the sections it needs. Smaller histories stay inline unchanged. Usage is recorded per run.
+- **Discussion** researches the current code and produces a free-form reviewed answer.
+- **Plan** is read-only and produces a reviewed design in `design.md`, with options,
+  trade-offs, risks, an implementation outline and open questions.
+- **Develop** can change project files. Switch back to Discussion to ask about the
+  resulting implementation. Each turn inherits the preceding checkout, including
+  its committed and pending changes.
 
-For a question, choose the **Answer only** mode. This sets server-generated `read_only`
-metadata as well as instructions. Nonempty steps or proposed change paths are
-rejected by plan validation, and a separate transition guard blocks implementation.
-A successful reviewed answer finishes as `NO_CHANGES_REQUIRED` with its conclusion.
-Changing back to **Develop** on the next turn removes the answer-only constraint.
+The latest goal controls the work. Previous goals, constraints and reviewed answers
+are available to the model. Development turns also carry their public stage results
+and diff. The model checks current sources before making new claims. Small histories
+stay inline. Above 24,000 bytes the prompt includes an excerpt of the latest turn and
+points to the complete, indexed `00-input/history.md`. The original task and full
+history remain in `00-input/task.md`. Hidden reasoning and tool logs stay in the
+original runs.
 
 ## Deletion
 
@@ -153,7 +153,7 @@ Same-origin and CSRF-token checks apply to every mutation (`POST /api/tasks`,
 launches a linked attempt for an eligible split child, integration, validation or server phase,
 and refuses corrective writers. `/api/tasks` accepts the task fields plus the booleans `read_only`,
 `design`, `decompose` and `auto_approve`, and optionally `parent_run` with `submission_mode`
-`restart`, `followup`, `answer` or `design`; without a parent the mode is `new`. `/api/decision` answers one pending approval ticket with
+`followup` to inherit the current mode, or `develop`, `discussion`, `plan` or `split` to select one. Use `restart` for a fresh task. Without a parent the submission mode is `new`. `/api/decision` answers one pending approval ticket with
 `allow`, `deny` or `alternative`; an `allow` may add `"allow_all": true`. Commands and settings stay server-owned. Reads use
 `GET /api/session`, `/api/runs`, `/api/run` and `/api/analytics`. `/api/actions` also
 accepts `epic_next`, `epic_auto_on`, `epic_auto_off`, `confirm`, `integration_review`, `integration_correct`,
@@ -167,16 +167,24 @@ and controls runs through the same launcher, validation and run store. Each comm
 prints one JSON object and returns at once; the task runs in a detached worker.
 
 ```sh
-taskrail submit --root shop=/srv/shop --goal @goal.md --mode answer --allow-all
+taskrail submit --root shop=/srv/shop --goal @goal.md --mode discussion --allow-all
+taskrail submit --followup RUN --goal "Explain the second finding"
+taskrail submit --followup RUN --mode plan --goal "Propose a fix"
+taskrail submit --followup RUN --mode develop --goal "Implement the proposal"
+taskrail submit --followup RUN --mode discussion --goal "Explain the change"
 taskrail status RUN                       # status, answer, worker activity, approval, delivery step
 taskrail decide RUN alternative --text "Use tox instead"
 taskrail action RUN resume --note "python3 is installed now"
 taskrail submit --json payload.json       # the fields of POST /api/tasks
 ```
 
-`--mode` is `develop` (the default), `answer`, `design` or `split`; every top-level task runs in
+`--mode` is `develop`, `discussion`, `plan` or `split`. A new task defaults to Develop.
+A follow-up defaults to the last turn’s mode. Use the first run ID in `--followup`
+to address the latest turn of the conversation. Each submission returns the exact
+turn ID for `status` and `action`. Every top-level task runs in
 [isolated worktrees](task-format.md#worktree-isolation).
-`--followup RUN` and `--restart RUN` continue a conversation; a text option may name a file as `@FILE`. `action` accepts the
+Use `--restart RUN` to start a fresh task. A text option may name a file as `@FILE`.
+`action` accepts the
 `/api/actions` actions. For a standalone run, `action RUN restart` prints the saved
 `draft`; submit the edited fields with `parent_run` and `submission_mode: "restart"`
 in the JSON payload. For a split child, `action CHILD_RUN restart` launches a new

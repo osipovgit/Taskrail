@@ -7,8 +7,8 @@ Give [opencode](https://opencode.ai) a goal and a Git repository. Taskrail turns
 | Choose a mode | What you get |
 | --- | --- |
 | **Develop** | A reviewed change on a task branch. Larger changes can split into tasks with their own checks and commits. |
-| **Answer only** | An independently reviewed answer grounded in project files and recorded evidence. |
-| **Design discussion** | A reviewed design document. Start a Develop follow-up when you want to implement it. |
+| **Discussion** | A reviewed research answer in the task card. Ask follow-up questions there to explore the findings. |
+| **Plan** | A reviewed design document. Refine it or switch to Develop to implement it in the same conversation. |
 
 ## Run your first task
 
@@ -22,7 +22,7 @@ bash deploy/install.sh
 2. Select the root of a Git repository with at least one commit. Describe the goal and how you will know it is done.
 3. Open a stage to inspect the plan, review findings and command output. When a change is ready, inspect the diff and commits on `taskrail/<run>`. You decide when to merge.
 
-For a first read-only run, try **Answer only** with “Where does this project validate its configuration, and which tests cover invalid input?”
+For a first read-only run, try **Discussion** with “Where does this project validate its configuration, and which tests cover invalid input?”
 
 The bundled settings use opencode's configured default model. For role-specific models, foreground installation, updates or a remote host, see the [deployment guide](docs/deployment.md).
 

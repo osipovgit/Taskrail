@@ -83,6 +83,16 @@ class HistoryFileTests(unittest.TestCase):
         self.assertNotIn("s" * 2001, inline.replace("\n", ""))
         self.assertIn("s" * 5000, self.file.read_text().replace("\n", ""))
 
+    def test_research_history_indexes_the_full_approved_answer(self):
+        answer = "Grouped by direction.\n" * 2000 + "Final observation."
+        prompt = prompt_task(
+            task_with([dict(run="first", goal="Study the history", answer=answer)]), self.run
+        )
+        self.assertIn("### Answer\nGrouped by direction.", prompt)
+        self.assertNotIn("Final observation.", prompt)
+        self.assertIn(answer, self.file.read_text())
+        self.assertRegex(self.file.read_text(), r"answer \d+-\d+")
+
     def test_a_history_section_that_is_not_server_json_stays_verbatim(self):
         text = CURRENT + MARKER + "Hand-written notes\n" * 3000
         self.assertEqual(prompt_task(text, self.run), text)

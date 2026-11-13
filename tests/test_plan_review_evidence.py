@@ -83,6 +83,26 @@ class PlanReviewEvidenceTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "remove the duplicate"):
             self.review(f"{defect}\n- R1: {defect}")
 
+    def test_answer_reviewer_can_confirm_the_same_sources_without_retyping_ranges(self):
+        self.plan.update(
+            decision="none",
+            proposed_change_files=[],
+            evidence=[dict(id="E1", path=str(self.source), line_start=1, line_end=1)],
+            coverage=[dict(id="R-check", outcome="satisfied", evidence_ids=["E1"])],
+        )
+        atomic_json(self.run / self.context["plan_reference"], self.plan)
+        self.context["check_config"] = dict(read_only=True)
+        self.observe(self.source, session="planner")
+        with self.assertRaisesRegex(ValueError, "observed read|recorded as read|never reached"):
+            self.review("done")
+        self.observe(self.source)
+        reviewed = self.review("done")
+        self.assertEqual(reviewed["status"], "APPROVE")
+        self.assertEqual(reviewed["evidence"], self.plan["evidence"])
+        self.context["check_config"] = {}
+        with self.assertRaisesRegex(ValueError, "cite the lines"):
+            self.review("done")
+
     def test_account_for_all_issued_ids_and_observe_each_decision_independently(self):
         self.context.update(prior_findings=[dict(id="F3-1", criterion="R-check")])
         for lines, message in (

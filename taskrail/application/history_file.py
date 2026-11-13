@@ -56,7 +56,9 @@ def excerpt(turn):
     """The run, goal and summary of one turn, each clipped to EXCERPT_CHARS."""
     lines = ["### Run {}".format(turn.get("run", ""))]
     lines.extend(section_lines("Goal", clipped(turn.get("goal"))))
-    lines.extend(section_lines("Summary", clipped(turn.get("summary"))))
+    title = "Answer" if "answer" in turn else "Summary"
+    outcome = clipped(turn.get(title.lower()))
+    lines.extend(section_lines(title, outcome))
     return "\n".join(lines)
 
 

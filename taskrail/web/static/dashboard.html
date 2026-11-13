@@ -57,9 +57,10 @@
             <div class="form-options">
               <label for="task-mode">Mode</label
               ><select id="task-mode">
-                <option value="develop">Develop (large work is split into tasks)</option>
-                <option value="answer">Answer only</option>
-                <option value="design">Design discussion</option>
+                <option value="develop">Develop</option>
+                <option value="discussion">Discussion</option>
+                <option value="plan">Plan</option>
+                <option value="split" hidden>Split into tasks</option>
               </select>
               <label
                 ><input type="checkbox" name="auto_approve" id="task-auto-approve" /> Allow all
@@ -126,16 +127,17 @@
             ></textarea>
             <label for="reply-intent">Mode</label>
             <select id="reply-intent">
-              <option value="followup">Develop</option>
-              <option value="answer">Answer only</option>
-              <option value="design">Design discussion</option>
+              <option value="develop">Develop</option>
+              <option value="discussion">Discussion</option>
+              <option value="plan">Plan</option>
+              <option value="split" hidden>Split into tasks</option>
             </select>
             <p class="hint">
-              A new planning pass uses current sources and saved task conclusions. Previous runs and
-              partial edits are preserved.
+              Discussion answers questions. Plan drafts a design document. Develop can change
+              project files.
             </p>
             <p id="reply-error" role="alert"></p>
-            <button id="send-reply" type="submit" class="primary">Send and start planning</button>
+            <button id="send-reply" type="submit" class="primary">Send follow-up</button>
           </form>
         </section>
       </article>

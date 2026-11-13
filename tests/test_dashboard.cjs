@@ -276,7 +276,7 @@ async function main() {
   );
   assert.equal(fields.goal.value, 'Original goal');
   assert.equal(fields.criteria.value, 'Check existing work');
-  assert.equal(nodes['task-mode'].value, 'design');
+  assert.equal(nodes['task-mode'].value, 'plan');
   assert.equal(nodes['task-auto-approve'].checked, true);
   assert.equal(fields.worktree, undefined);
   assert.equal(nodes.composer.hidden, false);
@@ -291,7 +291,7 @@ async function main() {
   assert.equal(nodes['project-roots'].children.length, 1);
   assert.equal(nodes['project-roots'].children[0].children[0].value, '');
   app.openComposer({ goal: 'Explain', roots: [], read_only: true });
-  assert.equal(nodes['task-mode'].value, 'answer');
+  assert.equal(nodes['task-mode'].value, 'discussion');
   console.log('Restart prefill and clean new-task form passed without launching a worker.');
 
   const requirements = [
@@ -646,7 +646,8 @@ async function main() {
   console.log('Delivery graph, in-card runs and collapsed attempts passed.');
 
   // A budget-paused run exposes both continuation choices and reversible deletion.
-  for (const name of ['reply-goal', 'send-reply', 'monitor']) nodes[name] = new Node('div');
+  for (const name of ['reply-goal', 'reply-intent', 'send-reply', 'monitor'])
+    nodes[name] = new Node('div');
   globalThis.scrollY = 0;
   globalThis.scrollTo = () => {};
   app.render({
@@ -743,7 +744,7 @@ async function main() {
   });
   const nextGoal = 'The deployment finished yesterday.';
   nodes['reply-goal'].value = nextGoal;
-  nodes['reply-intent'] = { value: 'answer' };
+  nodes['reply-intent'] = Object.assign(new Node('select'), { value: 'discussion' });
   nodes['reply-error'] = new Node('div');
   await app.submitFollowup({ preventDefault() {} });
   const followup = calls.find(([url]) => url === '/api/tasks')[1];
@@ -754,15 +755,94 @@ async function main() {
     auto_approve: false,
     roots: [],
     parent_run: 'prior',
-    submission_mode: 'answer',
-    read_only: true,
-    design: false,
+    submission_mode: 'discussion',
   });
+
+  const question = {
+    ...assigned,
+    id: 'explanation',
+    phase: null,
+    summary: 'The reviewer approved the answer.',
+    draft: { read_only: true, goal: 'What changed?', roots: [] },
+    answer:
+      '## Storage\n- Kept **snapshots** for `main`.\n\n```html\n<script>literal</script>\n```',
+    actions: { followup: true },
+    conversation: [{ run: 'research', goal: 'Which projects?', answer: 'Two projects.' }],
+  };
+  state.runs = [
+    { id: 'research', latest: 'explanation', members: ['explanation'], title: 'Project history' },
+  ];
+  state.selected = 'research';
+  state.focus = '';
+  const fetched = [];
+  globalThis.fetch = async (url) => {
+    fetched.push(url);
+    return { ok: true, json: async () => question };
+  };
+  await app.refreshRun();
+  assert.deepEqual(fetched, ['/api/run?id=explanation']);
+  assert.equal(state.selected, 'research');
+  assert.equal(nodes['reply-intent'].value, 'discussion');
+  const answers = all(nodes.chat).filter((node) => node.className === 'reviewed-answer');
+  assert.equal(answers.length, 2);
+  assert.ok(all(answers[0]).some((node) => node.textContent === 'Two projects.'));
+  assert.ok(answers[1].querySelector('ul'));
+  assert.equal(answers[1].querySelector('strong').textContent, 'snapshots');
+  assert.equal(answers[1].querySelector('code').textContent, 'main');
+  assert.equal(answers[1].querySelector('pre').textContent.trim(), '<script>literal</script>');
+  assert.equal(answers[1].querySelector('script'), undefined);
+  assert.ok(all(nodes.chat).some((node) => node.textContent === 'Task, review and activity'));
+  assert.ok(all(nodes.chat).every((node) => node.textContent !== question.summary));
+
+  const planTurn = {
+    ...question,
+    id: 'proposal',
+    draft: { read_only: true, design: true, goal: 'Propose a fix', roots: [] },
+    answer: '## Recommendation\nKeep the public API.',
+  };
+  app.render(planTurn);
+  assert.equal(nodes['reply-intent'].value, 'plan');
+  assert.ok(all(nodes.chat).some((node) => node.textContent === 'Design document'));
+  nodes['reply-intent'].value = 'develop';
+  app.render({ ...planTurn, server_time: 'next poll' });
+  assert.equal(nodes['reply-intent'].value, 'develop');
+  const thread = {
+    id: 'research',
+    latest: 'implementation',
+    members: ['proposal', 'implementation'],
+  };
+  const implementation = {
+    ...question,
+    id: 'implementation',
+    draft: { roots: [] },
+    answer: null,
+    conversation: [
+      { run: 'proposal', mode: 'plan', goal: 'Propose a fix', answer: planTurn.answer },
+    ],
+  };
+  const views = { proposal: planTurn, implementation };
+  globalThis.fetch = async (url) => ({
+    ok: true,
+    json: async () => (url === '/api/runs' ? [thread] : views[url.split('id=')[1]]),
+  });
+  await app.showRun(thread.id);
+  assert.equal(nodes['reply-intent'].value, 'develop');
+  await all(nodes.chat)
+    .find((node) => node.textContent === 'View earlier workflow')
+    .onclick();
+  assert.equal(state.currentRun.id, 'proposal');
+  assert.equal(nodes['followup-panel'].hidden, true);
+  assert.equal(globalThis.location.hash, 'research//proposal');
+  await all(nodes.chat)
+    .find((node) => node.textContent === 'Return to the latest turn')
+    .onclick();
+  assert.equal(state.currentRun.id, 'implementation');
+  assert.equal(nodes['followup-panel'].hidden, false);
 
   // A task or phase run opens inside its parent's card, with its own decision and actions.
   const { parseHash } = await load('state');
-  assert.deepEqual(parseHash('#a%2Fb/c'), { selected: 'a/b', focus: 'c' });
-  assert.deepEqual(parseHash('#solo'), { selected: 'solo', focus: '' });
+  assert.deepEqual(parseHash('#a%2Fb/c'), { selected: 'a/b', focus: 'c', turn: '' });
+  assert.deepEqual(parseHash('#solo'), { selected: 'solo', focus: '', turn: '' });
   const base = { ...assigned, phase: null, parent: null, pending_approval: null };
   const familyTasks = [
     delivery.tasks[0],

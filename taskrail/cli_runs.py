@@ -2,10 +2,11 @@
 
 from pathlib import Path
 
+from taskrail import cli_requests
 from taskrail.application import run_store
 from taskrail.core.runtime import run_storage
 from taskrail.interactions import approvals
-from taskrail.web import delivery_state, history, run_activity
+from taskrail.web import delivery_state, discussions, history, run_activity
 from taskrail.web.submissions import TaskLauncher
 
 STATUS_FIELDS = ("status", "summary", "answer", "changed_files")
@@ -19,6 +20,15 @@ def launcher(args):
     not, because the service may be starting a worker meanwhile.
     """
     return TaskLauncher(run_storage(args.settings, args.runs_dir), args.settings, recover=False)
+
+
+def submit(args):
+    """Resolve a permanent conversation ID once, then submit against that exact turn."""
+    service = launcher(args)
+    payload = cli_requests.task_payload(args)
+    if args.followup and not args.payload:
+        payload["parent_run"] = discussions.current_turn(service.base, args.followup)
+    return service.submit(payload)
 
 
 def run_path(args):

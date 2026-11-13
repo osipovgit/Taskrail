@@ -38,7 +38,8 @@ namespaces = false
 "taskrail.application" = ["policy.md", "instruction-modules.json"]
 "taskrail.web" = [
     "static/dashboard.html", "static/dashboard.css", "static/dashboard.js", "static/favicon.svg",
-    "static/theme.js", "static/modules/analytics.js", "static/modules/app.js", "static/modules/dom.js",
+    "static/theme.js", "static/modules/analytics.js", "static/modules/answer.js",
+    "static/modules/app.js", "static/modules/dom.js",
     "static/modules/epic.js", "static/modules/graph.js", "static/modules/monitor.js",
     "static/modules/stages.js", "static/modules/state.js", "static/modules/task.js",
 ]

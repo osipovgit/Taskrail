@@ -4,7 +4,7 @@ import json
 import re
 
 from taskrail.application import run_store, worktree_isolation
-from taskrail.core import task_markdown, task_spec
+from taskrail.core import task_markdown, task_modes, task_spec
 from taskrail.core.input_header import HEADER
 from taskrail.interactions import approval_policy
 from taskrail.web import task_input
@@ -12,7 +12,9 @@ from taskrail.web import task_input
 HISTORY = "\n## Conversation history\n"
 TASK_FILE = "00-input/task.md"
 GOAL = "goal"
-MAX_HISTORY_BYTES = 256000
+SUMMARY = "summary"
+ANSWER = "answer"
+PUBLIC_FIELDS = ("run", "mode", GOAL, SUMMARY, ANSWER)
 DESIGN = "design"
 DECOMPOSE = "decompose"
 
@@ -83,40 +85,41 @@ def task_draft(run, *, editable=False):
 def saved_turn(run, original):
     """Snapshot public outcomes and the diff, never hidden model context."""
     index = run_store.read(run)
-    conclusions = {
+    turn = dict(run=run.name, task=original)
+    draft = TaskDraft(original)
+    turn[GOAL] = draft.fields()[GOAL]
+    turn["mode"] = task_modes.selected(draft.metadata)
+    if draft.metadata.get("read_only") or draft.metadata.get(DESIGN):
+        key = ANSWER if index.get(ANSWER) else SUMMARY
+        return dict(turn, **{key: index.get(key, "")})
+    turn["conclusions"] = {
         key: json.loads(read_artifact(run, relative))
         for key, relative in index.get("results", {}).items()
     }
-    diff = read_artifact(run, "changes.diff") if (run / "changes.diff").exists() else ""
-    return dict(
-        run=run.name,
-        task=original,
-        goal=TaskDraft(original).fields()[GOAL],
-        summary=index.get("summary", ""),
-        conclusions=conclusions,
-        diff=diff,
-    )
+    turn["diff"] = ""
+    if (run / "changes.diff").exists():
+        turn["diff"] = read_artifact(run, "changes.diff")
+    turn[SUMMARY] = index.get(SUMMARY, "")
+    return turn
 
 
 def conversation(run):
-    """Carry bounded history explicitly; fail instead of silently truncating it."""
+    """Carry every turn. Large histories are indexed outside the model prompt."""
     fragments = read_artifact(run, TASK_FILE).split(HISTORY, 1)
     history = []
     if len(fragments) == 2:
         history = json.loads(fragments[1])
     history.append(saved_turn(run, fragments[0]))
     encoded = json.dumps(history, ensure_ascii=False, indent=2)
-    if len(encoded.encode("utf-8")) > MAX_HISTORY_BYTES:
-        raise ValueError("Conversation exceeds 256 KB. Start a new task with a selected summary.")
     return HISTORY + encoded
 
 
-def previous_messages(run):
+def previous_messages(run, filename=TASK_FILE):
     """Expose prior conclusions without requiring deleted ancestor artifacts."""
-    original = read_artifact(run, TASK_FILE)
+    original = read_artifact(run, filename)
     if HISTORY not in original:
         return []
     return [
-        {key: turn.get(key, "") for key in ("run", GOAL, "summary")}
+        {key: turn[key] for key in PUBLIC_FIELDS if key in turn}
         for turn in json.loads(original.split(HISTORY, 1)[1])
     ]

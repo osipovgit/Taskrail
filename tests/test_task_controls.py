@@ -158,7 +158,7 @@ class TaskControlTests(unittest.TestCase):
                     self.payload,
                     goal="Explain the result",
                     parent_run="original",
-                    submission_mode="answer",
+                    submission_mode="discussion",
                 )
             )
             text = launch.call_args.args[0]["text"]
@@ -187,6 +187,60 @@ class TaskControlTests(unittest.TestCase):
                 self.assertRaisesRegex(ValueError, "Only a server check"),
             ):
                 self.launcher.submit(dict(self.payload, **fields))
+
+    def test_answer_discussion_keeps_its_card_and_full_answers_across_launches(self):
+        with patch.object(submissions, "start_worker", return_value=None):
+            first = self.launcher.submit(dict(self.payload, read_only=True))["id"]
+            path = self.runs / first
+            first_task = self.runs / ".submissions" / first / "task.md"
+            self.finish(first, "NO_CHANGES_REQUIRED")
+            (path / "00-input/task.md").write_bytes(first_task.read_bytes())
+            answer = "## Operations\n" + "Observed result.\n" * 16000
+            index = json.loads((path / "run.json").read_text())
+            atomic_json(
+                path / "run.json", dict(index, answer=answer, roots={"project": str(self.repo)})
+            )
+            self.assertEqual(run_view(self.runs, first)["answer"], answer)
+            payload = dict(
+                self.payload,
+                submission_mode="discussion",
+                parent_run=first,
+                goal="Expand on operations.",
+            )
+            second = self.launcher.submit(payload)["id"]
+            with self.assertRaisesRegex(ValueError, "newer turn"):
+                self.launcher.submit(payload)
+            entry = next(row for row in list_runs(self.runs) if row["id"] == first)
+            self.assertEqual(
+                (entry["title"], entry["latest"], entry["group"]), ("Original", second, "running")
+            )
+            self.assertNotIn(second, [row["id"] for row in list_runs(self.runs)])
+            previous = run_view(self.runs, second)["conversation"][0]
+            self.assertEqual(
+                previous,
+                dict(run=first, mode="discussion", goal=self.payload["goal"], answer=answer),
+            )
+            second_task = self.runs / ".submissions" / second / "task.md"
+            self.finish(second, "NO_CHANGES_REQUIRED")
+            (self.runs / second / "00-input/task.md").write_bytes(second_task.read_bytes())
+            atomic_json(
+                self.runs / second / "run.json",
+                dict(index, roots={"project": str(self.repo)}, answer="Follow-up result"),
+            )
+            third = self.launcher.submit(
+                dict(payload, parent_run=second, goal="What changed next?")
+            )["id"]
+            self.assertEqual(
+                [turn["answer"] for turn in run_view(self.runs, third)["conversation"]],
+                [answer, "Follow-up result"],
+            )
+            card = next(row for row in list_runs(self.runs) if row["id"] == first)
+            self.assertEqual(card["members"], [second, third])
+            manifest = self.runs / ".submissions" / third / "launch.json"
+            atomic_json(manifest, dict(json.loads(manifest.read_text()), status="LAUNCH_ERROR"))
+            self.launcher.delete(self.runs / third)
+            card = next(row for row in list_runs(self.runs) if row["id"] == first)
+            self.assertEqual(card["latest"], second)
 
     def test_followup_and_restart_select_parent_and_original_roots_without_an_isolation_toggle(
         self,
@@ -239,8 +293,8 @@ class TaskControlTests(unittest.TestCase):
         self.assertTrue(meta["read_only"])
         self.assertNotIn("Turn control", text)
         rule = mode_rules.render(dict(design=True, read_only=True), "planner")
-        self.assertIn("Mode: design discussion. Change nothing", rule)
-        self.assertNotIn("answer only", rule)
+        self.assertIn("Mode: plan. Change nothing", rule)
+        self.assertNotIn("Mode: discussion", rule)
         self.assertIn("Mode: split into tasks", mode_rules.render(dict(decompose=True), "planner"))
         self.assertIn("Mode: change", mode_rules.render({}, "planner"))
         self.assertEqual(mode_rules.render({}, "implementer"), "")
@@ -250,7 +304,7 @@ class TaskControlTests(unittest.TestCase):
                     self.payload,
                     goal="Compare caching options",
                     parent_run="original",
-                    submission_mode="design",
+                    submission_mode="plan",
                 )
             )
             followup = launch.call_args.args[0]["text"]
@@ -336,7 +390,7 @@ class TaskControlTests(unittest.TestCase):
         epic = self.make_epic()
         epic_entry = next(run for run in list_runs(self.runs) if run["id"] == "epic")
         self.assertEqual((epic_entry["group"], epic_entry["progress"]), ("attention", "0/2"))
-        self.assertEqual(epic_entry["mode"], "decompose")
+        self.assertEqual(epic_entry["mode"], "split")
         view = run_view(self.runs, "epic")["delivery"]
         self.assertEqual(view["next"], "S-1")
         with self.launching("child-1") as launch:
@@ -862,15 +916,14 @@ class TaskControlTests(unittest.TestCase):
                 self.launcher.action(dict(id=name, action="delete"))
         self.assertTrue(self.run.exists())
 
-    def test_history_refuses_external_artifacts_and_oversized_context(self):
+    def test_history_refuses_external_artifacts_and_keeps_large_results(self):
         (self.run / "plan.json").unlink()
         (self.run / "plan.json").symlink_to(self.repo / "hello.py")
         with self.assertRaises(ValueError):
             conversation(self.run)
         (self.run / "plan.json").unlink()
         (self.run / "plan.json").write_text(json.dumps(dict(summary="x" * 256001)))
-        with self.assertRaisesRegex(ValueError, "256 KB"):
-            conversation(self.run)
+        self.assertIn("x" * 256001, conversation(self.run))
 
     def test_stop_running_worker_then_resume_same_run(self):
         self.configure("planner-timeout")

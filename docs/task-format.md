@@ -36,7 +36,7 @@ Any other `#` or `##` heading, a repeated section, and text outside the sections
 | Projects | Required. One to eight existing absolute directories; `~` is supported. An empty name becomes the directory name (numbered on a clash) |
 | Goal | Required. Expected behavior and its purpose |
 | Acceptance criteria | Optional observable conditions for a satisfactory result |
-| Mode | **Develop** (large work is split into tasks), **Answer only** or **Design discussion** |
+| Mode | **Develop**, **Discussion** or **Plan** |
 | Title | Under **More details**, one line up to 160 characters. An omitted title displays the first line of the Goal in the run list |
 
 **More details** also holds current behavior and errors, known entry points,
@@ -77,11 +77,11 @@ the agents' input.
 |---|---|
 | `roots` | Alias to directory. Roots must not coincide or contain one another; relative paths resolve from the task file's directory |
 | `verification` | Deferred runtime checks to report, not commands to execute |
-| `read_only` | `true` for an answer-only task (the browser's **Answer only**) |
+| `read_only` | `true` for a read-only task (the browser's **Discussion** or **Plan**) |
 | `decompose` | `true` always splits the Goal into task runs, even a small plan; see [delivery](task-controls.md#delivery-of-a-code-change) |
 | `phase` | Server-generated for delivery runs (`task`, `integration`, `correction`, `validation`, `server`); do not set it by hand |
 | `task_scope` | Required for server-generated `task` phases: exact reviewed file paths; child planning cannot widen them or create another split |
-| `design` | `true` for a design discussion (the browser's **Design discussion**); implies `read_only` |
+| `design` | `true` for a design document (the browser's **Plan**); implies `read_only` |
 | `auto_approve` | `true` approves local command decisions for this run (the browser's **Allow all actions**); SSH keeps its root-only approval |
 | `task_spec` | Generated typed input: version 1, literal named fields, a display integrity reference and optional child context/requirement lineage; do not edit only its Markdown display |
 | `assigned_contract` | Generated child reference (`parent_run`, `task_id`); the workflow authenticates it against the sealed reviewed parent before skipping child planning |
@@ -229,12 +229,13 @@ Host execution follows `host_commands`. Remote operations use the
 [SSH and Jenkins executor](ssh-executor.md) and its approval rules. A
 no-change result requires independent plan review and sufficient evidence.
 
-Answer-only and design tasks start with a requirements list and an `## Answer`
+Discussion and Plan tasks start with a requirements list and an `## Answer`
 section. Use `Decision: no change` for a supported answer or `Decision: blocked`
 with a precise gap when required input is missing. Both go through independent
 review. These modes never start implementation, even with an imported plan.
 
-Each submission creates a separate run. A browser follow-up starts task
+Each submission creates a separate run. All follow-ups in a conversation share one
+dashboard task and permalink. A browser follow-up starts task
 understanding with the new Goal and carries forward the project roots, constraints
 and deferred checks. Previous tasks and their starting files stay in conversation
 history. Server-generated

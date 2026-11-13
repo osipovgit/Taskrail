@@ -116,7 +116,7 @@ class SplitRecoveryTests(ReviewedFixture, unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "latest attempt"):
             launcher.action(dict(id=child.name, action="restart"))
         # A task run never becomes a detached planner or conversation.
-        for mode in ("restart", "followup", "answer", "design"):
+        for mode in ("restart", "followup", "discussion", "plan", "develop", "split"):
             with self.subTest(mode=mode), self.assertRaisesRegex(ValueError, "belongs to a split"):
                 requests.Submission(
                     dict(parent_run=child.name, submission_mode=mode, **FIELDS), self.runs

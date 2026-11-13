@@ -5,6 +5,7 @@ export const state = {
   selected: '',
   // A task or phase run shown inside the selected parent's card, or a planned node key.
   focus: '',
+  turn: '',
   runs: [],
   doneOpen: false,
   last: '',
@@ -16,13 +17,13 @@ export const state = {
   resumeNote: '',
 };
 
-// The address is #run or #parent/child.
+// An earlier turn can carry its own task or phase focus: #discussion/focus/turn.
 export function parseHash(hash) {
   try {
-    const [selected = '', focus = ''] = hash.slice(1).split('/').map(decodeURIComponent);
-    return { selected, focus };
+    const [selected = '', focus = '', turn = ''] = hash.slice(1).split('/').map(decodeURIComponent);
+    return { selected, focus, turn };
   } catch {
-    return { selected: '', focus: '' };
+    return { selected: '', focus: '', turn: '' };
   }
 }
 
