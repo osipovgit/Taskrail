@@ -175,19 +175,12 @@ class InventoryInspectionTests(unittest.TestCase):
 
     def test_fifty_targets_are_inspected_in_reviewable_batches(self):
         group = {f"worker-{number}": {} for number in range(50)}
-        self.file.write_text(
-            json.dumps(
-                {
-                    "k8s": {
-                        "hosts": group,
-                        "vars": {
-                            "ansible_user": "operator",
-                            "ansible_password": SECRET,
-                        },
-                    }
-                }
-            )
-        )
+        settings = {"ansible_user": "operator", "ansible_password": SECRET}
+        fixture = json.dumps({"k8s": {"hosts": group, "vars": settings}}).encode()
+        with patch.object(inventory, "read", return_value=fixture):
+            self.inspect_batches(group)
+
+    def inspect_batches(self, group):
         selected = list(self.lookup(dict(operation="catalog", ssh_inventory=SELECTION))["hosts"])
         self.assertCountEqual(selected, group)
         for command in (
@@ -249,9 +242,9 @@ class InventoryInspectionTests(unittest.TestCase):
             ("k8s: [" + SECRET, "k8s"),
             (FIXTURE.replace(SECRET, "'{{ lookup() }}'"), "k8s"),
         ):
-            self.file.write_text(body)
             failures = io.StringIO()
             with (
+                patch.object(inventory, "read", return_value=body.encode()),
                 patch.object(remote_catalog.client, "request", side_effect=self.lookup),
                 redirect_stderr(failures),
             ):
