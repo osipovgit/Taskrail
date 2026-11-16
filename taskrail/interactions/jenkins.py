@@ -45,7 +45,7 @@ def build(session, request):
     """A build is a root-approved executor ticket, like an SSH action."""
     run = session.environment["run"]
     authorize(session)
-    execution_wait.submit(run, session.active[0], request, kind="jenkins")
+    execution_wait.submit(run, session.active[0], {"operation": "submit", "jenkins": request})
     with ApprovalPause(session):
         return execution_wait.resume(run, session.state)
 

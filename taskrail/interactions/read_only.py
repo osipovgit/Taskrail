@@ -7,8 +7,7 @@ unknown option, still goes to the operator.
 
 from pathlib import Path
 
-from taskrail.core import protected_paths
-from taskrail.interactions import read_grammar
+from taskrail.core import protected_paths, read_grammar
 
 
 def request(payload, roots, protected=protected_paths.DEFAULT_PATTERNS):

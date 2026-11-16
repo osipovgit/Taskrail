@@ -2,7 +2,7 @@
 
 import socket
 
-from taskrail.executor import protocol
+from taskrail.executor import inventory, protocol
 
 CONNECTION_TIMEOUT = 15
 
@@ -15,8 +15,11 @@ def request(payload, address=protocol.SOCKET, timeout=CONNECTION_TIMEOUT):
         connection.sendall(protocol.encode(payload))
         with connection.makefile("rb") as stream:
             response = protocol.receive(stream)
+    message = response.get("error")
     if response.get(protocol.MAINTENANCE):
-        raise protocol.MaintenanceError(response.get("error"))
-    if response.get("error"):
-        raise ValueError(response.get("error"))
+        raise protocol.MaintenanceError(message)
+    if response.get("inventory_error"):
+        raise inventory.InventoryError(message)
+    if message:
+        raise ValueError(message)
     return response

@@ -48,7 +48,7 @@ def blocked_requirement(requirement):
 
 def confirmed(flow, state, verdict, reference):
     """Keep a confirmed blocker and resume the planner when the requested input arrives."""
-    if flow["plan"].get("decision") != "blocked" or verdict["findings"]:
+    if flow["plan"].get("decision") != "blocked":
         return False
     state["results"]["plan-review"] = reference
     summary = " ".join(verdict[GAPS])

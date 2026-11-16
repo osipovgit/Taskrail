@@ -63,6 +63,21 @@ class WorkflowTransitionTests(unittest.TestCase):
             self.assertEqual(execution["stage"], "implementer" if files else "reviewer")
             self.assertEqual(state["status"], "RUNNING" if files else "BLOCKED")
 
+    def test_confirmed_prerequisite_pauses_a_blocked_plan_with_other_findings(self):
+        execution = flow("plan-reviewer", [])
+        execution["plan"]["decision"] = "blocked"
+        state = dict(status="RUNNING", results={})
+        review = dict(
+            verdict("BLOCKED"),
+            blocking_gaps=["Live CPU measurements require SSH access"],
+            findings=[dict(criterion="R1", evidence="Inventory alone cannot establish live state")],
+        )
+        transitions.advance(execution, state, review, "05-plan-review/result.json", "v2")
+        self.assertEqual(state["status"], "BLOCKED")
+        self.assertEqual(state["results"]["plan-review"], "05-plan-review/result.json")
+        self.assertEqual(execution["effect"], "blocked_checkpoint")
+        self.assertEqual(execution["feedback"], review)
+
     def test_repeated_gaps_follow_the_whole_plan_and_open_set(self):
         execution = flow("plan-reviewer", [])
         state = dict(status="RUNNING", results={})

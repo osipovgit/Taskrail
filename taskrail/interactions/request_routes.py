@@ -14,6 +14,8 @@ from taskrail.interactions import (
     request_limits,
     turn_recovery,
 )
+from taskrail.interactions.inventory_lookup import STATUS as INVENTORY
+from taskrail.interactions.inventory_lookup import consume as lookup_inventory
 
 RESPONSE = "final_text"
 
@@ -87,6 +89,7 @@ ROUTES = MappingProxyType(
         request_envelope.GIT: run_git,
         request_envelope.LOCAL: local_route.run_local,
         request_envelope.ACTION: run_remote,
+        INVENTORY: lookup_inventory,
         request_envelope.JENKINS: jenkins.consume,
     }
 )

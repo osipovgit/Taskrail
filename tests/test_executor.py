@@ -16,14 +16,28 @@ from unittest.mock import MagicMock, patch
 
 from run_fixture import current_run
 
-from taskrail.application import delivery_confirmation, execution_requests, execution_wait
+from taskrail.application import (
+    delivery_confirmation,
+    execution_requests,
+    execution_wait,
+    remote_catalog,
+)
 from taskrail.application.source_guard import SourceGuard
 from taskrail.core import prompt_texts
 from taskrail.core.files import atomic_json
-from taskrail.executor import action_schema, client, hosts, protocol, streams, transport, worker
+from taskrail.executor import (
+    action_schema,
+    client,
+    hosts,
+    protocol,
+    remote_inspection,
+    streams,
+    transport,
+    worker,
+)
 from taskrail.executor.service import ExecutorServer
 from taskrail.executor.store import TicketStore
-from taskrail.interactions import remote, remote_inspection
+from taskrail.interactions import remote
 
 INVENTORY = {
     "server-a": dict(
@@ -292,6 +306,7 @@ class ExecutorTest(unittest.TestCase):
                     self.assertIn("Nothing was executed", answer)
         self.assertEqual(execution_wait.read(run), [])
         with (
+            patch.object(remote_catalog, "available", return_value={"hosts": INVENTORY}),
             patch.object(execution_wait, "resume", return_value="observed"),
             patch.object(remote, "ApprovalPause", return_value=contextlib.nullcontext()),
         ):
@@ -305,6 +320,21 @@ class ExecutorTest(unittest.TestCase):
         self.assertEqual(
             submitted, ["systemctl status nginx --no-pager\n", "systemctl restart nginx\n"]
         )
+
+    def test_missing_inspection_capability_returns_feedback_before_a_ticket_exists(self):
+        run = self.root / "inspection"
+        session = self.session(run, "planner", {})
+        for catalog, detail in (
+            ({"unavailable": "routes.ssh.denied"}, "socket access denied"),
+            ({"hosts": {}}, "no configured targets"),
+            ({"hosts": {"other": {}}}, "Unknown SSH targets: server-a"),
+        ):
+            with (
+                self.subTest(catalog=catalog),
+                patch.object(remote_catalog, "available", return_value=catalog),
+            ):
+                self.assertIn(detail, remote.consume(session, self.request("df -P")))
+                self.assertEqual(execution_wait.read(run), [])
 
     def confirm_server_checks(self, run):
         change = run.parent / "change"
@@ -346,7 +376,7 @@ class ExecutorTest(unittest.TestCase):
         run = self.root / "run"
         folder = run / "01-plan"
         folder.mkdir(parents=True)
-        execution_wait.submit(run, folder, ACTION)
+        execution_wait.submit(run, folder, execution_wait.ssh_request(ACTION))
         (run / "stop.request").touch()
         with self.assertRaises(KeyboardInterrupt), patch.object(client, "request") as request:
             execution_wait.resume(run, {})
@@ -369,8 +399,8 @@ class ExecutorTest(unittest.TestCase):
         run = self.root / "run"
         folder = run / "01-plan"
         folder.mkdir(parents=True)
-        execution_wait.submit(run, folder, ACTION)
-        execution_wait.submit(run, folder, ACTION)
+        execution_wait.submit(run, folder, execution_wait.ssh_request(ACTION))
+        execution_wait.submit(run, folder, execution_wait.ssh_request(ACTION))
         first, second = execution_wait.read(run)
         self.assertNotEqual(first["request"]["key"], second["request"]["key"])
         outcome = dict(id="ticket", status="SUCCEEDED", results=[dict(output="Linux")])
@@ -387,7 +417,7 @@ class ExecutorTest(unittest.TestCase):
         run = self.root / "run"
         folder = run / "01-plan"
         folder.mkdir(parents=True)
-        execution_wait.submit(run, folder, ACTION)
+        execution_wait.submit(run, folder, execution_wait.ssh_request(ACTION))
         with (
             patch.object(client, "request", return_value=dict(status="UNKNOWN")),
             self.assertRaisesRegex(ValueError, "UNKNOWN"),

@@ -394,6 +394,34 @@
       }
     }
   },
+  "inventory-request": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "schema_version",
+      "status",
+      "path",
+      "group"
+    ],
+    "properties": {
+      "schema_version": {
+        "type": "integer",
+        "enum": [1]
+      },
+      "status": {
+        "type": "string",
+        "enum": ["INVENTORY_REQUEST"]
+      },
+      "path": {
+        "type": "string",
+        "minLength": 1
+      },
+      "group": {
+        "type": "string",
+        "minLength": 1
+      }
+    }
+  },
   "ssh-request": {
     "type": "object",
     "additionalProperties": false,

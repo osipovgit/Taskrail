@@ -58,6 +58,7 @@ class ScenarioFixture:
         task.write_text(text)
         parent_context.write(folder, context)
         with (
+            patch("taskrail.application.remote_catalog.available", return_value={}),
             patch("taskrail.executor.client.request", side_effect=AssertionError("Remote call")),
             patch("taskrail.interactions.approvals.wait", return_value=dict(decision="deny")),
         ):
