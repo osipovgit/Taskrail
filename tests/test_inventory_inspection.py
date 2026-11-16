@@ -69,7 +69,9 @@ class InventoryInspectionTests(unittest.TestCase):
         task, _ = task_form.build_task(cli_requests.task_payload(args), self.base.parent / "runs")
         submitted = self.base / "task.md"
         submitted.write_text(task)
-        config = task_config.configuration(submitted, self.base / "settings.json")
+        settings = self.base / "settings.json"
+        settings.write_text(json.dumps({"opencode_version": "1.x"}))
+        config = task_config.configuration(submitted, settings)
         run = self.base / "run"
         folder = run / "02-plan"
         folder.mkdir(parents=True)
