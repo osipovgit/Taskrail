@@ -75,6 +75,10 @@ def observe(pending):
     query = pending["request"]
     if pending.get(IDENTIFIER):
         query = dict(operation=STATUS, id=pending[IDENTIFIER])
+    if pending.get(STATUS) == "APPROVED":
+        query = dict(
+            query, operation="start-inspection", ssh_inventory=pending["request"][inventory.KEY]
+        )
     try:
         pending.update(client.request(query))
     except inventory.InventoryError as error:

@@ -51,7 +51,10 @@ if [[ "$check_only" == yes ]]; then
 fi
 # The journal of a running or uncertain action is never deleted: reconcile it first.
 begin_maintenance "$marker" /var/lib/taskrail-executor /etc/systemd/system/taskrail-executor.service RUNNING UNKNOWN
+if [[ -f /etc/systemd/system/taskrail-executor.socket ]]; then
+    systemctl disable taskrail-executor.socket
+fi
 systemctl disable taskrail-executor.service 2>/dev/null || true
-rm -f -- /etc/systemd/system/taskrail-executor.service /usr/local/bin/taskrail-executor-approve
-rm -rf -- /opt/taskrail-executor /etc/taskrail-executor /var/lib/taskrail-executor /run/taskrail-executor /etc/systemd/system/taskrail-executor.service.d
+rm -f -- /etc/systemd/system/taskrail-executor.service /etc/systemd/system/taskrail-executor.socket /usr/local/bin/taskrail-executor-approve
+rm -rf -- /opt/taskrail-executor /etc/taskrail-executor /var/lib/taskrail-executor /run/taskrail-executor /etc/systemd/system/taskrail-executor.service.d /etc/systemd/system/taskrail-executor.socket.d
 systemctl daemon-reload

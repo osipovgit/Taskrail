@@ -1,5 +1,6 @@
 """Discover the selected executor targets without exposing authentication data."""
 
+from taskrail.application import inventory_sources
 from taskrail.core import prompt_texts
 from taskrail.executor import client, inventory
 
@@ -40,6 +41,7 @@ def protect_sources(config):
     """Mask published credential filenames before capturing project files."""
     published = available().get("inventory_files", [])
     protected = config["protected_paths"]
+    protected.extend(name for name in inventory_sources.named(config) if name not in protected)
     protected.extend(
         name
         for name in published

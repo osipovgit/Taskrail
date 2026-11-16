@@ -26,9 +26,9 @@ def encode(payload):
     return b"%s\n" % raw
 
 
-def receive(stream):
+def receive(stream, prefix=b""):
     """Read exactly one bounded newline-delimited object."""
-    raw = stream.readline(MAX_MESSAGE + 2)
+    raw = prefix + stream.readline(MAX_MESSAGE + 2 - len(prefix))
     if len(raw) > MAX_MESSAGE + 1 or not raw.endswith(b"\n"):
         raise ValueError("Incomplete or oversized executor message")
     payload = json.loads(raw, object_pairs_hook=unique_fields)

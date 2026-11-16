@@ -24,6 +24,9 @@ EXECUTOR = (
     "executor/hosts.py",
     "executor/inventory.py",
     "executor/inventory_groups.py",
+    "executor/inventory_file.py",
+    "executor/inventory_tickets.py",
+    "executor/socket_io.py",
     "executor/jenkins_build.py",
     "executor/jenkins_config.py",
     "executor/jenkins_http.py",
@@ -45,6 +48,7 @@ EXECUTOR_ASSETS = (
     "ssh-askpass",
     "taskrail-executor-approve",
     "taskrail-executor.service",
+    "taskrail-executor.socket",
 )
 DEPLOY = (
     *EXECUTOR_ASSETS,

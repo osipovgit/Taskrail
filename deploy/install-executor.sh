@@ -41,13 +41,10 @@ marker=$config/maintenance
     "$source_root" "$config" "$source_root" "$release" "$state"
 getent group taskrail-executor >/dev/null || groupadd --system taskrail-executor
 id taskrail-executor >/dev/null 2>&1 || useradd --system --gid taskrail-executor --home-dir /nonexistent --shell /usr/sbin/nologin taskrail-executor
-getent group taskrail-executor-clients >/dev/null || groupadd --system taskrail-executor-clients
 if [[ $client_user == taskrail-executor ]] || id -nG -- "$client_user" | tr ' ' '\n' | grep -qx taskrail-executor; then
     printf 'The application account must not belong to the private taskrail-executor group.\n' >&2
     exit 2
 fi
-usermod -a -G taskrail-executor-clients "$client_user"
-usermod -a -G taskrail-executor-clients taskrail-executor
 install -d -m 0755 -o root -g root "$release" "$release/deploy"
 install -d -m 0750 -o root -g taskrail-executor "$config"
 if [[ ! -d $config/inventories ]]; then
@@ -70,6 +67,10 @@ prepare_executor_package "$source_root/taskrail" "$staging"
 sed "s/@CLIENT_UID@/$client_uid/g" "$staging/deploy/taskrail-executor.service" >"$staging/service"
 # No new submissions or approvals from here on; refuse while an action runs; the stop
 # must succeed, and the journal is checked again after it.
+socket_unit=taskrail-executor.socket
+sed "s/@CLIENT_UID@/$client_uid/g" "$staging/deploy/$socket_unit" >"$staging/socket"
+socket_active=no
+if [[ -e /etc/systemd/system/taskrail-executor.socket ]] && systemctl is-active --quiet "$socket_unit"; then socket_active=yes; fi
 begin_maintenance "$marker" "$state" "$unit_file" RUNNING
 if [[ -d $release/taskrail ]]; then
     mv -- "$release/taskrail" "$staging/previous"
@@ -85,7 +86,8 @@ done
 install -m 0755 -o root -g root "$staging/deploy/taskrail-executor-approve" /usr/local/bin/taskrail-executor-approve
 install -d -m 0700 -o taskrail-executor -g taskrail-executor "$state"
 if [[ ! -f /etc/taskrail-executor/hosts.json ]]; then
-    install -m 0640 -o root -g taskrail-executor "$staging/deploy/executor-hosts.example.json" /etc/taskrail-executor/hosts.json
+    echo '{}' >"$staging/hosts.json"
+    install -m 0640 -o root -g taskrail-executor "$staging/hosts.json" /etc/taskrail-executor/hosts.json
 fi
 install -m 0640 -o root -g taskrail-executor "$staging/deploy/executor-jenkins.example.json" /etc/taskrail-executor/jenkins.json.example
 if [[ ! -f /etc/taskrail-executor/known_hosts ]]; then
@@ -101,17 +103,15 @@ for private_file in "${private_files[@]}"; do
     chown root:taskrail-executor "$private_file"
     chmod 0640 "$private_file"
 done
+install -m 0644 -o root -g root "$staging/socket" /etc/systemd/system/taskrail-executor.socket
+# The socket now owns activation, including after an upgrade from a standalone unit.
+if [[ -e "$unit_file" ]]; then systemctl disable taskrail-executor.service; fi
 install -m 0644 -o root -g root "$staging/service" "$unit_file"
 systemctl daemon-reload
+leave_maintenance "$marker"
 case "$autostart" in
-    enable) systemctl enable taskrail-executor.service ;;
-    disable) systemctl disable taskrail-executor.service ;;
+    enable) systemctl enable --now "$socket_unit" ;;
+    disable) systemctl disable "$socket_unit" ;;
+    keep) if [[ "$socket_active" == yes ]]; then systemctl start "$socket_unit"; fi ;;
 esac
-printf '%s\n' \
-    'Executor installed. Existing credentials and host keys were preserved.' \
-    'Use sudoedit /etc/taskrail-executor/hosts.json and /etc/taskrail-executor/known_hosts.' \
-    'For Jenkins, copy jenkins.json.example to jenkins.json in the same directory and edit it.' \
-    'Verify host keys through a trusted channel; unknown keys fail closed.' \
-    'Then run: sudo systemctl start taskrail-executor.service' \
-    'Log out and back in before restarting Taskrail so its process gets the client group.' \
-    'Do NOT give the Taskrail account passwordless sudo or add it to the taskrail-executor group.'
+echo "Executor installed. Verify remote host keys and add them to /etc/taskrail-executor/known_hosts."

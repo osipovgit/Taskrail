@@ -394,7 +394,8 @@ Both clean reinstall modes check the ownership of custom history and protect
 project checkouts, linked worktrees, the selected CLI and external provider
 credentials. Mixed history or a deletion path that overlaps a protected input
 blocks the reset. Held locks retain their inodes throughout installation.
-The separate SSH executor keeps its installation and configuration on `--force-update`.
+The SSH executor keeps its installation and configuration on `--force-update`.
+Add `--with-ssh` to install or update and activate it with the application.
 
 ## Reinstall the application and its SSH executor
 
@@ -408,8 +409,8 @@ also requires `sudo` and resets
 its service, code, tickets, inventory/passwords and known host keys. Failure to stop
 the application leaves the executor untouched; failure to stop the executor preserves
 both installations and their data. RUNNING or UNKNOWN
-remote tickets must first be reconciled. The executor is reinstalled disabled;
-configure its inventory and verified host keys again before starting it. Dedicated
+remote tickets must first be reconciled. The executor socket is reinstalled disabled
+unless `--with-ssh` is given. Restore verified host keys before remote connections. Dedicated
 system account/group identities are retained.
 
 ## Run storage updates

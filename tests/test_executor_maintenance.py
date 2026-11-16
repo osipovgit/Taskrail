@@ -229,13 +229,16 @@ class MaintenanceScriptTests(unittest.TestCase):
         )
 
     def test_the_installer_swaps_a_prepared_package_only_after_maintenance(self):
-        installed = self.execute("install-executor.sh", "--client=fixture")
+        installed = self.execute("install-executor.sh", "--client=fixture", "--autostart=enable")
         self.assertEqual(installed.returncode, 0, installed.stderr)
         service = Path("executor/service.py")
         self.assertEqual(
             (self.package / service).read_bytes(),
             (self.release / "taskrail" / service).read_bytes(),
         )
+        self.assertEqual(json.loads((self.config / "hosts.json").read_text()), {})
+        self.assertIn("SocketUser=1000", self.unit.with_suffix(".socket").read_text())
+        self.assertIn("enable --now taskrail-executor.socket marker=no", self.log.read_text())
         self.assertFalse((self.package / "web").exists())
         self.assertFalse((self.package / "executor/debug.json").exists())
         self.assertFalse((self.package / "executor/custom.py").exists())
@@ -309,13 +312,22 @@ class MaintenanceScriptTests(unittest.TestCase):
                 self.assertEqual((self.package / "previous").read_text(), "previous package")
                 self.assertFalse(self.log.exists())
                 self.assertFalse((self.config / "maintenance").exists())
+        socket_unit = self.unit.with_suffix(".socket")
+        socket_unit.touch()
+        dropin = self.unit.with_suffix(".socket.d")
+        dropin.mkdir()
         ticket.write_text('{"status":"COMPLETED"}')
         reset = self.execute("reset-executor.sh")
         self.assertEqual(reset.returncode, 0, reset.stderr)
         self.assertFalse(self.package.exists())
         self.assertFalse(ticket.exists())
+        self.assertFalse(socket_unit.exists())
+        self.assertFalse(dropin.exists())
         calls = self.log.read_text().splitlines()
-        self.assertEqual(calls[0], "stop taskrail-executor.service marker=yes previous=yes")
+        self.assertEqual(
+            calls[0],
+            "stop taskrail-executor.socket taskrail-executor.service marker=yes previous=yes",
+        )
         self.assertEqual(calls[-1], "daemon-reload marker=no previous=no")
 
 

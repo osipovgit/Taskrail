@@ -1,11 +1,10 @@
-"""Bind a planning-time inventory lookup to a published file and a group."""
+"""Bind a planning-time inventory lookup to a project file and a group."""
 
 from pathlib import Path
 
 from taskrail.application import artifacts, execution_requests, remote_catalog, workspace_paths
 from taskrail.core import json_response, prompt_texts, schema
-from taskrail.core.files import bounded_bytes, digest
-from taskrail.executor import inventory
+from taskrail.executor import inventory, inventory_file
 from taskrail.interactions import transcripts
 
 STATUS = "INVENTORY_REQUEST"
@@ -22,11 +21,7 @@ def source(config, request):
     path = Path(request["path"])
     if not inside_project(config, path):
         raise ValueError(prompt_texts.text("feedback.inventory_path"))
-    selection = inventory.selector(path.name, request["group"])
-    raw = bounded_bytes(path, inventory.MAX_BYTES)
-    if raw is None:
-        raise ValueError(prompt_texts.text("feedback.inventory_source"))
-    return dict(selection, sha256=digest(raw))
+    return inventory_file.pin(inventory.selector(str(path), request["group"]))
 
 
 def inside_project(config, path):

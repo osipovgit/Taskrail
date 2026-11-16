@@ -158,14 +158,15 @@ class ExecutorTest(unittest.TestCase):
     def test_wire_handler_uses_kernel_peer_uid(self):
         server = self.server()
         connection = MagicMock()
+        connection.recvmsg.return_value = (b"{", [], 0, None)
         connection.getsockopt.return_value = struct.pack("3i", 123, 1000, 1000)
-        connection.makefile.return_value = io.BytesIO(b'{"operation":"catalog"}\n')
+        connection.makefile.return_value = io.BytesIO(b'"operation":"catalog"}\n')
         server.finish_request(connection, None)
         response = json.loads(connection.sendall.call_args.args[0])
         self.assertEqual(response["hosts"]["server-a"]["hostname"], "192.0.2.10")
         self.assertNotIn("password", json.dumps(response))
         connection.getsockopt.return_value = struct.pack("3i", 123, 1001, 1001)
-        connection.makefile.return_value = io.BytesIO(b'{"operation":"catalog","uid":0}\n')
+        connection.makefile.return_value = io.BytesIO(b'"operation":"catalog","uid":0}\n')
         server.finish_request(connection, None)
         self.assertIn("error", json.loads(connection.sendall.call_args.args[0]))
 

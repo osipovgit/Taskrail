@@ -13,6 +13,7 @@ from taskrail.executor import protocol, tickets
 
 PRIVATE_DIRECTORY_MODE = 0o700
 
+STATUS = "status"
 STATE = Path("/var/lib/taskrail-executor")
 
 
@@ -60,23 +61,24 @@ class TicketStore:
                 return self.get(ticket["id"])
             return self.save(ticket)
 
-    def approve(self, identifier, digest, inventory):
+    def approve(self, identifier, digest, inventory, expected="PENDING_APPROVAL"):
         """Consume exactly the reviewed content, once, under the store lock."""
         with self.lock:
             ticket = self.get(identifier)
-            if ticket["status"] != "PENDING_APPROVAL" or ticket["digest"] != digest:
+            if ticket[STATUS] != expected or ticket["digest"] != digest:
                 raise ValueError("Ticket changed or approval was already consumed")
             if tickets.identity(ticket, inventory) != ticket["targets"]:
                 raise ValueError("Target identity changed; submit and review a new ticket")
-            ticket.update(status="RUNNING", approved_at=datetime.now(timezone.utc).isoformat())
+            ticket[STATUS] = "RUNNING"
+            ticket.setdefault("approved_at", datetime.now(timezone.utc).isoformat())
             return self.save(ticket)
 
     def reject(self, identifier, digest):
         """Decline a pending ticket without executing any remote command."""
         with self.lock:
             ticket = self.get(identifier)
-            if ticket["status"] != "PENDING_APPROVAL" or ticket["digest"] != digest:
-                raise ValueError("Ticket changed or is no longer pending")
+            if ticket[STATUS] not in {"PENDING_APPROVAL", "APPROVED"} or ticket["digest"] != digest:
+                raise ValueError("Ticket changed or already started")
             ticket.update(status="REJECTED", detail="Operator rejected this exact action")
             return self.save(ticket)
 
@@ -84,7 +86,7 @@ class TicketStore:
         """Never replay an interrupted remote action after a daemon restart."""
         for path in self.directory.glob("*.json"):
             ticket = self.get(path.stem)
-            if ticket["status"] == "RUNNING":
+            if ticket[STATUS] == "RUNNING":
                 ticket.update(
                     status="UNKNOWN",
                     detail="Executor restarted; inspect remote state before any new action",

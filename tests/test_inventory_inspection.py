@@ -2,6 +2,7 @@
 
 import io
 import json
+import os
 import tempfile
 import threading
 import unittest
@@ -17,7 +18,7 @@ from taskrail.application import (
     remote_catalog,
     task_config,
 )
-from taskrail.executor import action_schema, inventory
+from taskrail.executor import action_schema, client, inventory, inventory_file
 from taskrail.executor.service import ExecutorServer
 from taskrail.executor.store import TicketStore
 from taskrail.interactions import inventory_lookup, request_routes
@@ -61,6 +62,10 @@ class InventoryInspectionTests(unittest.TestCase):
         self.addCleanup(self.server.server_close)
 
     def lookup(self, payload):
+        selected = payload.get(inventory.KEY)
+        if inventory_file.project(selected):
+            with inventory_file.opened(selected["file"]) as descriptor:
+                return self.server.dispatch(payload, 1200, descriptor)
         return self.server.dispatch(payload, 1200)
 
     def test_planner_resolves_the_task_inventory_before_approved_inspection(self):
@@ -113,13 +118,16 @@ class InventoryInspectionTests(unittest.TestCase):
                             "check",
                             "--ssh",
                             "--inventory-file",
-                            "cluster.yaml",
+                            str(self.file),
                             "--inventory-group",
                             "k8s",
                         ]
                     ),
                     0,
                 )
+            with redirect_stdout(output):
+                self.assertEqual(cli_service.check_command(["check", "--ssh"]), 0)
+        self.assertIn("SSH executor ready", output.getvalue())
         self.assertIn("node1, node2", output.getvalue())
         self.assertEqual(catalog["hosts"]["node2"]["port"], 2222)
         remote = execution_wait.ssh_request(ACTION, selection)
@@ -147,7 +155,12 @@ class InventoryInspectionTests(unittest.TestCase):
             ) as execute,
             patch.object(threading.Thread, "start", lambda thread: thread.run()),
         ):
-            self.server.dispatch(approval, 0)
+            self.assertEqual(self.server.dispatch(approval, 0)["status"], "APPROVED")
+            observed = dict(request=pending, id=ticket["id"], status="PENDING_APPROVAL")
+            with patch.object(remote_catalog.client, "request", side_effect=self.lookup):
+                execution_wait.observe(observed)
+                self.assertEqual(observed["status"], "APPROVED")
+                execution_wait.observe(observed)
             self.assertEqual(execute.call_args.args[0]["password"], SECRET)
         result = self.store.get(ticket["id"])
         self.assertEqual(result["results"][0]["output"], "42% [REDACTED]")
@@ -161,7 +174,7 @@ class InventoryInspectionTests(unittest.TestCase):
         ):
             self.assertNotIn(SECRET, artifact)
 
-    def test_inventory_request_rejects_other_paths_and_same_name_different_contents(self):
+    def test_project_path_selects_the_exact_file_across_socket_and_restart(self):
         project = self.base / "project"
         project.mkdir()
         alternate = project / self.file.name
@@ -169,11 +182,74 @@ class InventoryInspectionTests(unittest.TestCase):
         config = {"roots": {"repo": project}}
         lookup = {"path": str(alternate), "group": "k8s"}
         binding = inventory_lookup.source(config, lookup)
-        with self.assertRaisesRegex(inventory.InventoryError, "differs"):
-            inventory.load(binding)
+        self.server.client_uid = os.getuid()
+        listener = threading.Thread(target=self.server.serve_forever, daemon=True)
+        listener.start()
+        self.addCleanup(self.server.shutdown)
+        address = self.server.server_address
+        for path, expected in ((alternate, "192.0.2.21"), (self.file, "192.0.2.17")):
+            selected = inventory_file.pin(inventory.selector(str(path), "k8s"))
+            response = client.request(dict(operation="catalog", ssh_inventory=selected), address)
+            self.assertEqual(response["hosts"]["node1"]["hostname"], expected)
+            self.assertNotIn(SECRET, json.dumps(response))
+        payload = dict(execution_wait.ssh_request(ACTION, binding), key="inspection")
+        ticket = client.request(payload, address)
+        start = dict(operation="start-inspection", id=ticket["id"], ssh_inventory=binding)
+        self.assertEqual(client.request(start, address)["status"], "PENDING_APPROVAL")
+        self.server.dispatch(dict(operation="approve", id=ticket["id"], digest=ticket["digest"]), 0)
+        self.store.recover()
+        alternate.unlink()
+        self.assertEqual(client.request(start, address)["status"], "REJECTED")
+        self.assertEqual(client.request(payload, address)["id"], ticket["id"])
+        self.assertFalse(self.store.get(ticket["id"])["results"])
         with self.assertRaises(ValueError):
             inventory_lookup.source(config, dict(lookup, path=str(self.file)))
         self.assertIn("unavailable", remote_catalog.available({}))
+
+    def test_a_changed_or_revoked_approved_inventory_never_starts_ssh(self):
+        selection = inventory_file.pin(inventory.selector(str(self.file), "k8s"))
+        payload = dict(execution_wait.ssh_request(ACTION, selection), key="project")
+        ticket = self.lookup(payload)
+        decision = dict(id=ticket["id"], digest=ticket["digest"])
+        self.server.dispatch(dict(decision, operation="approve"), 0)
+        start = dict(operation="start-inspection", id=ticket["id"], ssh_inventory=selection)
+        self.file.write_text(FIXTURE.replace("192.0.2.17", "192.0.2.21"))
+        with patch.object(threading.Thread, "start") as worker:
+            self.assertIn("changed", self.lookup(start)["inventory_error"])
+            self.file.write_text(FIXTURE)
+            ticket = self.lookup(dict(payload, key="another-ticket"))
+            decision = dict(id=ticket["id"], digest=ticket["digest"])
+            self.server.dispatch(dict(decision, operation="approve"), 0)
+            self.server.dispatch(dict(decision, operation="reject"), 0)
+            self.assertEqual(self.lookup(dict(start, id=ticket["id"]))["status"], "REJECTED")
+            worker.assert_not_called()
+
+    def test_named_credentials_are_masked_before_model_start_without_executor(self):
+        directory = self.base / "second cluster"
+        directory.mkdir()
+        second = directory / "another.yml"
+        second.write_bytes(self.file.read_bytes())
+        ordinary = self.base / "playbook.yaml"
+        ordinary.write_text("- hosts: workers\n")
+        goal = f"Check {self.file} and {second}. Also inspect {ordinary} and create new.yaml."
+        config = dict(
+            roots={"repo": self.base}, protected_paths=[], task_spec={"fields": [{"text": goal}]}
+        )
+        with patch.object(remote_catalog.client, "request", side_effect=ConnectionRefusedError):
+            remote_catalog.protect_sources(config)
+        self.assertCountEqual(config["protected_paths"], [self.file.name, second.name])
+
+    def test_project_inventory_rejects_link_swaps_in_any_component(self):
+        selection = inventory_file.pin(inventory.selector(str(self.file), "k8s"))
+        actual = self.base / "elsewhere"
+        self.file.rename(actual)
+        self.file.symlink_to(actual)
+        with self.assertRaises(OSError):
+            inventory_file.pin(selection)
+        linked = self.base / "linked"
+        linked.symlink_to(self.base, target_is_directory=True)
+        with self.assertRaises(OSError), inventory_file.opened(linked / actual.name):
+            self.fail("opened inventory through an ancestor symlink")
 
     def test_fifty_targets_are_inspected_in_reviewable_batches(self):
         group = {f"worker-{number}": {} for number in range(50)}

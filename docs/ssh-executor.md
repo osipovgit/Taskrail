@@ -2,23 +2,33 @@
 
 The optional executor runs as the dedicated Linux account `taskrail-executor`.
 Taskrail can submit an exact action and observe its result. Only root can approve it.
-The web application and model never receive SSH passwords or the approval right.
+The model, browser and ticket journal receive public target identities. The task
+process opens project inventories as the application user. SSH authentication and
+remote execution run under the executor account.
 
 ## Install and configure
 
-Use a trusted extracted release. Install the normal application as your usual user,
-then install the executor separately:
+From a trusted release, run the application installer as your usual account:
 
 ```sh
-bash deploy/install.sh --wait=3600 --autostart=keep
-sudo bash deploy/install-executor.sh --client="$USER" --autostart=enable
-sudoedit /etc/taskrail-executor/hosts.json
-sudoedit /etc/taskrail-executor/known_hosts
-sudo systemctl start taskrail-executor.service
+bash deploy/install.sh --with-ssh --autostart=yes
 ```
 
-`--autostart=enable|disable|keep` is explicit and never prompts. Enabled means system
-boot, independently of user login. Updates preserve credentials, host keys and
+The installer uses sudo for the system component, starts the Taskrail user service,
+and enables a private socket for that account. Systemd starts the isolated executor
+when Taskrail first contacts the socket. No extra group membership or login is
+required. Check readiness with `taskrail check --ssh`; an empty default host list
+is valid. `systemctl is-active taskrail-executor.socket` reports `active` even
+before the executor handles its first request. The system Python needs PyYAML for project inventories (Debian/Ubuntu:
+`sudo apt install python3-yaml`). Before the first remote connection, add the
+independently verified host keys to `/etc/taskrail-executor/known_hosts` with
+`sudoedit`. Project inventories supply their own targets.
+
+Use the same command to update both components. The ordinary installer also works
+without SSH. For a separate system installation, use
+`sudo bash deploy/install-executor.sh --client="$USER" --autostart=enable`.
+Socket enablement controls activation after boot independently of user login.
+Updates preserve credentials, host keys and
 queued tickets. Installers and resets hold one root-owned lock outside their deletion
 targets, so concurrent maintenance is refused. Packages receive explicit directory
 and file permissions and must import successfully as the executor account before
@@ -32,15 +42,13 @@ prepared beforehand, or deletes the installation. A failed safety check prevents
 package swap or reset; a failure after stopping the service leaves it stopped for
 inspection. A reset never deletes the journal of a running or uncertain action.
 An existing maintenance marker is preserved and requires inspection of the interrupted
-operation before retrying. Startup is left to the explicit command above.
+operation before retrying. The socket only accepts the configured application UID and root through its
+filesystem permissions and the executor verifies the caller's UID independently.
+The model chooses the inventory, targets and diagnostic commands. Only the root
+approval helper can authorize execution. A model tool or web request cannot
+approve its own action.
 
-Log out and back in after first installation so your account inherits the
-`taskrail-executor-clients` group, then restart the user application service.
-If the user systemd manager remains alive through logout (lingering), reboot once
-to refresh its groups. Never add the Taskrail account to the private
-`taskrail-executor` group or give it passwordless sudo.
-
-For the default SSH catalog, replace the example in `hosts.json` before starting.
+For the default SSH catalog, configure aliases in `hosts.json`.
 Use `{}` if tasks will only use selected inventories. Default catalog format:
 
 ```json
@@ -75,32 +83,17 @@ deliberately.
 
 ## Inspect an Ansible group during planning
 
-Install or update **both** Taskrail and the system executor. The executor's
-system Python needs PyYAML (on Debian/Ubuntu, `sudo apt install python3-yaml`).
-Put a trusted static YAML inventory in the private inventory directory:
+Name the inventory path in the task. Taskrail opens the project file using the
+application account and passes a read-only file descriptor to the executor.
+The executor has no general access to the application's home directory. There is
+no copy to install, mount or synchronize when inventory files change. Different
+directories can have identically named inventories. The planner can select another
+file and group in the same task. Each ticket keeps its own selection.
+
+To check discovery manually, use the actual project path:
 
 ```sh
-sudo install -o root -g taskrail-executor -m 0640 path/to/cluster.yaml /etc/taskrail-executor/inventories/cluster.yaml
-```
-
-To use files in place, an administrator can instead expose a trusted inventory
-directory read-only inside the executor's service. Run `sudo systemctl edit
-taskrail-executor.service` and add the following drop-in with the **actual
-absolute source path**. The executor account needs read access to the YAML files
-and traversal of the mounted directory. Keep the application's credentials out
-of the drop-in.
-
-```ini
-[Service]
-BindReadOnlyPaths=/absolute/path/to/inventory:/etc/taskrail-executor/inventories
-```
-
-After configuring the mount, reload systemd and start the service (restart it
-if already running and idle). Verify the published aliases as the ordinary
-Taskrail user before submitting a task:
-
-```sh
-taskrail check --ssh --inventory-file cluster.yaml --inventory-group workers
+taskrail check --ssh --inventory-file "/path/to/repo/inventory/cluster.yaml" --inventory-group workers
 ```
 
 This queries the local executor. SSH connectivity and host keys are tested on the
@@ -115,15 +108,18 @@ taskrail submit --mode discussion --root project=/path/to/repo \
 
 During planning, the model sends the path and group in an `INVENTORY_REQUEST`.
 Taskrail checks the path against the task's roots and authenticated source checkout.
-The executor verifies that its published file has the same contents, resolves
-group membership and returns aliases. No task-form fields or per-host registration
-are needed. Discovery runs locally and contacts no hosts. The binding follows
-the run's checkpoints. Each inspection still requires root approval of the exact
-command and destinations. Changed inventory bytes require a fresh lookup.
+The executor resolves the group and returns public target information. Discovery runs
+locally and contacts no hosts. Checkpoints keep the selected path, group and content
+digest. After root approves a ticket, the active task supplies the file again.
+The executor verifies its bytes and targets before starting the approved command
+once. Root can reject an approved ticket until the task starts it. A missing or changed inventory requires a new lookup and a new ticket.
+Passwords stay out of model requests, snapshots and the ticket journal.
 
-Taskrail masks the published inventory filenames in project reads when the
-executor is available at startup. Also put credential file paths in
-`protected_paths` when the executor may be offline or the files have other names.
+Taskrail masks task-named YAML inventories with Ansible password fields before
+project capture, including when the executor is offline. Use `protected_paths`
+for other credential files in the repository. Administrators can still publish
+private inventories in `/etc/taskrail-executor/inventories` for catalog checks
+by filename.
 
 Use an ordinary YAML file (up to 8 MiB) with explicit host aliases, group
 `hosts`, `children` and inline `vars`. Connections use literal SSH username,
@@ -282,7 +278,7 @@ independent review agrees; otherwise it stays deferred.
 Diagnostics:
 
 ```sh
-sudo systemctl status taskrail-executor.service
+systemctl status taskrail-executor.socket taskrail-executor.service
 sudo journalctl -u taskrail-executor.service
 cd ~/.local/share/taskrail/current
 python3 -m taskrail.executor catalog
