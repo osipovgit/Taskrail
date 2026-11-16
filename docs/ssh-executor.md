@@ -66,8 +66,9 @@ Credentials and host keys belong to `root:taskrail-executor`, mode `0640`, insid
 `0750` directory. Obtain and verify host keys through a trusted channel before
 adding them to `known_hosts`; the executor never accepts unknown keys automatically.
 For nonstandard ports use OpenSSH's `[hostname]:port` known-hosts notation.
-After editing `hosts.json`, restart the executor when no actions are
-running; inventory changes are loaded at service startup.
+The executor loads `hosts.json` at startup. After editing that default catalog,
+restart the executor when no actions are running. Task-selected YAML inventories
+are read on demand.
 Each host uses either `password` or `identity_file`. For key authentication, replace
 `password` with the absolute path of an unencrypted private key inside
 `/etc/taskrail-executor/`, owned by `root:taskrail-executor` with mode `0640`:
@@ -112,12 +113,19 @@ The executor resolves the group and returns public target information. Discovery
 locally and contacts no hosts. Checkpoints keep the selected path, group and content
 digest. After root approves a ticket, the active task supplies the file again.
 The executor verifies its bytes and targets before starting the approved command
-once. Root can reject an approved ticket until the task starts it. A missing or changed inventory requires a new lookup and a new ticket.
-Passwords stay out of model requests, snapshots and the ticket journal.
+once. Root can reject an approved ticket until the task starts it. If the file
+changed, disappeared or could only be read in part, the executor declines the
+ticket before connecting. The agent receives the reason and can repeat discovery.
+The SSH route returns public identities and removes known inventory passwords
+from captured command output before recording it.
 
-Taskrail masks task-named YAML inventories with Ansible password fields before
-project capture, including when the executor is offline. Use `protected_paths`
-for other credential files in the repository. Administrators can still publish
+Before capturing the project, Taskrail checks the working file, the staged
+version and the current commit for Ansible password fields in each task-named
+YAML file. It checks both the source checkout and the task worktree, even when
+the executor is offline. For example, protecting `inventory/main.yaml` leaves
+`roles/web/tasks/main.yaml` available. Child tasks and continuations inherit
+these protections. Use `protected_paths` for other credential files in the
+repository. Administrators can still publish
 private inventories in `/etc/taskrail-executor/inventories` for catalog checks
 by filename.
 
@@ -135,8 +143,9 @@ For sampled CPU utilization use the second data row from `vmstat 1 2`.
 
 ## Use from a task
 
-Specify target **aliases**, the goal, expected checks and constraints. Do not put
-passwords in task text or project files. With the service installed, stage prompts
+For the default catalog, specify target **aliases**, the goal, expected checks
+and constraints. For a project inventory, put its path and group in the task
+and keep credentials out of the task text. With the service installed, stage prompts
 include the available aliases and the `ACTION_REQUEST` contract. The agent can
 request a script plus a text-file bundle. Every remote action, including inspection,
 waits for personal approval. Direct shell tools remain disabled. Before you confirm a

@@ -39,24 +39,32 @@ def pinned_stream(pin, path):
     return reference.open("rb", buffering=0)
 
 
-def validate(fd):
-    attributes = os.fstat(fd)
-    if not stat.S_ISREG(attributes.st_mode) or attributes.st_size > MAX_BYTES:
-        raise inventory_groups.InventoryError("Expected a regular inventory of at most 8 MiB.")
-    flags = fcntl.fcntl(fd, fcntl.F_GETFL)
-    if flags & os.O_ACCMODE != os.O_RDONLY or flags & os.O_PATH:
-        raise inventory_groups.InventoryError("Expected a readable, read-only inventory file.")
-
-
 def read_descriptor(fd):
     if fd is None:
         raise inventory_groups.InventoryError(
             "The project inventory is unavailable. Repeat the lookup."
         )
-    validate(fd)
-    raw = os.pread(fd, MAX_BYTES + 1, 0)
-    if len(raw) > MAX_BYTES:
-        raise inventory_groups.InventoryError("Inventory exceeds the size limit.")
+    try:
+        return complete_bytes(fd)
+    except OSError:
+        raise inventory_groups.InventoryError(
+            "Unable to read the inventory. Repeat the lookup."
+        ) from None
+
+
+def complete_bytes(fd):
+    before = os.fstat(fd)
+    if not stat.S_ISREG(before.st_mode) or before.st_size > MAX_BYTES:
+        raise inventory_groups.InventoryError("Expected a regular inventory of at most 8 MiB.")
+    flags = fcntl.fcntl(fd, fcntl.F_GETFL)
+    if flags & os.O_ACCMODE != os.O_RDONLY or flags & os.O_PATH:
+        raise inventory_groups.InventoryError("Expected a readable, read-only inventory file.")
+    raw = os.pread(fd, before.st_size, 0)
+    after = os.fstat(fd)
+    if len(raw) != before.st_size or after.st_ctime_ns != before.st_ctime_ns:
+        raise inventory_groups.InventoryError(
+            "The inventory changed or was read incompletely. Repeat the lookup."
+        )
     return raw
 
 

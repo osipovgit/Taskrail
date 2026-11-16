@@ -3,24 +3,46 @@
 import re
 from pathlib import Path
 
-from taskrail.application import project_files
-from taskrail.executor import inventory, inventory_file, inventory_groups
+from taskrail.application import inventory_credentials, project_files, workspace_paths
+from taskrail.executor import inventory
 
 # Absolute and root-relative YAML paths in prose, including quoted paths with spaces.
 YAML_PATH = re.compile(r"[`\"']([^`\"'\n]+?\.ya?ml)[`\"']|([\w./@+=~-]+\.ya?ml)\b")
-PASSWORD_FIELDS = tuple(name.encode() for name in inventory_groups.CONNECTION["password"])
 ABSOLUTE_YAML = r"{root}/[^\n`\"']*?\.ya?ml\b"
-ESCAPED_KEY = re.compile(rb"\\(?:[xuU]|[\r\n])")
 
 
 def named(config):
     fields = config.get("task_spec", {}).get("fields", [])
     prose = "\n".join(field["text"] for field in fields)
     found = set()
-    for root in map(Path, config["roots"].values()):
-        paths = filter(private, candidates(root, prose))
-        found.update(path.name for path in paths)
+    for copies in checkouts(config):
+        found.update(map(mask, protected(copies, prose)))
     return sorted(found)
+
+
+def checkouts(config):
+    mapping = workspace_paths.mappings(config)
+    for root in config["roots"].values():
+        copies = {source for source, target in mapping if target == root}
+        yield copies.union((Path(root),))
+
+
+def protected(copies, prose):
+    names = set()
+    for root in copies:
+        names.update(path.relative_to(root) for path in candidates(root, prose))
+    for root in copies:
+        yield from inventory_credentials.hidden(root, names)
+
+
+def mask(relative):
+    """Use the longest literal suffix both permission matchers can represent safely."""
+    parts = []
+    for part in reversed(relative.parts):
+        if re.search(r"[\[\]*?\\\r\n]", part):
+            break
+        parts.append(part)
+    return "/".join(reversed(parts))
 
 
 def candidates(root, prose):
@@ -32,7 +54,11 @@ def candidates(root, prose):
     for quoted, plain in YAML_PATH.findall(prose):
         names.add(quoted or plain)
     for path in project_paths(root, names):
-        if root in path.parents and inventory.NAME_PATTERN.fullmatch(path.name):
+        if (
+            root in path.parents
+            and ".." not in path.parts
+            and inventory.NAME_PATTERN.fullmatch(path.name)
+        ):
             yield path
 
 
@@ -43,17 +69,3 @@ def project_paths(root, names):
         for relative in project_files.listing(root):
             if Path(relative).name in basenames:
                 yield root / relative
-
-
-def private(path):
-    try:
-        with inventory_file.opened(path) as stream:
-            raw = inventory_file.read_descriptor(stream.fileno())
-    except FileNotFoundError:
-        return False
-    except (OSError, ValueError):
-        return True
-    # YAML may encode a literal key with Unicode escapes or a continued quoted scalar.
-    if b"\x00" in raw or ESCAPED_KEY.search(raw):
-        return True
-    return any(field in raw for field in PASSWORD_FIELDS)

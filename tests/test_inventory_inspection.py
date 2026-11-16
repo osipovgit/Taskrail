@@ -16,11 +16,14 @@ from taskrail.application import (
     execution_requests,
     execution_wait,
     remote_catalog,
+    run_setup,
     task_config,
 )
+from taskrail.core import protected_paths
 from taskrail.executor import action_schema, client, inventory, inventory_file
 from taskrail.executor.service import ExecutorServer
 from taskrail.executor.store import TicketStore
+from taskrail.git import process
 from taskrail.interactions import inventory_lookup, request_routes
 from taskrail.web import task_form
 
@@ -40,7 +43,7 @@ all:
         workers:
           hosts:
             node1: {ansible_host: 192.0.2.17}
-            node2: {ansible_user: other, ansible_port: '2222'}
+            node2: {ansible_user: other, ansible_password: test-only-literal-extra, ansible_port: '2222'}
     elsewhere:
       hosts:
         other-node: {ansible_host: 192.0.2.19}
@@ -151,7 +154,9 @@ class InventoryInspectionTests(unittest.TestCase):
         with (
             patch(
                 "taskrail.executor.worker.transport.execute",
-                return_value=dict(status="SUCCEEDED", exit_code=0, output="42% " + SECRET),
+                return_value=dict(
+                    status="SUCCEEDED", exit_code=0, output=f"42% {SECRET} {SECRET}-extra"
+                ),
             ) as execute,
             patch.object(threading.Thread, "start", lambda thread: thread.run()),
         ):
@@ -163,7 +168,7 @@ class InventoryInspectionTests(unittest.TestCase):
                 execution_wait.observe(observed)
             self.assertEqual(execute.call_args.args[0]["password"], SECRET)
         result = self.store.get(ticket["id"])
-        self.assertEqual(result["results"][0]["output"], "42% [REDACTED]")
+        self.assertEqual(result["results"][0]["output"], "42% [REDACTED] [REDACTED]")
         for artifact in (
             rendered,
             output.getvalue(),
@@ -237,7 +242,94 @@ class InventoryInspectionTests(unittest.TestCase):
         )
         with patch.object(remote_catalog.client, "request", side_effect=ConnectionRefusedError):
             remote_catalog.protect_sources(config)
-        self.assertCountEqual(config["protected_paths"], [self.file.name, second.name])
+        self.assertCountEqual(
+            config["protected_paths"], [self.file.name, "second cluster/another.yml"]
+        )
+
+    def test_checkout_index_and_head_secrets_are_masked_before_capture_and_in_children(self):
+        repo = self.base / "project"
+        inventories = repo / "inventories"
+        inventories.mkdir(parents=True)
+        role = repo / "roles/service/tasks/main.yaml"
+        role.parent.mkdir(parents=True)
+        role.write_text("- name: Public task\n")
+        committed, staged, working = (
+            inventories / f"{name}.yaml" for name in ("main", "staged", "working")
+        )
+        clean = "all: {}\n"
+        committed.write_text(FIXTURE)
+        staged.write_text(clean)
+        working.write_text(clean)
+        process.checked(repo, ["init"])
+        process.checked(repo, ["add", "."])
+        process.checked(
+            repo,
+            [
+                "-c",
+                "user.name=Test",
+                "-c",
+                "user.email=t@example.invalid",
+                "commit",
+                "-m",
+                "Initial",
+            ],
+        )
+        committed.write_text(clean)
+        staged.write_text(FIXTURE)
+        process.checked(repo, ["add", "."])
+        staged.write_text(clean)
+        working.write_text(f"ansible_become_password: {SECRET}\n")
+        task = self.base / "task.md"
+        settings = self.base / "settings.json"
+        settings.write_text(
+            json.dumps({"opencode_version": "1.x", "worktree_base": str(self.base / "trees")})
+        )
+        header = json.dumps({"roots": {"repo": str(repo)}})
+        task.write_text(
+            f"```taskrail-task\n{header}\n```\n## Goal\nInspect {committed}, {staged} and {working}."
+        )
+        config = task_config.configuration(task, settings)
+        run = self.base / "run"
+        with patch.object(remote_catalog.client, "request", side_effect=ConnectionRefusedError):
+            run_setup.open_state(config, run, dict(resume=False, plan_response=None), True)
+        masks = protected_paths.patterns(config)
+        target = config["roots"]["repo"]
+        snapshot = run / "00-input/original"
+        rows = [
+            json.loads(line) for line in (snapshot / "status.jsonl").read_text().splitlines()[1:]
+        ]
+        self.assertEqual(
+            {row["path"] for row in rows},
+            {str(path.relative_to(repo)) for path in (committed, staged, working)},
+        )
+        self.assertTrue(all(row.get("unavailable") == "protected path" for row in rows))
+        self.assertFalse((snapshot / "repo").exists())
+        self.assertTrue(protected_paths.matches(target / "inventories/main.yaml", masks))
+        self.assertFalse(protected_paths.matches(target / role.relative_to(repo), masks))
+        frozen = json.loads((run / "00-input/settings.json").read_text())
+        task.write_text(f"```taskrail-task\n{header}\n```\n## Goal\nSummarize the findings.")
+        child = task_config.configuration(task, settings, checks_override=frozen)
+        self.assertEqual(protected_paths.patterns(child), masks)
+
+    def test_incomplete_or_failed_read_after_approval_is_a_recoverable_inventory_refusal(self):
+        selection = inventory_file.pin(inventory.selector(str(self.file), "k8s"))
+        wire = execution_wait.ssh_request(ACTION, selection)
+        for key, outcome in (("partial", b"all: {}\n"), ("io", OSError("fixture"))):
+            pending = self.lookup(dict(wire, key=key))
+            self.server.dispatch(
+                dict(operation="approve", id=pending["id"], digest=pending["digest"]), 0
+            )
+            start = dict(operation="start-inspection", id=pending["id"], ssh_inventory=selection)
+            with (
+                self.subTest(key=key),
+                patch("os.pread", side_effect=[outcome]),
+                patch.object(threading.Thread, "start") as worker,
+            ):
+                result = self.lookup(start)
+                self.assertEqual(result["status"], "REJECTED")
+                self.assertIn("Repeat the lookup", result["inventory_error"])
+                worker.assert_not_called()
+            self.assertEqual(self.lookup(start), result)
 
     def test_project_inventory_rejects_link_swaps_in_any_component(self):
         selection = inventory_file.pin(inventory.selector(str(self.file), "k8s"))
