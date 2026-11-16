@@ -50,6 +50,9 @@ usermod -a -G taskrail-executor-clients "$client_user"
 usermod -a -G taskrail-executor-clients taskrail-executor
 install -d -m 0755 -o root -g root "$release" "$release/deploy"
 install -d -m 0750 -o root -g taskrail-executor "$config"
+if [[ ! -d $config/inventories ]]; then
+    install -d -m 0750 -o root -g taskrail-executor "$config/inventories"
+fi
 # Prepare the new package before anything stops; the swap below is a rename. The
 # directory contains only this application's package, never target sources.
 staging=$(mktemp -d "$release/.taskrail.XXXXXX")

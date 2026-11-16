@@ -7,7 +7,7 @@ from taskrail.application import (
     execution_wait,
 )
 from taskrail.core.schema import require
-from taskrail.executor import protocol
+from taskrail.executor import inventory, protocol
 
 STATUS = "status"
 
@@ -66,9 +66,10 @@ def followed(workflow, folder, request, kind, binding):
             return pending
         require(pending == entries[-1], "Another executor ticket follows an unfinished check")
     else:
-        execution_wait.submit(
-            workflow.run, folder, request, "jenkins" if kind == "jenkins" else "action", binding
-        )
+        wire = {"operation": "submit", "jenkins": request}
+        if kind == "ssh":
+            wire = execution_wait.ssh_request(request, workflow.state.get(inventory.KEY))
+        execution_wait.submit(workflow.run, folder, wire, binding)
     try:
         execution_wait.resume(workflow.run, workflow.state)
     except ValueError:

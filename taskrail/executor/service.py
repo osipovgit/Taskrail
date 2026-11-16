@@ -11,6 +11,7 @@ from pathlib import Path
 
 from taskrail.executor import (
     hosts,
+    inventory,
     jenkins_config,
     jenkins_reads,
     jenkins_schema,
@@ -27,7 +28,7 @@ IDENTIFIER = "id"
 DIGEST = "digest"
 PRIVILEGED = frozenset(("approve", "reject"))
 # Operations that could start remote work later; refused while maintenance runs.
-HELD = frozenset(("submit", "approve"))
+HELD = frozenset(("submit", "inspect-inventory", "approve"))
 
 
 class ExecutorServer(socketserver.ThreadingUnixStreamServer):
@@ -54,9 +55,8 @@ class ExecutorServer(socketserver.ThreadingUnixStreamServer):
         if operation in PRIVILEGED and uid == 0:
             return self.decide(operation, payload)
         if operation == "catalog":
-            jenkins = jenkins_config.public(self.configs[tickets.JENKINS])
-            return dict(hosts=hosts.public(self.configs[tickets.SSH]), jenkins=jenkins)
-        if operation == "submit":
+            return catalog(self.configs, payload)
+        if operation in {"submit", "inspect-inventory"}:
             return self.submit(payload)
         if operation == "status":
             return self.store.get(payload[IDENTIFIER])
@@ -67,6 +67,9 @@ class ExecutorServer(socketserver.ThreadingUnixStreamServer):
     def submit(self, payload):
         """Record a ticket; a build of a job configured with approval none starts at once."""
         kind = tickets.submission_kind(payload)
+        payload = inventory.inspection_request(payload)
+        if inventory.KEY in payload:
+            return inventory_ticket(self.store, self.configs, kind, payload)
         ticket = self.store.submit(payload, self.configs[kind])
         waiting = ticket["status"] == "PENDING_APPROVAL" and kind == tickets.JENKINS
         if waiting and tickets.preapproved(self.configs[kind], ticket["action"]):
@@ -82,7 +85,8 @@ class ExecutorServer(socketserver.ThreadingUnixStreamServer):
         identifier = payload[IDENTIFIER]
         if operation == "reject":
             return self.store.reject(identifier, payload[DIGEST])
-        config = self.configs[tickets.stored_kind(self.store.get(identifier))]
+        saved = self.store.get(identifier)
+        config = target_config(self.configs, tickets.stored_kind(saved), saved)
         ticket = self.store.approve(identifier, payload[DIGEST], config)
         threading.Thread(
             target=worker.perform, args=(self.store, ticket, config), daemon=True
@@ -109,6 +113,8 @@ class ExecutorServer(socketserver.ThreadingUnixStreamServer):
                 response = self.checked_dispatch(protocol.receive(stream), uid)
             except protocol.MaintenanceError as error:
                 response = {"error": str(error), protocol.MAINTENANCE: True}
+            except inventory.InventoryError as error:
+                response = {"error": str(error), "inventory_error": True}
             except (ValueError, OSError, LookupError):
                 response = {
                     "error": "Executor rejected request; check fields, targets and permissions"
@@ -121,6 +127,37 @@ class ExecutorServer(socketserver.ThreadingUnixStreamServer):
             return self.dispatch(payload, uid)
         except TypeError as error:
             raise ValueError("Invalid executor field type") from error
+
+
+def inventory_ticket(store, configs, kind, payload):
+    """Reconnect to an existing ticket even when its inventory has since changed."""
+    try:
+        return store.get(protocol.fingerprint(payload))
+    except FileNotFoundError:
+        config = target_config(configs, kind, payload)
+    try:
+        return store.submit(payload, config)
+    except KeyError:
+        raise inventory.InventoryError("A requested host is outside the selected group.") from None
+
+
+def target_config(configs, kind, payload):
+    if inventory.KEY not in payload:
+        return configs[kind]
+    if kind != tickets.SSH:
+        raise ValueError("Inventory selection requires an SSH inspection")
+    return inventory.load(payload[inventory.KEY])
+
+
+def catalog(configs, payload):
+    jenkins = jenkins_config.public(configs[tickets.JENKINS])
+    target_hosts = target_config(configs, tickets.SSH, payload)
+    shown = dict(hosts=hosts.public(target_hosts), jenkins=jenkins)
+    shown["inventory_lookup"] = True
+    shown["inventory_files"] = inventory.published()
+    if inventory.KEY in payload:
+        shown[inventory.KEY] = payload.get(inventory.KEY)
+    return shown
 
 
 def main():

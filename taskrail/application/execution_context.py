@@ -57,6 +57,8 @@ def apply(config, payload):
 def adopt(workflow, parent, state):
     """Call only after the parent assignment or delivery phase has been authenticated."""
     apply(workflow.config, frozen(parent, state))
+    if "ssh_inventory" in state:
+        workflow.state["ssh_inventory"] = state.get("ssh_inventory")
     original_checkout.inherit(parent, workflow.run)
     capture(workflow.run, workflow.config, workflow.state)
 

@@ -30,7 +30,7 @@ def validate(config, source):
 def main():
     """The installer supplies exact root-owned configuration and prepared package paths."""
     config, source, *directories = map(Path, sys.argv[1:])
-    for directory in (config, *directories):
+    for directory in (config, config / "inventories", *directories):
         if directory.resolve() != directory:
             raise ValueError(f"Executor installation directory must not be redirected: {directory}")
     validate(config, source)

@@ -364,7 +364,13 @@ class LiveTests(LiveFixture, unittest.TestCase):
             status="SUCCEEDED",
             results=[dict(target="server-a", output="Linux", status="SUCCEEDED")],
         )
-        with patch("taskrail.executor.client.request", return_value=response) as request:
+        with (
+            patch(
+                "taskrail.application.remote_catalog.available",
+                return_value={"hosts": {"server-a": {}}},
+            ),
+            patch("taskrail.executor.client.request", return_value=response) as request,
+        ):
             run, status, state = self.run_mode("ssh-action")
         self.assertEqual(status, "READY_FOR_REVIEW")
         self.assertEqual(request.call_count, 1)
@@ -380,6 +386,10 @@ class LiveTests(LiveFixture, unittest.TestCase):
             return dict(id="same-ticket", status="PENDING_APPROVAL", results=[])
 
         with (
+            patch(
+                "taskrail.application.remote_catalog.available",
+                return_value={"hosts": {"server-a": {}}},
+            ),
             patch("taskrail.executor.client.request", side_effect=pending_request) as request,
             patch("taskrail.application.execution_wait.time.sleep"),
         ):
@@ -389,7 +399,13 @@ class LiveTests(LiveFixture, unittest.TestCase):
         outcome = dict(
             id="same-ticket", status="SUCCEEDED", results=[dict(output="Linux", status="SUCCEEDED")]
         )
-        with patch("taskrail.executor.client.request", return_value=outcome) as request:
+        with (
+            patch(
+                "taskrail.application.remote_catalog.available",
+                return_value={"hosts": {"server-a": {}}},
+            ),
+            patch("taskrail.executor.client.request", return_value=outcome) as request,
+        ):
             _, status = execute_task(
                 run / "00-input/task.md", self.settings, run_dir=run, resume=True
             )

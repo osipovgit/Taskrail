@@ -7,11 +7,11 @@ frozen policy and prompt catalog.
 """
 
 from taskrail.application import (
-    execution_requests,
     instruction_modules,
     instruction_sources,
     mode_rules,
     policy_sections,
+    remote_catalog,
     response_format,
     task_block,
     workspace_paths,
@@ -30,7 +30,7 @@ def make_request(config, execution, state, run):
     stage = execution[0]
     if stage == "understanding":
         return understand(config, execution, state, run, instruction_sources.POLICY)
-    catalog = execution_requests.available()
+    catalog = remote_catalog.available(state.get("ssh_inventory"))
     if not catalog.get("unavailable"):
         state["jenkins_configured"] = bool(catalog.get("jenkins"))
     task = task_text(config, run, state.get("requirements", []))

@@ -21,6 +21,7 @@ from taskrail.application import (
     execution_wait,
     instruction_sources,
     prompts,
+    remote_catalog,
     task_config,
 )
 from taskrail.application.source_guard import SourceGuard
@@ -212,7 +213,7 @@ class DeliveryApprovalTests(unittest.TestCase):
         for stage in ("planner", "reviewer"):
             with (
                 self.subTest(stage=stage),
-                patch.object(execution_requests, "available", return_value=CAPABILITIES),
+                patch.object(remote_catalog, "available", return_value=CAPABILITIES),
             ):
                 self.assertEqual(execution_requests.remote_mode(run, config, stage), "server")
                 request = prompts.make_request(config, (stage, None, [], None), state, run)
@@ -222,7 +223,7 @@ class DeliveryApprovalTests(unittest.TestCase):
             assert_request_budget(self, request, stage, self.base)
         (self.repo / "app.py").write_text("changed after confirmation\n")
         with (
-            patch.object(execution_requests, "available", return_value=CAPABILITIES),
+            patch.object(remote_catalog, "available", return_value=CAPABILITIES),
             self.assertRaisesRegex(ValueError, "Confirmed"),
         ):
             prompts.make_request(config, ("reviewer", None, [], None), state, run)

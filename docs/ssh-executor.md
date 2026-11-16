@@ -40,7 +40,8 @@ If the user systemd manager remains alive through logout (lingering), reboot onc
 to refresh its groups. Never add the Taskrail account to the private
 `taskrail-executor` group or give it passwordless sudo.
 
-Inventory format (replace the example before starting):
+For the default SSH catalog, replace the example in `hosts.json` before starting.
+Use `{}` if tasks will only use selected inventories. Default catalog format:
 
 ```json
 {
@@ -57,7 +58,7 @@ Credentials and host keys belong to `root:taskrail-executor`, mode `0640`, insid
 `0750` directory. Obtain and verify host keys through a trusted channel before
 adding them to `known_hosts`; the executor never accepts unknown keys automatically.
 For nonstandard ports use OpenSSH's `[hostname]:port` known-hosts notation.
-After editing an existing inventory, restart the executor when no actions are
+After editing `hosts.json`, restart the executor when no actions are
 running; inventory changes are loaded at service startup.
 Each host uses either `password` or `identity_file`. For key authentication, replace
 `password` with the absolute path of an unencrypted private key inside
@@ -71,6 +72,70 @@ sudo install -m 0640 -o root -g taskrail-executor id_ed25519 /etc/taskrail-execu
 The key is offered alone (`IdentitiesOnly`, no agent, no password prompt). Remote
 sudo password handling is not implemented; choose the remote account's permissions
 deliberately.
+
+## Inspect an Ansible group during planning
+
+Install or update **both** Taskrail and the system executor. The executor's
+system Python needs PyYAML (on Debian/Ubuntu, `sudo apt install python3-yaml`).
+Put a trusted static YAML inventory in the private inventory directory:
+
+```sh
+sudo install -o root -g taskrail-executor -m 0640 path/to/cluster.yaml /etc/taskrail-executor/inventories/cluster.yaml
+```
+
+To use files in place, an administrator can instead expose a trusted inventory
+directory read-only inside the executor's service. Run `sudo systemctl edit
+taskrail-executor.service` and add the following drop-in with the **actual
+absolute source path**. The executor account needs read access to the YAML files
+and traversal of the mounted directory. Keep the application's credentials out
+of the drop-in.
+
+```ini
+[Service]
+BindReadOnlyPaths=/absolute/path/to/inventory:/etc/taskrail-executor/inventories
+```
+
+After configuring the mount, reload systemd and start the service (restart it
+if already running and idle). Verify the published aliases as the ordinary
+Taskrail user before submitting a task:
+
+```sh
+taskrail check --ssh --inventory-file cluster.yaml --inventory-group workers
+```
+
+This queries the local executor. SSH connectivity and host keys are tested on the
+first approved remote action. To start a task, describe the project inventory path,
+group and measurements in the goal. Choose **Discussion** for a report. The same
+goal works in the dashboard and CLI:
+
+```sh
+taskrail submit --mode discussion --root project=/path/to/repo \
+  --goal "Inspect the workers group in /path/to/repo/inventory/cluster.yaml. Report disk usage, CPU load and running services on each host."
+```
+
+During planning, the model sends the path and group in an `INVENTORY_REQUEST`.
+Taskrail checks the path against the task's roots and authenticated source checkout.
+The executor verifies that its published file has the same contents, resolves
+group membership and returns aliases. No task-form fields or per-host registration
+are needed. Discovery runs locally and contacts no hosts. The binding follows
+the run's checkpoints. Each inspection still requires root approval of the exact
+command and destinations. Changed inventory bytes require a fresh lookup.
+
+Taskrail masks the published inventory filenames in project reads when the
+executor is available at startup. Also put credential file paths in
+`protected_paths` when the executor may be offline or the files have other names.
+
+Use an ordinary YAML file (up to 8 MiB) with explicit host aliases, group
+`hosts`, `children` and inline `vars`. Connections use literal SSH username,
+password, host (defaults to the alias), and port (defaults to 22). Nested groups
+inherit variables, with host settings taking precedence. Dynamic inventory
+plugins, host ranges, external variable files, Vault, templated credentials and
+SSH proxy options are outside this static format. This mode supports only
+read-only inspection commands, with at most 16 hosts per ticket. For example,
+50 hosts need four approved tickets for a single command. Each ticket records
+its own output. Use `df -PT` for disk usage, `uptime` for load averages and
+`systemctl list-units --type=service --state=running --no-pager` for services.
+For sampled CPU utilization use the second data row from `vmstat 1 2`.
 
 ## Use from a task
 

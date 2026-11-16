@@ -6,7 +6,7 @@ import time
 from taskrail.application.artifacts import save_run
 from taskrail.core import control, prompt_texts
 from taskrail.core.files import atomic_json
-from taskrail.executor import client, protocol
+from taskrail.executor import client, inventory, protocol
 from taskrail.interactions import output_preview
 
 LEDGER = "remote-execution.json"
@@ -21,17 +21,17 @@ def read(run):
     return json.loads(path.read_text(encoding="utf-8")) if path.exists() else []
 
 
-def submit(run, folder, action, kind="action", binding=None):
-    """Persist the idempotency key before contacting the executor.
+def ssh_request(action, selection=None):
+    if selection is None:
+        return {"operation": "submit", "action": action}
+    return {"operation": "inspect-inventory", "action": action, inventory.KEY: selection}
 
-    The key includes the request's position in the run, so a repeated identical
-    check is a new ticket rather than the earlier result; retries reuse the stored key.
-    """
+
+def submit(run, folder, request, binding=None):
+    """Persist the exact request and its idempotency key before contacting the executor."""
     entries = read(run)
-    identity = dict(run=str(run), stage=folder.name, action=action)
-    identity.update(sequence=len(entries), kind=kind)
-    key = protocol.fingerprint(identity)
-    entry = {"operation": "submit", "key": key, kind: action}
+    identity = [str(run), folder.name, request, len(entries)]
+    entry = dict(request, key=protocol.fingerprint(identity))
     pending = dict(request=entry, stage=folder.name, status="SUBMITTING", binding=binding)
     entries.append(pending)
     atomic_json(run / LEDGER, entries)
@@ -55,6 +55,10 @@ def resume(run, state):
     state["execution_jobs"] = entries
     save_run(run, state)
     terminal_status = pending[STATUS]
+    if "inventory_error" in pending:
+        return prompt_texts.text(
+            "routes.ssh.inventory_error", detail=pending.get("inventory_error")
+        )
     if terminal_status == "REJECTED":
         return prompt_texts.text("feedback.remote_declined")
     if terminal_status == "UNKNOWN":
@@ -73,6 +77,10 @@ def observe(pending):
         query = dict(operation=STATUS, id=pending[IDENTIFIER])
     try:
         pending.update(client.request(query))
+    except inventory.InventoryError as error:
+        if query["operation"] != "inspect-inventory":
+            raise
+        pending.update(status="REJECTED", inventory_error=str(error))
     except OSError:
         return "Executor unreachable; retrying. Last status: {0}"
     return "Executor action: {0}"

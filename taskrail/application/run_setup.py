@@ -17,6 +17,7 @@ from taskrail.application import (
 )
 from taskrail.application.artifacts import save_run
 from taskrail.application.checkpoints import RESUMABLE
+from taskrail.application.remote_catalog import protect_sources
 from taskrail.application.task_config import configuration
 from taskrail.application.worktree_isolation import isolate
 from taskrail.core.files import atomic_json, atomic_write
@@ -75,6 +76,7 @@ def source_roots(config, request):
 
 def open_state(config, run, request, ready):
     """Create or reopen the run index; worktrees are created only once the locks are held."""
+    protect_sources(config)
     if request["resume"]:
         state = resumed_state(run, config, request)
         execution_context.restore(run, config, state)

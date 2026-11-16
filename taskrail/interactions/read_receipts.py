@@ -4,10 +4,10 @@ import json
 from pathlib import Path
 
 from taskrail.application import evidence, source_tree
-from taskrail.core import prompt_texts
+from taskrail.core import prompt_texts, read_grammar
 from taskrail.core.files import atomic_json, digest
 from taskrail.infrastructure import environment
-from taskrail.interactions import local_actions, read_grammar
+from taskrail.interactions import local_actions
 
 CONTENT_READS = frozenset(("cat", "grep", "head", "tail", "wc"))
 

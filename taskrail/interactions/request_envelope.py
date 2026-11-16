@@ -13,7 +13,7 @@ from types import MappingProxyType
 from taskrail.application import execution_requests, jenkins_requests
 from taskrail.core import json_response, prompt_texts, schema
 from taskrail.git import requests as git_requests
-from taskrail.interactions import local, local_intake, local_request
+from taskrail.interactions import inventory_lookup, local, local_intake, local_request
 
 GIT = git_requests.STATUS
 LOCAL = "LOCAL_REQUEST"
@@ -21,7 +21,7 @@ ACTION = "ACTION_REQUEST"
 JENKINS = jenkins_requests.STATUS
 
 
-REQUEST_NAME = r"(?:GIT|LOCAL|ACTION|JENKINS)_REQUEST"
+REQUEST_NAME = r"(?:GIT|LOCAL|ACTION|JENKINS|INVENTORY)_REQUEST"
 REQUEST_MARKUP = re.compile(
     rf"^\s*(?:<\s*(?:{REQUEST_NAME}|request|tool_call)\b|`?{REQUEST_NAME}`?\s*[:({{]|{REQUEST_NAME}\s*$)"
     rf'|"status"\s*:\s*"{REQUEST_NAME}"|"(?:argv|cwd|action|jenkins)"\s*:',
@@ -86,6 +86,7 @@ PARSERS = MappingProxyType(
         GIT: git_requests.extract,
         LOCAL: local.extract,
         ACTION: execution_requests.extract,
+        inventory_lookup.STATUS: inventory_lookup.extract,
         JENKINS: jenkins_requests.extract,
     }
 )

@@ -3,8 +3,8 @@
 import shlex
 from types import MappingProxyType
 
+from taskrail.core import read_grammar
 from taskrail.core.schema import require
-from taskrail.interactions import read_grammar
 
 # Exact switches and valued options, using the same parser as local inspection.
 COMMANDS = MappingProxyType(
@@ -19,6 +19,7 @@ COMMANDS = MappingProxyType(
             "",
         ),
         "ps": ("-e -A -a -f -F -l -w -H --forest", "-p -u -U -o --pid --user --format --sort"),
+        "vmstat": ("-n -w", ""),
         "uptime": ("-p -s --pretty --since", ""),
         "uname": ("-a -s -n -r -v -m -p -i -o --all", ""),
         "id": ("-u -g -G -n -r --user --group --groups --name --real", ""),

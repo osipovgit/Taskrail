@@ -1,45 +1,47 @@
 """Intermediate SSH requests, separate from final stage result contracts."""
 
 import json
-from pathlib import Path
 
-from taskrail.application import delivery_confirmation, jenkins_requests
+from taskrail.application import delivery_confirmation, jenkins_requests, remote_catalog
 from taskrail.core import delivery_record, json_response, prompt_texts, schema
-from taskrail.executor import action_schema, client, protocol
-from taskrail.interactions import remote_inspection
+from taskrail.executor import action_schema, inventory, remote_inspection
 
 INSPECT = "inspect"
 SERVER = "server"
-UNAVAILABLE = "unavailable"
-
-
-def available():
-    """One public catalog snapshot supplies both route instructions and response shapes."""
-    if not Path(protocol.SOCKET).exists():
-        return {UNAVAILABLE: "routes.ssh.unavailable"}
-    try:
-        return client.request({"operation": "catalog"})
-    except (OSError, ValueError):
-        return {UNAVAILABLE: "routes.ssh.unreachable"}
 
 
 def instructions(config, stage, run, catalog):
     """Advertise remote routes and their examples from the same catalog snapshot."""
-    if catalog.get(UNAVAILABLE):
-        return prompt_texts.text(catalog[UNAVAILABLE])
+    unavailable = catalog.get(remote_catalog.UNAVAILABLE)
+    if unavailable:
+        detail = remote_catalog.unavailable(catalog)
+        if (
+            unavailable in {"routes.inventory.retry", "routes.ssh.inventory_error"}
+            and stage != "implementer"
+        ):
+            return "{}\n{}".format(detail, prompt_texts.text("routes.inventory"))
+        return detail
     routes = [
-        ssh_instructions(catalog.get("hosts"), server_scope(config, stage, run)),
+        prompt_texts.text("routes.inventory")
+        if catalog.get("inventory_lookup") and stage != "implementer"
+        else "",
+        ssh_instructions(
+            catalog.get("hosts"),
+            server_scope(config, stage, run, selected=catalog.get(inventory.KEY)),
+        )
+        if catalog.get("hosts") or not catalog.get("inventory_lookup")
+        else "",
         jenkins_requests.instructions(catalog.get("jenkins")),
     ]
     return "\n\n".join(filter(None, routes))
 
 
-def server_scope(config, stage, run):
+def server_scope(config, stage, run, selected=None):
     """What server actions may do in this stage; None when they are unavailable."""
     mode = remote_mode(run, config, stage)
     if mode is None:
         return None
-    if mode == SERVER:
+    if mode == SERVER and not selected:
         return prompt_texts.text("routes.ssh.server")
     return prompt_texts.text("routes.ssh.inspect", commands=remote_inspection.listed())
 
@@ -68,7 +70,7 @@ def server_authorized(run, config):
 def ssh_instructions(targets, scope):
     """The ACTION_REQUEST contract and the configured targets, or nothing without targets."""
     if not targets:
-        return ""
+        return prompt_texts.text("routes.ssh.empty")
     if scope is None:
         return prompt_texts.text("routes.ssh.implementing")
     return prompt_texts.text(
@@ -76,6 +78,7 @@ def ssh_instructions(targets, scope):
         scope=scope,
         targets=json.dumps(list(targets)),
         target=json.dumps(next(iter(targets))),
+        limit=action_schema.MAX_TARGETS,
     )
 
 

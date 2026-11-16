@@ -16,14 +16,46 @@ def check_command(argv):
     parser = argparse.ArgumentParser(description=check_command.__doc__)
     parser.add_argument(COMMAND_ARGUMENT)
     parser.add_argument(SETTINGS_OPTION)
+    parser.add_argument(
+        "--ssh", action="store_true", help="Check access to the SSH executor catalog"
+    )
+    parser.add_argument("--inventory-file", help="Published executor inventory filename")
+    parser.add_argument("--inventory-group", help="Inventory group to check")
     from taskrail.onboarding import check
 
-    lines = check(parser.parse_args(argv).settings)
+    args = parser.parse_args(argv)
+    if args.ssh or args.inventory_file or args.inventory_group:
+        return check_ssh(args)
+    return print_checks(check(args.settings))
+
+
+def print_checks(lines):
     failures = 0
     for passed, message in lines:
         failures += not passed
         sys.stdout.write("{} {}\n".format("OK  " if passed else "FAIL", message))
     return 1 if failures else 0
+
+
+def check_ssh(args):
+    """Inspect the local catalog without contacting a target or showing its credentials."""
+    from taskrail.application import remote_catalog
+    from taskrail.executor import inventory
+
+    try:
+        selection = inventory.selector(args.inventory_file, args.inventory_group)
+    except ValueError as error:
+        sys.stderr.write(f"{ERROR_PREFIX}{error}\n")
+        return 1
+    catalog = remote_catalog.available(selection)
+    targets = catalog.get("hosts", {})
+    if targets:
+        names = ", ".join(sorted(targets))
+        sys.stdout.write(f"SSH targets ({len(targets)}): {names}\n")
+        return 0
+    message = remote_catalog.unavailable(catalog)
+    sys.stderr.write(f"{ERROR_PREFIX}{message}\n")
+    return 1
 
 
 def init_command(argv):

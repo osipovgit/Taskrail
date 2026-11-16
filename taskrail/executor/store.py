@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from taskrail.core.files import atomic_json
+from taskrail.executor import inventory as selected_inventory
 from taskrail.executor import protocol, tickets
 
 PRIVATE_DIRECTORY_MODE = 0o700
@@ -49,7 +50,11 @@ class TicketStore:
             created_at=datetime.now(timezone.utc).isoformat(),
             results=[],
         )
-        ticket["digest"] = protocol.fingerprint(dict(action=action, targets=identity))
+        reviewed = dict(action=action, targets=identity)
+        if selected_inventory.KEY in payload:
+            reviewed[selected_inventory.KEY] = payload.get(selected_inventory.KEY)
+            ticket.update(reviewed)
+        ticket["digest"] = protocol.fingerprint(reviewed)
         with self.lock:
             if (self.directory / "{id}.json".format(**ticket)).exists():
                 return self.get(ticket["id"])

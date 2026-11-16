@@ -345,8 +345,9 @@ Plan syntax, dependency parsing, scopes and field diagnostics are specified in
 [task format](task-format.md). Invalid plans receive all line-specific errors before
 independent review. A blocked planner draft grants no edits. The independent reviewer
 checks the named missing prerequisite and permitted alternatives. A supported route
-returns to planning. A confirmed missing prerequisite stops with its reasons, and
-Continue reopens the planner with the operator’s clarification. An approval cannot
+returns to planning. When the reviewer confirms a required prerequisite is missing,
+the run pauses even if other findings remain. Continue reopens the planner with
+those findings and the operator’s clarification. An approval cannot
 turn a blocked proposal into a successful no-change result. For each plan-review
 verdict, the server checks that the reviewed JSON and Markdown still match the
 accepted planner snapshot, including reviews consisting entirely of `planned` lines.
@@ -357,6 +358,12 @@ ones. Runtime profiles are generated per role and run; permissions come from the
 engine. Stages record role source/hash, contract hash and request hash for UI provenance.
 
 ## Executor requests
+
+During planning or review, an available inventory-capable executor accepts
+`{"schema_version":1,"status":"INVENTORY_REQUEST","path":"/absolute/project/inventory.yaml","group":"workers"}`.
+The application verifies project scope and binds the published inventory by
+content digest. The response identifies the selected aliases for subsequent
+read-only SSH actions. Discovery makes no remote connection.
 
 To request an operation, send one JSON object as the entire message. The examples
 use a declared working root for Git and local commands. SSH and Jenkins examples

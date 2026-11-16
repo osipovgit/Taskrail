@@ -17,6 +17,7 @@ from taskrail.application import (
     instruction_sources,
     prompts,
     recovery,
+    remote_catalog,
     task_config,
 )
 from taskrail.core import prompt_texts, task_spec, task_understanding
@@ -167,19 +168,19 @@ class FrozenTextTests(unittest.TestCase):
 
 class CapabilityTests(unittest.TestCase):
     def test_absent_and_unreachable_executors_do_not_advertise_remote_schemas(self):
-        with mock.patch("taskrail.application.execution_requests.Path.exists", return_value=False):
-            self.assertEqual(
-                execution_requests.available(), {"unavailable": "routes.ssh.unavailable"}
-            )
-        with (
-            mock.patch("taskrail.application.execution_requests.Path.exists", return_value=True),
-            mock.patch(
-                "taskrail.application.execution_requests.client.request", side_effect=OSError
-            ),
+        for error, cause in (
+            (FileNotFoundError, "unavailable"),
+            (PermissionError, "denied"),
+            (ConnectionRefusedError, "unreachable"),
         ):
-            self.assertEqual(
-                execution_requests.available(), {"unavailable": "routes.ssh.unreachable"}
-            )
+            with (
+                self.subTest(error=error),
+                mock.patch.object(remote_catalog.client, "request", side_effect=error),
+            ):
+                self.assertEqual(remote_catalog.available(), {"unavailable": f"routes.ssh.{cause}"})
+        instructions = execution_requests.instructions({}, "planner", Path("/run"), {})
+        self.assertIn("no configured targets", instructions)
+        self.assertNotIn("Example ACTION_REQUEST", instructions)
 
 
 class RequestBudgetTests(LiveFixture, unittest.TestCase):
@@ -197,7 +198,7 @@ class RequestBudgetTests(LiveFixture, unittest.TestCase):
             {},
             {"hosts": CAPABILITIES["hosts"]},
             {"jenkins": CAPABILITIES["jenkins"]},
-            CAPABILITIES,
+            dict(CAPABILITIES, inventory_lookup=True),
         )
         modes = (
             ({}, tuple(STAGES)),
@@ -228,7 +229,7 @@ class RequestBudgetTests(LiveFixture, unittest.TestCase):
                     with (
                         self.subTest(catalog=catalog, mode=overrides, stage=stage),
                         mock.patch(
-                            "taskrail.application.execution_requests.available",
+                            "taskrail.application.remote_catalog.available",
                             return_value=catalog,
                         ) as available,
                     ):
@@ -238,7 +239,7 @@ class RequestBudgetTests(LiveFixture, unittest.TestCase):
                         if stage == "understanding":
                             available.assert_not_called()
                         else:
-                            available.assert_called_once_with()
+                            available.assert_called_once_with(None)
                         self.check_budget(request, stage)
                         ssh = bool(catalog.get("hosts")) and stage not in {
                             "understanding",
