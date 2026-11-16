@@ -1,5 +1,6 @@
 """Classify task-named YAML versions without including their contents in run artifacts."""
 
+import os
 import re
 from functools import cache, partial
 from subprocess import TimeoutExpired
@@ -8,6 +9,7 @@ from taskrail.core.git_marker import control
 from taskrail.executor import inventory_file, inventory_groups
 from taskrail.git import process
 
+MASK_SCAN_BYTES = 8 * 1024 * 1024
 PASSWORD_FIELDS = tuple(
     name.encode()
     for name in (
@@ -22,6 +24,8 @@ ESCAPED_KEY = re.compile(rb"\\(?:[xuU]|[\r\n])")
 def private(path):
     try:
         with inventory_file.opened(path) as stream:
+            if os.fstat(stream.fileno()).st_size > MASK_SCAN_BYTES:
+                return True
             raw = inventory_file.read_descriptor(stream.fileno())
     except FileNotFoundError:
         return False
@@ -81,7 +85,7 @@ def git_private(root, names):
 
 def private_blob(root, record):
     metadata = re.fullmatch(r"([0-9a-f]+) blob ([0-9]+)", record)
-    if not metadata or int(metadata[2]) > inventory_file.MAX_BYTES:
+    if not metadata or int(metadata[2]) > MASK_SCAN_BYTES:
         return True
     raw = process.blob(root, metadata[1])
     if raw is None or len(raw) != int(metadata[2]):

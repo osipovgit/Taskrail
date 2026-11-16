@@ -8,7 +8,6 @@ from pathlib import Path
 
 from taskrail.executor import (
     inventory,
-    inventory_tickets,
     jenkins_config,
     jenkins_schema,
     protocol,
@@ -18,19 +17,20 @@ from taskrail.executor import (
 )
 from taskrail.executor.hosts import load as load_hosts
 from taskrail.executor.hosts import public as public_hosts
-from taskrail.executor.inventory_file import project
 from taskrail.executor.store import TicketStore
 
 PRIVATE_UMASK = 0o77
 IDENTIFIER = "id"
 DIGEST = "digest"
 PRIVILEGED = frozenset(("approve", "reject"))
-# Operations that could start remote work later; refused while maintenance runs.
-HELD = frozenset(("submit", "inspect-inventory", "start-inspection", "approve"))
+ERROR_FIELD = "error"
+INVALID_REQUEST = (ValueError, OSError, LookupError, TypeError)
+# Maintenance excludes all operations that can start remote work.
+HELD = frozenset(("submit", "run-ssh", "approve"))
 
 
 class ExecutorServer(socketserver.ThreadingUnixStreamServer):
-    """The application account may submit; only root can authorize execution."""
+    """Authenticate the application UID for SSH and reserve privileged decisions for Jenkins."""
 
     daemon_threads = True
     maintenance = Path(protocol.MAINTENANCE_MARKER)
@@ -57,7 +57,7 @@ class ExecutorServer(socketserver.ThreadingUnixStreamServer):
             return self.decide(operation, payload)
         if operation == "catalog":
             return catalog(self.configs, payload, descriptor)
-        if operation in {"submit", "inspect-inventory", "start-inspection"}:
+        if operation in {"run-ssh", "submit"}:
             return self.submit(payload, descriptor)
         if operation == "status":
             return self.store.get(payload[IDENTIFIER])
@@ -65,17 +65,30 @@ class ExecutorServer(socketserver.ThreadingUnixStreamServer):
             return self.jenkins_read(payload["request"])
         raise ValueError("Unsupported operation or privileged approval required")
 
-    def submit(self, payload, descriptor=None):
-        """Record a ticket; a build of a job configured with approval none starts at once."""
-        if payload["operation"] == "start-inspection":
-            return inventory_tickets.start(self.store, payload, descriptor)
+    def run_ssh(self, payload, descriptor):
+        """Reserve the immutable request before connecting, including after lost replies."""
+        if tickets.submission_kind(payload) != tickets.SSH:
+            raise ValueError("Expected an SSH action")
+        identifier = protocol.fingerprint(payload)
+        with self.store.lock:
+            try:
+                return self.store.get(identifier)
+            except FileNotFoundError:
+                config = target_config(self.configs, payload, descriptor)
+            ticket = self.store.save(tickets.ssh_ticket(payload, config, identifier))
+        return worker.launch(self.store, ticket, config)
+
+    def submit(self, payload, descriptor):
+        """Only Jenkins jobs use the configured approval policy."""
+        if payload["operation"] == "run-ssh":
+            return self.run_ssh(payload, descriptor)
         kind = tickets.submission_kind(payload)
-        payload = inventory.inspection_request(payload)
-        if inventory.KEY in payload:
-            return inventory_ticket(self.store, self.configs, kind, payload, descriptor)
+        if kind != tickets.JENKINS or inventory.KEY in payload:
+            raise ValueError("Use run-ssh for SSH actions")
         ticket = self.store.submit(payload, self.configs[kind])
-        waiting = ticket["status"] == "PENDING_APPROVAL" and kind == tickets.JENKINS
-        if waiting and tickets.preapproved(self.configs[kind], ticket["action"]):
+        if ticket["status"] == "PENDING_APPROVAL" and tickets.preapproved(
+            self.configs[kind], ticket["action"]
+        ):
             return self.decide("approve", {IDENTIFIER: ticket[IDENTIFIER], DIGEST: ticket[DIGEST]})
         return ticket
 
@@ -86,12 +99,12 @@ class ExecutorServer(socketserver.ThreadingUnixStreamServer):
         here on submission, against the same digest and identity checks.
         """
         identifier = payload[IDENTIFIER]
+        saved = self.store.get(identifier)
+        if tickets.stored_kind(saved) != tickets.JENKINS:
+            raise ValueError("Only Jenkins builds accept approval decisions")
         if operation == "reject":
             return self.store.reject(identifier, payload[DIGEST])
-        saved = self.store.get(identifier)
-        if project(saved.get(inventory.KEY)):
-            return inventory_tickets.authorize(self.store, identifier, payload[DIGEST])
-        config = target_config(self.configs, tickets.stored_kind(saved), saved)
+        config = self.configs[tickets.JENKINS]
         ticket = self.store.approve(identifier, payload[DIGEST], config)
         return worker.launch(self.store, ticket, config)
 
@@ -109,50 +122,35 @@ class ExecutorServer(socketserver.ThreadingUnixStreamServer):
         """Serve one authenticated request without retaining a client session."""
         request.settimeout(10)
         uid = socket_io.peer(request)
+        if uid not in (0, self.client_uid):
+            request.sendall(protocol.encode({ERROR_FIELD: "Unauthorized local account"}))
+            return
         try:
             with socket_io.received(request) as (payload, descriptor):
-                response = self.checked_dispatch(payload, uid, descriptor)
+                response = self.dispatch(payload, uid, descriptor)
         except protocol.MaintenanceError as error:
-            response = {"error": str(error), protocol.MAINTENANCE: True}
+            response = {ERROR_FIELD: str(error), protocol.MAINTENANCE: True}
         except inventory.InventoryError as error:
-            response = {"error": str(error), "inventory_error": True}
-        except (ValueError, OSError, LookupError):
-            response = {"error": "Executor rejected request; check fields, targets and permissions"}
+            response = {ERROR_FIELD: str(error), "inventory_error": True}
+        except INVALID_REQUEST:
+            response = {
+                ERROR_FIELD: "Executor rejected request; check fields, targets and permissions"
+            }
         request.sendall(protocol.encode(response))
 
-    def checked_dispatch(self, payload, uid, descriptor=None):
-        """Translate malformed nested fields into protocol errors."""
-        try:
-            return self.dispatch(payload, uid, descriptor)
-        except TypeError as error:
-            raise ValueError("Invalid executor field type") from error
 
-
-def inventory_ticket(store, configs, kind, payload, descriptor):
-    """Reconnect to an existing ticket even when its inventory has since changed."""
-    try:
-        return store.get(protocol.fingerprint(payload))
-    except FileNotFoundError:
-        config = target_config(configs, kind, payload, descriptor)
-    try:
-        return store.submit(payload, config)
-    except KeyError:
-        raise inventory.InventoryError("A requested host is outside the selected group.") from None
-
-
-def target_config(configs, kind, payload, descriptor=None):
+def target_config(configs, payload, descriptor):
     if inventory.KEY not in payload:
-        return configs[kind]
-    if kind != tickets.SSH:
-        raise ValueError("Inventory selection requires an SSH inspection")
+        return configs[tickets.SSH]
     return inventory.load(payload[inventory.KEY], descriptor)
 
 
 def catalog(configs, payload, descriptor=None):
     jenkins = jenkins_config.public(configs[tickets.JENKINS])
-    target_hosts = target_config(configs, tickets.SSH, payload, descriptor)
+    target_hosts = target_config(configs, payload, descriptor)
     shown = dict(hosts=public_hosts(target_hosts), jenkins=jenkins)
     shown["inventory_lookup"] = True
+    shown["ssh_execution"] = "automatic"
     shown["inventory_files"] = inventory.published()
     if inventory.KEY in payload:
         shown[inventory.KEY] = payload.get(inventory.KEY)

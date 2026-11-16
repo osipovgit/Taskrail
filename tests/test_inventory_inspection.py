@@ -20,7 +20,7 @@ from taskrail.application import (
     task_config,
 )
 from taskrail.core import protected_paths
-from taskrail.executor import action_schema, client, inventory, inventory_file
+from taskrail.executor import client, inventory, inventory_file
 from taskrail.executor.service import ExecutorServer
 from taskrail.executor.store import TicketStore
 from taskrail.git import process
@@ -71,7 +71,7 @@ class InventoryInspectionTests(unittest.TestCase):
                 return self.server.dispatch(payload, 1200, stream.fileno())
         return self.server.dispatch(payload, 1200)
 
-    def test_planner_resolves_the_task_inventory_before_approved_inspection(self):
+    def test_planner_resolves_the_task_inventory_and_runs_the_selected_command(self):
         goal = f"Inspect the k8s servers from {self.file}."
         args = cli_api.submit_parser().parse_args(["--goal", goal, "--root", f"repo={self.base}"])
         task, _ = task_form.build_task(cli_requests.task_payload(args), self.base.parent / "runs")
@@ -105,7 +105,7 @@ class InventoryInspectionTests(unittest.TestCase):
             self.assertIn(self.file.name, config["protected_paths"])
             self.assertIn(
                 "INVENTORY_REQUEST",
-                execution_requests.instructions(config, "planner", run, remote_catalog.available()),
+                execution_requests.instructions(remote_catalog.available(), run),
             )
             rendered = request_routes.route(actions, outcome)
             selection = json.loads((run / "run.json").read_text())[inventory.KEY]
@@ -136,21 +136,6 @@ class InventoryInspectionTests(unittest.TestCase):
         remote = execution_wait.ssh_request(ACTION, selection)
         execution_wait.submit(run, run / "02-plan", remote)
         pending = execution_wait.read(run)[0]["request"]
-        ticket = self.lookup(pending)
-        self.assertEqual(ticket["status"], "PENDING_APPROVAL")
-        self.assertEqual(ticket[inventory.KEY], selection)
-        self.assertEqual(ticket, self.lookup(pending))
-        with patch.object(
-            inventory, "load", side_effect=inventory.InventoryError("Inventory changed.")
-        ):
-            self.assertEqual(ticket, self.lookup(pending))
-            rejected = {"request": dict(pending, key="new-ticket"), "status": "SUBMITTING"}
-            with patch.object(remote_catalog.client, "request", side_effect=self.lookup):
-                execution_wait.observe(rejected)
-            self.assertEqual(rejected["status"], "REJECTED")
-        approval = dict(operation="approve", id=ticket["id"], digest=ticket["digest"])
-        with self.assertRaises(ValueError):
-            self.lookup(approval)
         with (
             patch(
                 "taskrail.executor.worker.transport.execute",
@@ -160,14 +145,13 @@ class InventoryInspectionTests(unittest.TestCase):
             ) as execute,
             patch.object(threading.Thread, "start", lambda thread: thread.run()),
         ):
-            self.assertEqual(self.server.dispatch(approval, 0)["status"], "APPROVED")
-            observed = dict(request=pending, id=ticket["id"], status="PENDING_APPROVAL")
-            with patch.object(remote_catalog.client, "request", side_effect=self.lookup):
-                execution_wait.observe(observed)
-                self.assertEqual(observed["status"], "APPROVED")
-                execution_wait.observe(observed)
+            receipt = self.lookup(pending)
+            result = self.store.get(receipt["id"])
+            self.assertEqual(result["status"], "SUCCEEDED")
+            self.assertEqual(result[inventory.KEY], selection)
+            self.assertEqual(self.lookup(pending), result)
+            execute.assert_called_once()
             self.assertEqual(execute.call_args.args[0]["password"], SECRET)
-        result = self.store.get(ticket["id"])
         self.assertEqual(result["results"][0]["output"], "42% [REDACTED] [REDACTED]")
         for artifact in (
             rendered,
@@ -198,35 +182,30 @@ class InventoryInspectionTests(unittest.TestCase):
             self.assertEqual(response["hosts"]["node1"]["hostname"], expected)
             self.assertNotIn(SECRET, json.dumps(response))
         payload = dict(execution_wait.ssh_request(ACTION, binding), key="inspection")
-        ticket = client.request(payload, address)
-        start = dict(operation="start-inspection", id=ticket["id"], ssh_inventory=binding)
-        self.assertEqual(client.request(start, address)["status"], "PENDING_APPROVAL")
-        self.server.dispatch(dict(operation="approve", id=ticket["id"], digest=ticket["digest"]), 0)
-        self.store.recover()
-        alternate.unlink()
-        self.assertEqual(client.request(start, address)["status"], "REJECTED")
-        self.assertEqual(client.request(payload, address)["id"], ticket["id"])
-        self.assertFalse(self.store.get(ticket["id"])["results"])
+        with patch("taskrail.executor.worker.launch", return_value={"status": "RUNNING"}) as launch:
+            self.assertEqual(client.request(payload, address)["status"], "RUNNING")
+            self.store.recover()
+            alternate.unlink()
+            self.assertEqual(client.request(payload, address)["status"], "UNKNOWN")
+            with self.assertRaisesRegex(inventory.InventoryError, "unavailable"):
+                client.request(dict(payload, key="new"), address)
+            launch.assert_called_once()
         with self.assertRaises(ValueError):
             inventory_lookup.source(config, dict(lookup, path=str(self.file)))
         self.assertIn("unavailable", remote_catalog.available({}))
 
-    def test_a_changed_or_revoked_approved_inventory_never_starts_ssh(self):
+    def test_changed_inventory_returns_feedback_before_any_ssh_connection(self):
         selection = inventory_file.pin(inventory.selector(str(self.file), "k8s"))
         payload = dict(execution_wait.ssh_request(ACTION, selection), key="project")
-        ticket = self.lookup(payload)
-        decision = dict(id=ticket["id"], digest=ticket["digest"])
-        self.server.dispatch(dict(decision, operation="approve"), 0)
-        start = dict(operation="start-inspection", id=ticket["id"], ssh_inventory=selection)
         self.file.write_text(FIXTURE.replace("192.0.2.17", "192.0.2.21"))
-        with patch.object(threading.Thread, "start") as worker:
-            self.assertIn("changed", self.lookup(start)["inventory_error"])
-            self.file.write_text(FIXTURE)
-            ticket = self.lookup(dict(payload, key="another-ticket"))
-            decision = dict(id=ticket["id"], digest=ticket["digest"])
-            self.server.dispatch(dict(decision, operation="approve"), 0)
-            self.server.dispatch(dict(decision, operation="reject"), 0)
-            self.assertEqual(self.lookup(dict(start, id=ticket["id"]))["status"], "REJECTED")
+        pending = {"request": payload}
+        with (
+            patch.object(remote_catalog.client, "request", side_effect=self.lookup),
+            patch.object(threading.Thread, "start") as worker,
+        ):
+            execution_wait.observe(pending)
+            self.assertEqual(pending["status"], "REJECTED")
+            self.assertIn("changed", pending["inventory_error"])
             worker.assert_not_called()
 
     def test_named_credentials_are_masked_before_model_start_without_executor(self):
@@ -311,25 +290,19 @@ class InventoryInspectionTests(unittest.TestCase):
         child = task_config.configuration(task, settings, checks_override=frozen)
         self.assertEqual(protected_paths.patterns(child), masks)
 
-    def test_incomplete_or_failed_read_after_approval_is_a_recoverable_inventory_refusal(self):
+    def test_incomplete_or_failed_read_is_a_recoverable_inventory_refusal(self):
         selection = inventory_file.pin(inventory.selector(str(self.file), "k8s"))
-        wire = execution_wait.ssh_request(ACTION, selection)
-        for key, outcome in (("partial", b"all: {}\n"), ("io", OSError("fixture"))):
-            pending = self.lookup(dict(wire, key=key))
-            self.server.dispatch(
-                dict(operation="approve", id=pending["id"], digest=pending["digest"]), 0
-            )
-            start = dict(operation="start-inspection", id=pending["id"], ssh_inventory=selection)
+        wire = dict(execution_wait.ssh_request(ACTION, selection), key="read")
+        for outcome in (b"all: {}\n", OSError("fixture")):
             with (
-                self.subTest(key=key),
+                self.subTest(outcome=outcome),
                 patch("os.pread", side_effect=[outcome]),
-                patch.object(threading.Thread, "start") as worker,
+                patch.object(threading.Thread, "start") as start,
+                self.assertRaisesRegex(inventory.InventoryError, "Repeat the lookup"),
             ):
-                result = self.lookup(start)
-                self.assertEqual(result["status"], "REJECTED")
-                self.assertIn("Repeat the lookup", result["inventory_error"])
-                worker.assert_not_called()
-            self.assertEqual(self.lookup(start), result)
+                self.lookup(wire)
+            start.assert_not_called()
+        self.assertFalse(list(self.store.directory.iterdir()))
 
     def test_project_inventory_rejects_link_swaps_in_any_component(self):
         selection = inventory_file.pin(inventory.selector(str(self.file), "k8s"))
@@ -346,70 +319,41 @@ class InventoryInspectionTests(unittest.TestCase):
         ):
             self.fail("opened inventory through an ancestor symlink")
 
-    def test_fifty_targets_are_inspected_in_reviewable_batches(self):
+    def test_whole_group_runs_one_agent_chosen_script_without_batching(self):
         group = {f"worker-{number}": {} for number in range(50)}
         settings = {"ansible_user": "operator", "ansible_password": SECRET}
         fixture = json.dumps({"k8s": {"hosts": group, "vars": settings}}).encode()
-        with patch.object(inventory, "read", return_value=fixture):
-            self.inspect_batches(group)
-
-    def inspect_batches(self, group):
-        selected = list(self.lookup(dict(operation="catalog", ssh_inventory=SELECTION))["hosts"])
-        self.assertCountEqual(selected, group)
-        for command in (
-            "df -PT",
-            "vmstat 1 2",
-            "systemctl list-units --type=service --state=running --no-pager",
+        script = "kubectl get nodes | sort; ceph status"
+        action = dict(targets="all", script=script, reason="Inspect cluster", files={})
+        with (
+            patch.object(inventory, "read", return_value=fixture),
+            patch.object(threading.Thread, "start", lambda thread: thread.run()),
+            patch(
+                "taskrail.executor.worker.transport.execute",
+                return_value=dict(status="SUCCEEDED", exit_code=0, output="ok"),
+            ) as execute,
         ):
-            observed = []
-            for start in range(0, len(selected), action_schema.MAX_TARGETS):
-                batch = selected[start : start + action_schema.MAX_TARGETS]
-                action = dict(ACTION, targets=batch, script=command)
-                ticket = self.lookup(
-                    dict(execution_wait.ssh_request(action, SELECTION), key="batch")
-                )
-                self.assertEqual(ticket["status"], "PENDING_APPROVAL")
-                with (
-                    patch(
-                        "taskrail.executor.worker.transport.execute",
-                        side_effect=lambda *_: dict(
-                            status="SUCCEEDED", exit_code=0, output="sample"
-                        ),
-                    ),
-                    patch.object(threading.Thread, "start", lambda thread: thread.run()),
-                ):
-                    self.server.dispatch(
-                        dict(operation="approve", id=ticket["id"], digest=ticket["digest"]), 0
-                    )
-                results = self.store.get(ticket["id"])["results"]
-                observed.extend(item["target"] for item in results if item["status"] == "SUCCEEDED")
-            self.assertCountEqual(observed, group)
+            receipt = self.lookup(
+                dict(execution_wait.ssh_request(action, SELECTION), key="whole-group")
+            )
+            result = self.store.get(receipt["id"])
+        self.assertEqual(result["status"], "SUCCEEDED")
+        self.assertEqual(execute.call_count, len(group))
+        self.assertCountEqual([row["target"] for row in result["results"]], group)
+        self.assertTrue(all(call.args[1]["script"] == script for call in execute.call_args_list))
 
-    def test_fails_closed_for_wrong_group_unsafe_actions_and_changed_connections(self):
-        wire = dict(execution_wait.ssh_request(ACTION, SELECTION), key="test-ticket")
-        for action in (
-            dict(ACTION, targets=["other-node"]),
-            dict(ACTION, script="systemctl restart kubelet"),
-            dict(ACTION, files={"test": "payload"}),
-        ):
-            with self.subTest(action=action), self.assertRaises((ValueError, KeyError)):
-                self.lookup(dict(wire, action=action))
+    def test_rejects_unknown_hosts_and_malformed_inventory(self):
+        wire = dict(
+            execution_wait.ssh_request(dict(ACTION, targets=["other-node"]), SELECTION),
+            key="test-ticket",
+        )
+        with self.assertRaises(inventory.InventoryError):
+            self.lookup(wire)
         for filename in ("../cluster.yaml", "/etc/shadow", "bad.yaml"):
             if filename == "bad.yaml":
                 (self.base / filename).symlink_to(self.file)
             with self.subTest(filename=filename), self.assertRaises(ValueError):
                 inventory.load(dict(SELECTION, file=filename))
-        ticket = self.lookup(wire)
-        self.file.write_text(FIXTURE.replace("192.0.2.17", "192.0.2.21"))
-        with (
-            self.assertRaisesRegex(ValueError, "identity changed"),
-            patch.object(threading.Thread, "start") as start,
-        ):
-            self.server.dispatch(
-                dict(operation="approve", id=ticket["id"], digest=ticket["digest"]), 0
-            )
-        start.assert_not_called()
-        self.assertEqual(self.store.get(ticket["id"])["status"], "PENDING_APPROVAL")
         for body, group in (
             (FIXTURE, "missing"),
             ("k8s: [" + SECRET, "k8s"),

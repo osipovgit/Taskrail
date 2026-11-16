@@ -36,7 +36,7 @@ Local commands normally run in a sandbox where available. Commands that require 
 
 For server diagnostics, install with `bash deploy/install.sh --with-ssh --autostart=yes`
 and put the Ansible inventory path and group in the task. Systemd starts the SSH
-executor on demand. [SSH setup and host keys](docs/ssh-executor.md)
+executor on demand. Agents run diagnostics across the selected group automatically. [SSH setup and host keys](docs/ssh-executor.md)
 
 ## From the CLI
 

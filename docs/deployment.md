@@ -106,7 +106,7 @@ Taskrail can run on a Linux server while you use the browser on your workstation
 Do not publish the port through `0.0.0.0`, a reverse proxy or a firewall rule: the UI
 has no user accounts, and its session token only protects against other websites
 open in your browser. Closing the tunnel or the browser does not stop running tasks.
-Root approval of SSH actions happens in a terminal on the server.
+SSH starts automatically for the installed application account.
 
 ## File locations
 
@@ -358,7 +358,7 @@ deleting configuration, history or code.
 
 The SSH executor is a separate system service with its own user and root-owned
 installation. It is not installed or granted privileges by the ordinary UI updater.
-See [SSH executor](ssh-executor.md) for installation, host keys and approvals.
+See [SSH executor](ssh-executor.md) for installation, host keys and task-selected commands.
 
 ## Clean reinstall of the managed application
 

@@ -7,21 +7,12 @@ from unittest.mock import patch
 from taskrail.executor import __main__ as executor_cli
 from taskrail.executor import approval
 
-ACTION = dict(
-    targets=["server-a"], script="uname -a\n", files={}, reason="Inspect kernel", timeout_seconds=30
-)
 TICKET = dict(
     id="ticket-1",
-    kind="ssh",
-    action=ACTION,
-    targets={"server-a": dict(hostname="192.0.2.10", port=22, username="operator")},
-    status="PENDING_APPROVAL",
-    digest="a" * 64,
-)
-JENKINS_TICKET = dict(
-    TICKET,
     kind="jenkins",
     action=dict(operation="build", server="ci", job="tests", parameters=dict(BRANCH="main")),
+    status="PENDING_APPROVAL",
+    digest="a" * 64,
 )
 
 
@@ -53,15 +44,15 @@ class ApprovalHelperTests(unittest.TestCase):
             approval.main()
         return requests, output.getvalue()
 
-    def test_the_full_digest_approves_the_displayed_script_once(self):
+    def test_the_full_digest_approves_the_displayed_build_once(self):
         requests, shown = self.decide(TICKET["digest"])
         self.assertEqual(
             requests[1], dict(operation="approve", id="ticket-1", digest=TICKET["digest"])
         )
         self.assertEqual(len(requests), 2)
         self.assertIn("Decision: APPROVE", shown)
-        self.assertIn("Exact SSH stdin", shown)
-        self.assertIn("uname -a", shown)
+        self.assertIn("ONE build", shown)
+        self.assertIn('"BRANCH": "main"', shown)
 
     def test_anything_but_the_exact_digest_approves_nothing(self):
         for typed in ("", "yes", TICKET["digest"][:12], TICKET["digest"].upper()):
@@ -79,10 +70,9 @@ class ApprovalHelperTests(unittest.TestCase):
         requests, _ = self.decide("", "--reject")
         self.assertEqual(len(requests), 1)
 
-    def test_a_jenkins_build_shows_its_parameters(self):
-        _, shown = self.decide("", ticket=JENKINS_TICKET)
-        self.assertIn("ONE build", shown)
-        self.assertIn('"BRANCH": "main"', shown)
+    def test_ssh_tickets_cannot_be_approved(self):
+        with self.assertRaisesRegex(ValueError, "Only Jenkins"):
+            self.decide(TICKET["digest"], ticket=dict(TICKET, kind="ssh"))
 
     def test_only_root_at_a_terminal_can_decide(self):
         for euid, stdin in ((1000, None), (0, io.StringIO(f"{TICKET['digest']}\n"))):
@@ -90,7 +80,7 @@ class ApprovalHelperTests(unittest.TestCase):
                 self.decide(TICKET["digest"], euid=euid, stdin=stdin)
 
     def test_terminal_control_sequences_are_escaped(self):
-        hostile = dict(TICKET, action=dict(ACTION, script="echo \x1b[2J\x1b]0;owned\x07\n"))
+        hostile = dict(TICKET, reason="echo \x1b[2J\x1b]0;owned\x07\n")
         _, shown = self.decide("", ticket=hostile)
         self.assertNotIn("\x1b", shown)
         self.assertIn("\\u001b[2J", shown)

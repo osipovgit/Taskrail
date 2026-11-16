@@ -13,7 +13,6 @@ from taskrail.executor import inventory_groups
 FILENAME = "file"
 NAME_PATTERN = re.compile(r"[\w-][\w.-]*\.ya?ml")
 PIN_FLAGS = os.O_PATH | os.O_NOFOLLOW
-MAX_BYTES = 8 * 1024 * 1024
 
 
 def opened(path):
@@ -54,8 +53,8 @@ def read_descriptor(fd):
 
 def complete_bytes(fd):
     before = os.fstat(fd)
-    if not stat.S_ISREG(before.st_mode) or before.st_size > MAX_BYTES:
-        raise inventory_groups.InventoryError("Expected a regular inventory of at most 8 MiB.")
+    if not stat.S_ISREG(before.st_mode):
+        raise inventory_groups.InventoryError("Expected a regular inventory file.")
     flags = fcntl.fcntl(fd, fcntl.F_GETFL)
     if flags & os.O_ACCMODE != os.O_RDONLY or flags & os.O_PATH:
         raise inventory_groups.InventoryError("Expected a readable, read-only inventory file.")

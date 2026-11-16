@@ -25,7 +25,7 @@ from taskrail.application import (
     task_config,
 )
 from taskrail.application.source_guard import SourceGuard
-from taskrail.core import approval_marks, delivery_record, prompt_texts
+from taskrail.core import approval_marks, delivery_record
 from taskrail.core.files import atomic_json
 from taskrail.interactions import approval_policy, approvals, jenkins
 from taskrail.web import delivery_launch, epic_record, requests, split_approvals, task_form
@@ -215,9 +215,8 @@ class DeliveryApprovalTests(unittest.TestCase):
                 self.subTest(stage=stage),
                 patch.object(remote_catalog, "available", return_value=CAPABILITIES),
             ):
-                self.assertEqual(execution_requests.remote_mode(run, config, stage), "server")
+                execution_requests.verify_delivery(run, config)
                 request = prompts.make_request(config, (stage, None, [], None), state, run)
-            self.assertIn(prompt_texts.text("routes.ssh.server"), request)
             self.assertIn("Example ACTION_REQUEST:", request)
             self.assertIn("Example JENKINS_REQUEST:", request)
             assert_request_budget(self, request, stage, self.base)
@@ -226,7 +225,7 @@ class DeliveryApprovalTests(unittest.TestCase):
             patch.object(remote_catalog, "available", return_value=CAPABILITIES),
             self.assertRaisesRegex(ValueError, "Confirmed"),
         ):
-            prompts.make_request(config, ("reviewer", None, [], None), state, run)
+            execution_requests.verify_delivery(run, config)
 
     def test_standalone_confirmation_rejects_source_and_git_drift(self):
         for relative in ("app.py", ".git/HEAD"):
@@ -259,19 +258,19 @@ class DeliveryApprovalTests(unittest.TestCase):
             record["phases"] = dict(server="server")
         run = self.runs / "server"
         config = dict(phase="server", confirmed_change="parent")
-        self.assertEqual(execution_requests.remote_mode(run, config, "reviewer"), "server")
+        execution_requests.verify_delivery(run, config)
         for path in cases:
             original = path.read_text()
             path.write_text("outside change\n")
             with self.subTest(path=path.name), self.assertRaisesRegex(ValueError, "Confirmed"):
-                execution_requests.remote_mode(run, config, "reviewer")
+                execution_requests.verify_delivery(run, config)
             path.write_text(original)
 
     def test_confirmation_without_fingerprints_cannot_authorize_server_actions(self):
         atomic_json(self.parent / "epic.json", dict(confirmed=1, phases=dict(server="server")))
         with self.assertRaisesRegex(ValueError, "review and confirmation"):
-            execution_requests.remote_mode(
-                self.runs / "server", dict(phase="server", confirmed_change="parent"), "reviewer"
+            execution_requests.verify_delivery(
+                self.runs / "server", dict(phase="server", confirmed_change="parent")
             )
 
     def test_server_start_and_resume_recheck_before_adopting_parent_evidence(self):

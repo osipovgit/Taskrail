@@ -32,8 +32,6 @@ def inside_project(config, path):
 
 def consume(actions, request):
     session = actions.session
-    if session.active[1]["role"] == "implementer":
-        return prompt_texts.text("feedback.ssh_refused")
     session.state[inventory.KEY] = {}
     artifacts.save_run(actions.run, session.state)
     try:
@@ -49,10 +47,7 @@ def consume(actions, request):
 
 
 def answer(actions, request, catalog):
-    session = actions.session
     found = dict(targets=sorted(catalog["hosts"]))
     snapshot = transcripts.command_snapshot(actions.folder, request, found, source="remote")
-    rules = execution_requests.instructions(
-        session.environment["config"], session.active[1]["role"], actions.run, catalog
-    )
+    rules = execution_requests.instructions(catalog, actions.run)
     return f"{snapshot}\n{rules}"

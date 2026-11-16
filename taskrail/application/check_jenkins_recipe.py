@@ -1,7 +1,7 @@
 """Validate exact server-owned Jenkins recipes before inventory resolution."""
 
 from taskrail.core.schema import require
-from taskrail.executor import action_schema, protocol
+from taskrail.executor import jenkins_schema, protocol
 
 SERVER = "server"
 
@@ -18,7 +18,7 @@ def validate_jenkins(request):
     )
     check_arguments(request["parameters"])
     protocol.text(request["reason"])
-    action_schema.timeout(request["timeout_seconds"])
+    jenkins_schema.timeout(request["timeout_seconds"])
 
 
 def check_arguments(arguments):

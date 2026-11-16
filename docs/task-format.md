@@ -82,7 +82,7 @@ the agents' input.
 | `phase` | Server-generated for delivery runs (`task`, `integration`, `correction`, `validation`, `server`); do not set it by hand |
 | `task_scope` | Required for server-generated `task` phases: exact reviewed file paths; child planning cannot widen them or create another split |
 | `design` | `true` for a design document (the browser's **Plan**); implies `read_only` |
-| `auto_approve` | `true` approves local command decisions for this run (the browser's **Allow all actions**); SSH keeps its root-only approval |
+| `auto_approve` | `true` approves local command decisions for this run (the browser's **Allow all actions**); SSH runs automatically under the task scope |
 | `task_spec` | Generated typed input: version 1, literal named fields, a display integrity reference and optional child context/requirement lineage; do not edit only its Markdown display |
 | `assigned_contract` | Generated child reference (`parent_run`, `task_id`); the workflow authenticates it against the sealed reviewed parent before skipping child planning |
 | `check_specs` | Selected server recipe IDs and runtime criterion IDs; commands and approval policy remain server-owned |

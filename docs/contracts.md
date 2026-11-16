@@ -359,11 +359,11 @@ engine. Stages record role source/hash, contract hash and request hash for UI pr
 
 ## Executor requests
 
-During planning or review, an available inventory-capable executor accepts
+During planning, implementation or review, an available inventory-capable executor accepts
 `{"schema_version":1,"status":"INVENTORY_REQUEST","path":"/absolute/project/inventory.yaml","group":"workers"}`.
 The application verifies project scope, binds the exact YAML path and bytes by
 digest, and passes its read-only descriptor to the isolated executor. The response identifies the selected aliases for subsequent
-read-only SSH actions. Discovery makes no remote connection.
+automatic SSH actions. Use `"targets": "all"` for the selected group or give a list of aliases. Discovery makes no remote connection.
 
 To request an operation, send one JSON object as the entire message. The examples
 use a declared working root for Git and local commands. SSH and Jenkins examples
@@ -401,7 +401,7 @@ external state can produce new observations.
 Command permissions, sandbox boundaries, approvals and source/Git checks are owned
 by [access](access.md). Remote request examples and executor setup are in
 [SSH executor](ssh-executor.md); controlled Git syntax is in [Git access](git-access.md).
-Each approved SSH action or Jenkins build has one ticket object in
+Each SSH action or Jenkins build has one ticket object in
 `00-input/remote/<ticket-id>.json`. Jenkins reads have numbered command receipts
 in the same directory. Reobservation verifies the ticket and its long-output files.
 UNKNOWN remote outcomes require inspection and are never replayed automatically.

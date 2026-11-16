@@ -1,8 +1,4 @@
-"""Inspect the isolated executor: its public catalog or one ticket's status.
-
-Tickets are submitted by the orchestrator workflow, which decides whether a stage may
-only inspect servers, and each one still needs root approval before anything runs.
-"""
+"""Inspect the isolated executor's public catalog or ticket status."""
 
 import argparse
 import json

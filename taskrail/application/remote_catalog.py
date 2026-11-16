@@ -19,6 +19,16 @@ def available(selection=None):
         return {UNAVAILABLE: "routes.ssh.inventory_error", "detail": str(error)}
     except (OSError, ValueError) as error:
         return {UNAVAILABLE: reason(error)}
+    return compatible_catalog(catalog, selection)
+
+
+def compatible_catalog(catalog, selection):
+    if catalog.get("ssh_execution") != "automatic":
+        return {
+            UNAVAILABLE: "routes.ssh.update",
+            "inventory_files": catalog.get("inventory_files", []),
+            "jenkins": catalog.get("jenkins", {}),
+        }
     if selection and catalog.get(inventory.KEY) != selection:
         return {UNAVAILABLE: "routes.ssh.update"}
     return catalog

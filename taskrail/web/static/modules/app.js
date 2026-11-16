@@ -12,7 +12,7 @@ const LOCAL_NOTE =
   'Local programs run as the application user and may execute project code. Review the exact command and its effects. This is not a sandbox.';
 const APPROVAL_NOTES = {
   JENKINS_REQUEST:
-    'A read-only Jenkins request: build status, console log or test results. Starting a build always needs root approval in a terminal.',
+    'A read-only Jenkins request: build status, console log or test results. Build approval follows the configured job policy.',
   MANUAL_STEP:
     'Nothing runs from this card. Do the step yourself on this host, then Allow to continue; Deny continues without it.',
 };

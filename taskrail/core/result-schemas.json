@@ -406,11 +406,15 @@
     "properties": {
       "schema_version": {
         "type": "integer",
-        "enum": [1]
+        "enum": [
+          1
+        ]
       },
       "status": {
         "type": "string",
-        "enum": ["INVENTORY_REQUEST"]
+        "enum": [
+          "INVENTORY_REQUEST"
+        ]
       },
       "path": {
         "type": "string",
@@ -444,19 +448,24 @@
           "targets",
           "script",
           "reason",
-          "files",
-          "timeout_seconds"
+          "files"
         ],
         "properties": {
           "targets": {
-            "type": "array",
-            "minItems": 1,
-            "maxItems": 16,
-            "uniqueItems": true,
-            "items": {
-              "type": "string",
-              "minLength": 1
-            }
+            "oneOf": [
+              {
+                "type": "array",
+                "minItems": 1,
+                "uniqueItems": true,
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              {
+                "const": "all"
+              }
+            ]
           },
           "script": {
             "type": "string",
@@ -474,8 +483,7 @@
           },
           "timeout_seconds": {
             "type": "integer",
-            "minimum": 1,
-            "maximum": 3600
+            "minimum": 1
           }
         }
       }

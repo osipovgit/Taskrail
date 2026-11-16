@@ -286,11 +286,10 @@ class CheckRecipesTest(unittest.TestCase):
         resume.assert_not_called()
 
     def test_server_recipe_cannot_bypass_parent_confirmation(self):
-        with (
-            patch("taskrail.application.execution_requests.remote_mode", return_value="inspect"),
-            self.assertRaisesRegex(ValueError, "confirmed changes"),
-        ):
-            check_remote.authorize(self.workflow(), dict(kind="ssh"))
+        workflow = self.workflow()
+        workflow.config["phase"] = "server"
+        with self.assertRaisesRegex(ValueError, "confirmed changes"):
+            check_remote.execute(workflow, self.folder, self.spec, dict(kind="ssh"))
 
     def test_report_adapters_reject_invalid_empty_or_incomplete_reports(self):
         base = dict(status="SUCCEEDED", exit_code=0)

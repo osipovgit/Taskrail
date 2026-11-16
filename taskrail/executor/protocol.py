@@ -1,4 +1,4 @@
-"""Bounded local messages and immutable action validation."""
+"""Local messages and immutable action validation."""
 
 import hashlib
 import json
@@ -6,7 +6,6 @@ import re
 
 from taskrail.core.schema import unique_fields
 
-MAX_MESSAGE = 2 * 1024 * 1024
 MAX_SCRIPT = 524288
 SOCKET = "/run/taskrail-executor/control.sock"
 # Present while an update or reset runs: no new submissions or approvals.
@@ -19,18 +18,16 @@ class MaintenanceError(OSError):
 
 
 def encode(payload):
-    """Encode one bounded message without ambiguous JSON fields."""
+    """Encode one message without ambiguous JSON fields."""
     raw = json.dumps(payload, sort_keys=True, ensure_ascii=True).encode("utf-8")
-    if len(raw) > MAX_MESSAGE:
-        raise ValueError("Executor message exceeds the size limit")
     return b"%s\n" % raw
 
 
 def receive(stream, prefix=b""):
-    """Read exactly one bounded newline-delimited object."""
-    raw = prefix + stream.readline(MAX_MESSAGE + 2 - len(prefix))
-    if len(raw) > MAX_MESSAGE + 1 or not raw.endswith(b"\n"):
-        raise ValueError("Incomplete or oversized executor message")
+    """Read exactly one newline-delimited object."""
+    raw = prefix + stream.readline()
+    if not raw.endswith(b"\n"):
+        raise ValueError("Incomplete executor message")
     payload = json.loads(raw, object_pairs_hook=unique_fields)
     if not isinstance(payload, dict):
         raise ValueError("Executor message must be an object")
@@ -44,7 +41,7 @@ def fingerprint(payload):
 
 def label(entry):
     """Accept only non-option identifiers."""
-    if not isinstance(entry, str) or not re.fullmatch(r"[a-zA-Z0-9][a-zA-Z0-9_.-]{0,63}", entry):
+    if not isinstance(entry, str) or not re.fullmatch(r"[a-zA-Z0-9][a-zA-Z0-9_.-]*", entry):
         raise ValueError("Invalid executor identifier")
     return entry
 

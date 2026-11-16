@@ -62,6 +62,6 @@ def section(stage, run, config, catalog):
             stage, config.get("host_commands", "auto"), config.get("sandbox_network") is True
         ),
         text("example.local", root=root),
-        execution_requests.instructions(config, stage, run, catalog),
+        execution_requests.instructions(catalog, run),
     )
     return "\n".join(filter(None, lines))

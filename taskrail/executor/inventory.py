@@ -81,18 +81,6 @@ def decoded(raw):
         raise InventoryError("Invalid static YAML inventory.") from None
 
 
-def inspection_request(payload):
-    """Rebuild a selected-inventory action before creating its privileged ticket."""
-    from taskrail.executor import action_schema, remote_inspection
-
-    if (KEY in payload) != (payload["operation"] == "inspect-inventory"):
-        raise ValueError("Invalid inventory inspection route")
-    if KEY in payload:
-        action_schema.validate(payload["action"])
-        return dict(payload, action=remote_inspection.inspection(payload["action"]))
-    return payload
-
-
 def published():
     """Names alone let the application mask credential files before project discovery."""
     if not DIRECTORY.is_dir():

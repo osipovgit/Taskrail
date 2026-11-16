@@ -47,7 +47,7 @@ def mark(run, done):
 
 
 def awaiting_ticket(state):
-    """A running stage that waits for root approval of an SSH or Jenkins ticket."""
+    """A running stage that waits for root approval of a Jenkins build."""
     if state.get(STATUS) != "RUNNING":
         return False
     jobs = state.get("execution_jobs") or [{}]

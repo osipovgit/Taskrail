@@ -31,7 +31,7 @@ The run list groups runs by what they need:
 | Group | Runs |
 |---|---|
 | Running | Starting or running, not waiting for you |
-| Needs you | A pending UI decision, an SSH or Jenkins ticket waiting for root approval, or a stop without a successful result (errors, steering timeouts, interruptions); highlighted in yellow |
+| Needs you | A pending UI decision, a Jenkins ticket waiting for root approval, or a stop without a successful result (errors, steering timeouts, interruptions); highlighted in yellow |
 | Ready for review | A finished change: waiting for your review, or for your confirmation before server checks |
 | Done | Confirmed with its server checks finished, finished without changes, or marked done; collapsed until opened or searched |
 
@@ -64,7 +64,7 @@ Git writes block delivery. After the configured number of integration correction
 New local catalog checks are allowed; new remote bindings require parent replanning.
 
 Planned Jenkins validation follows integration. Planned server checks wait for
-**Confirm changes**, then the isolated executor's root approval. Confirmation binds
+**Confirm changes** and then run through the isolated executor. Confirmation binds
 source/Git fingerprints, accepted results and their links. Every server request and
 phase restart rechecks them; drift requires fresh review and confirmation. Without
 server checks the completed change is Ready for review, with no confirmation wait.

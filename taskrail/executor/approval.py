@@ -1,11 +1,11 @@
-"""Interactive root approval for exact immutable server actions."""
+"""Interactive root approval for configured Jenkins builds."""
 
 import argparse
 import json
 import os
 import sys
 
-from taskrail.executor import client, tickets, transport
+from taskrail.executor import client, tickets
 
 
 def show_json(payload):
@@ -16,24 +16,14 @@ def show_json(payload):
 
 def display(ticket):
     """Escape remote-controlled terminal sequences during review."""
+    if tickets.stored_kind(ticket) != tickets.JENKINS:
+        raise ValueError("Only Jenkins builds accept approval decisions")
     show_json(ticket)
-    if tickets.stored_kind(ticket) == tickets.JENKINS:
-        sys.stdout.write("Approval starts ONE build of the job above with these parameters:\n")
-        show_json(ticket["action"]["parameters"])
-    else:
-        show_script(ticket["action"])
+    sys.stdout.write("Approval starts ONE build of the job above with these parameters:\n")
+    show_json(ticket["action"]["parameters"])
     sys.stdout.write("A disconnect may leave remote processes running. No automatic rollback.\n")
     sys.stdout.write("Type the full digest to confirm this decision, or Enter to cancel: ")
     sys.stdout.flush()
-
-
-def show_script(action):
-    """The exact SSH standard input of an action."""
-    sys.stdout.write("Exact SSH stdin (JSON escaped for terminal safety):\n")
-    show_json(transport.remote_script(action))
-    sys.stdout.write(
-        "Approval covers the complete script and bundle on ALL listed targets, once.\n"
-    )
 
 
 def main():

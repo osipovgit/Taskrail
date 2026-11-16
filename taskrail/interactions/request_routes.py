@@ -69,7 +69,7 @@ def git_response(actions, payload):
 
 
 def run_remote(actions, payload):
-    """An SSH action keeps its own root approval route."""
+    """Run SSH through the peer-authenticated executor."""
     return remote.consume(actions.session, payload)
 
 

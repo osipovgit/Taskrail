@@ -26,6 +26,3 @@ RestrictSUIDSGID=yes
 RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
 CapabilityBoundingSet=
 LockPersonality=yes
-LimitFSIZE=8M
-TasksMax=64
-MemoryMax=512M

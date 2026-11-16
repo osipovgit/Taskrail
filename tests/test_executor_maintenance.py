@@ -419,18 +419,21 @@ class MaintenanceServiceTests(unittest.TestCase):
         self.server.maintenance = base / "maintenance"
 
     def test_submissions_and_approvals_wait_for_maintenance_to_end(self):
-        ticket = self.server.dispatch(dict(operation="submit", key="one", action=ACTION), 1000)
+        with patch.object(threading.Thread, "start"):
+            ticket = self.server.dispatch(dict(operation="run-ssh", key="one", action=ACTION), 1000)
         self.server.maintenance.touch()
-        approval = dict(operation="approve", id=ticket["id"], digest=ticket["digest"])
+        approval = dict(operation="approve", id=ticket["id"], digest="reviewed")
         for payload, uid in (
-            (dict(operation="submit", key="two", action=ACTION), 1000),
+            (dict(operation="submit", key="two", jenkins={}), 1000),
+            (dict(operation="run-ssh", key="two", action=ACTION), 1000),
             (approval, 0),
         ):
             with self.assertRaises(protocol.MaintenanceError):
                 self.server.dispatch(payload, uid)
-        self.assertEqual(self.store.get(ticket["id"])["status"], "PENDING_APPROVAL")
+        self.assertEqual(self.store.get(ticket["id"])["status"], "RUNNING")
         self.assertEqual(
-            self.server.dispatch(dict(operation="status", id=ticket["id"]), 1000), ticket
+            self.server.dispatch(dict(operation="status", id=ticket["id"]), 1000)["id"],
+            ticket["id"],
         )
 
     def test_a_refusal_reaches_the_application_as_an_outage(self):
@@ -443,7 +446,7 @@ class MaintenanceServiceTests(unittest.TestCase):
             serving = threading.Thread(target=self.answer_once, args=(listener,))
             serving.start()
             with self.assertRaises(protocol.MaintenanceError):
-                client.request(dict(operation="submit", key="one", action=ACTION), address)
+                client.request(dict(operation="run-ssh", key="one", action=ACTION), address)
             serving.join(5)
 
     def answer_once(self, listener):
@@ -452,7 +455,7 @@ class MaintenanceServiceTests(unittest.TestCase):
             self.server.finish_request(connection, None)
 
     def test_the_application_asks_again_during_maintenance(self):
-        pending = dict(request=dict(operation="submit", key="one", action=ACTION))
+        pending = dict(request=dict(operation="run-ssh", key="one", action=ACTION))
         refusal = protocol.MaintenanceError("Executor maintenance is in progress")
         with patch.object(client, "request", side_effect=refusal):
             self.assertIn("retrying", execution_wait.observe(pending))

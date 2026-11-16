@@ -70,7 +70,7 @@ The activity counter separately counts calls with identical arguments.
 | `evidence.json`, `recovery.md` | Source-versioned recovery data; clipping stays explicit |
 | `findings.json`, `validation.json`, `handoff.md` | Pageable review feedback, long validation errors and saved public session notes |
 | `changes.diff`, `report.md` | Actual edits and human review report |
-| `00-input/local/`, `00-input/remote/` | Numbered command receipts by stage and text sidecars for long output. Remote approval tickets are named by ID. |
+| `00-input/local/`, `00-input/remote/` | Numbered command receipts by stage and text sidecars for long output. Remote execution tickets are named by ID. |
 | `NN-check/verify-NN.log` | Output of a settings verification command |
 
 Numbering reflects attempts in execution order, not fixed role numbers. Recovery
@@ -124,7 +124,7 @@ this percentage or a context stop. Historical byte-based estimates are ignored. 
 Git/local executor operations appear in the activity log as tool calls. They retain
 one stage ID, session ID and cumulative active-time limit. Operator approval pauses
 the timer indefinitely; ordinary command execution consumes the remaining time.
-The separate SSH executor uses its own action timeout while the model waits.
+The separate SSH executor applies a per-host timeout if the request specifies one while the model waits.
 Token counters remain observational; no cumulative-usage warning is shown.
 
 An expanded Activity log keeps its heading and **Close log** button visible while
