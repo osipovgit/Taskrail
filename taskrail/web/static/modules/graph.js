@@ -20,7 +20,7 @@ const PHASE_WAITING = {
   integration: 'Starts after every child task finishes.',
   validation: 'Starts when the code is done.',
   confirm: 'Confirm once you have reviewed the changes.',
-  server: 'Run after you confirm the changes; each action needs root approval.',
+  server: 'Run after you confirm the changes.',
 };
 // A finished check run means its checks ran and were reviewed; its summary has the results.
 const PHASE_LABELS = {

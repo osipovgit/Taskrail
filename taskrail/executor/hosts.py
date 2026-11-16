@@ -69,7 +69,7 @@ def public(inventory):
 
 def redact(output, inventory):
     """Remove configured passwords from captured server output."""
-    passwords = [host.get(PASSWORD) for host in inventory.values()]
-    for password in filter(None, passwords):
+    passwords = {host.get(PASSWORD) for host in inventory.values()}
+    for password in sorted(filter(None, passwords), key=len, reverse=True):
         output = output.replace(password, "[REDACTED]")
     return output

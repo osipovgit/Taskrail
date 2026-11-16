@@ -229,13 +229,16 @@ class MaintenanceScriptTests(unittest.TestCase):
         )
 
     def test_the_installer_swaps_a_prepared_package_only_after_maintenance(self):
-        installed = self.execute("install-executor.sh", "--client=fixture")
+        installed = self.execute("install-executor.sh", "--client=fixture", "--autostart=enable")
         self.assertEqual(installed.returncode, 0, installed.stderr)
         service = Path("executor/service.py")
         self.assertEqual(
             (self.package / service).read_bytes(),
             (self.release / "taskrail" / service).read_bytes(),
         )
+        self.assertEqual(json.loads((self.config / "hosts.json").read_text()), {})
+        self.assertIn("SocketUser=1000", self.unit.with_suffix(".socket").read_text())
+        self.assertIn("enable --now taskrail-executor.socket marker=no", self.log.read_text())
         self.assertFalse((self.package / "web").exists())
         self.assertFalse((self.package / "executor/debug.json").exists())
         self.assertFalse((self.package / "executor/custom.py").exists())
@@ -309,13 +312,22 @@ class MaintenanceScriptTests(unittest.TestCase):
                 self.assertEqual((self.package / "previous").read_text(), "previous package")
                 self.assertFalse(self.log.exists())
                 self.assertFalse((self.config / "maintenance").exists())
+        socket_unit = self.unit.with_suffix(".socket")
+        socket_unit.touch()
+        dropin = self.unit.with_suffix(".socket.d")
+        dropin.mkdir()
         ticket.write_text('{"status":"COMPLETED"}')
         reset = self.execute("reset-executor.sh")
         self.assertEqual(reset.returncode, 0, reset.stderr)
         self.assertFalse(self.package.exists())
         self.assertFalse(ticket.exists())
+        self.assertFalse(socket_unit.exists())
+        self.assertFalse(dropin.exists())
         calls = self.log.read_text().splitlines()
-        self.assertEqual(calls[0], "stop taskrail-executor.service marker=yes previous=yes")
+        self.assertEqual(
+            calls[0],
+            "stop taskrail-executor.socket taskrail-executor.service marker=yes previous=yes",
+        )
         self.assertEqual(calls[-1], "daemon-reload marker=no previous=no")
 
 
@@ -407,18 +419,21 @@ class MaintenanceServiceTests(unittest.TestCase):
         self.server.maintenance = base / "maintenance"
 
     def test_submissions_and_approvals_wait_for_maintenance_to_end(self):
-        ticket = self.server.dispatch(dict(operation="submit", key="one", action=ACTION), 1000)
+        with patch.object(threading.Thread, "start"):
+            ticket = self.server.dispatch(dict(operation="run-ssh", key="one", action=ACTION), 1000)
         self.server.maintenance.touch()
-        approval = dict(operation="approve", id=ticket["id"], digest=ticket["digest"])
+        approval = dict(operation="approve", id=ticket["id"], digest="reviewed")
         for payload, uid in (
-            (dict(operation="submit", key="two", action=ACTION), 1000),
+            (dict(operation="submit", key="two", jenkins={}), 1000),
+            (dict(operation="run-ssh", key="two", action=ACTION), 1000),
             (approval, 0),
         ):
             with self.assertRaises(protocol.MaintenanceError):
                 self.server.dispatch(payload, uid)
-        self.assertEqual(self.store.get(ticket["id"])["status"], "PENDING_APPROVAL")
+        self.assertEqual(self.store.get(ticket["id"])["status"], "RUNNING")
         self.assertEqual(
-            self.server.dispatch(dict(operation="status", id=ticket["id"]), 1000), ticket
+            self.server.dispatch(dict(operation="status", id=ticket["id"]), 1000)["id"],
+            ticket["id"],
         )
 
     def test_a_refusal_reaches_the_application_as_an_outage(self):
@@ -431,7 +446,7 @@ class MaintenanceServiceTests(unittest.TestCase):
             serving = threading.Thread(target=self.answer_once, args=(listener,))
             serving.start()
             with self.assertRaises(protocol.MaintenanceError):
-                client.request(dict(operation="submit", key="one", action=ACTION), address)
+                client.request(dict(operation="run-ssh", key="one", action=ACTION), address)
             serving.join(5)
 
     def answer_once(self, listener):
@@ -440,7 +455,7 @@ class MaintenanceServiceTests(unittest.TestCase):
             self.server.finish_request(connection, None)
 
     def test_the_application_asks_again_during_maintenance(self):
-        pending = dict(request=dict(operation="submit", key="one", action=ACTION))
+        pending = dict(request=dict(operation="run-ssh", key="one", action=ACTION))
         refusal = protocol.MaintenanceError("Executor maintenance is in progress")
         with patch.object(client, "request", side_effect=refusal):
             self.assertIn("retrying", execution_wait.observe(pending))

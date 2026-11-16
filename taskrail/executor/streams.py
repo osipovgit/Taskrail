@@ -1,18 +1,13 @@
-"""Run one transport process while keeping only a bounded tail of its output.
-
-The executor service limits file sizes, so output is streamed instead of spooled:
-a large remote log cannot kill the transport or exhaust memory.
-"""
+"""Capture complete SSH output and bounded Jenkins console previews."""
 
 import functools
 import os
 import signal
 import subprocess
-import threading
+import tempfile
 
 OUTPUT_LIMIT = 32000
 CHUNK = 65536
-DRAIN_SECONDS = 5
 
 
 class OutputTail:
@@ -33,34 +28,24 @@ class OutputTail:
         return self.kept.decode("utf-8", "replace")
 
 
-def feed(stream, payload):
-    """Write the whole payload; a process that exits early simply closes its input."""
-    try:
-        with stream:
-            stream.write(payload)
-    except BrokenPipeError:
-        return
-
-
-def run_bounded(argv, payload, environment, timeout):
-    """(exit code, output tail); the exit code is None when the timeout killed the process."""
-    tail = OutputTail()
-    with subprocess.Popen(
-        argv,
-        stdin=subprocess.PIPE,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        env=environment,
-        start_new_session=True,
-    ) as process:
-        writer = threading.Thread(target=feed, args=(process.stdin, payload), daemon=True)
-        writer.start()
-        reader = threading.Thread(target=tail.consume, args=(process.stdout,), daemon=True)
-        reader.start()
-        try:
-            exit_code = process.wait(timeout=timeout)
-        except subprocess.TimeoutExpired:
-            os.killpg(process.pid, signal.SIGKILL)
-            exit_code = None
-        reader.join(DRAIN_SECONDS)
-    return exit_code, tail
+def execute(argv, payload, environment, timeout):
+    """Spool output while SSH runs and retain the full result, including on timeout."""
+    with tempfile.TemporaryFile() as output:
+        with subprocess.Popen(
+            argv,
+            stdin=subprocess.PIPE,
+            stdout=output,
+            stderr=output,
+            env=environment,
+            start_new_session=True,
+        ) as process:
+            try:
+                process.communicate(payload, timeout=timeout)
+            except subprocess.TimeoutExpired:
+                os.killpg(process.pid, signal.SIGKILL)
+                process.wait()
+                code = None
+            else:
+                code = process.returncode
+        output.seek(0)
+        return code, output.read().decode("utf-8", "replace")

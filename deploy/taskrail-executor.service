@@ -1,16 +1,14 @@
 [Unit]
 Description=Taskrail isolated SSH executor
-After=network-online.target
+Requires=taskrail-executor.socket
+After=network-online.target taskrail-executor.socket
 Wants=network-online.target
 
 [Service]
 Type=simple
 User=taskrail-executor
 Group=taskrail-executor
-SupplementaryGroups=taskrail-executor-clients
 ExecStart=/opt/taskrail-executor/deploy/executor-service --client-uid=@CLIENT_UID@
-RuntimeDirectory=taskrail-executor
-RuntimeDirectoryMode=0755
 StateDirectory=taskrail-executor
 StateDirectoryMode=0700
 UMask=0077
@@ -28,9 +26,3 @@ RestrictSUIDSGID=yes
 RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
 CapabilityBoundingSet=
 LockPersonality=yes
-LimitFSIZE=8M
-TasksMax=64
-MemoryMax=512M
-
-[Install]
-WantedBy=multi-user.target

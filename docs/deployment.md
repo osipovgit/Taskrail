@@ -106,7 +106,7 @@ Taskrail can run on a Linux server while you use the browser on your workstation
 Do not publish the port through `0.0.0.0`, a reverse proxy or a firewall rule: the UI
 has no user accounts, and its session token only protects against other websites
 open in your browser. Closing the tunnel or the browser does not stop running tasks.
-Root approval of SSH actions happens in a terminal on the server.
+SSH starts automatically for the installed application account.
 
 ## File locations
 
@@ -358,7 +358,7 @@ deleting configuration, history or code.
 
 The SSH executor is a separate system service with its own user and root-owned
 installation. It is not installed or granted privileges by the ordinary UI updater.
-See [SSH executor](ssh-executor.md) for installation, host keys and approvals.
+See [SSH executor](ssh-executor.md) for installation, host keys and task-selected commands.
 
 ## Clean reinstall of the managed application
 
@@ -394,7 +394,8 @@ Both clean reinstall modes check the ownership of custom history and protect
 project checkouts, linked worktrees, the selected CLI and external provider
 credentials. Mixed history or a deletion path that overlaps a protected input
 blocks the reset. Held locks retain their inodes throughout installation.
-The separate SSH executor keeps its installation and configuration on `--force-update`.
+The SSH executor keeps its installation and configuration on `--force-update`.
+Add `--with-ssh` to install or update and activate it with the application.
 
 ## Reinstall the application and its SSH executor
 
@@ -408,8 +409,8 @@ also requires `sudo` and resets
 its service, code, tickets, inventory/passwords and known host keys. Failure to stop
 the application leaves the executor untouched; failure to stop the executor preserves
 both installations and their data. RUNNING or UNKNOWN
-remote tickets must first be reconciled. The executor is reinstalled disabled;
-configure its inventory and verified host keys again before starting it. Dedicated
+remote tickets must first be reconciled. The executor socket is reinstalled disabled
+unless `--with-ssh` is given. Restore verified host keys before remote connections. Dedicated
 system account/group identities are retained.
 
 ## Run storage updates

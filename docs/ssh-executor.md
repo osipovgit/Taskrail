@@ -1,24 +1,35 @@
 # Isolated SSH and Jenkins executor
 
 The optional executor runs as the dedicated Linux account `taskrail-executor`.
-Taskrail can submit an exact action and observe its result. Only root can approve it.
-The web application and model never receive SSH passwords or the approval right.
+Taskrail can start an SSH script on any selected target using the remote account’s permissions.
+The executor authenticates the local application account. Any process with that account’s socket access can submit SSH work.
+The model, browser and ticket journal receive public target identities. The task
+process opens project inventories as the application user. SSH authentication and
+remote execution run under the executor account.
 
 ## Install and configure
 
-Use a trusted extracted release. Install the normal application as your usual user,
-then install the executor separately:
+From a trusted release, run the application installer as your usual account:
 
 ```sh
-bash deploy/install.sh --wait=3600 --autostart=keep
-sudo bash deploy/install-executor.sh --client="$USER" --autostart=enable
-sudoedit /etc/taskrail-executor/hosts.json
-sudoedit /etc/taskrail-executor/known_hosts
-sudo systemctl start taskrail-executor.service
+bash deploy/install.sh --with-ssh --autostart=yes
 ```
 
-`--autostart=enable|disable|keep` is explicit and never prompts. Enabled means system
-boot, independently of user login. Updates preserve credentials, host keys and
+The installer uses sudo for the system component, starts the Taskrail user service,
+and enables a private socket for that account. Systemd starts the isolated executor
+when Taskrail first contacts the socket. No extra group membership or login is
+required. Check readiness with `taskrail check --ssh`; an empty default host list
+is valid. `systemctl is-active taskrail-executor.socket` reports `active` even
+before the executor handles its first request. The system Python needs PyYAML for project inventories (Debian/Ubuntu:
+`sudo apt install python3-yaml`). Before the first remote connection, add the
+independently verified host keys to `/etc/taskrail-executor/known_hosts` with
+`sudoedit`. Project inventories supply their own targets.
+
+Use the same command to update both components. The ordinary installer also works
+without SSH. For a separate system installation, use
+`sudo bash deploy/install-executor.sh --client="$USER" --autostart=enable`.
+Socket enablement controls activation after boot independently of user login.
+Updates preserve credentials, host keys and
 queued tickets. Installers and resets hold one root-owned lock outside their deletion
 targets, so concurrent maintenance is refused. Packages receive explicit directory
 and file permissions and must import successfully as the executor account before
@@ -32,15 +43,11 @@ prepared beforehand, or deletes the installation. A failed safety check prevents
 package swap or reset; a failure after stopping the service leaves it stopped for
 inspection. A reset never deletes the journal of a running or uncertain action.
 An existing maintenance marker is preserved and requires inspection of the interrupted
-operation before retrying. Startup is left to the explicit command above.
+operation before retrying. The socket only accepts the configured application UID and root through its
+filesystem permissions and the executor verifies the caller's UID independently.
+Installing the socket for a user grants that account the SSH capability. The sudo approval helper handles configured Jenkins builds.
 
-Log out and back in after first installation so your account inherits the
-`taskrail-executor-clients` group, then restart the user application service.
-If the user systemd manager remains alive through logout (lingering), reboot once
-to refresh its groups. Never add the Taskrail account to the private
-`taskrail-executor` group or give it passwordless sudo.
-
-For the default SSH catalog, replace the example in `hosts.json` before starting.
+For the default SSH catalog, configure aliases in `hosts.json`.
 Use `{}` if tasks will only use selected inventories. Default catalog format:
 
 ```json
@@ -58,8 +65,9 @@ Credentials and host keys belong to `root:taskrail-executor`, mode `0640`, insid
 `0750` directory. Obtain and verify host keys through a trusted channel before
 adding them to `known_hosts`; the executor never accepts unknown keys automatically.
 For nonstandard ports use OpenSSH's `[hostname]:port` known-hosts notation.
-After editing `hosts.json`, restart the executor when no actions are
-running; inventory changes are loaded at service startup.
+The executor loads `hosts.json` at startup. After editing that default catalog,
+restart the executor when no actions are running. Task-selected YAML inventories
+are read on demand.
 Each host uses either `password` or `identity_file`. For key authentication, replace
 `password` with the absolute path of an unencrypted private key inside
 `/etc/taskrail-executor/`, owned by `root:taskrail-executor` with mode `0640`:
@@ -73,38 +81,23 @@ The key is offered alone (`IdentitiesOnly`, no agent, no password prompt). Remot
 sudo password handling is not implemented; choose the remote account's permissions
 deliberately.
 
-## Inspect an Ansible group during planning
+## Inspect an Ansible group from a task
 
-Install or update **both** Taskrail and the system executor. The executor's
-system Python needs PyYAML (on Debian/Ubuntu, `sudo apt install python3-yaml`).
-Put a trusted static YAML inventory in the private inventory directory:
+Name the inventory path in the task. Taskrail opens the project file using the
+application account and passes a read-only file descriptor to the executor.
+The executor has no general access to the application's home directory. There is
+no copy to install, mount or synchronize when inventory files change. Different
+directories can have identically named inventories. The planner can select another
+file and group in the same task. Each ticket keeps its own selection.
 
-```sh
-sudo install -o root -g taskrail-executor -m 0640 path/to/cluster.yaml /etc/taskrail-executor/inventories/cluster.yaml
-```
-
-To use files in place, an administrator can instead expose a trusted inventory
-directory read-only inside the executor's service. Run `sudo systemctl edit
-taskrail-executor.service` and add the following drop-in with the **actual
-absolute source path**. The executor account needs read access to the YAML files
-and traversal of the mounted directory. Keep the application's credentials out
-of the drop-in.
-
-```ini
-[Service]
-BindReadOnlyPaths=/absolute/path/to/inventory:/etc/taskrail-executor/inventories
-```
-
-After configuring the mount, reload systemd and start the service (restart it
-if already running and idle). Verify the published aliases as the ordinary
-Taskrail user before submitting a task:
+To check discovery manually, use the actual project path:
 
 ```sh
-taskrail check --ssh --inventory-file cluster.yaml --inventory-group workers
+taskrail check --ssh --inventory-file "/path/to/repo/inventory/cluster.yaml" --inventory-group workers
 ```
 
 This queries the local executor. SSH connectivity and host keys are tested on the
-first approved remote action. To start a task, describe the project inventory path,
+first SSH connection. To start a task, describe the project inventory path,
 group and measurements in the goal. Choose **Discussion** for a report. The same
 goal works in the dashboard and CLI:
 
@@ -115,69 +108,57 @@ taskrail submit --mode discussion --root project=/path/to/repo \
 
 During planning, the model sends the path and group in an `INVENTORY_REQUEST`.
 Taskrail checks the path against the task's roots and authenticated source checkout.
-The executor verifies that its published file has the same contents, resolves
-group membership and returns aliases. No task-form fields or per-host registration
-are needed. Discovery runs locally and contacts no hosts. The binding follows
-the run's checkpoints. Each inspection still requires root approval of the exact
-command and destinations. Changed inventory bytes require a fresh lookup.
+The executor resolves the group and returns public target information. Discovery runs
+locally and contacts no hosts. Checkpoints keep the selected path, group and content
+digest. On a new SSH request, Taskrail supplies the file again. The executor checks
+the digest, expands the selected aliases and records the request before opening a connection.
+If the file changed or disappeared, the agent receives a discovery error and can repeat the lookup.
+The SSH route returns public identities and removes known inventory passwords
+from captured command output before recording it.
 
-Taskrail masks the published inventory filenames in project reads when the
-executor is available at startup. Also put credential file paths in
-`protected_paths` when the executor may be offline or the files have other names.
+Before capturing the project, Taskrail checks the working file, the staged
+version and the current commit for Ansible password fields in each task-named
+YAML file. It checks both the source checkout and the task worktree, even when
+the executor is offline. For example, protecting `inventory/main.yaml` leaves
+`roles/web/tasks/main.yaml` available. Child tasks and continuations inherit
+these protections. Use `protected_paths` for other credential files in the
+repository. Administrators can still publish
+private inventories in `/etc/taskrail-executor/inventories` for catalog checks
+by filename.
 
-Use an ordinary YAML file (up to 8 MiB) with explicit host aliases, group
+Use an ordinary YAML file with explicit host aliases, group
 `hosts`, `children` and inline `vars`. Connections use literal SSH username,
 password, host (defaults to the alias), and port (defaults to 22). Nested groups
 inherit variables, with host settings taking precedence. Dynamic inventory
 plugins, host ranges, external variable files, Vault, templated credentials and
-SSH proxy options are outside this static format. This mode supports only
-read-only inspection commands, with at most 16 hosts per ticket. For example,
-50 hosts need four approved tickets for a single command. Each ticket records
-its own output. Use `df -PT` for disk usage, `uptime` for load averages and
-`systemctl list-units --type=service --state=running --no-pager` for services.
-For sampled CPU utilization use the second data row from `vmstat 1 2`.
+SSH proxy options are outside this static format.
 
-## Use from a task
+## Run commands
 
-Specify target **aliases**, the goal, expected checks and constraints. Do not put
-passwords in task text or project files. With the service installed, stage prompts
-include the available aliases and the `ACTION_REQUEST` contract. The agent can
-request a script plus a text-file bundle. Every remote action, including inspection,
-waits for personal approval. Direct shell tools remain disabled. Before you confirm a
-code change, planning and review may only inspect servers and the implementer cannot
-use SSH at all; actions that check or change servers run in the server-check step after
-**Confirm changes** ([delivery](task-controls.md#delivery-of-a-code-change)).
+The planner, implementer and reviewers can send an `ACTION_REQUEST` in their existing
+session. Use `"targets": "all"` for every host in the selected group or default catalog.
+An array selects particular aliases. Large group lists are saved in a readable file
+referenced by the stage prompt. One request covers the whole group regardless of size.
 
-The server enforces this, whatever the model writes. Until a confirmed change's
-server-check run (its task names the change, whose record shows your confirmation and
-that run), an action is exactly one listed read-only command without files: for
-example `cat`, `grep`, `find` without `-exec` or `-delete`, `journalctl` without
-`--follow` or vacuuming, `systemctl status` and other read operations, `docker ps`,
-`inspect` or `logs`, optionally through `sudo`. Its arguments are quoted again, so
-pipes, redirects, globs and variables stay literal; anything else is refused before a
-ticket exists, and the session is told why.
-
-The UI shows the exact script, bundled files, connection targets and ticket ID.
-Review them, then run the command displayed by the UI:
-
-```sh
-sudo -k /usr/local/bin/taskrail-executor-approve TICKET_ID
-# To reject an incorrect request:
-sudo -k /usr/local/bin/taskrail-executor-approve --reject TICKET_ID
+```json
+{"schema_version":1,"status":"ACTION_REQUEST","action":{"targets":"all","script":"df -PT; uptime; vmstat 1 2","files":{},"reason":"Collect disk usage, load averages and sampled CPU utilization"}}
 ```
 
-The helper displays the immutable request and requires its full digest. There is
-no `--yes` option and no approval endpoint usable by the application account.
-Approval covers one exact script, bundle and set of SSH targets. Changing them
-requires a new ticket and approval. This protects executor-owned credentials;
-it does not sandbox your local account or override any other SSH/root access it
-already has. Protection depends on the OS account separation and your sudo policy.
+The agent chooses the remote shell commands, pipelines and text files according to
+the user's task. For diagnostics, ask it to collect measurements without changing the hosts.
+The remote account’s permissions determine what its commands can actually do. Use a
+read-only account when the infrastructure must enforce that property.
 
-Once approved, targets execute sequentially. On the first failure, remaining targets
-are not executed. Results return to the same stage, which may request a separate
-verification action or finish its report. Each additional action needs approval.
-Continuation turns remain inside one stage and session; waiting itself does
-not consume model tokens. Local commands use the separate [local command policy](access.md#local-commands).
+The executor starts immediately, records each host’s output and exit status, and
+continues to the remaining hosts after failures or disconnections. A disconnect gives
+`UNKNOWN` for that host. Any uncertain host makes the overall result uncertain. Each
+request may specify a positive `timeout_seconds` per host. Omitting it leaves the
+remote command without a Taskrail execution deadline. SSH still times out failed
+connection attempts. Very long-running commands delay subsequent hosts in the same group.
+
+The task shows the script, files, ticket and observed outcomes. The same agent can
+investigate a failed host or request a new measurement. Local tools use the
+[local command policy](access.md#local-commands).
 
 ## Jenkins
 
@@ -228,7 +209,7 @@ Agents return `JENKINS_REQUEST` ([contract](contracts.md#executor-requests)):
 | `status` | Number, result, running state and timing of `"last"` or a numbered build | UI (covered by Allow all actions) |
 | `console` | The last 32,000 bytes of the console log | UI (covered by Allow all actions) |
 | `tests` | Pass, fail and skip counts with up to 100 failed cases | UI (covered by Allow all actions) |
-| `build` | Starts one build, waits up to `timeout_seconds` for its result and console tail | Root, like SSH; none for a job with `"approval": "none"` |
+| `build` | Starts one build, waits up to `timeout_seconds` for its result and console tail | Root; automatic for a job with `"approval": "none"` |
 
 A job with `"approval": "none"` gets an executor ticket like any build, and the
 executor approves it on submission against the same digest and identity checks; the
@@ -245,19 +226,19 @@ retried automatically.
 
 The action's `files` object snapshots UTF-8 files, including playbooks, roles,
 inventories and included files. Paths must be relative and cannot escape the bundle.
-Review all dependencies; do not rely on unreviewed downloads or mutable remote files.
+Include the dependencies needed to reproduce the script.
 The executor creates a private temporary directory on each SSH target, writes that
 bundle, runs its script with `/bin/sh`, then removes that directory. Creation and
-cleanup are part of the displayed, approved transport script. No bundle means the
+cleanup are part of the SSH transport. No bundle means the
 script is passed directly to the remote shell.
 
 Ansible can run **on a configured remote controller** where Ansible and its managed
 host credentials already exist. Include the playbook and its non-secret dependencies
-in the bundle and use an explicit inventory and arguments in the approved script.
+in the bundle and use an explicit inventory and arguments in the submitted script.
 Ansible is not run locally under the credential-owning executor account. The SSH
 inventory covers the controller connection, not every host reached by a playbook.
 Review Ansible inventory, includes, roles, delegation and local actions together:
-`--limit` is not a security boundary. An approved script can affect other resources
+`--limit` is not a security boundary. A submitted script can affect other resources
 reachable from its remote account; the executor is not a remote network sandbox.
 
 ## Interruption and evidence
@@ -265,11 +246,11 @@ reachable from its remote account; the executor is not a remote network sandbox.
 A timeout, transport failure or daemon restart during execution yields `UNKNOWN`:
 the remote process may still be running. No automatic replay or rollback occurs.
 Inspect the server before a new request. Stopping a task saves its workflow checkpoint;
-it does **not** cancel an already approved remote command. Continue observes the
-same ticket instead of submitting it again. Rejection stops the workflow for revision.
+remote commands can continue running. Continue observes the same ticket and returns
+any completed host results to the agent.
 
 Run artifacts contain `remote-execution.json`, UI action cards and a report section. They
-record targets, payload, approval digest, statuses and bounded output. Captured known
+record targets, payload, statuses, exit codes and SSH output. Captured known
 passwords are redacted, but arbitrary remote output can still contain other secrets:
 do not request secret dumps. Server tickets remain in `/var/lib/taskrail-executor`, owned
 by the executor; application history deletion does not delete them.
@@ -282,7 +263,7 @@ independent review agrees; otherwise it stays deferred.
 Diagnostics:
 
 ```sh
-sudo systemctl status taskrail-executor.service
+systemctl status taskrail-executor.socket taskrail-executor.service
 sudo journalctl -u taskrail-executor.service
 cd ~/.local/share/taskrail/current
 python3 -m taskrail.executor catalog
@@ -291,14 +272,6 @@ python3 -m taskrail.executor status TICKET_ID
 
 Run these from the installed release (as shown) or a source checkout so Python
 finds the package. The command line only shows the catalog and ticket status; it has
-no `submit`. Tickets come from task stages, where the server decides whether an action
-may only inspect. That decision is made by the application, not the executor: a
-process running as the application account can still reach the socket, so your root
-review of each ticket's exact script remains the boundary. Repeating the same key
-and payload returns the same job without replay. Within a task, each request gets its
-own key, so repeating an identical check after a change runs it again (after a new
-approval) instead of returning the earlier result. If the executor
-is briefly unreachable while a task waits, the task keeps asking about the same
-ticket. Limits: 16 targets, 200 text files, 512 KiB request, 3600 seconds per target,
-and the last 32,000 bytes of output per target; output is streamed, so a larger log
-is truncated rather than failing the transport. Binary bundles are not supported.
+no `submit`. Each workflow request has its own durable key. Resending it after a
+lost response returns the existing ticket. A new agent message can request a fresh
+measurement. The task receives a bounded preview with a path to the full evidence.

@@ -4,31 +4,27 @@ import json
 
 from taskrail.application import delivery_confirmation, jenkins_requests, remote_catalog
 from taskrail.core import delivery_record, json_response, prompt_texts, schema
-from taskrail.executor import action_schema, inventory, remote_inspection
+from taskrail.core.files import digest
+from taskrail.executor import action_schema
+from taskrail.interactions.output_preview import immutable_text
 
-INSPECT = "inspect"
 SERVER = "server"
+INLINE_TARGET_CHARS = 512
 
 
-def instructions(config, stage, run, catalog):
+def instructions(catalog, run):
     """Advertise remote routes and their examples from the same catalog snapshot."""
     unavailable = catalog.get(remote_catalog.UNAVAILABLE)
     if unavailable:
         detail = remote_catalog.unavailable(catalog)
-        if (
-            unavailable in {"routes.inventory.retry", "routes.ssh.inventory_error"}
-            and stage != "implementer"
-        ):
+        if unavailable in {"routes.inventory.retry", "routes.ssh.inventory_error"}:
             return "{}\n{}".format(detail, prompt_texts.text("routes.inventory"))
-        return detail
-    routes = [
-        prompt_texts.text("routes.inventory")
-        if catalog.get("inventory_lookup") and stage != "implementer"
-        else "",
-        ssh_instructions(
-            catalog.get("hosts"),
-            server_scope(config, stage, run, selected=catalog.get(inventory.KEY)),
+        return "\n".join(
+            filter(None, (detail, jenkins_requests.instructions(catalog.get("jenkins"))))
         )
+    routes = [
+        prompt_texts.text("routes.inventory") if catalog.get("inventory_lookup") else "",
+        ssh_instructions(catalog.get("hosts"), run)
         if catalog.get("hosts") or not catalog.get("inventory_lookup")
         else "",
         jenkins_requests.instructions(catalog.get("jenkins")),
@@ -36,50 +32,27 @@ def instructions(config, stage, run, catalog):
     return "\n\n".join(filter(None, routes))
 
 
-def server_scope(config, stage, run, selected=None):
-    """What server actions may do in this stage; None when they are unavailable."""
-    mode = remote_mode(run, config, stage)
-    if mode is None:
-        return None
-    if mode == SERVER and not selected:
-        return prompt_texts.text("routes.ssh.server")
-    return prompt_texts.text("routes.ssh.inspect", commands=remote_inspection.listed())
-
-
-def remote_mode(run, config, role):
-    """What the SSH route allows, decided by the server, never by the model.
-
-    server: this is the server check run of a change the operator confirmed; inspect:
-    one read-only command per action; None: no server actions while implementing.
-    """
-    if role == "implementer":
-        return None
+def verify_delivery(run, config):
+    """Deferred server-check phases require the authenticated delivery record."""
+    if config.get("phase") != SERVER:
+        return
     change = config.get("confirmed_change")
-    if config.get("phase") == SERVER and delivery_record.server_checks_confirmed(run, change):
-        delivery_confirmation.verify(run.parent / change)
-        return SERVER
-    return INSPECT
+    confirmed = delivery_record.server_checks_confirmed(run, change)
+    schema.require(confirmed, "Server checks require confirmed changes")
+    delivery_confirmation.verify(run.parent / change)
 
 
-def server_authorized(run, config):
-    """Every remote kind in a server phase retains the confirmed delivery boundary."""
-    mode = remote_mode(run, config, "reviewer")
-    schema.require(mode == SERVER, "Server checks require confirmed changes")
-
-
-def ssh_instructions(targets, scope):
-    """The ACTION_REQUEST contract and the configured targets, or nothing without targets."""
+def ssh_instructions(targets, run):
     if not targets:
         return prompt_texts.text("routes.ssh.empty")
-    if scope is None:
-        return prompt_texts.text("routes.ssh.implementing")
-    return prompt_texts.text(
-        "routes.ssh",
-        scope=scope,
-        targets=json.dumps(list(targets)),
-        target=json.dumps(next(iter(targets))),
-        limit=action_schema.MAX_TARGETS,
-    )
+    names = sorted(targets)
+    summary = json.dumps(names)
+    if len(summary) > INLINE_TARGET_CHARS:
+        body = "\n".join([*names, ""])
+        path = run / "00-input/remote" / f"aliases-{digest(body.encode())}.txt"
+        immutable_text(path, body)
+        summary = prompt_texts.text("routes.ssh.aliases", count=len(names), path=path)
+    return prompt_texts.text("routes.ssh", targets=summary)
 
 
 def extract(response):

@@ -27,8 +27,9 @@ Read [access routes](docs/access.md) before deployment. In short:
   code executed by local commands runs under the configured sandbox or host policy.
 - Local commands receive a filtered environment. The opencode process also receives
   the allowlisted provider variables and any explicit `agent_env_allow` additions.
-- SSH actions require root approval of the exact request digest. Jenkins uses
-  the same executor and its per-job build approval settings.
+- The configured application UID can run arbitrary SSH scripts on selected hosts with
+  the inventory account’s permissions. Task prohibitions guide the agent. An enforced
+  read-only boundary requires a read-only remote account. Jenkins uses per-job approval.
 
 Reports that depend on running hostile project content, granting an untrusted local
 user access to your account, or approving a malicious command are outside this

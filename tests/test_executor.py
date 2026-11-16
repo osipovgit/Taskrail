@@ -1,7 +1,5 @@
 """Executor authority, immutable approvals and recovery tests; no real SSH."""
 
-import contextlib
-import copy
 import io
 import json
 import struct
@@ -10,33 +8,26 @@ import tempfile
 import threading
 import time
 import unittest
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
-from run_fixture import current_run
-
 from taskrail.application import (
-    delivery_confirmation,
     execution_requests,
     execution_wait,
     remote_catalog,
 )
-from taskrail.application.source_guard import SourceGuard
-from taskrail.core import prompt_texts
-from taskrail.core.files import atomic_json
 from taskrail.executor import (
     action_schema,
     client,
     hosts,
     protocol,
-    remote_inspection,
-    streams,
     transport,
     worker,
 )
 from taskrail.executor.service import ExecutorServer
-from taskrail.executor.store import TicketStore
+from taskrail.executor.store import TicketStore, record_target
 from taskrail.interactions import remote
 
 INVENTORY = {
@@ -53,30 +44,6 @@ ACTION = dict(
 
 
 class ExecutorTest(unittest.TestCase):
-    def test_inspection_uses_known_command_options_even_after_find_separator(self):
-        for script in (
-            "find -- . -delete",
-            "find -- . -exec touch marker ';'",
-            "find -- . -fprint result.txt",
-            "find . -unknown",
-            "journalctl --unknown",
-            "ss --kill",
-            "systemctl -- status nginx --now",
-            "docker logs --follow app",
-            "head --unknown file",
-        ):
-            with self.subTest(script=script), self.assertRaises(ValueError):
-                remote_inspection.inspection(dict(ACTION, script=script))
-        for script in (
-            "find -- . -maxdepth 2 -name '*.log' -print",
-            "sudo -n systemctl status nginx --no-pager",
-            "journalctl -u nginx --since yesterday --no-pager",
-            "docker logs --tail 20 app",
-            "ps -eo pid,args",
-        ):
-            with self.subTest(script=script):
-                self.assertTrue(remote_inspection.inspection(dict(ACTION, script=script)))
-
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory()
         self.addCleanup(self.temporary.cleanup)
@@ -84,57 +51,33 @@ class ExecutorTest(unittest.TestCase):
         self.store = TicketStore(self.root / "tickets")
 
     def submit(self, action=None, key="request-1"):
-        return self.store.submit(
-            dict(operation="submit", key=key, action=copy.deepcopy(action or ACTION)), INVENTORY
+        server = self.server()
+        return server.dispatch(
+            dict(operation="run-ssh", key=key, action=action or ACTION), server.client_uid
         )
 
-    def test_submit_is_idempotent_and_does_not_execute(self):
-        with patch.object(transport, "execute") as execute:
-            first = self.submit()
-            self.assertEqual(first, self.submit())
-            execute.assert_not_called()
-        self.assertEqual(first["status"], "PENDING_APPROVAL")
-        self.assertNotIn(INVENTORY["server-a"]["password"], json.dumps(first))
+    def test_concurrent_delivery_starts_one_worker(self):
+        with patch.object(worker, "launch", return_value={"status": "RUNNING"}) as launch:
+            with ThreadPoolExecutor(2) as pool:
+                responses = list(pool.map(lambda _: self.submit(), range(2)))
+            self.assertTrue(all(reply["status"] == "RUNNING" for reply in responses))
+        launch.assert_called_once()
+        self.assertNotIn(INVENTORY["server-a"]["password"], json.dumps(launch.call_args.args[1]))
 
-    def test_ambiguous_submission_and_an_untyped_ticket_never_start_a_worker(self):
+    def test_invalid_or_obsolete_submissions_never_start_a_worker(self):
         server = self.server()
-        with patch.object(threading.Thread, "start") as start:
-            for fields in (
-                {},
-                {"action": ACTION, "jenkins": {}},
-                {"kind": "ssh", "action": ACTION},
-            ):
-                request = dict(operation="submit", key="ambiguous", **fields)
-                with self.subTest(fields), self.assertRaisesRegex(ValueError, "exactly one"):
-                    server.dispatch(request, server.client_uid)
-            self.assertEqual(list(self.store.directory.iterdir()), [])
-            ticket = self.submit()
-            ticket.pop("kind")
-            self.store.save(ticket)
-            request = dict(operation="approve", id=ticket["id"], digest=ticket["digest"])
-            with self.assertRaisesRegex(ValueError, "executor ticket kind"):
-                server.dispatch(request, 0)
-            self.assertEqual(self.store.get(ticket["id"])["status"], "PENDING_APPROVAL")
-            start.assert_not_called()
-
-    def test_exact_digest_and_single_use_approval(self):
-        ticket = self.submit()
-        with self.assertRaises(ValueError):
-            self.store.approve(ticket["id"], "wrong", INVENTORY)
-        approved = self.store.approve(ticket["id"], ticket["digest"], INVENTORY)
-        self.assertEqual(approved["status"], "RUNNING")
-        with self.assertRaises(ValueError):
-            self.store.approve(ticket["id"], ticket["digest"], INVENTORY)
-
-    def test_changes_require_new_approval(self):
-        first = self.submit()
-        updated = dict(ACTION, script="uname -r\n")
-        second = self.submit(updated)
-        self.assertNotEqual(first["digest"], second["digest"])
-        changed_hosts = copy.deepcopy(INVENTORY)
-        changed_hosts["server-a"]["hostname"] = "192.0.2.20"
-        with self.assertRaises(ValueError):
-            self.store.approve(first["id"], first["digest"], changed_hosts)
+        cases = [
+            dict(operation="run-ssh", action=ACTION, jenkins={}),
+            dict(operation="run-ssh", kind="ssh", action=ACTION),
+            dict(operation="submit", action=ACTION),
+            dict(operation="run-ssh", jenkins={}),
+        ]
+        with patch.object(worker, "launch") as launch:
+            for payload in cases:
+                with self.subTest(payload=payload), self.assertRaises(ValueError):
+                    server.dispatch(dict(payload, key="one"), server.client_uid)
+            launch.assert_not_called()
+        self.assertFalse(list(self.store.directory.iterdir()))
 
     def server(self):
         server = object.__new__(ExecutorServer)
@@ -143,53 +86,59 @@ class ExecutorTest(unittest.TestCase):
         server.store = self.store
         return server
 
-    def test_application_uid_cannot_approve(self):
-        server = self.server()
-        ticket = server.dispatch(dict(operation="submit", key="one", action=ACTION), 1000)
-        with patch.object(threading.Thread, "start") as start:
-            with self.assertRaises(ValueError):
-                server.dispatch(
-                    dict(operation="approve", id=ticket["id"], digest=ticket["digest"]), 1000
-                )
-            start.assert_not_called()
-        with self.assertRaises(ValueError):
-            server.dispatch(dict(operation="catalog"), 1001)
-
     def test_wire_handler_uses_kernel_peer_uid(self):
         server = self.server()
         connection = MagicMock()
+        connection.recvmsg.return_value = (b"{", [], 0, None)
         connection.getsockopt.return_value = struct.pack("3i", 123, 1000, 1000)
-        connection.makefile.return_value = io.BytesIO(b'{"operation":"catalog"}\n')
+        connection.makefile.return_value = io.BytesIO(b'"operation":"catalog"}\n')
         server.finish_request(connection, None)
         response = json.loads(connection.sendall.call_args.args[0])
         self.assertEqual(response["hosts"]["server-a"]["hostname"], "192.0.2.10")
         self.assertNotIn("password", json.dumps(response))
         connection.getsockopt.return_value = struct.pack("3i", 123, 1001, 1001)
-        connection.makefile.return_value = io.BytesIO(b'{"operation":"catalog","uid":0}\n')
+        connection.makefile.return_value = io.BytesIO(b'"operation":"catalog","uid":0}\n')
         server.finish_request(connection, None)
         self.assertIn("error", json.loads(connection.sendall.call_args.args[0]))
 
     def test_restart_marks_running_unknown_and_never_replays(self):
-        ticket = self.submit()
-        self.store.approve(ticket["id"], ticket["digest"], INVENTORY)
-        with patch.object(transport, "execute") as execute:
+        with patch.object(threading.Thread, "start") as start:
+            ticket = self.submit()
+            record_target(
+                self.store.directory,
+                ticket["id"],
+                0,
+                {"target": "server-a", "status": "SUCCEEDED", "output": "done"},
+            )
             self.store.recover()
-            execute.assert_not_called()
-        self.assertEqual(self.store.get(ticket["id"])["status"], "UNKNOWN")
-        self.assertEqual(self.submit()["status"], "UNKNOWN")
+            saved = self.submit()
+            start.assert_called_once()
+        self.assertEqual(saved["status"], "UNKNOWN")
+        self.assertEqual(saved["results"][0]["output"], "done")
 
-    def test_failed_target_stops_and_redacts_all_configured_passwords(self):
-        ticket = self.submit(dict(ACTION, targets=["server-a", "server-b"]))
-        ticket = self.store.approve(ticket["id"], ticket["digest"], INVENTORY)
+    def test_uncertain_host_and_failed_host_do_not_skip_later_hosts(self):
+        server = self.server()
+        server.configs["ssh"] = dict(INVENTORY, third=INVENTORY["server-b"])
         failure = dict(
-            status="FAILED", output="private-test-password other-private-password", truncated=False
+            status="FAILED", output="private-test-password other-private-password", exit_code=1
         )
-        with patch.object(transport, "execute", return_value=failure) as execute:
-            worker.perform(self.store, ticket, INVENTORY)
-            self.assertEqual(execute.call_count, 1)
+        success = dict(status="SUCCEEDED", output="ok", exit_code=0)
+        with (
+            patch.object(threading.Thread, "start", lambda thread: thread.run()),
+            patch.object(
+                transport, "execute", side_effect=[OSError(), failure, success]
+            ) as execute,
+        ):
+            ticket = server.dispatch(
+                dict(operation="run-ssh", key="group", action=dict(ACTION, targets="all")), 1000
+            )
         stored = self.store.get(ticket["id"])
-        self.assertEqual(stored["status"], "FAILED")
-        self.assertEqual(stored["results"][0]["output"], "[REDACTED] [REDACTED]")
+        self.assertEqual(execute.call_count, 3)
+        self.assertEqual(stored["status"], "UNKNOWN")
+        self.assertEqual(
+            [row["status"] for row in stored["results"]], ["UNKNOWN", "FAILED", "SUCCEEDED"]
+        )
+        self.assertEqual(stored["results"][1]["output"], "[REDACTED] [REDACTED]")
 
     def test_ssh_does_not_inherit_agent_password_or_config_in_argv(self):
         argv = transport.command(INVENTORY["server-a"])
@@ -238,7 +187,7 @@ class ExecutorTest(unittest.TestCase):
         ):
             with self.subTest(path=path), self.assertRaises(ValueError):
                 action_schema.validate(dict(ACTION, files={path: "text"}))
-        for timeout in (True, -1, 0, 3601, "30"):
+        for timeout in (True, -1, 0, "30"):
             with self.subTest(timeout=timeout), self.assertRaises(ValueError):
                 action_schema.validate(dict(ACTION, timeout_seconds=timeout))
         with self.assertRaises(ValueError):
@@ -246,11 +195,27 @@ class ExecutorTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             action_schema.validate(dict(ACTION, surprise=True))
 
+    def test_ssh_has_no_fixed_command_deadline_or_payload_quota(self):
+        action = dict(
+            ACTION,
+            targets=[f"node-{i}" for i in range(80)],
+            files={f"data/{i}": "" for i in range(220)},
+            script="x" * 600000,
+            timeout_seconds=86400,
+        )
+        self.assertEqual(action_schema.validate(action), action)
+        del action["timeout_seconds"]
+        self.assertEqual(action_schema.validate(action), action)
+        with patch("taskrail.executor.streams.execute", return_value=(0, "ok")) as execute:
+            transport.execute(INVENTORY["server-a"], action)
+        self.assertIsNone(execute.call_args.args[-1])
+
     def test_bundle_snapshot_has_no_local_file_references(self):
         action = dict(
             ACTION, files={"roles/main.yml": "- debug: msg=hello\n"}, script="cat roles/main.yml\n"
         )
-        ticket = self.submit(action)
+        with patch.object(threading.Thread, "start"):
+            ticket = self.submit(action)
         action["files"]["roles/main.yml"] = "changed"
         saved = self.store.get(ticket["id"])["action"]
         self.assertEqual(saved["files"]["roles/main.yml"], "- debug: msg=hello\n")
@@ -259,67 +224,30 @@ class ExecutorTest(unittest.TestCase):
         self.assertIn("base64 -d", script)
         self.assertIn("/bin/sh ./action.sh", script)
 
-    def test_protocol_size_limits_and_invalid_messages(self):
-        for raw in (b"{}", b"[]\n", b"x" * (protocol.MAX_MESSAGE + 2)):
+    def test_protocol_reads_complete_large_frames_and_rejects_invalid_messages(self):
+        large = {"script": "x" * (2 * 1024 * 1024)}
+        self.assertEqual(protocol.receive(io.BytesIO(protocol.encode(large))), large)
+        for raw in (b"{}", b"[]\n", b'{"x": 1, "x": 2}\n'):
             with self.assertRaises(ValueError):
                 protocol.receive(io.BytesIO(raw))
-        with self.assertRaises(ValueError):
-            protocol.encode(dict(text="x" * protocol.MAX_MESSAGE))
         for name in ("../escape", "", "-option", "x/y"):
             with self.assertRaises(ValueError):
                 self.store.get(name)
 
-    def test_server_actions_inspect_before_confirmation_and_never_implement(self):
-        targets = {"web": {"hostname": "192.0.2.10"}}
-        run = self.root / "server-check"
-        server = {"phase": "server", "confirmed_change": "change"}
-        inspect_only = execution_requests.server_scope({}, "planner", run)
-        self.assertIn("one literal read-only command", inspect_only)
-        self.assertIn("systemctl status|show", inspect_only)
-        self.assertIsNone(execution_requests.server_scope({}, "implementer", run))
-        self.assertEqual(execution_requests.server_scope(server, "planner", run), inspect_only)
-        self.confirm_server_checks(run)
-        confirmed = execution_requests.server_scope(server, "planner", run)
-        self.assertEqual(confirmed, prompt_texts.text("routes.ssh.server"))
-        planning = execution_requests.ssh_instructions(targets, inspect_only)
-        example = planning.split("Example ACTION_REQUEST: ", 1)[1]
-        action = execution_requests.extract(example)
-        self.assertIn(action["targets"][0], targets)
-        self.assertEqual(remote_inspection.inspection(action)["script"], "hostname\n")
-        implementing = execution_requests.ssh_instructions(targets, None)
-        self.assertNotIn("ACTION_REQUEST", implementing)
-        session = self.session(run, "implementer", server)
-        refused = prompt_texts.text("feedback.ssh_refused")
-        self.assertEqual(remote.consume(session, self.request("uname -a\n")), refused)
-        self.assertEqual(execution_wait.read(run), [])
-
-    def test_a_changing_script_never_runs_before_the_change_is_confirmed(self):
-        run = self.root / "server-check"
-        server = {"phase": "server", "confirmed_change": "change"}
-        restart = self.request("systemctl restart nginx\n")
-        for config in ({}, server):
-            for script in ("systemctl restart nginx\n", "cat /etc/hosts; rm -rf /tmp/x\n"):
-                with self.subTest(config=config, script=script):
-                    answer = remote.consume(
-                        self.session(run, "planner", config), self.request(script)
-                    )
-                    self.assertIn("Nothing was executed", answer)
-        self.assertEqual(execution_wait.read(run), [])
+    def test_every_project_stage_can_submit_an_agent_selected_pipeline(self):
+        run = self.root / "inspection"
+        script = "kubectl get pods -A | sort; ceph -s"
         with (
             patch.object(remote_catalog, "available", return_value={"hosts": INVENTORY}),
             patch.object(execution_wait, "resume", return_value="observed"),
-            patch.object(remote, "ApprovalPause", return_value=contextlib.nullcontext()),
         ):
-            reading = self.request("systemctl status nginx --no-pager\n")
-            self.assertEqual(remote.consume(self.session(run, "reviewer", {}), reading), "observed")
-            self.confirm_server_checks(run)
-            self.assertEqual(
-                remote.consume(self.session(run, "planner", server), restart), "observed"
-            )
-        submitted = [entry["request"]["action"]["script"] for entry in execution_wait.read(run)]
-        self.assertEqual(
-            submitted, ["systemctl status nginx --no-pager\n", "systemctl restart nginx\n"]
-        )
+            for role in ("planner", "plan-reviewer", "implementer", "reviewer"):
+                self.assertEqual(
+                    remote.consume(self.session(run, role, {}), self.request(script)), "observed"
+                )
+        entries = execution_wait.read(run)
+        self.assertEqual([e["request"]["operation"] for e in entries], ["run-ssh"] * 4)
+        self.assertTrue(all(e["request"]["action"]["script"] == script for e in entries))
 
     def test_missing_inspection_capability_returns_feedback_before_a_ticket_exists(self):
         run = self.root / "inspection"
@@ -335,25 +263,6 @@ class ExecutorTest(unittest.TestCase):
             ):
                 self.assertIn(detail, remote.consume(session, self.request("df -P")))
                 self.assertEqual(execution_wait.read(run), [])
-
-    def confirm_server_checks(self, run):
-        change = run.parent / "change"
-        change.mkdir(parents=True, exist_ok=True)
-        source = self.root / "source"
-        source.mkdir(exist_ok=True)
-        (source / "source.txt").write_text("Reviewed source\n")
-        guard = SourceGuard({"project": source})
-        guard.capture()
-        atomic_json(
-            change / "run.json", current_run(dict(roots={"project": str(source)}, results={}))
-        )
-        atomic_json(
-            change / "checkpoint.json",
-            current_run(dict(expected=guard.expected, git_before=guard.git_before)),
-        )
-        record = dict(confirmed=1.0, phases=dict(server=run.name))
-        record[delivery_confirmation.INPUTS] = delivery_confirmation.capture(change, change, record)
-        (change / "epic.json").write_text(json.dumps(record))
 
     def session(self, run, role, config):
         folder = run / "01-plan"
@@ -413,33 +322,17 @@ class ExecutorTest(unittest.TestCase):
         self.assertEqual(request.call_args_list[0], request.call_args_list[1])
         self.assertEqual(pause.call_count, 1)
 
-    def test_unknown_action_cannot_be_blindly_resumed(self):
+    def test_unknown_ssh_outcome_returns_to_the_model_without_replay(self):
         run = self.root / "run"
         folder = run / "01-plan"
         folder.mkdir(parents=True)
         execution_wait.submit(run, folder, execution_wait.ssh_request(ACTION))
-        with (
-            patch.object(client, "request", return_value=dict(status="UNKNOWN")),
-            self.assertRaisesRegex(ValueError, "UNKNOWN"),
-        ):
-            execution_wait.resume(run, {"attempts": []})
-
-    def test_rejection_is_terminal_and_never_executes(self):
-        ticket = self.submit()
-        rejected = self.store.reject(ticket["id"], ticket["digest"])
-        self.assertEqual(rejected["status"], "REJECTED")
-        with self.assertRaises(ValueError):
-            self.store.approve(ticket["id"], ticket["digest"], INVENTORY)
-
-    def test_root_approval_launches_once(self):
-        server = self.server()
-        ticket = self.submit()
-        request = dict(operation="approve", id=ticket["id"], digest=ticket["digest"])
-        with patch.object(threading.Thread, "start") as start:
-            self.assertEqual(server.dispatch(request, 0)["status"], "RUNNING")
-            with self.assertRaises(ValueError):
-                server.dispatch(request, 0)
-            self.assertEqual(start.call_count, 1)
+        with patch.object(
+            client, "request", return_value=dict(id="ticket", status="UNKNOWN", results=[])
+        ) as request:
+            for _ in range(2):
+                self.assertIn("UNKNOWN", execution_wait.resume(run, {"attempts": []}))
+            request.assert_called_once()
 
     def test_timeout_and_disconnect_are_unknown(self):
         local = patch.object(transport, "command", return_value=["/bin/sh", "-s"])
@@ -449,20 +342,17 @@ class ExecutorTest(unittest.TestCase):
             outcome = transport.execute(INVENTORY["server-a"], slow)
         self.assertEqual((outcome["status"], outcome["exit_code"]), ("UNKNOWN", None))
         self.assertLess(time.monotonic() - started, 10)
-        tail = streams.OutputTail()
         for code, expected in ((255, "UNKNOWN"), (-25, "UNKNOWN"), (0, "SUCCEEDED"), (1, "FAILED")):
-            outcome = transport.captured(tail, code)
+            outcome = transport.captured("", code)
             self.assertEqual(outcome["status"], expected)
             self.assertEqual(outcome["exit_code"], code)
 
-    def test_large_output_keeps_a_bounded_tail(self):
-        # Output far beyond the service file-size limit is streamed, never spooled to disk.
+    def test_large_output_is_preserved_with_its_exit_code(self):
         script = "head -c 9000000 /dev/zero | tr '\\0' x\necho END\nexit 3\n"
         with patch.object(transport, "command", return_value=["/bin/sh", "-s"]):
             outcome = transport.execute(INVENTORY["server-a"], dict(ACTION, script=script))
         self.assertEqual((outcome["status"], outcome["exit_code"]), ("FAILED", 3))
-        self.assertTrue(outcome["truncated"])
-        self.assertEqual(len(outcome["output"]), streams.OUTPUT_LIMIT)
+        self.assertEqual(len(outcome["output"]), 9000004)
         self.assertTrue(outcome["output"].endswith("xEND\n"))
 
     def test_complete_bundle_executes_only_in_temporary_directory(self):

@@ -1,5 +1,6 @@
 """Discover the selected executor targets without exposing authentication data."""
 
+from taskrail.application import inventory_sources
 from taskrail.core import prompt_texts
 from taskrail.executor import client, inventory
 
@@ -18,6 +19,16 @@ def available(selection=None):
         return {UNAVAILABLE: "routes.ssh.inventory_error", "detail": str(error)}
     except (OSError, ValueError) as error:
         return {UNAVAILABLE: reason(error)}
+    return compatible_catalog(catalog, selection)
+
+
+def compatible_catalog(catalog, selection):
+    if catalog.get("ssh_execution") != "automatic":
+        return {
+            UNAVAILABLE: "routes.ssh.update",
+            "inventory_files": catalog.get("inventory_files", []),
+            "jenkins": catalog.get("jenkins", {}),
+        }
     if selection and catalog.get(inventory.KEY) != selection:
         return {UNAVAILABLE: "routes.ssh.update"}
     return catalog
@@ -40,6 +51,7 @@ def protect_sources(config):
     """Mask published credential filenames before capturing project files."""
     published = available().get("inventory_files", [])
     protected = config["protected_paths"]
+    protected.extend(name for name in inventory_sources.named(config) if name not in protected)
     protected.extend(
         name
         for name in published

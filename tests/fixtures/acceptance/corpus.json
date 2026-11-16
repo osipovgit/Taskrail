@@ -35,7 +35,7 @@
       "goal": "Review and fix the Flink role's syntax and lint findings without changing its service paths.",
       "criteria": "- Use fully qualified Ansible module names.\n- Preserve variable names and explicit file modes.",
       "constraints": "Keep the inventory and unrelated files unchanged. Do not suppress lint rules.",
-      "verification": "Run ansible-lint for roles/flink using an operator-configured local recipe.\nRun the play twice on the disposable server only after confirmation and root approval.",
+      "verification": "Run ansible-lint for roles/flink using an operator-configured local recipe.\nRun the play twice on the disposable server only after confirmation of the code change.",
       "live_oracle": "Independent review is required. Deferred server idempotence must never be reported as a passed local check.",
       "changes": {
         "infra/roles/flink/tasks/main.yml": "---\n- name: Create the Flink service directory\n  ansible.builtin.file:\n    path: /opt/flink\n    state: directory\n    mode: '0755'\n- name: Install the Flink configuration\n  ansible.builtin.template:\n    src: flink-conf.yaml.j2\n    dest: /opt/flink/flink-conf.yaml\n    mode: '0644'\n"

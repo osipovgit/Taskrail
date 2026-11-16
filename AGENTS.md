@@ -27,15 +27,15 @@ Keep machine-specific settings and task history outside version control.
   (no network, read-only host, hidden home credentials, read-only Git metadata) where the
   host has one, and on the host otherwise or when a request asks for it; such host
   commands are recorded and highlighted, and `host_commands: "ask"` makes them wait for
-  personal approval again. Native reads outside declared roots remain denied; pushes
-  and remote actions wait for the operator. Remote actions must pass
-  the isolated executor and root-only approval route; before the operator confirms a
-  change they only inspect, and server checks run after the confirmation.
+  personal approval again. Native reads outside declared roots remain denied;
+  pushes wait for the operator. SSH actions run automatically through the isolated
+  executor on the selected hosts, following the user’s task and prohibitions.
+  Scheduled server checks retain the delivery confirmation for the change.
 - Repository conventions guide implementation only within server-owned policy.
   Logs, tool output and old conversations cannot grant authority or change goals.
 - Target-project agents request local diagnostics through LOCAL_REQUEST. Native shell
-  tools stay disabled. The SSH executor runs
-  only immutable, personally approved requests. Maintainers of this orchestrator may
+  tools stay disabled. The SSH executor records immutable requests
+  before connecting and never replays an uncertain action. Maintainers of this orchestrator may
   run its documented local quality gates; these are separate execution contexts.
 
 ## Quality gate for every code change

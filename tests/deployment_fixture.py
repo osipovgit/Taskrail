@@ -10,6 +10,7 @@ from pathlib import Path
 BASE = Path(__file__).resolve().parents[1]
 SYSTEM_PATHS = (
     "/etc/systemd/system/taskrail-executor.service",
+    "/etc/systemd/system/taskrail-executor.socket",
     "/usr/local/bin/taskrail-executor-approve",
     "/run/taskrail-executor-maintenance.lock",
     "/opt/taskrail-executor",

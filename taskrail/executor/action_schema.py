@@ -6,44 +6,47 @@ from pathlib import PurePosixPath
 from taskrail.core.schema import require
 from taskrail.executor import protocol
 
-FIELDS = frozenset(("targets", "script", "files", "reason", "timeout_seconds"))
-MAX_TARGETS = 16
-MAX_TIMEOUT = 3600
-MAX_FILES = 200
+FIELDS = frozenset(("targets", "script", "files", "reason"))
 
 
 def validate(payload):
-    """Reject ambiguous targets and executable payloads that were not reviewed."""
+    """Validate the requested destinations and exact remote payload."""
     require(isinstance(payload, dict), "Action must be an object")
     require(
-        set(payload) == FIELDS, "Action requires targets, script, files, reason, timeout_seconds"
+        FIELDS <= payload.keys() <= FIELDS | {"timeout_seconds"},
+        "Action requires targets, script, files and reason; timeout_seconds is optional",
     )
     validate_targets(payload["targets"])
-    timeout(payload["timeout_seconds"])
-    protocol.text(payload["reason"])
-    protocol.text(payload["script"])
+    if "timeout_seconds" in payload:
+        timeout(payload.get("timeout_seconds"))
+    text(payload["reason"])
+    text(payload["script"])
     bundle(payload["files"])
-    require(len(protocol.encode(payload)) <= protocol.MAX_SCRIPT, "Action bundle exceeds 512 KiB")
     return payload
 
 
+def text(entry):
+    require(
+        isinstance(entry, str) and entry.strip() and "\x00" not in entry,
+        "Expected nonempty text without NUL bytes",
+    )
+
+
 def timeout(seconds):
-    """Booleans and unbounded SSH runtimes are not accepted."""
+    """An explicit command deadline must be a positive integer."""
     require(
         isinstance(seconds, int) and not isinstance(seconds, bool), "Timeout must be an integer"
     )
-    require(1 <= seconds <= MAX_TIMEOUT, "Timeout must be between 1 and 3600 seconds")
+    require(seconds > 0, "Timeout must be positive")
 
 
 def bundle(files):
-    """Accept only bounded UTF-8 regular files, never local symlinks or paths."""
+    """Accept UTF-8 regular files, never local symlinks or paths."""
     require(isinstance(files, dict), "Files must be an object")
-    require(len(files) <= MAX_FILES, "Too many bundle files")
     for name, body in files.items():
         bundle_path(name)
         require(isinstance(body, str), "Bundle body must be text")
-        if body:
-            protocol.text(body)
+        require("\x00" not in body, "Bundle body contains a NUL byte")
 
 
 def bundle_path(name):
@@ -59,8 +62,10 @@ def bundle_path(name):
 
 
 def validate_targets(targets):
-    """Require a nonempty distinct bounded target list."""
-    require(isinstance(targets, list), "Targets must be a list")
-    require(1 <= len(targets) <= MAX_TARGETS, "Invalid target count")
+    """Accept the whole selected inventory or distinct aliases."""
+    if targets == "all":
+        return
+    require(isinstance(targets, list), "Targets must be a list or all")
+    require(bool(targets), "Missing SSH targets")
     targets = [protocol.label(target) for target in targets]
     require(len(set(targets)) == len(targets), "Duplicate targets")

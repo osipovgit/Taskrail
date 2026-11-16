@@ -338,7 +338,7 @@ export function executionCard(job) {
   card.append(el('p', reason || 'Submitting request'));
   if (job.id) {
     card.append(el('p', 'Ticket: ' + job.id, 'muted'));
-    if (job.status === 'PENDING_APPROVAL') {
+    if (build && job.status === 'PENDING_APPROVAL') {
       card.append(
         el('p', 'Review and approve in your terminal. The UI cannot grant server access.'),
       );
@@ -351,7 +351,13 @@ export function executionCard(job) {
   }
   const action = build ? null : job.action || job.request?.action;
   if (action) {
-    card.append(el('p', 'SSH targets: ' + action.targets.join(', ')));
+    card.append(
+      el(
+        'p',
+        'SSH targets: ' +
+          (Array.isArray(action.targets) ? action.targets.join(', ') : action.targets),
+      ),
+    );
     card.append(el('pre', action.script));
     for (const [name, text] of Object.entries(action.files || {})) {
       const file = el('details');
@@ -363,9 +369,7 @@ export function executionCard(job) {
   details.append(el('summary', 'Exact request and target results'));
   details.append(el('pre', JSON.stringify(job, null, 2)));
   card.append(details);
-  card.append(
-    el('p', 'Stopping the task does not cancel an already approved remote command.', 'muted'),
-  );
+  card.append(el('p', 'A remote command can continue running after the task stops.', 'muted'));
   if (job.status === 'UNKNOWN')
     card.append(el('p', 'Remote effects are uncertain. Inspect the server before a new action.'));
   return card;

@@ -540,7 +540,7 @@ async function main() {
   ]);
   const serverPanel = deliverySection(delivery, actions('phase:server'));
   assert.ok(
-    all(serverPanel).some((n) => n.textContent.includes('each action needs root approval')),
+    all(serverPanel).some((n) => n.textContent.includes('Run after you confirm the changes')),
   );
 
   // A started task opens its run inside the card; earlier attempts collapse into one line.
@@ -1059,17 +1059,24 @@ async function main() {
 
   const sshCard = stages.executionCard({
     id: 'ticket-123',
-    status: 'PENDING_APPROVAL',
+    status: 'RUNNING',
     action: {
       reason: 'Inspect host',
-      targets: ['qa'],
+      targets: 'all',
       script: 'uname -a',
       files: { 'play.yml': '<script>literal</script>' },
     },
   });
+  assert.ok(all(sshCard).some((node) => node.textContent === 'SSH targets: all'));
+  assert.ok(!all(sshCard).some((node) => node.textContent.includes('sudo -k')));
+  const buildCard = stages.executionCard({
+    id: 'build-ticket',
+    status: 'PENDING_APPROVAL',
+    request: { jenkins: { server: 'ci', job: 'tests', parameters: {} } },
+  });
   assert.ok(
-    all(sshCard).some((node) =>
-      node.textContent.includes('sudo -k /usr/local/bin/taskrail-executor-approve ticket-123'),
+    all(buildCard).some((node) =>
+      node.textContent.includes('taskrail-executor-approve build-ticket'),
     ),
   );
   assert.ok(

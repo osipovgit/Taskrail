@@ -11,6 +11,11 @@ unit_dir="$HOME/.config/systemd/user"
 service=taskrail.service
 # shellcheck source=deploy/options.sh
 source "$source_dir/deploy/options.sh"
+if [[ "$with_ssh" == yes ]] && ! /usr/bin/python3 -I -c 'import yaml'; then
+    echo 'SSH inventory support requires PyYAML for /usr/bin/python3 (Debian/Ubuntu: sudo apt install python3-yaml).' >&2
+    exit 2
+fi
+if [[ "$with_ssh" == yes ]]; then sudo -v; fi
 systemctl --user show-environment >/dev/null
 "$python_bin" -c 'import sys; sys.exit(sys.version_info < (3, 10))' || {
     echo 'Python 3.10+ is required' >&2
@@ -104,6 +109,12 @@ publish_config cli-check.sha256
 "$release/venv/bin/python" -I -B -c \
     'import sys; sys.path.insert(0, sys.argv.pop(1)); from taskrail.deployment.releases import main; main()' \
     "$release" "$app_dir" "$config_dir/settings.json"
+if [[ "$with_ssh" == yes ]]; then
+    sudo bash "$source_dir/deploy/install-executor.sh" --client="$(id -un)" --autostart=enable
+elif [[ "$executor_reset" == yes ]]; then
+    sudo bash "$source_dir/deploy/install-executor.sh" --client="$(id -un)" --autostart=disable
+    echo "SSH settings and host keys were erased. Configure them before enabling the executor socket."
+fi
 if [[ "$boot" == yes ]]; then
     # Explicit opt-in: this affects the user's service manager, not just Taskrail.
     loginctl enable-linger "$(id -un)" || {
@@ -116,9 +127,4 @@ systemctl --user is-enabled "$service" || true
 printf 'Installed Taskrail %s\nUI: http://127.0.0.1:8787 (default port)\nSettings: %s/settings.json\n' "$version" "$config_dir"
 if ! PATH=/usr/bin:/bin command -v bwrap >/dev/null; then
     echo 'Install bubblewrap (for example: sudo apt install bubblewrap) to sandbox local commands. Without it the host command policy applies.'
-fi
-
-if [[ "${executor_reset:-no}" == yes ]]; then
-    sudo bash "$source_dir/deploy/install-executor.sh" --client="$(id -un)" --autostart=disable
-    echo "SSH inventory and host keys were erased. Configure them before starting the executor."
 fi

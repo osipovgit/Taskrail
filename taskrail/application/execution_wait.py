@@ -12,7 +12,8 @@ from taskrail.interactions import output_preview
 LEDGER = "remote-execution.json"
 STATUS = "status"
 IDENTIFIER = "id"
-TERMINAL = frozenset(("SUCCEEDED", "FAILED", "UNKNOWN", "REJECTED"))
+REJECTED = "REJECTED"
+TERMINAL = frozenset(("SUCCEEDED", "FAILED", "UNKNOWN", REJECTED))
 
 
 def read(run):
@@ -22,9 +23,10 @@ def read(run):
 
 
 def ssh_request(action, selection=None):
-    if selection is None:
-        return {"operation": "submit", "action": action}
-    return {"operation": "inspect-inventory", "action": action, inventory.KEY: selection}
+    request = dict(operation="run-ssh", action=action)
+    if selection is not None:
+        request[inventory.KEY] = selection
+    return request
 
 
 def submit(run, folder, request, binding=None):
@@ -59,9 +61,13 @@ def resume(run, state):
         return prompt_texts.text(
             "routes.ssh.inventory_error", detail=pending.get("inventory_error")
         )
-    if terminal_status == "REJECTED":
+    if terminal_status == REJECTED and pending.get("kind") == "ssh":
+        return prompt_texts.text(
+            "feedback.rejected_request", status="ACTION_REQUEST", error=pending["detail"]
+        )
+    if terminal_status == REJECTED:
         return prompt_texts.text("feedback.remote_declined")
-    if terminal_status == "UNKNOWN":
+    if terminal_status == "UNKNOWN" and "jenkins" in pending.get("request", {}):
         raise ValueError(prompt_texts.text("feedback.remote_unknown"))
     evidence_path = save_snapshot(run, pending)
     return output_preview.ticket_preview(evidence_path, pending)
@@ -78,9 +84,9 @@ def observe(pending):
     try:
         pending.update(client.request(query))
     except inventory.InventoryError as error:
-        if query["operation"] != "inspect-inventory":
+        if query["operation"] != "run-ssh":
             raise
-        pending.update(status="REJECTED", inventory_error=str(error))
+        pending.update(status=REJECTED, inventory_error=str(error))
     except OSError:
         return "Executor unreachable; retrying. Last status: {0}"
     return "Executor action: {0}"

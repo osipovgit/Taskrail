@@ -68,9 +68,14 @@ PY
 # Stop an installed service; a failed or incomplete stop fails the caller.
 stop_executor() { # UNIT_FILE
     if [[ ! -e $1 ]]; then
+        if [[ -e ${1%.service}.socket ]]; then systemctl stop "${executor_unit%.service}.socket"; fi
         return 0
     fi
-    systemctl stop "$executor_unit"
+    if [[ -e ${1%.service}.socket ]]; then
+        systemctl stop "${executor_unit%.service}.socket" "$executor_unit"
+    else
+        systemctl stop "$executor_unit"
+    fi
     if systemctl is-active --quiet "$executor_unit"; then
         printf 'The executor did not stop. Nothing was changed.\n' >&2
         return 1

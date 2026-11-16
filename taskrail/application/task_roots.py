@@ -12,10 +12,12 @@ ALIAS = re.compile("[A-Za-z0-9_-]+")
 WILDCARDS = frozenset("*?\n\r")
 
 
-def declared_access(meta, task, options):
+def declared_access(meta, task, options, inherited=None):
     """Declared roots, protected path entries and a child's writable task scope."""
     roots = declared_roots(meta, task)
     protected = protected_paths.configured(options)
+    if inherited:
+        protected = protected_paths.resumed(protected, inherited.get(protected_paths.KEY, []))
     patterns = protected_paths.read_patterns(protected)
     scope = task_scope.configured(meta, roots, patterns)
     return {ROOTS: roots, protected_paths.KEY: protected, task_scope.KEY: scope}

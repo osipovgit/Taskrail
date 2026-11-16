@@ -16,7 +16,7 @@ UI updates read the ordered stage index and public event stream.
 | `core/` | Result contract, schema validation, the prompt text catalog (`prompt-texts.json`), requirement labels, file/path utilities and stop/read-only guards |
 | `infrastructure/` | opencode launch (1.x direct, 2.x through an adapter), process watch, JSONL event summary, permission profiles, the bubblewrap sandbox of local commands (`sandbox.py`) |
 | `observability/` | Public progress, usage and compaction telemetry |
-| `executor/` | Separate system service: peer-authenticated socket, immutable tickets, root-only approval, SSH transport, Jenkins client |
+| `executor/` | Separate system service: peer-authenticated socket, immutable tickets, Jenkins approval, SSH transport, Jenkins client |
 | `web/server.py`, `http_handler.py`, `http_policy.py` | Loopback HTTP API, request checks and static resources |
 | `web/run_view.py`, `run_list.py`, `run_files.py`, `run_messages.py`, `run_sources.py` | Bounded, contained run views for the dashboard |
 | `web/run_family.py`, `run_attempts.py` | Task and phase runs shown in their parent's card, with every earlier attempt |
@@ -187,8 +187,8 @@ errors stay in opencode. Interrupted turns with a known session resume there thr
 known and turns start warm. See [context limits](deployment.md#context-limits).
 
 The optional SSH executor owns its private credentials and queue under a separate
-OS user. The application submits requests through a Unix socket; only a root peer
-can approve the exact digest. The executor runs nothing locally. It also holds the
+OS user. The application submits SSH commands through a peer-authenticated Unix socket.
+The executor records the request and starts SSH immediately. It also holds the
 Jenkins API token: reads run on request; builds need root approval unless root has
 preauthorized that job with `approval: none`. See
 [SSH and Jenkins executor](ssh-executor.md).

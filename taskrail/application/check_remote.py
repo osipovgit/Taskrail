@@ -1,4 +1,4 @@
-"""Fixed remote checks use the existing isolated executor and exact root approval."""
+"""Fixed remote checks use the existing isolated executor and durable ticket results."""
 
 from taskrail.application import (
     check_diagnostics,
@@ -15,19 +15,12 @@ STATUS = "status"
 def execute(workflow, folder, spec, recipe):
     """Observe the same durable ticket on resume; never submit a replacement for UNKNOWN."""
     workflow.guard.verify("Source changed before remote verification")
-    authorize(workflow, recipe)
+    execution_requests.verify_delivery(workflow.run, workflow.config)
     context = binding(workflow, spec, recipe)
     ticket = followed(workflow, folder, recipe["request"], recipe["kind"], context)
     workflow.guard.verify("Source changed during remote verification")
     context["assessment"] = assess(recipe["adapter"], ticket)
     return check_results.record(workflow.run, spec, recipe["request"], outcome(ticket), context)
-
-
-def authorize(workflow, recipe):
-    """The server verifies confirmation independently of the selected recipe."""
-    phase = workflow.config.get("phase")
-    if recipe["kind"] == "ssh" or phase == execution_requests.SERVER:
-        execution_requests.server_authorized(workflow.run, workflow.config)
 
 
 def binding(workflow, spec, recipe):

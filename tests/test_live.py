@@ -381,9 +381,9 @@ class LiveTests(LiveFixture, unittest.TestCase):
 
     def test_ssh_wait_stop_resume_observes_same_ticket(self):
         def pending_request(payload):
-            self.assertEqual(payload["operation"], "submit")
+            self.assertEqual(payload["operation"], "run-ssh")
             (self.base / "result/stop.request").touch()
-            return dict(id="same-ticket", status="PENDING_APPROVAL", results=[])
+            return dict(id="same-ticket", status="RUNNING", results=[])
 
         with (
             patch(

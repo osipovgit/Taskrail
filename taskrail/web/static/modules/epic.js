@@ -74,7 +74,7 @@ function confirmationBlock(delivery, actions) {
   button.onclick = () => actions.act('confirm');
   block.append(button);
   const hint = delivery.checks.server.length
-    ? 'Server checks start after you confirm; each server action still needs root approval.'
+    ? 'Server checks start after you confirm the changes.'
     : 'Confirm once you have reviewed the changes.';
   block.append(el('p', hint, 'muted'));
   return block;

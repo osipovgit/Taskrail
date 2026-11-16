@@ -76,16 +76,17 @@ def source_roots(config, request):
 
 def open_state(config, run, request, ready):
     """Create or reopen the run index; worktrees are created only once the locks are held."""
-    protect_sources(config)
     if request["resume"]:
         state = resumed_state(run, config, request)
         execution_context.restore(run, config, state)
+        protect_sources(config)
         return state
     if ready:
         parent = execution_context.submission_source(config, run)
         isolate(config, run.name)
         if parent is not None:
             worktree_followup.transfer(config, parent)
+    protect_sources(config)
     state = new_state(run, config, request)
     original_checkout.capture(run, config)
     return state

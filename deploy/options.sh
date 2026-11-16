@@ -2,6 +2,7 @@
 # Sourced by install.sh; preserve service enablement on unattended updates.
 reset_mode=
 apply_settings=no
+with_ssh=no
 opencode_path=
 autostart=keep
 autostart_explicit=no
@@ -19,6 +20,7 @@ while [[ $# -gt 0 ]]; do
             reset_mode=${1#--}
             ;;
         --apply-settings) apply_settings=yes ;;
+        --with-ssh) with_ssh=yes ;;
         --opencode=?*) opencode_path=${1#*=} ;;
         --autostart=yes | --autostart=no | --autostart=keep)
             autostart=${1#*=}
@@ -38,7 +40,8 @@ while [[ $# -gt 0 ]]; do
             }
             ;;
         --help)
-            echo 'Usage: bash deploy/install.sh [settings.json] [--apply-settings] [--opencode=PATH] [--force-update|--fresh] [--autostart=yes|no|keep] [--agents=keep|bundled] [--boot=yes|no] [--wait=SECONDS]'
+            echo 'Usage: bash deploy/install.sh [settings.json] [--apply-settings] [--with-ssh] [--opencode=PATH] [--force-update|--fresh] [--autostart=yes|no|keep] [--agents=keep|bundled] [--boot=yes|no] [--wait=SECONDS]'
+            echo '  --with-ssh      Install, enable and start the isolated SSH executor socket using sudo.'
             echo '  --force-update  Reinstall the user service from the supplied settings or release defaults. Erase installed configuration and run history.'
             echo '  --fresh         Wait for active work, reinstall the user service and reset any installed SSH executor.'
             exit 0

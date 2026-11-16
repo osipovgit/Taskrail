@@ -38,10 +38,10 @@ generated dependencies; [deployment](deployment.md) owns configuration details.
 | Source edit | opencode edit | Exact approved regular files; in an authenticated owned worktree the whole roots except Git metadata and protected files; preserve user edits |
 | Git history | `GIT_REQUEST` final response | Controlled executor; read-only for planning/review |
 | Git mutation | `GIT_REQUEST` final response | Implementer, approved scope, bounded command grammar |
-| Remote inspection/change | `ACTION_REQUEST` final response | Configured SSH targets; exact script root-approved; inspection only before you confirm a change, server checks after it; never the implementer |
+| Remote inspection/change | `ACTION_REQUEST` final response | Agent-selected scripts start automatically on selected hosts according to the task |
 | Jenkins | `JENKINS_REQUEST` final response | Configured jobs; reads automatically approved, builds root-approved unless root configured the job with `approval: none` |
 | Local checks | Built-in syntax checks and `LOCAL_REQUEST` for tests and linters | [Sandbox or host policy](#local-commands) |
-| HTTP/API/database tools | No direct connector | Approved SSH scripts may use installed remote clients |
+| HTTP/API/database tools | No direct connector | SSH scripts may use installed remote clients |
 
 Executor JSON responses and turn rules are defined in [contracts](contracts.md#executor-requests).
 Requests are not execution proof. Internal indexes are not model inputs; use supplied
@@ -60,7 +60,7 @@ and Git reads can expose history from elsewhere in the same repository.
 Agents must not use either route to bypass scope or protected-file rules. Hostile
 project content and untrusted local users require stronger isolation.
 
-SSH needs separate installation, verified hosts and root approval; it inherits no
+SSH uses the socket-enabled executor and verified host keys. It inherits no
 SSH agent/config or remote sudo. Stop ends observation, not necessarily remote work.
 Git network operations use their separately authorized noninteractive transport.
 See [SSH executor](ssh-executor.md) and [Git access](git-access.md).
@@ -133,12 +133,11 @@ Jenkins reads and bounded in-root listing commands are recorded without asking. 
 fixed system executables. Options precede operands; `--color=value` is explicit.
 Other flags and operands follow the configured local command policy.
 `find` permits only name/path/type/depth tests and printing. The executor rechecks
-scope immediately before execution. Remote inspection uses its own bounded grammar.
+scope immediately before execution.
 
 **Allow all actions** approves local commands, including inline code.
 Inline-code cards identify scripts and interpreter wrappers whose effects cannot be
-inferred from argv. This grant never authorizes Git pushes or changes root-only remote
-approval. The task badge and Stop allowing all actions button expose the durable grant.
+inferred from argv. This grant never authorizes Git pushes or changes Jenkins job approval. The task badge and Stop allowing all actions button expose the durable grant.
 
 Personal **Allow all actions** card grants survive Continue and appear in Restart
 drafts. A linked split/delivery child refreshes the family grant before each decision,
@@ -161,4 +160,4 @@ fingerprinted. Other files a command changes are adopted into the run's source s
 recorded with the action, reported under **Changed by approved commands** and named to
 the session; Git metadata changed by a command still stops the run.
 
-Remote execution retains its separate timeout and root-only approval.
+SSH requests may specify a per-host timeout. Jenkins uses the configured job approval policy.

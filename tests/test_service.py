@@ -545,6 +545,14 @@ class ServiceTests(unittest.TestCase):
         self.assertTrue((self.repo / "hello.py").exists())
         self.assertTrue((config / "settings.json").exists())
 
+    def test_installer_enables_remote_socket_and_starts_user_service_with_one_command(self):
+        installed = self.installer(str(self.settings), "--with-ssh", "--autostart=yes")
+        self.assertEqual(installed.returncode, 0, installed.stderr)
+        calls = (self.home / "privilege.log").read_text()
+        self.assertIn("--autostart=enable", calls)
+        self.assertIn("install-executor.sh", calls)
+        self.assertIn("--user restart taskrail.service", calls)
+
     def test_fresh_executor_reset_uses_only_private_host_paths_and_privilege_stubs(self):
         installed_executor = self.deployment.system / "opt/taskrail-executor"
         installed_executor.mkdir(parents=True)

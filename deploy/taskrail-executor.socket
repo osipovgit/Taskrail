@@ -1,0 +1,12 @@
+[Unit]
+Description=Taskrail remote executor control socket
+
+[Socket]
+ListenStream=/run/taskrail-executor/control.sock
+SocketUser=@CLIENT_UID@
+SocketMode=0600
+DirectoryMode=0755
+RemoveOnStop=yes
+
+[Install]
+WantedBy=sockets.target

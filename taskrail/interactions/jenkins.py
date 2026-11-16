@@ -42,7 +42,7 @@ def checked(payload):
 
 
 def build(session, request):
-    """A build is a root-approved executor ticket, like an SSH action."""
+    """Start a build under the configured job approval policy."""
     run = session.environment["run"]
     authorize(session)
     execution_wait.submit(run, session.active[0], {"operation": "submit", "jenkins": request})
@@ -69,5 +69,4 @@ def read(actions, request):
 def authorize(session):
     """A confirmation remains current across Jenkins requests and personal read approval."""
     config = session.environment.get("config", {})
-    if config.get("phase") == execution_requests.SERVER:
-        execution_requests.server_authorized(session.environment["run"], config)
+    execution_requests.verify_delivery(session.environment.get("run"), config)

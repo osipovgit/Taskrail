@@ -1,4 +1,4 @@
-"""Fixed SSH transport; only the approved payload runs remotely."""
+"""Fixed SSH transport; only the submitted payload runs remotely."""
 
 import base64
 import shlex
@@ -13,7 +13,7 @@ SSH_OPTION = "-o"
 
 
 def remote_script(action):
-    """Materialize the exact reviewed bundle in a private remote directory."""
+    """Materialize the exact submitted bundle in a private remote directory."""
     if not action["files"]:
         return action["script"]
     lines = [
@@ -108,17 +108,17 @@ def environment(host):
 
 
 def execute(host, action):
-    """Bound runtime and captured output; a timeout has uncertain remote effects."""
-    exit_code, tail = streams.run_bounded(
+    """Return complete output and the observed exit code."""
+    exit_code, output = streams.execute(
         command(host),
         remote_script(action).encode("utf-8"),
         environment(host),
-        action["timeout_seconds"],
+        action.get("timeout_seconds"),
     )
-    return captured(tail, exit_code)
+    return captured(output, exit_code)
 
 
-def captured(tail, exit_code):
+def captured(output, exit_code):
     """Transport loss cannot establish whether remote side effects completed."""
     status = "SUCCEEDED" if exit_code == 0 else "FAILED"
     if exit_code is None or exit_code == SSH_TRANSPORT_ERROR or exit_code < 0:
@@ -126,6 +126,5 @@ def captured(tail, exit_code):
     return dict(
         status=status,
         exit_code=exit_code,
-        output=tail.text(),
-        truncated=tail.size > streams.OUTPUT_LIMIT,
+        output=output,
     )

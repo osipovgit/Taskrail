@@ -7,6 +7,7 @@ OPERATION = "operation"
 BUILD = "build"
 ARGUMENTS = "parameters"
 FIELDS = frozenset(("server", "job", OPERATION, BUILD, ARGUMENTS, "reason", "timeout_seconds"))
+MAX_TIMEOUT = 3600
 READS = frozenset(("status", "console", "tests"))
 
 
@@ -20,7 +21,7 @@ def validate(payload, servers):
     require(job in jobs, "Unknown Jenkins job")
     require(payload[OPERATION] in (*READS, BUILD), "Unknown Jenkins operation")
     protocol.text(payload["reason"])
-    action_schema.timeout(payload["timeout_seconds"])
+    timeout(payload["timeout_seconds"])
     check_build(payload)
     check_arguments(payload, jobs[job][ARGUMENTS])
     return payload
@@ -46,3 +47,8 @@ def check_arguments(payload, allowed):
     for argument in arguments.values():
         require(isinstance(argument, str) and "\x00" not in argument, "Parameter values are text")
         require(len(argument) <= protocol.MAX_SCRIPT, "Parameter value is too long")
+
+
+def timeout(seconds):
+    action_schema.timeout(seconds)
+    require(seconds <= MAX_TIMEOUT, "Jenkins timeout must be at most 3600 seconds")

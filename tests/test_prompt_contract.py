@@ -117,7 +117,7 @@ class FrozenTextTests(unittest.TestCase):
                 execution_wait.resume(run, dict(attempts=[])),
                 prompt_texts.text("feedback.remote_declined"),
             )
-            ledger.write_text(json.dumps([dict(status="UNKNOWN")]))
+            ledger.write_text(json.dumps([dict(status="UNKNOWN", request={"jenkins": {}})]))
             with self.assertRaisesRegex(
                 ValueError, re.escape(prompt_texts.text("feedback.remote_unknown"))
             ):
@@ -167,6 +167,17 @@ class FrozenTextTests(unittest.TestCase):
 
 
 class CapabilityTests(unittest.TestCase):
+    def test_large_ssh_groups_keep_all_aliases_without_filling_the_model_context(self):
+        with tempfile.TemporaryDirectory() as directory:
+            run = Path(directory)
+            hosts = {f"node-{n}": {} for n in range(3000)}
+            rules = execution_requests.instructions({"hosts": hosts}, run)
+            (catalog,) = (run / "00-input/remote").glob("aliases-*.txt")
+            self.assertEqual(catalog.read_text().splitlines(), sorted(hosts))
+            self.assertIn(str(catalog), rules)
+            self.assertIn('"targets":"all"', rules)
+            self.assertLess(len(rules), 1000)
+
     def test_absent_and_unreachable_executors_do_not_advertise_remote_schemas(self):
         for error, cause in (
             (FileNotFoundError, "unavailable"),
@@ -178,7 +189,7 @@ class CapabilityTests(unittest.TestCase):
                 mock.patch.object(remote_catalog.client, "request", side_effect=error),
             ):
                 self.assertEqual(remote_catalog.available(), {"unavailable": f"routes.ssh.{cause}"})
-        instructions = execution_requests.instructions({}, "planner", Path("/run"), {})
+        instructions = execution_requests.instructions({}, Path("/run"))
         self.assertIn("no configured targets", instructions)
         self.assertNotIn("Example ACTION_REQUEST", instructions)
 
@@ -241,10 +252,7 @@ class RequestBudgetTests(LiveFixture, unittest.TestCase):
                         else:
                             available.assert_called_once_with(None)
                         self.check_budget(request, stage)
-                        ssh = bool(catalog.get("hosts")) and stage not in {
-                            "understanding",
-                            "implementer",
-                        }
+                        ssh = bool(catalog.get("hosts")) and stage != "understanding"
                         self.assertEqual("Example ACTION_REQUEST:" in request, ssh)
                         self.assertEqual(
                             "Example JENKINS_REQUEST:" in request,

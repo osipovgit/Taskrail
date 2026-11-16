@@ -62,7 +62,7 @@ the local source snapshot records when the observation was made and does not
 prove Jenkins checked out that revision. SSH recipes use `kind: ssh`,
 `phase: server`, `adapter: exit-code` and the
 exact [SSH action fields](ssh-executor.md). They run only after the parent change
-has been confirmed, still through the root approval route. Recipe selection
+has been confirmed. The executor starts the SSH request automatically. Recipe selection
 never grants remote authority.
 
 ## Select and bind checks
@@ -156,7 +156,7 @@ check IDs and criterion bindings. Continue verifies the digest before resolving
 check IDs, so later settings changes cannot alter the commands. A linked child
 or delivery phase authenticates its parent, roots, criterion bindings and catalog
 before inheriting the recipes. A delivery phase records these inputs and its
-phase for an independent continuation. SSH actions also recheck the parent's
+phase for an independent continuation. Server-phase actions also recheck the parent's
 live confirmation and linked server phase before execution.
 
 Each execution writes an immutable JSON artifact under `00-input/checks/` and a

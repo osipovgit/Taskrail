@@ -114,8 +114,7 @@ The destination must not exist. Each directory contains `task.md`, its own initi
 projects and `oracle.json`. For a requested live run, choose a disposable directory,
 use the actual configured provider CLI and the operator's explicit settings, submit
 one task, then compare its artifacts with the oracle. Review command approvals in
-the usual UI and keep all server checks deferred until change confirmation and
-root approval. Never silently replace the configured provider CLI or interpret
+the usual UI and keep delivery server checks deferred until change confirmation. Never silently replace the configured provider CLI or interpret
 fixture expectations as permission to access a real server.
 
 ## Coverage
