@@ -47,8 +47,8 @@ def project_paths(root, names):
 
 def private(path):
     try:
-        with inventory_file.opened(path) as descriptor:
-            raw = inventory_file.read_descriptor(descriptor)
+        with inventory_file.opened(path) as stream:
+            raw = inventory_file.read_descriptor(stream.fileno())
     except FileNotFoundError:
         return False
     except (OSError, ValueError):

@@ -38,8 +38,8 @@ def read(filename, expected):
     require(NAME_PATTERN.fullmatch(filename), "Expected a private inventory filename")
     path = DIRECTORY / filename
     try:
-        with inventory_file.opened(path) as descriptor:
-            raw = inventory_file.read_descriptor(descriptor)
+        with inventory_file.opened(path) as stream:
+            raw = inventory_file.read_descriptor(stream.fileno())
     except OSError:
         raise InventoryError(
             "Selected inventory file is unavailable to the SSH executor."

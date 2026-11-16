@@ -35,14 +35,14 @@ def send(connection, payload):
     if not inventory_file.project(selection):
         connection.sendall(wire)
         return
-    with ExitStack() as stack:
-        try:
-            fd = stack.enter_context(inventory_file.opened(selection[inventory_file.FILENAME]))
-        except (OSError, ValueError):
-            # The broker can still return a previously submitted ticket or a typed refusal.
-            connection.sendall(wire)
-            return
-        socket.send_fds(connection, [wire[:1]], [fd])
+    try:
+        stream = inventory_file.opened(selection[inventory_file.FILENAME])
+    except (OSError, ValueError):
+        # The broker can still return a previously submitted ticket or a typed refusal.
+        connection.sendall(wire)
+        return
+    with stream:
+        socket.send_fds(connection, [wire[:1]], [stream.fileno()])
     connection.sendall(wire[1:])
 
 

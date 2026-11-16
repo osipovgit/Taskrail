@@ -64,8 +64,8 @@ class InventoryInspectionTests(unittest.TestCase):
     def lookup(self, payload):
         selected = payload.get(inventory.KEY)
         if inventory_file.project(selected):
-            with inventory_file.opened(selected["file"]) as descriptor:
-                return self.server.dispatch(payload, 1200, descriptor)
+            with inventory_file.opened(selected["file"]) as stream:
+                return self.server.dispatch(payload, 1200, stream.fileno())
         return self.server.dispatch(payload, 1200)
 
     def test_planner_resolves_the_task_inventory_before_approved_inspection(self):
@@ -244,11 +244,14 @@ class InventoryInspectionTests(unittest.TestCase):
         actual = self.base / "elsewhere"
         self.file.rename(actual)
         self.file.symlink_to(actual)
-        with self.assertRaises(OSError):
+        with self.assertRaises(inventory.InventoryError):
             inventory_file.pin(selection)
         linked = self.base / "linked"
         linked.symlink_to(self.base, target_is_directory=True)
-        with self.assertRaises(OSError), inventory_file.opened(linked / actual.name):
+        with (
+            self.assertRaises(inventory.InventoryError),
+            inventory_file.opened(linked / actual.name),
+        ):
             self.fail("opened inventory through an ancestor symlink")
 
     def test_fifty_targets_are_inspected_in_reviewable_batches(self):
