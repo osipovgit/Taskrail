@@ -2,7 +2,9 @@
 
 
 def accepted_status(flow, state):
-    """A read-only integration review never becomes a code-delivery phase."""
+    """Diagnostic tickets in a discussion or integration review do not start delivery."""
+    if not state.get("phase") and flow.get("read_only"):
+        return "NO_CHANGES_REQUIRED"
     changed = flow["allowed"] or state.get("execution_jobs")
     if state.get("phase") == "integration" or not changed:
         return "NO_CHANGES_REQUIRED"

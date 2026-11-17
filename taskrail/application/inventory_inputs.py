@@ -9,16 +9,17 @@ KEY = "inventory_inputs"
 WORDS = re.compile(r"[`\"']([^`\"'\n]+)[`\"']|([^\s`\"'<>|]+)")
 
 
-def capture(config):
+def capture(config, inherited=()):
+    """Only the sealed parent and this turn's operator fields can name trusted sources."""
     if KEY in config:
         return
-    inputs = set()
+    inputs = set(inherited)
     fields = config.get("task_spec", {}).get("fields", [])
     if not config.get("phase"):
         roots = {original for _, original in checkouts(config)}
         for root in roots:
-            inputs.update(mentioned(root, fields))
-    config[KEY] = sorted(map(str, inputs))
+            inputs.update(map(str, mentioned(root, fields)))
+    config[KEY] = sorted(inputs)
 
 
 def mentioned(root, fields):
@@ -49,19 +50,10 @@ def checkouts(config):
             yield checkout, original
 
 
-def files(root, inputs):
-    for path in inputs:
-        if root not in path.parents:
-            continue
-        relative = path.relative_to(root)
-        if path.is_dir():
+def files(root, relative_sources):
+    for relative in relative_sources:
+        path = root / relative
+        if path.is_dir() and candidate(path):
             yield from (relative / name for name in project_files.listing(path))
         else:
             yield relative
-
-
-def locations(copies, inputs):
-    for root in copies:
-        for source in inputs:
-            if root in source.parents:
-                yield root, source

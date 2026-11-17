@@ -25,6 +25,7 @@ class Workflow:
         self.flow = dict.fromkeys(FLOW_KEYS)
         stage = "planner" if config.get("phase") else "understanding"
         self.flow.update(stage=stage, allowed=[])
+        self.flow["read_only"] = config.get("read_only", False)
         self.runtime = dict(
             debug=request["debug"],
             resumed=bool(request["resume"]),

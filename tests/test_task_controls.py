@@ -19,7 +19,7 @@ from taskrail.application import (
 )
 from taskrail.application.live import execute_task
 from taskrail.application.source_guard import SourceGuard
-from taskrail.core.files import atomic_json
+from taskrail.core.files import atomic_json, digest
 from taskrail.web import delivery_launch, delivery_state, requests, submissions, task_form
 from taskrail.web.history import HISTORY, TaskDraft, conversation, previous_messages, task_draft
 from taskrail.web.lifecycle import trash_run
@@ -241,6 +241,57 @@ class TaskControlTests(unittest.TestCase):
             self.launcher.delete(self.runs / third)
             card = next(row for row in list_runs(self.runs) if row["id"] == first)
             self.assertEqual(card["latest"], second)
+
+    def test_reviewed_ssh_answer_survives_a_reply_with_only_a_conclusion_in_its_snapshot(self):
+        answer = "## Disk survey\nFixture node uses 42%."
+        with patch.object(submissions, "start_worker", return_value=None):
+            first = self.launcher.submit(dict(self.payload, read_only=True))["id"]
+            original = self.runs / first
+            self.finish(first, "READY_FOR_REVIEW")
+            original_task = self.runs / ".submissions" / first / "task.md"
+            (original / "00-input/task.md").write_bytes(original_task.read_bytes())
+            plan = original / "plan.json"
+            atomic_json(plan, dict(decision="none", summary=answer))
+            index = json.loads((original / "run.json").read_text())
+            index.update(
+                results={"plan": plan.name},
+                reviewed_plan_sha256=digest(plan.read_bytes()),
+                plan_review=dict(status="APPROVE"),
+                summary="Survey approved.",
+                roots={"project": str(self.repo)},
+            )
+            atomic_json(original / "run.json", index)
+            self.assertEqual(run_view(self.runs, first)["answer"], answer)
+            reply = self.launcher.submit(
+                dict(
+                    self.payload,
+                    parent_run=first,
+                    submission_mode="followup",
+                    goal="Inspect disk usage",
+                )
+            )["id"]
+            task = self.runs / ".submissions" / reply / "task.md"
+            body, earlier = task.read_text().split(HISTORY)
+            turns = json.loads(earlier)
+            self.assertEqual(turns[0].pop("answer"), answer)
+            turns[0]["summary"] = index["summary"]
+            task.write_text(body + HISTORY + json.dumps(turns))
+            expected = dict(run=first, mode="discussion", goal=self.payload["goal"], answer=answer)
+            self.assertEqual(run_view(self.runs, reply)["conversation"], [expected])
+            self.finish(reply, "NO_CHANGES_REQUIRED")
+            finished = self.runs / reply
+            (finished / "00-input/task.md").write_bytes(task.read_bytes())
+            current = json.loads((finished / "run.json").read_text())
+            atomic_json(finished / "run.json", dict(current, answer="Disk detail."))
+            view = run_view(self.runs, reply)
+            self.assertEqual(view["conversation"], [expected])
+            self.assertEqual(view["answer"], "Disk detail.")
+            self.assertEqual(
+                [turn["answer"] for turn in json.loads(conversation(finished).split(HISTORY)[1])],
+                [answer, "Disk detail."],
+            )
+            atomic_json(plan, dict(decision="none", summary="Unreviewed replacement"))
+            self.assertNotIn("answer", run_view(self.runs, reply)["conversation"][0])
 
     def test_followup_and_restart_select_parent_and_original_roots_without_an_isolation_toggle(
         self,

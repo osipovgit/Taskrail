@@ -46,13 +46,20 @@ def consume(actions, request):
     try:
         selection = source(session.environment["config"], request)
     except (OSError, ValueError) as error:
-        return prompt_texts.text("feedback.rejected_request", status=STATUS, error=error)
+        detail = prompt_texts.text("feedback.rejected_request", status=STATUS, error=error)
+        return refusal(actions, request, detail)
     catalog = discover(session.environment["config"], selection)
     if catalog.get(remote_catalog.UNAVAILABLE):
-        return remote_catalog.unavailable(catalog)
+        return refusal(actions, request, remote_catalog.unavailable(catalog))
     session.state[inventory.KEY] = catalog[inventory.KEY]
     artifacts.save_run(actions.run, session.state)
     return answer(actions, request, catalog)
+
+
+def refusal(actions, request, detail):
+    """Give planner and reviewer a citable discovery failure without raw Ansible output."""
+    outcome = dict(status="REJECTED", detail=detail)
+    return transcripts.command_snapshot(actions.folder, request, outcome, source="remote")
 
 
 def answer(actions, request, catalog):

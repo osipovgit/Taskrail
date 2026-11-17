@@ -129,6 +129,22 @@ class InventoryInspectionTests(unittest.TestCase):
             self.assertEqual(set(catalog["hosts"]), {"node1", "node2"})
             self.assertIn("node1", rendered)
             self.assertNotIn("other-node", rendered)
+            with patch.object(
+                ansible_inventory, "resolve", side_effect=inventory.InventoryError("Missing group")
+            ):
+                missing = dict(request, group="missing")
+                refusal = request_routes.route(
+                    actions,
+                    dict(outcome, final_text=json.dumps(missing), final_message_id="response-2"),
+                )
+            denied = run / "00-input/remote/02-plan-1.json"
+            self.assertIn(str(denied), refusal)
+            receipt = json.loads(denied.read_text())
+            self.assertEqual(receipt["request"], missing)
+            self.assertEqual(receipt["result"]["status"], "REJECTED")
+            self.assertIn("Missing group", receipt["result"]["detail"])
+            self.assertNotIn(SECRET, refusal)
+            self.assertEqual(json.loads((run / "run.json").read_text())[inventory.KEY], {})
             output = io.StringIO()
             with redirect_stdout(output):
                 self.assertEqual(

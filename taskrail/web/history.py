@@ -7,7 +7,7 @@ from taskrail.application import run_store, worktree_isolation
 from taskrail.core import task_markdown, task_modes, task_spec
 from taskrail.core.input_header import HEADER
 from taskrail.interactions import approval_policy
-from taskrail.web import task_input
+from taskrail.web import discussion_answers, task_input
 
 HISTORY = "\n## Conversation history\n"
 TASK_FILE = "00-input/task.md"
@@ -90,8 +90,8 @@ def saved_turn(run, original):
     turn[GOAL] = draft.fields()[GOAL]
     turn["mode"] = task_modes.selected(draft.metadata)
     if draft.metadata.get("read_only") or draft.metadata.get(DESIGN):
-        key = ANSWER if index.get(ANSWER) else SUMMARY
-        return dict(turn, **{key: index.get(key, "")})
+        turn.update(discussion_answers.outcome(run, index))
+        return turn
     turn["conclusions"] = {
         key: json.loads(read_artifact(run, relative))
         for key, relative in index.get("results", {}).items()
@@ -106,20 +106,17 @@ def saved_turn(run, original):
 def conversation(run):
     """Carry every turn. Large histories are indexed outside the model prompt."""
     fragments = read_artifact(run, TASK_FILE).split(HISTORY, 1)
-    history = []
-    if len(fragments) == 2:
-        history = json.loads(fragments[1])
+    history = discussion_answers.earlier_turns(run, fragments)
     history.append(saved_turn(run, fragments[0]))
     encoded = json.dumps(history, ensure_ascii=False, indent=2)
     return HISTORY + encoded
 
 
-def previous_messages(run, filename=TASK_FILE):
+def previous_messages(run, original=None):
     """Expose prior conclusions without requiring deleted ancestor artifacts."""
-    original = read_artifact(run, filename)
-    if HISTORY not in original:
-        return []
+    if original is None:
+        original = read_artifact(run, TASK_FILE)
     return [
         {key: turn[key] for key in PUBLIC_FIELDS if key in turn}
-        for turn in json.loads(original.split(HISTORY, 1)[1])
+        for turn in discussion_answers.earlier_turns(run, original.split(HISTORY, 1))
     ]

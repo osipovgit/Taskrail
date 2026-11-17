@@ -22,8 +22,7 @@ def named(config):
     found = set()
     inputs = tuple(map(Path, config.get(inventory_inputs.KEY, [])))
     for copies in checkouts(config):
-        found.update(map(mask, protected(copies, prose, inputs)))
-        found.update(companions(copies, inputs))
+        found.update(protected(copies, prose, inputs))
     return sorted(found)
 
 
@@ -35,16 +34,21 @@ def checkouts(config):
 
 
 def protected(copies, prose, inputs):
+    relative = {
+        path.relative_to(root) for root in copies for path in inputs if root in path.parents
+    }
     names = set()
     for root in copies:
         names.update(path.relative_to(root) for path in candidates(root, prose))
-        names.update(inventory_inputs.files(root, inputs))
+        names.update(inventory_inputs.files(root, relative))
     for root in copies:
-        yield from inventory_credentials.hidden(root, names)
+        yield from map(mask, inventory_credentials.hidden(root, names))
+        yield from companions(root, relative)
 
 
-def companions(copies, inputs):
-    for root, source in inventory_inputs.locations(copies, inputs):
+def companions(root, relative_sources):
+    for relative in relative_sources:
+        source = root / relative
         directory = source if source.is_dir() else source.parent
         for name in ("host_vars", "group_vars"):
             path = directory / name
