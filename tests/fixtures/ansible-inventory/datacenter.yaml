@@ -1,0 +1,15 @@
+all:
+  hosts:
+  children:
+    compute:
+      hosts:
+        worker26:
+          ansible_host: 192.0.2.26
+          ansible_user: operator
+          ansible_password: private-fixture-password
+          origin_hostname: original-name
+          ceph_host: false
+    other:
+      hosts:
+        compute: {}
+        db[1:4]: {ansible_connection: local}

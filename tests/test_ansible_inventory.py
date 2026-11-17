@@ -15,6 +15,7 @@ from taskrail.executor.store import TicketStore
 from taskrail.interactions import inventory_lookup
 
 SECRET = "private-fixture-password"
+FIXTURES = Path(__file__).with_name("fixtures") / "ansible-inventory"
 
 
 class ProjectInventoryTests(unittest.TestCase):
@@ -41,16 +42,15 @@ class ProjectInventoryTests(unittest.TestCase):
     def discover(self, path, group):
         return remote_catalog.discover(inventory_file.pin(inventory.selector(str(path), group)))
 
+    def group_vars(self, inventory_dir, group):
+        variables = inventory_dir / "group_vars"
+        variables.mkdir()
+        shutil.copyfile(FIXTURES / "group-vars.yml", variables / f"{group}.yml")
+
     @unittest.skipUnless(shutil.which("ansible-inventory"), "requires the project Ansible CLI")
     def test_yaml_user_fields_and_explicit_source_win_over_environment_defaults(self):
         source = self.root / "datacenter.yaml"
-        source.write_text(
-            "all:\n  hosts:\n  children:\n    compute:\n      hosts:\n        worker26:\n"
-            "          ansible_host: 192.0.2.26\n          ansible_user: operator\n"
-            f"          ansible_password: {SECRET}\n"
-            "          origin_hostname: original-name\n          ceph_host: false\n"
-            "    other:\n      hosts:\n        compute: {}\n        db[1:4]: {ansible_connection: local}\n"
-        )
+        shutil.copyfile(FIXTURES / source.name, source)
         config = self.root / "custom.cfg"
         config.write_text("[defaults]\nremote_user=other-user\nremote_port=2222\n")
         with patch.dict(
@@ -72,9 +72,7 @@ class ProjectInventoryTests(unittest.TestCase):
         )
         # A config in the inventory directory takes effect even without exports from a login shell.
         (source / "ansible.cfg").write_text("[defaults]\nremote_user=operator\n")
-        variables = source / "group_vars"
-        variables.mkdir()
-        (variables / "cluster.yml").write_text(f"ansible_password: {SECRET}\n")
+        self.group_vars(source, "cluster")
         catalog = self.discover(source, "cluster")
         self.assertEqual(set(catalog["hosts"]), {"worker01", "worker02"}, catalog)
         self.assertEqual(catalog["hosts"]["worker02"]["username"], "operator")
@@ -85,13 +83,12 @@ class ProjectInventoryTests(unittest.TestCase):
     def test_dynamic_source_runs_once_per_discovery_and_old_targets_cannot_be_reused(self):
         source = self.root / "discover"
         listing = {
-            "_meta": {
-                "hostvars": {"node1": {"ansible_user": "operator", "ansible_password": SECRET}}
-            },
+            "_meta": {"hostvars": {"node1": {"ansible_user": "operator"}}},
             "workers": {"hosts": ["node1"]},
         }
         data = self.root / "data.json"
         data.write_text(json.dumps(listing))
+        self.group_vars(self.root, "workers")
         source.write_text("#!/bin/sh\necho run >> calls\ncat data.json\n")
         source.chmod(0o700)
         first = self.discover(source, "workers")
@@ -126,9 +123,7 @@ class ProjectInventoryTests(unittest.TestCase):
     @unittest.skipUnless(shutil.which("ansible-inventory"), "requires the project Ansible CLI")
     def test_configured_jump_host_cannot_silently_become_a_direct_connection(self):
         source = self.root / "hosts.ini"
-        source.write_text(
-            "[workers]\nnode ansible_user=operator ansible_password=fixture-password\n"
-        )
+        shutil.copyfile(FIXTURES / source.name, source)
         (self.root / "ansible.cfg").write_text(
             "[ssh_connection]\nssh_common_args=-o ProxyJump=private-jump\n"
         )
@@ -161,7 +156,7 @@ class ProjectInventoryTests(unittest.TestCase):
 
     def test_credentials_in_named_ini_and_external_vars_are_masked_before_planning(self):
         source = self.root / "hosts.ini"
-        source.write_text(f"[workers]\nnode ansible_password={SECRET}\n")
+        shutil.copyfile(FIXTURES / source.name, source)
         (self.root / "group_vars").mkdir()
         config = {
             "roots": {"repo": self.root},
