@@ -5,14 +5,15 @@ from pathlib import Path
 from taskrail.core.files import digest
 from taskrail.core.schema import require
 from taskrail.executor import inventory_file, inventory_groups, protocol
+from taskrail.executor.inventory_connection import InventoryError as InventoryError
 
 DIRECTORY = Path("/etc/taskrail-executor/inventories")
 KEY = "ssh_inventory"
 FILENAME = inventory_file.FILENAME
 NAME_PATTERN = inventory_file.NAME_PATTERN
 GROUP = "group"
-InventoryError = inventory_groups.InventoryError
-FIELDS = frozenset((FILENAME, GROUP, "sha256"))
+SHA256 = "sha256"
+FIELDS = frozenset((FILENAME, GROUP, SHA256, "directory", "binding"))
 INVALID_DATA = (AttributeError, KeyError, RecursionError, TypeError, ValueError)
 
 
@@ -21,7 +22,7 @@ def selector(filename, group):
     if not filename and not group:
         return None
     if not isinstance(filename, str) or not inventory_file.valid_name(filename):
-        raise ValueError("Choose an inventory filename such as servers.yaml and a group")
+        raise ValueError("Choose a project inventory path or private YAML filename and a group")
     return {FILENAME: filename, GROUP: protocol.label(group)}
 
 
@@ -53,11 +54,9 @@ def load(selection, descriptor=None):
     """Return only the selected group's hosts; never include parser errors in responses."""
     selected = checked(selection)
     if inventory_file.project(selected):
-        raw = inventory_file.read_descriptor(descriptor)
-        if digest(raw) != selection.get("sha256"):
-            raise InventoryError("The project inventory changed. Repeat the lookup.")
+        raw = verify_project(selection, descriptor)
     else:
-        raw = read(selected[FILENAME], selection.get("sha256"))
+        raw = read(selected[FILENAME], selection.get(SHA256))
     document = decoded(raw)
     try:
         return inventory_groups.Groups(document).resolve(selected[GROUP])
@@ -65,8 +64,19 @@ def load(selection, descriptor=None):
         raise
     except INVALID_DATA:
         raise InventoryError(
-            "Invalid static SSH inventory or unsupported connection variables."
+            "Cannot resolve the static YAML inventory. Check its group and host structure."
         ) from None
+
+
+def verify_project(selection, descriptor):
+    if not inventory_file.project(selection):
+        raise InventoryError("Expected a project inventory source.")
+    if selection.get("directory") is True and SHA256 not in selection and descriptor is None:
+        return b""
+    raw = inventory_file.read_descriptor(descriptor)
+    if digest(raw) != selection.get(SHA256):
+        raise InventoryError("The project inventory changed. Repeat the lookup.")
+    return raw
 
 
 def decoded(raw):

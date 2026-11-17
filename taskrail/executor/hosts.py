@@ -18,6 +18,10 @@ PORT = "port"
 CONFIG = Path("/etc/taskrail-executor/hosts.json")
 
 
+class InvalidConnection(ValueError):
+    """A field diagnostic safe to report without exposing private host settings."""
+
+
 def load(path=CONFIG):
     """Validate the root-managed target inventory."""
     inventory = json.loads(path.read_text(encoding="utf-8"))
@@ -37,18 +41,28 @@ def validate(host):
         raise ValueError(
             "Each host requires hostname, port, username and password or identity_file"
         )
-    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9.:-]*", host["hostname"]):
-        raise ValueError("Invalid hostname")
-    protocol.label(host["username"])
-    port = host[PORT]
-    if isinstance(port, bool) or not isinstance(port, int):
-        raise ValueError("SSH port must be an integer")
-    require(1 <= port <= MAX_PORT, "Invalid SSH port")
-    password = host.get(PASSWORD)
-    if password is None:
-        validate_identity(host[IDENTITY])
+    validate_address(host)
+    if PASSWORD in host:
+        try:
+            protocol.text(host.get(PASSWORD))
+        except ValueError:
+            raise InvalidConnection("Expected a valid, nonempty SSH password string.") from None
     else:
-        protocol.text(password)
+        validate_identity(host[IDENTITY])
+
+
+def validate_address(host):
+    hostname = host["hostname"]
+    if not isinstance(hostname, str) or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9.:-]*", hostname):
+        raise InvalidConnection("Invalid SSH hostname or address.")
+    try:
+        protocol.label(host["username"])
+    except ValueError:
+        raise InvalidConnection("Invalid SSH username.") from None
+    port = host[PORT]
+    integer = isinstance(port, int) and not isinstance(port, bool)
+    if not integer or not 1 <= port <= MAX_PORT:
+        raise InvalidConnection("SSH port must be an integer between 1 and 65535.")
 
 
 def validate_identity(path):

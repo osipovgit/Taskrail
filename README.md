@@ -35,7 +35,8 @@ The bundled settings use opencode's configured default model. For role-specific 
 Local commands normally run in a sandbox where available. Commands that require host execution run under your account and are highlighted in the log. Set `host_commands` to `"ask"` to review host requests. Git pushes require a personal decision. [Access and approvals](docs/access.md)
 
 For server diagnostics, install with `bash deploy/install.sh --with-ssh --autostart=yes`
-and put the Ansible inventory path and group in the task. Systemd starts the SSH
+and name the inventory path and group in the task. Taskrail uses the project’s Ansible
+to resolve static and dynamic sources. Systemd starts the SSH
 executor on demand. Agents run diagnostics across the selected group automatically. [SSH setup and host keys](docs/ssh-executor.md)
 
 ## From the CLI

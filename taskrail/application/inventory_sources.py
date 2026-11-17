@@ -3,7 +3,12 @@
 import re
 from pathlib import Path
 
-from taskrail.application import inventory_credentials, project_files, workspace_paths
+from taskrail.application import (
+    inventory_credentials,
+    inventory_inputs,
+    project_files,
+    workspace_paths,
+)
 from taskrail.executor import inventory
 
 # Absolute and root-relative YAML paths in prose, including quoted paths with spaces.
@@ -15,8 +20,10 @@ def named(config):
     fields = config.get("task_spec", {}).get("fields", [])
     prose = "\n".join(field["text"] for field in fields)
     found = set()
+    inputs = tuple(map(Path, config.get(inventory_inputs.KEY, [])))
     for copies in checkouts(config):
-        found.update(map(mask, protected(copies, prose)))
+        found.update(map(mask, protected(copies, prose, inputs)))
+        found.update(companions(copies, inputs))
     return sorted(found)
 
 
@@ -27,12 +34,22 @@ def checkouts(config):
         yield copies.union((Path(root),))
 
 
-def protected(copies, prose):
+def protected(copies, prose, inputs):
     names = set()
     for root in copies:
         names.update(path.relative_to(root) for path in candidates(root, prose))
+        names.update(inventory_inputs.files(root, inputs))
     for root in copies:
         yield from inventory_credentials.hidden(root, names)
+
+
+def companions(copies, inputs):
+    for root, source in inventory_inputs.locations(copies, inputs):
+        directory = source if source.is_dir() else source.parent
+        for name in ("host_vars", "group_vars"):
+            path = directory / name
+            if path.is_dir():
+                yield f"{mask(path.relative_to(root))}/*"
 
 
 def mask(relative):

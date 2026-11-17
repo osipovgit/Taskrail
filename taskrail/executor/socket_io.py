@@ -32,7 +32,7 @@ def send(connection, payload):
     """Send the descriptor on the first byte, followed by the ordinary request frame."""
     wire = protocol.encode(payload)
     selection = payload.get("ssh_inventory")
-    if not inventory_file.project(selection):
+    if not inventory_file.project(selection) or selection.get("directory") is True:
         connection.sendall(wire)
         return
     try:

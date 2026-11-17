@@ -8,7 +8,7 @@ from pathlib import Path
 
 from taskrail.core.files import digest
 from taskrail.core.schema import require
-from taskrail.executor import inventory_groups
+from taskrail.executor.inventory_connection import InventoryError
 
 FILENAME = "file"
 NAME_PATTERN = re.compile(r"[\w-][\w.-]*\.ya?ml")
@@ -23,7 +23,7 @@ def opened(path):
     try:
         return pinned_stream(pin, path)
     except OSError:
-        raise inventory_groups.InventoryError("The pinned inventory could not be read.") from None
+        raise InventoryError("The pinned inventory could not be read.") from None
     finally:
         os.close(pin)
 
@@ -32,45 +32,37 @@ def pinned_stream(pin, path):
     reference = Path(f"/proc/self/fd/{pin}")
     regular = stat.S_ISREG(os.fstat(pin).st_mode)
     if not regular or reference.readlink() != path:
-        raise inventory_groups.InventoryError(
-            "Inventory path is redirected or is not a regular file."
-        )
+        raise InventoryError("Inventory path is redirected or is not a regular file.")
     return reference.open("rb", buffering=0)
 
 
 def read_descriptor(fd):
     if fd is None:
-        raise inventory_groups.InventoryError(
-            "The project inventory is unavailable. Repeat the lookup."
-        )
+        raise InventoryError("The project inventory is unavailable. Repeat the lookup.")
     try:
         return complete_bytes(fd)
     except OSError:
-        raise inventory_groups.InventoryError(
-            "Unable to read the inventory. Repeat the lookup."
-        ) from None
+        raise InventoryError("Unable to read the inventory. Repeat the lookup.") from None
 
 
 def complete_bytes(fd):
     before = os.fstat(fd)
     if not stat.S_ISREG(before.st_mode):
-        raise inventory_groups.InventoryError("Expected a regular inventory file.")
+        raise InventoryError("Expected a regular inventory file.")
     flags = fcntl.fcntl(fd, fcntl.F_GETFL)
     if flags & os.O_ACCMODE != os.O_RDONLY or flags & os.O_PATH:
-        raise inventory_groups.InventoryError("Expected a readable, read-only inventory file.")
+        raise InventoryError("Expected a readable, read-only inventory file.")
     raw = os.pread(fd, before.st_size, 0)
     after = os.fstat(fd)
     if len(raw) != before.st_size or after.st_ctime_ns != before.st_ctime_ns:
-        raise inventory_groups.InventoryError(
-            "The inventory changed or was read incompletely. Repeat the lookup."
-        )
+        raise InventoryError("The inventory changed or was read incompletely. Repeat the lookup.")
     return raw
 
 
 def valid_name(filename):
     path = Path(filename)
     if path.is_absolute() and ".." not in path.parts:
-        return str(path) == filename and bool(NAME_PATTERN.fullmatch(path.name))
+        return str(path) == filename and bool(path.name) and "\x00" not in filename
     return bool(NAME_PATTERN.fullmatch(filename))
 
 
@@ -80,6 +72,9 @@ def project(selection):
 
 def pin(selection):
     if project(selection):
-        with opened(selection[FILENAME]) as stream:
+        path = Path(selection[FILENAME])
+        if path.resolve() == path and path.is_dir():
+            return dict(selection, directory=True)
+        with opened(path) as stream:
             return dict(selection, sha256=digest(read_descriptor(stream.fileno())))
     return selection

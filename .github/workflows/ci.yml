@@ -53,6 +53,14 @@ jobs:
           python-version: ${{ matrix.python }}
       - name: Install pinned test dependencies
         run: python -m pip install -r requirements-dev.txt
+      - name: Provide Ansible for inventory regressions
+        if: matrix.python == '3.12'
+        run: |
+          if ! command -v ansible-inventory >/dev/null; then
+            sudo apt-get update
+            sudo apt-get install --no-install-recommends --yes ansible-core
+          fi
+          ansible-inventory --version
       - name: Run Python regressions
         run: make test-python
 

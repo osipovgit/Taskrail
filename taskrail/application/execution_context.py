@@ -3,7 +3,7 @@
 import json
 from pathlib import Path
 
-from taskrail.application import original_checkout, reviewed_artifacts, run_state
+from taskrail.application import inventory_inputs, original_checkout, reviewed_artifacts, run_state
 from taskrail.core.files import atomic_json, digest
 from taskrail.core.schema import require
 from taskrail.git import reviewed_commit
@@ -21,6 +21,7 @@ def capture(run, config, state):
     payload = dict(
         roots=run_state.stored_roots(config[ROOTS]),
         worktrees=config.get(WORKTREES, {}),
+        inventory_inputs=config.get(inventory_inputs.KEY, []),
         permission_worktree=None if base is None else str(base),
     )
     atomic_json(run / REFERENCE, payload)
@@ -50,6 +51,7 @@ def apply(config, payload):
     """Execution context cannot add roots or replace the submitted effective roots."""
     require(payload[ROOTS] == run_state.stored_roots(config[ROOTS]), "Inherited roots differ")
     config[WORKTREES] = payload[WORKTREES]
+    config[inventory_inputs.KEY] = payload.get(inventory_inputs.KEY, [])
     base = payload[BASE]
     config[BASE] = None if base is None else Path(base)
 
