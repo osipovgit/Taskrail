@@ -51,7 +51,7 @@ def check_ssh(args):
     except (OSError, ValueError) as error:
         sys.stderr.write(f"{ERROR_PREFIX}{error}\n")
         return 1
-    catalog = remote_catalog.available(selection)
+    catalog = remote_catalog.discover(selection)
     targets = catalog.get("hosts", {})
     if targets:
         names = ", ".join(sorted(targets))

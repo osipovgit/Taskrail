@@ -1,35 +1,29 @@
 """Membership and connection variables from a static Ansible YAML groups graph."""
 
 from graphlib import CycleError, TopologicalSorter
-from types import MappingProxyType
 
-from taskrail.core.schema import require
-from taskrail.executor import hosts, protocol
+from taskrail.executor import protocol
+from taskrail.executor.inventory_connection import InventoryError, bind
 
-CONNECTION = MappingProxyType(
-    {
-        "hostname": ("ansible_host", "ansible_ssh_host"),
-        "username": ("ansible_user", "ansible_ssh_user"),
-        hosts.PASSWORD: ("ansible_password", "ansible_ssh_pass", "ansible_ssh_password"),
-        hosts.PORT: ("ansible_port", "ansible_ssh_port"),
-    }
-)
 ALL = "all"
-SSH_PORT = 22
-SSH_OVERRIDES = frozenset(
-    (
-        "ansible_ssh_common_args",
-        "ansible_ssh_extra_args",
-        "ansible_ssh_args",
-        "ansible_ssh_executable",
-        "ansible_ssh_private_key_file",
-        "ansible_private_key_file",
-    )
-)
 
 
-class InventoryError(ValueError):
-    """Only fixed diagnostics without YAML snippets can leave the executor."""
+def mapping(entry, section):
+    if entry is None:
+        return {}
+    if not isinstance(entry, dict):
+        raise InventoryError(f"Expected a YAML mapping for {section}.")
+    return entry
+
+
+def identifier(name, kind):
+    try:
+        protocol.label(name)
+    except ValueError:
+        raise InventoryError(
+            f"Invalid {kind}. Use a literal name starting with a letter or digit, "
+            "containing only ASCII letters, digits, dots, underscores or hyphens."
+        ) from None
 
 
 class Groups:
@@ -41,12 +35,12 @@ class Groups:
         self.members = {}
         self.hostvars = {}
         self._seen = set()
-        for name, group in document.items():
+        for name, group in mapping(document, "the inventory").items():
             self.collect(name, group, None)
         self.lineage = self.ancestry()
 
     def collect(self, name, group, parent):
-        protocol.label(name)
+        identifier(name, "group name")
         self.parents.setdefault(name, set())
         if parent is not None:
             self.parents[name].add(parent)
@@ -54,18 +48,20 @@ class Groups:
         if group is None or marker in self._seen:
             return
         self._seen.add(marker)
-        require(set(group) <= {"hosts", "vars", "children"}, "Unsupported inventory group")
+        group = mapping(group, "a group")
+        if set(group) - {"hosts", "vars", "children"}:
+            raise InventoryError("A static inventory group accepts only hosts, vars and children.")
         variables = self.variables.setdefault(name, {})
-        variables.update(group.get("vars") or {})
-        self.collect_hosts(name, group.get("hosts") or {})
-        for child, definition in (group.get("children") or {}).items():
+        variables.update(mapping(group.get("vars"), "group vars"))
+        self.collect_hosts(name, mapping(group.get("hosts"), "hosts"))
+        for child, definition in mapping(group.get("children"), "children").items():
             self.collect(child, definition, name)
 
     def collect_hosts(self, group, definitions):
         for alias, settings in definitions.items():
-            protocol.label(alias)
+            identifier(alias, "host alias")
             self.members.setdefault(alias, set()).add(group)
-            self.hostvars.setdefault(alias, {}).update(settings or {})
+            self.hostvars.setdefault(alias, {}).update(mapping(settings, "host variables"))
 
     def ancestry(self):
         lineage = {}
@@ -83,23 +79,30 @@ class Groups:
         found = {}
         for alias, direct in self.members.items():
             inherited = set().union(*map(self.lineage.__getitem__, direct))
-            if group in inherited:
-                found[alias] = self.connection(alias, inherited)
+            if group not in inherited:
+                continue
+            found[alias] = self.connection(alias, inherited, len(found) + 1)
         if not found:
             raise InventoryError("The selected SSH inventory group contains no hosts.")
         return found
 
     def precedence(self, name):
         priority = self.variables.get(name, {}).get("ansible_group_priority", 1)
-        return self.depth[name], int(priority), name
+        try:
+            return self.depth[name], int(priority), name
+        except (TypeError, ValueError, OverflowError):
+            raise InventoryError("ansible_group_priority must be an integer.") from None
 
-    def connection(self, alias, inherited):
+    def connection(self, alias, inherited, position):
         """Merge parents before children and apply host variables last."""
         settings = {}
         for name in sorted(inherited, key=self.precedence):
             settings.update(self.variables.get(name, {}))
         settings.update(self.hostvars[alias])
-        return connection(alias, settings)
+        try:
+            return bind(alias, settings)
+        except InventoryError as error:
+            raise InventoryError(f"Selected host #{position}: {error}") from None
 
 
 def group_order(parents):
@@ -110,31 +113,3 @@ def group_order(parents):
         return tuple(TopologicalSorter(parents).static_order())
     except CycleError:
         raise InventoryError("SSH inventory groups contain a cycle.") from None
-
-
-def connection(alias, settings):
-    """Only direct SSH and literal fields reach the existing password transport."""
-    require(settings.get("ansible_connection", "ssh") in ("ssh", "smart"), "Expected SSH")
-    require(not any(settings.get(key) for key in SSH_OVERRIDES), "Unsupported SSH overrides")
-    host = connection_fields(settings)
-    host.setdefault("hostname", alias)
-    port = host.setdefault(hosts.PORT, SSH_PORT)
-    if isinstance(port, str) and port.isdecimal():
-        host[hosts.PORT] = int(port)
-    hosts.validate(host)
-    password = host[hosts.PASSWORD]
-    require(
-        not any(marker in password for marker in ("{{", "{%", "{#", "$ANSIBLE_VAULT;")),
-        "Expected a literal password",
-    )
-    return host
-
-
-def connection_fields(settings):
-    host = {}
-    for field, names in CONNECTION.items():
-        for name in names:
-            if name in settings:
-                host[field] = settings.get(name)
-                break
-    return host

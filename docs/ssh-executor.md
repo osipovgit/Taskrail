@@ -20,8 +20,9 @@ and enables a private socket for that account. Systemd starts the isolated execu
 when Taskrail first contacts the socket. No extra group membership or login is
 required. Check readiness with `taskrail check --ssh`; an empty default host list
 is valid. `systemctl is-active taskrail-executor.socket` reports `active` even
-before the executor handles its first request. The system Python needs PyYAML for project inventories (Debian/Ubuntu:
-`sudo apt install python3-yaml`). Before the first remote connection, add the
+before the executor handles its first request. Install Ansible Core in the controller
+environment used by the Taskrail application (Debian/Ubuntu: `sudo apt install ansible-core`).
+The executor's private static YAML catalog uses system PyYAML. Before the first remote connection, add the
 independently verified host keys to `/etc/taskrail-executor/known_hosts` with
 `sudoedit`. Project inventories supply their own targets.
 
@@ -83,55 +84,61 @@ deliberately.
 
 ## Inspect an Ansible group from a task
 
-Name the inventory path in the task. Taskrail opens the project file using the
-application account and passes a read-only file descriptor to the executor.
-The executor has no general access to the application's home directory. There is
-no copy to install, mount or synchronize when inventory files change. Different
-directories can have identically named inventories. The planner can select another
-file and group in the same task. Each ticket keeps its own selection.
-
-To check discovery manually, use the actual project path:
-
-```sh
-taskrail check --ssh --inventory-file "/path/to/repo/inventory/cluster.yaml" --inventory-group workers
-```
-
-This queries the local executor. SSH connectivity and host keys are tested on the
-first SSH connection. To start a task, describe the project inventory path,
-group and measurements in the goal. Choose **Discussion** for a report. The same
-goal works in the dashboard and CLI:
+Name the inventory file or directory and group in the task. Use an absolute path
+or a path relative to the project root; quote names containing spaces. For example:
 
 ```sh
 taskrail submit --mode discussion --root project=/path/to/repo \
   --goal "Inspect the workers group in /path/to/repo/inventory/cluster.yaml. Report disk usage, CPU load and running services on each host."
 ```
 
-During planning, the model sends the path and group in an `INVENTORY_REQUEST`.
-Taskrail checks the path against the task's roots and authenticated source checkout.
-The executor resolves the group and returns public target information. Discovery runs
-locally and contacts no hosts. Checkpoints keep the selected path, group and content
-digest. On a new SSH request, Taskrail supplies the file again. The executor checks
-the digest, expands the selected aliases and records the request before opening a connection.
-If the file changed or disappeared, the agent receives a discovery error and can repeat the lookup.
-The SSH route returns public identities and removes known inventory passwords
-from captured command output before recording it.
+Taskrail runs `ansible-inventory -i SOURCE --list` as the application
+user in the source directory (the parent for a file) and selects the exact group
+from the resolved membership graph. The installed Ansible
+handles YAML, INI, directories, host ranges, group and host variables, executable
+inventories and installed inventory plugins. Dynamic sources can execute project
+code and contact their providers during discovery. Use trusted inventory sources
+and provide their dependencies and credentials in the application environment.
+Taskrail maps an agent's worktree path back to the original checkout before
+running Ansible. Child tasks inherit the operator's source selections. For YAML
+files found during research that the operator did not name, the executor can
+inspect static groups and literal inline variables without executing project code.
 
-Before capturing the project, Taskrail checks the working file, the staged
-version and the current commit for Ansible password fields in each task-named
-YAML file. It checks both the source checkout and the task worktree, even when
-the executor is offline. For example, protecting `inventory/main.yaml` leaves
-`roles/web/tasks/main.yaml` available. Child tasks and continuations inherit
-these protections. Use `protected_paths` for other credential files in the
-repository. Administrators can still publish
-private inventories in `/etc/taskrail-executor/inventories` for catalog checks
-by filename.
+Ansible discovers a colocated `ansible.cfg` or uses `ANSIBLE_CONFIG` from the
+application environment. The explicit source takes precedence over the default
+inventory. If your playbook script already exports these variables, check the
+same source from that shell:
 
-Use an ordinary YAML file with explicit host aliases, group
-`hosts`, `children` and inline `vars`. Connections use literal SSH username,
-password, host (defaults to the alias), and port (defaults to 22). Nested groups
-inherit variables, with host settings taking precedence. Dynamic inventory
-plugins, host ranges, external variable files, Vault, templated credentials and
-SSH proxy options are outside this static format.
+```sh
+taskrail check --ssh --inventory-file "$ANSIBLE_INVENTORY" --inventory-group k8s
+```
+
+This prints selected aliases. Taskrail tests SSH connectivity on the first SSH
+action. Login-shell exports apply to the CLI invocation; a running systemd user
+service has its own environment.
+
+The application sends only SSH connection variables over the private executor
+socket. The executor validates them and keeps the resolved targets in memory.
+The model receives aliases and recorded action results. Ansible stdout, stderr
+and connection passwords stay out of run files and tickets. A missing field or
+unsupported SSH option is reported by name. The transport uses direct OpenSSH
+with verified host keys and requires a resolved username and password. Host
+variables override configured `remote_user` and `remote_port` defaults; port
+defaults to 22. A connection field still containing a template after inventory
+resolution cannot be used. Ansible connection plugins, proxy commands and project
+key files are outside the direct password transport.
+
+A fresh inventory lookup refreshes the selection. Catalog reads and SSH actions
+reuse the frozen targets without invoking the dynamic source again. A changed
+source file, a replaced binding or an executor restart can require another lookup
+before a new action. An existing ticket remains observable by its original key.
+Directory sources and external variables take effect on the next explicit lookup.
+
+Taskrail masks recognized inventory credential files before capturing the
+worktree, including staged and committed versions, and protects adjacent
+`host_vars` and `group_vars` directories. Use `protected_paths` for additional
+project-specific secrets. Administrators can also publish static YAML files with
+inline SSH variables in `/etc/taskrail-executor/inventories` for checks by filename.
 
 ## Run commands
 

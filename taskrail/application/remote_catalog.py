@@ -1,10 +1,36 @@
 """Discover the selected executor targets without exposing authentication data."""
 
-from taskrail.application import inventory_sources
+from taskrail.application import ansible_inventory, inventory_inputs, inventory_sources
 from taskrail.core import prompt_texts
-from taskrail.executor import client, inventory
+from taskrail.executor import client, inventory, inventory_file
 
 UNAVAILABLE = "unavailable"
+UPDATE = "routes.ssh.update"
+
+
+def discover(selection):
+    """Resolve once per explicit lookup. Other catalog reads use the frozen binding."""
+    if not inventory_file.project(selection):
+        return available(selection)
+    readiness = available()
+    if not readiness.get("native_inventory"):
+        return readiness if UNAVAILABLE in readiness else {UNAVAILABLE: UPDATE}
+    try:
+        reply = client.request(ansible_inventory.binding_request(selection))
+    except inventory.InventoryError as error:
+        return {UNAVAILABLE: "routes.ssh.inventory_error", "detail": str(error)}
+    except (OSError, ValueError) as error:
+        return {UNAVAILABLE: reason(error)}
+    return bound_catalog(reply, selection)
+
+
+def bound_catalog(reply, selection):
+    bound = reply.get(inventory.KEY, {})
+    if not bound.get("binding") or selection != {
+        key: entry for key, entry in bound.items() if key != "binding"
+    }:
+        return {UNAVAILABLE: UPDATE}
+    return compatible_catalog(reply, bound)
 
 
 def available(selection=None):
@@ -25,12 +51,12 @@ def available(selection=None):
 def compatible_catalog(catalog, selection):
     if catalog.get("ssh_execution") != "automatic":
         return {
-            UNAVAILABLE: "routes.ssh.update",
+            UNAVAILABLE: UPDATE,
             "inventory_files": catalog.get("inventory_files", []),
             "jenkins": catalog.get("jenkins", {}),
         }
     if selection and catalog.get(inventory.KEY) != selection:
-        return {UNAVAILABLE: "routes.ssh.update"}
+        return {UNAVAILABLE: UPDATE}
     return catalog
 
 
@@ -49,6 +75,7 @@ def unavailable(catalog):
 
 def protect_sources(config):
     """Mask published credential filenames before capturing project files."""
+    inventory_inputs.capture(config)
     published = available().get("inventory_files", [])
     protected = config["protected_paths"]
     protected.extend(name for name in inventory_sources.named(config) if name not in protected)

@@ -13,6 +13,7 @@ from unittest.mock import patch
 
 from taskrail import cli_api, cli_requests, cli_service
 from taskrail.application import (
+    ansible_inventory,
     execution_requests,
     execution_wait,
     remote_catalog,
@@ -100,7 +101,22 @@ class InventoryInspectionTests(unittest.TestCase):
             final_message_id="response-1",
             status="OK",
         )
-        with patch.object(remote_catalog.client, "request", side_effect=self.lookup):
+        resolved = {
+            "node1": {
+                "ansible_host": "192.0.2.17",
+                "ansible_user": "operator",
+                "ansible_password": SECRET,
+            },
+            "node2": {
+                "ansible_user": "other",
+                "ansible_password": SECRET + "-extra",
+                "ansible_port": 2222,
+            },
+        }
+        with (
+            patch.object(ansible_inventory, "resolve", return_value=resolved),
+            patch.object(remote_catalog.client, "request", side_effect=self.lookup),
+        ):
             remote_catalog.protect_sources(config)
             self.assertIn(self.file.name, config["protected_paths"])
             self.assertIn(
@@ -354,10 +370,19 @@ class InventoryInspectionTests(unittest.TestCase):
                 (self.base / filename).symlink_to(self.file)
             with self.subTest(filename=filename), self.assertRaises(ValueError):
                 inventory.load(dict(SELECTION, file=filename))
-        for body, group in (
-            (FIXTURE, "missing"),
-            ("k8s: [" + SECRET, "k8s"),
-            (FIXTURE.replace(SECRET, "'{{ lookup() }}'"), "k8s"),
+        for body, group, message in (
+            (FIXTURE, "missing", "selected group is absent"),
+            ("k8s: [" + SECRET, "k8s", "Invalid static YAML"),
+            ("k8s: {hosts: [" + SECRET + "]}", "k8s", "mapping for hosts"),
+            ("k8s: {" + SECRET + ": {}}", "k8s", "only hosts, vars and children"),
+            (FIXTURE.replace(SECRET, "{{ lookup() }}"), "k8s", "Invalid static YAML"),
+            (
+                FIXTURE.replace(
+                    "ansible_user:", "ansible_group_priority: invalid\n    ansible_user:", 1
+                ),
+                "k8s",
+                "ansible_group_priority must be an integer",
+            ),
         ):
             failures = io.StringIO()
             with (
@@ -378,6 +403,7 @@ class InventoryInspectionTests(unittest.TestCase):
                     ),
                     1,
                 )
+            self.assertIn(message, failures.getvalue())
             self.assertNotIn(SECRET, failures.getvalue())
         with patch.object(
             remote_catalog.client, "request", return_value={"hosts": {"other-node": {}}}
@@ -385,3 +411,39 @@ class InventoryInspectionTests(unittest.TestCase):
             self.assertEqual(
                 remote_catalog.available(SELECTION)["unavailable"], "routes.ssh.update"
             )
+
+    def test_discovery_explains_connection_failures_without_disclosing_yaml_values(self):
+        login = {"ansible_user": "operator", "ansible_password": SECRET}
+        for settings, detail in (
+            ({"ansible_password": SECRET}, "Missing ansible_user"),
+            ({"ansible_user": SECRET}, "Missing ansible_password"),
+            (dict(login, ansible_password=None), "Missing ansible_password"),
+            (dict(login, ansible_connection=SECRET), "ansible_connection"),
+            (dict(login, ansible_ssh_common_args=SECRET), "ansible_ssh_common_args"),
+            (
+                dict(login, ansible_password="{{ " + SECRET + " }}"),
+                "ansible_password must be literal",
+            ),
+            (dict(login, ansible_port=SECRET), "SSH port"),
+            (dict(login, ansible_host=[SECRET]), "SSH hostname"),
+            (dict(login, ansible_user=[SECRET]), "SSH username"),
+            (dict(login, ansible_password=[SECRET]), "SSH password"),
+        ):
+            fixture = {
+                "k8s": {
+                    "hosts": {"first": login},
+                    "children": {"workers": {"vars": settings, "hosts": {"second": None}}},
+                }
+            }
+            with (
+                self.subTest(detail=detail),
+                patch.object(inventory, "read", return_value=json.dumps(fixture).encode()),
+                patch.object(remote_catalog.client, "request", side_effect=self.lookup),
+                patch.object(threading.Thread, "start") as start,
+            ):
+                message = remote_catalog.unavailable(remote_catalog.available(SELECTION))
+                self.assertIn("Selected host #2:", message)
+                self.assertIn(detail, message)
+                self.assertIn("SSH executor did not connect", message)
+                self.assertNotIn(SECRET, message)
+                start.assert_not_called()

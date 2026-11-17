@@ -28,7 +28,10 @@ class ExecutionContextTests(unittest.TestCase):
             base="a" * 40,
         )
         self.config = dict(
-            roots=self.roots, worktrees={"project": self.record}, permission_worktree=self.root
+            roots=self.roots,
+            worktrees={"project": self.record},
+            permission_worktree=self.root,
+            inventory_inputs=[str(self.base / "original" / "inventory.ini")],
         )
         self.state = dict(roots={"project": str(self.root)})
         execution_context.capture(self.parent, self.config, self.state)

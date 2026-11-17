@@ -8,6 +8,7 @@ from pathlib import Path
 
 from taskrail.executor import (
     inventory,
+    inventory_bindings,
     jenkins_config,
     jenkins_schema,
     protocol,
@@ -22,6 +23,7 @@ from taskrail.executor.store import TicketStore
 PRIVATE_UMASK = 0o77
 IDENTIFIER = "id"
 DIGEST = "digest"
+OPERATION = "operation"
 PRIVILEGED = frozenset(("approve", "reject"))
 ERROR_FIELD = "error"
 INVALID_REQUEST = (ValueError, OSError, LookupError, TypeError)
@@ -38,6 +40,7 @@ class ExecutorServer(socketserver.ThreadingUnixStreamServer):
     def __init__(self, address, uid, inventory, store, jenkins=None):
         self.client_uid = uid
         self.configs = {tickets.SSH: inventory, tickets.JENKINS: jenkins or {}}
+        self.configs["bindings"] = inventory_bindings.Bindings()
         self.store = store
         super().__init__(address, None, bind_and_activate=not isinstance(address, socket.socket))
         if isinstance(address, socket.socket):
@@ -48,15 +51,16 @@ class ExecutorServer(socketserver.ThreadingUnixStreamServer):
         """Keep the approval route inaccessible to the application UID."""
         if uid not in (0, self.client_uid):
             raise ValueError("Unauthorized local account")
-        operation = payload.get("operation")
+        operation = payload.get(OPERATION)
         if operation in HELD and self.maintenance.exists():
             raise protocol.MaintenanceError(
                 "Executor maintenance is in progress; nothing was submitted or approved. Try again after it ends."
             )
         if operation in PRIVILEGED and uid == 0:
             return self.decide(operation, payload)
-        if operation == "catalog":
-            return catalog(self.configs, payload, descriptor)
+        if operation in {"catalog", "bind-inventory"}:
+            with self.store.lock:
+                return catalog(self.configs, payload, descriptor)
         if operation in {"run-ssh", "submit"}:
             return self.submit(payload, descriptor)
         if operation == "status":
@@ -80,7 +84,7 @@ class ExecutorServer(socketserver.ThreadingUnixStreamServer):
 
     def submit(self, payload, descriptor):
         """Only Jenkins jobs use the configured approval policy."""
-        if payload["operation"] == "run-ssh":
+        if payload[OPERATION] == "run-ssh":
             return self.run_ssh(payload, descriptor)
         kind = tickets.submission_kind(payload)
         if kind != tickets.JENKINS or inventory.KEY in payload:
@@ -142,18 +146,27 @@ class ExecutorServer(socketserver.ThreadingUnixStreamServer):
 def target_config(configs, payload, descriptor):
     if inventory.KEY not in payload:
         return configs[tickets.SSH]
+    if "binding" in payload[inventory.KEY]:
+        return configs["bindings"].get(payload[inventory.KEY], descriptor)
     return inventory.load(payload[inventory.KEY], descriptor)
 
 
 def catalog(configs, payload, descriptor=None):
+    if payload.get(OPERATION) == "bind-inventory":
+        selection, target_hosts = configs["bindings"].register(
+            payload[inventory.KEY], payload["hosts"], descriptor
+        )
+    else:
+        selection = payload.get(inventory.KEY)
+        target_hosts = target_config(configs, payload, descriptor)
     jenkins = jenkins_config.public(configs[tickets.JENKINS])
-    target_hosts = target_config(configs, payload, descriptor)
     shown = dict(hosts=public_hosts(target_hosts), jenkins=jenkins)
     shown["inventory_lookup"] = True
+    shown["native_inventory"] = True
     shown["ssh_execution"] = "automatic"
     shown["inventory_files"] = inventory.published()
-    if inventory.KEY in payload:
-        shown[inventory.KEY] = payload.get(inventory.KEY)
+    if selection is not None:
+        shown[inventory.KEY] = selection
     return shown
 
 

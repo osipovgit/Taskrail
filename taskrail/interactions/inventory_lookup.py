@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from taskrail.application import artifacts, execution_requests, remote_catalog, workspace_paths
+from taskrail.application import artifacts, execution_requests, inventory_inputs, remote_catalog
 from taskrail.core import json_response, prompt_texts, schema
 from taskrail.executor import inventory, inventory_file
 from taskrail.interactions import transcripts
@@ -17,17 +17,26 @@ def extract(text):
 
 
 def source(config, request):
-    """Use an exact project file; the daemon independently checks its bytes."""
+    """Run trusted inventory code only in the original project checkout."""
     path = Path(request["path"])
-    if not inside_project(config, path):
+    if path.resolve() != path:
         raise ValueError(prompt_texts.text("feedback.inventory_path"))
-    return inventory_file.pin(inventory.selector(str(path), request["group"]))
+    for checkout, original in inventory_inputs.checkouts(config):
+        if checkout in path.parents:
+            trusted = original / path.relative_to(checkout)
+            if str(trusted) in config.get(inventory_inputs.KEY, []):
+                path = trusted
+            return inventory_file.pin(inventory.selector(str(path), request["group"]))
+    raise ValueError(prompt_texts.text("feedback.inventory_path"))
 
 
-def inside_project(config, path):
-    roots = set(config["roots"].values())
-    roots.update(origin for origin, _ in workspace_paths.mappings(config))
-    return path.resolve() == path and bool(roots.intersection(path.parents))
+def discover(config, selection):
+    if selection["file"] in config.get(inventory_inputs.KEY, []):
+        return remote_catalog.discover(selection)
+    filename = Path(selection["file"]).name
+    if inventory.NAME_PATTERN.fullmatch(filename) and not selection.get("directory"):
+        return remote_catalog.available(selection)
+    return {remote_catalog.UNAVAILABLE: "feedback.inventory_source"}
 
 
 def consume(actions, request):
@@ -38,16 +47,17 @@ def consume(actions, request):
         selection = source(session.environment["config"], request)
     except (OSError, ValueError) as error:
         return prompt_texts.text("feedback.rejected_request", status=STATUS, error=error)
-    catalog = remote_catalog.available(selection)
+    catalog = discover(session.environment["config"], selection)
     if catalog.get(remote_catalog.UNAVAILABLE):
         return remote_catalog.unavailable(catalog)
-    session.state[inventory.KEY] = selection
+    session.state[inventory.KEY] = catalog[inventory.KEY]
     artifacts.save_run(actions.run, session.state)
     return answer(actions, request, catalog)
 
 
 def answer(actions, request, catalog):
-    found = dict(targets=sorted(catalog["hosts"]))
+    selected = catalog[inventory.KEY]
+    found = dict(source=selected["file"], targets=sorted(catalog["hosts"]))
     snapshot = transcripts.command_snapshot(actions.folder, request, found, source="remote")
     rules = execution_requests.instructions(catalog, actions.run)
     return f"{snapshot}\n{rules}"

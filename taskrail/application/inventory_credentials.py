@@ -6,19 +6,20 @@ from functools import cache, partial
 from subprocess import TimeoutExpired
 
 from taskrail.core.git_marker import control
-from taskrail.executor import inventory_file, inventory_groups
+from taskrail.executor import inventory_connection, inventory_file
 from taskrail.git import process
 
 MASK_SCAN_BYTES = 8 * 1024 * 1024
 PASSWORD_FIELDS = tuple(
     name.encode()
     for name in (
-        *inventory_groups.CONNECTION["password"],
+        *inventory_connection.CONNECTION["password"],
         "ansible_become_pass",
         "ansible_sudo_pass",
     )
 )
 ESCAPED_KEY = re.compile(rb"\\(?:[xuU]|[\r\n])")
+PLUGIN = re.compile(rb"(?m)^\s*plugin\s*:")
 
 
 def private(path):
@@ -38,7 +39,11 @@ def sensitive(raw):
     # YAML may encode a literal key with Unicode escapes or a continued quoted scalar.
     if b"\x00" in raw or ESCAPED_KEY.search(raw):
         return True
-    return any(field in raw for field in PASSWORD_FIELDS)
+    return (
+        bool(PLUGIN.search(raw))
+        or b"$ANSIBLE_VAULT;" in raw
+        or any(field in raw for field in PASSWORD_FIELDS)
+    )
 
 
 def hidden(root, names):

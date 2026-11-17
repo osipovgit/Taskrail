@@ -361,9 +361,12 @@ engine. Stages record role source/hash, contract hash and request hash for UI pr
 
 During planning, implementation or review, an available inventory-capable executor accepts
 `{"schema_version":1,"status":"INVENTORY_REQUEST","path":"/absolute/project/inventory.yaml","group":"workers"}`.
-The application verifies project scope, binds the exact YAML path and bytes by
-digest, and passes its read-only descriptor to the isolated executor. The response identifies the selected aliases for subsequent
-automatic SSH actions. Use `"targets": "all"` for the selected group or give a list of aliases. Discovery makes no remote connection.
+For a source named by the operator, the application resolves the selected group with Ansible in the
+trusted source checkout. A source can be a file, directory or dynamic inventory plugin or script.
+The private executor binds the resulting SSH targets and returns their public identities. Further
+catalog reads and actions reuse the binding. A new lookup refreshes it. Static YAML discovery
+also works for files found within the task roots. Use `"targets": "all"` for the selected group
+or give a list of aliases. Only an SSH action starts the executor's connection to a target.
 
 To request an operation, send one JSON object as the entire message. The examples
 use a declared working root for Git and local commands. SSH and Jenkins examples
