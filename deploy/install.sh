@@ -113,7 +113,7 @@ if [[ "$with_ssh" == yes ]]; then
     sudo bash "$source_dir/deploy/install-executor.sh" --client="$(id -un)" --autostart=enable
 elif [[ "$executor_reset" == yes ]]; then
     sudo bash "$source_dir/deploy/install-executor.sh" --client="$(id -un)" --autostart=disable
-    echo "SSH settings and host keys were erased. Configure them before enabling the executor socket."
+    echo "SSH settings and saved host keys were erased. Restore any required administrator pins before enabling the executor socket."
 fi
 if [[ "$boot" == yes ]]; then
     # Explicit opt-in: this affects the user's service manager, not just Taskrail.

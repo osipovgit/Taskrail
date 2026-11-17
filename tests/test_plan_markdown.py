@@ -100,6 +100,18 @@ class PlanDocumentTests(unittest.TestCase):
         )
         self.assertIn("v100.yaml:165-166", plan["coverage"][1]["explanation"])
 
+    def test_prose_before_evidence_gets_a_repair_that_preserves_the_cited_range(self):
+        original = "project/README.md:12-18, roles/x.yml:3"
+        citation = "`/run/report.json:8-61`"
+        reason = "the inventory resolved 50 hosts"
+        with self.assertRaisesRegex(ValueError, "cite the lines first, immediately after"):
+            payload(PLAN.replace(original, f"{reason} ({citation})."), REQUIREMENTS, ROOTS)
+        plan = payload(PLAN.replace(original, f"{citation} ({reason})."), REQUIREMENTS, ROOTS)
+        self.assertEqual(
+            [(row["path"], row["line_start"], row["line_end"]) for row in plan["evidence"]],
+            [("/run/report.json", 8, 61)],
+        )
+
     def test_invalid_citation_suffixes_cannot_drop_claims_silently(self):
         for detail in (
             "project/a:1,2-bad",

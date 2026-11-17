@@ -16,7 +16,7 @@ SEPARATOR = re.compile(r"\s*([,;])\s*")
 
 def parts(text, explanation=True, syntax=CITATION):
     """Keep every explicit citation and explanation, including notes between citations."""
-    found, remaining = citation(text.strip(), syntax)
+    found, remaining = citation(text.strip(), syntax, "validation.first_citation")
     details = []
     while remaining.strip() and not (explanation and remaining.strip() == "."):
         note = explanation_prefix(remaining.removeprefix(",")) if explanation else None
@@ -61,15 +61,15 @@ def following(text, previous, syntax):
     if shorthand:
         span = (previous, *shorthand.groups())
         return [span], remaining[shorthand.end() :]
-    return citation(remaining, syntax)
+    return citation(remaining, syntax, "validation.plan_citations")
 
 
-def citation(text, syntax):
+def citation(text, syntax, error_key):
     """Only the future-read grammar permits a file without an evidence span."""
     text = re.sub(r"^` ([^`\n]+) `", r"`\1`", text)
     match = syntax.match(text)
     if match is None:
-        raise ValueError(prompt_texts.text("validation.plan_citations"))
+        raise ValueError(prompt_texts.text(error_key))
     groups = match.groups()
     tail = text[match.end() :]
     for index in (0, 3, 6):

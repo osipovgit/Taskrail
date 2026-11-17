@@ -25,6 +25,8 @@ fi
 command -v python3 >/dev/null
 /usr/bin/python3 -c 'import sys; assert sys.version_info >= (3, 10), "Python 3.10+ is required"'
 command -v ssh >/dev/null
+command -v ssh-keygen >/dev/null
+command -v ssh-keyscan >/dev/null
 command -v systemctl >/dev/null
 command -v runuser >/dev/null
 source_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
@@ -114,4 +116,4 @@ case "$autostart" in
     disable) systemctl disable "$socket_unit" ;;
     keep) if [[ "$socket_active" == yes ]]; then systemctl start "$socket_unit"; fi ;;
 esac
-echo "Executor installed. Verify remote host keys and add them to /etc/taskrail-executor/known_hosts."
+echo "Executor installed. SSH remembers new hosts on first contact. To preconfigure trusted keys, use /etc/taskrail-executor/known_hosts."
