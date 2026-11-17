@@ -20,6 +20,7 @@ EXECUTOR = (
     "executor/action_schema.py",
     "executor/approval.py",
     "executor/client.py",
+    "executor/host_keys.py",
     "executor/hosts.py",
     "executor/inventory.py",
     "executor/inventory_bindings.py",

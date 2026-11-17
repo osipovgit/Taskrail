@@ -410,7 +410,8 @@ its service, code, tickets, inventory/passwords and known host keys. Failure to 
 the application leaves the executor untouched; failure to stop the executor preserves
 both installations and their data. RUNNING or UNKNOWN
 remote tickets must first be reconciled. The executor socket is reinstalled disabled
-unless `--with-ssh` is given. Restore verified host keys before remote connections. Dedicated
+unless `--with-ssh` is given. A reset clears first-use trust. Restore any
+administrator pins before reconnecting to those targets. Dedicated
 system account/group identities are retained.
 
 ## Run storage updates

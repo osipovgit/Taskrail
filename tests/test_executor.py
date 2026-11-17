@@ -49,6 +49,10 @@ class ExecutorTest(unittest.TestCase):
         self.addCleanup(self.temporary.cleanup)
         self.root = Path(self.temporary.name)
         self.store = TicketStore(self.root / "tickets")
+        self.known_hosts = self.root / "known_hosts"
+        lookup = patch.object(transport.host_keys, "trust_file", return_value=self.known_hosts)
+        lookup.start()
+        self.addCleanup(lookup.stop)
 
     def submit(self, action=None, key="request-1"):
         server = self.server()
@@ -141,8 +145,11 @@ class ExecutorTest(unittest.TestCase):
         self.assertEqual(stored["results"][1]["output"], "[REDACTED] [REDACTED]")
 
     def test_ssh_does_not_inherit_agent_password_or_config_in_argv(self):
-        argv = transport.command(INVENTORY["server-a"])
+        argv = transport.command(INVENTORY["server-a"], self.known_hosts)
         self.assertIn("StrictHostKeyChecking=yes", argv)
+        self.assertIn(f"UserKnownHostsFile={self.known_hosts}", argv)
+        self.assertIn(f"GlobalKnownHostsFile={transport.host_keys.PINNED}", argv)
+        self.assertIn("UpdateHostKeys=no", argv)
         self.assertIn("IdentityAgent=none", argv)
         self.assertNotIn(INVENTORY["server-a"]["password"], repr(argv))
         env = transport.environment(INVENTORY["server-a"])
@@ -154,7 +161,7 @@ class ExecutorTest(unittest.TestCase):
         key_host.pop("password")
         key_host["identity_file"] = "/etc/taskrail-executor/keys/server-a"
         hosts.validate(key_host)
-        argv = transport.command(key_host)
+        argv = transport.command(key_host, self.known_hosts)
         for option in (
             "IdentityFile=/etc/taskrail-executor/keys/server-a",
             "IdentitiesOnly=yes",

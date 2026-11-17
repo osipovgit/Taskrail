@@ -22,9 +22,8 @@ required. Check readiness with `taskrail check --ssh`; an empty default host lis
 is valid. `systemctl is-active taskrail-executor.socket` reports `active` even
 before the executor handles its first request. Install Ansible Core in the controller
 environment used by the Taskrail application (Debian/Ubuntu: `sudo apt install ansible-core`).
-The executor's private static YAML catalog uses system PyYAML. Before the first remote connection, add the
-independently verified host keys to `/etc/taskrail-executor/known_hosts` with
-`sudoedit`. Project inventories supply their own targets.
+The executor's private static YAML catalog uses system PyYAML. Project inventories
+supply their own targets. SSH remembers new hosts automatically on first use.
 
 Use the same command to update both components. The ordinary installer also works
 without SSH. For a separate system installation, use
@@ -62,10 +61,20 @@ Use `{}` if tasks will only use selected inventories. Default catalog format:
 }
 ```
 
-Credentials and host keys belong to `root:taskrail-executor`, mode `0640`, inside a
-`0750` directory. Obtain and verify host keys through a trusted channel before
-adding them to `known_hosts`; the executor never accepts unknown keys automatically.
-For nonstandard ports use OpenSSH's `[hostname]:port` known-hosts notation.
+The first SSH action uses `ssh-keyscan` to obtain a new destination's public
+keys and saves them under `/var/lib/taskrail-executor/host-keys/`. OpenSSH
+verifies the server against these keys before sending credentials or commands.
+Aliases and logins for the same address and port share the record. Later
+connections use the saved keys. A different server key blocks the connection.
+The initial scan trusts the network path to the destination.
+
+Administrator pins in `/etc/taskrail-executor/known_hosts` take precedence
+and skip first-use enrollment. To preconfigure an identity or authorize a
+legitimate rotation, verify the new fingerprint through a trusted channel
+and update this file with `sudoedit`. Match the resolved address for port 22
+or `[address]:port` for other ports. Private configuration files belong to
+`root:taskrail-executor`, mode `0640`, inside a `0750` directory.
+
 The executor loads `hosts.json` at startup. After editing that default catalog,
 restart the executor when no actions are running. Task-selected YAML inventories
 are read on demand.
@@ -122,7 +131,7 @@ socket. The executor validates them and keeps the resolved targets in memory.
 The model receives aliases and recorded action results. Ansible stdout, stderr
 and connection passwords stay out of run files and tickets. A missing field or
 unsupported SSH option is reported by name. The transport uses direct OpenSSH
-with verified host keys and requires a resolved username and password. Host
+with first-use or administrator-pinned host keys and requires a resolved username and password. Host
 variables override configured `remote_user` and `remote_port` defaults; port
 defaults to 22. A connection field still containing a template after inventory
 resolution cannot be used. Ansible connection plugins, proxy commands and project

@@ -4,9 +4,8 @@ import base64
 import shlex
 from pathlib import PurePosixPath
 
-from taskrail.executor import streams
+from taskrail.executor import host_keys, streams
 
-KNOWN_HOSTS = "/etc/taskrail-executor/known_hosts"
 ASKPASS = "/opt/taskrail-executor/deploy/ssh-askpass"
 SSH_TRANSPORT_ERROR = 255
 SSH_OPTION = "-o"
@@ -41,7 +40,7 @@ def file_commands(name, body):
     ]
 
 
-def command(host):
+def command(host, known_hosts):
     """Do not inherit caller SSH config, agents, proxies or host-key policy."""
     return [
         "/usr/bin/ssh",
@@ -51,14 +50,16 @@ def command(host):
         SSH_OPTION,
         "StrictHostKeyChecking=yes",
         SSH_OPTION,
-        f"UserKnownHostsFile={KNOWN_HOSTS}",
+        f"UserKnownHostsFile={known_hosts}",
         SSH_OPTION,
-        "GlobalKnownHostsFile=/dev/null",
+        f"GlobalKnownHostsFile={host_keys.PINNED}",
+        SSH_OPTION,
+        "UpdateHostKeys=no",
         SSH_OPTION,
         "IdentityAgent=none",
         *authentication(host),
         SSH_OPTION,
-        "ConnectTimeout=15",
+        f"ConnectTimeout={host_keys.CONNECT_TIMEOUT}",
         SSH_OPTION,
         "ClearAllForwardings=yes",
         SSH_OPTION,
@@ -109,8 +110,12 @@ def environment(host):
 
 def execute(host, action):
     """Return complete output and the observed exit code."""
+    try:
+        known_hosts = host_keys.trust_file(host)
+    except (host_keys.HostKeyError, OSError) as error:
+        return dict(status="FAILED", exit_code=None, output=f"SSH action did not start: {error}")
     exit_code, output = streams.execute(
-        command(host),
+        command(host, known_hosts),
         remote_script(action).encode("utf-8"),
         environment(host),
         action.get("timeout_seconds"),

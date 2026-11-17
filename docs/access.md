@@ -60,7 +60,8 @@ and Git reads can expose history from elsewhere in the same repository.
 Agents must not use either route to bypass scope or protected-file rules. Hostile
 project content and untrusted local users require stronger isolation.
 
-SSH uses the socket-enabled executor and verified host keys. It inherits no
+SSH uses the socket-enabled executor. It remembers keys on first contact,
+honors administrator pins and rejects a changed identity. It inherits no
 SSH agent/config or remote sudo. Stop ends observation, not necessarily remote work.
 Git network operations use their separately authorized noninteractive transport.
 See [SSH executor](ssh-executor.md) and [Git access](git-access.md).

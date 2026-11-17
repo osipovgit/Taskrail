@@ -162,6 +162,8 @@ no-change and integration reviews as well as reviews of edits. Models cannot
 override observed changes, granted scope, check records or the derived verdict.
 Executor claims need exact snapshot lines too; a prose summary alone is not proof.
 
+Place the first citation immediately after the outcome, as in
+`R2 → done: /run/report.json:8-61 (the inventory group was resolved)`.
 Single lines (`:41` or `:41-41`), multiple citations separated by commas or semicolons,
 and a final period are valid. Each citation may have a parenthesized explanation:
 `source.py:1-3 (first reason), other.py:4 (second reason)`. Every explicit range is
