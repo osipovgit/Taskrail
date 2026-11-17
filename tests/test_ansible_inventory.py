@@ -8,7 +8,11 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from taskrail.application import ansible_inventory, inventory_inputs, remote_catalog
+from git_fixture import repository
+
+from taskrail.application import ansible_inventory, inventory_inputs, remote_catalog, run_setup
+from taskrail.application.task_config import configuration
+from taskrail.core.files import atomic_json
 from taskrail.executor import inventory, inventory_file
 from taskrail.executor.service import ExecutorServer
 from taskrail.executor.store import TicketStore
@@ -154,6 +158,59 @@ class ProjectInventoryTests(unittest.TestCase):
             self.assertIn("unavailable", inventory_lookup.discover(config, unselected))
             self.assertEqual(native.call_count, 1)
 
+    @unittest.skipUnless(shutil.which("ansible-inventory"), "requires the project Ansible CLI")
+    def test_followup_resolves_operator_sources_with_ansible_and_masks_them_again(self):
+        repo = self.root / "repo"
+        repo.mkdir()
+        source = repo / "cluster.yaml"
+        source.write_text(
+            "workers:\n  become: true\n  ansible_python_interpreter: /usr/bin/python3\n"
+            "  hosts:\n    worker15: {ansible_user: operator, ansible_password: fixture}\n"
+        )
+        (repo / "other.ini").touch()
+        (repo / "unselected.ini").touch()
+        repository(repo)
+        settings = self.root / "settings.json"
+        atomic_json(settings, dict(opencode_version="1.x", worktree_base=str(self.root / "trees")))
+        options = dict(resume=False, plan_response=None)
+        parent = self.root / "original"
+        task = self.root / "task.md"
+        header = json.dumps({"roots": {"repo": str(repo)}, "read_only": True})
+        task.write_text(f"```taskrail-task\n{header}\n```\nInspect workers in cluster.yaml.")
+        state = run_setup.open_state(configuration(task, settings), parent, options, True)
+        atomic_json(parent / "run.json", dict(state, status="NO_CHANGES_REQUIRED"))
+
+        reply = self.root / ".submissions" / "reply"
+        reply.mkdir(parents=True)
+        atomic_json(
+            reply / "launch.json",
+            dict(
+                id="reply",
+                launch_id="reply",
+                execution_parent=parent.name,
+                submission_mode="followup",
+                resume=False,
+            ),
+        )
+        header = json.dumps({"roots": state["roots"], "read_only": True})
+        task = reply / "task.md"
+        task.write_text(
+            f"```taskrail-task\n{header}\n```\nInspect worker15. Also consider other.ini."
+            '\n## Conversation history\n[{"summary":"Use unselected.ini"}]'
+        )
+        config = configuration(task, settings)
+        state = run_setup.open_state(config, self.root / "reply", options, True)
+        self.assertCountEqual(config[inventory_inputs.KEY], map(str, (source, repo / "other.ini")))
+        self.assertNotIn(inventory.KEY, state)
+        self.assertIn("cluster.yaml", config["protected_paths"])
+        worktree = Path(state["roots"]["repo"])
+        selection = inventory_lookup.source(
+            config, {"path": str(worktree / source.name), "group": "workers"}
+        )
+        self.assertEqual(selection["file"], str(source))
+        catalog = inventory_lookup.discover(config, selection)
+        self.assertEqual(set(catalog["hosts"]), {"worker15"}, catalog)
+
     def test_credentials_in_named_ini_and_external_vars_are_masked_before_planning(self):
         source = self.root / "hosts.ini"
         shutil.copyfile(FIXTURES / source.name, source)
@@ -167,6 +224,27 @@ class ProjectInventoryTests(unittest.TestCase):
         self.assertIn("hosts.ini", config["protected_paths"])
         self.assertIn("group_vars/*", config["protected_paths"])
         self.assertNotIn(SECRET, str(config))
+
+    def test_removed_inventory_directory_keeps_its_worktree_copy_protected(self):
+        original = self.root / "original"
+        original.mkdir()
+        checkout = self.root / "worktree"
+        inventory_dir = checkout / "inventories"
+        inventory_dir.mkdir(parents=True)
+        shutil.copyfile(FIXTURES / "hosts.ini", inventory_dir / "workers.ini")
+        self.group_vars(inventory_dir, "workers")
+        config = dict(
+            roots={"repo": checkout},
+            worktrees={"repo": dict(source=str(original), worktree=str(checkout))},
+            protected_paths=[],
+        )
+        remote_catalog.protect_sources(
+            config, {"inventory_inputs": [str(original / "inventories")]}
+        )
+        self.assertIn("inventories/workers.ini", config["protected_paths"])
+        self.assertIn("inventories/group_vars/*", config["protected_paths"])
+        with self.assertRaises(FileNotFoundError):
+            inventory_lookup.source(config, {"path": str(inventory_dir), "group": "workers"})
 
     def test_native_process_diagnostics_never_quote_credentials(self):
         source = self.root / "hosts.ini"

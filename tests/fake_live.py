@@ -216,7 +216,11 @@ if mode in {"bad-git-request", "local-effects"} and role == "planner" and "--ses
         part.update(messageID="msg1", id=event)
         print(json.dumps(dict(type=event, part=part, sessionID="ses1")))
     sys.exit(0)
-if mode == "ssh-action" and role == "planner" and not (run / "remote-execution.json").exists():
+if (
+    mode in {"ssh-action", "ssh-discussion"}
+    and role == "planner"
+    and not (run / "remote-execution.json").exists()
+):
     action = dict(
         targets=["server-a"],
         script="uname -a\n",
@@ -446,6 +450,8 @@ if role == "planner":
         value["proposed_change_files"] = ["project/.git/config"]
     if mode in ("no-change", "no-change-rejected", "wrapped-no-change"):
         value.update(proposed_change_files=[], steps=[], summary="Current source already returns 2")
+    if mode == "ssh-discussion":
+        value.update(proposed_change_files=[], steps=[], summary="The server runs Linux.")
 elif role == "implementer":
     if mode == "writer-timeout":
         target.write_text(target.read_text().replace("return 1", "return 2"))

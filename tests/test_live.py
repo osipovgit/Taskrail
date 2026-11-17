@@ -379,6 +379,27 @@ class LiveTests(LiveFixture, unittest.TestCase):
         self.assertEqual(state["execution_jobs"][0]["status"], "SUCCEEDED")
         self.assertIn("SSH and Jenkins execution", (run / "report.md").read_text())
 
+    def test_ssh_discussion_publishes_the_reviewed_report(self):
+        header = {"roots": {"project": str(self.root)}, "read_only": True}
+        self.task.write_text(
+            f"```taskrail-task\n{json.dumps(header)}\n```\nIdentify the server OS."
+        )
+        response = dict(
+            id="survey", status="SUCCEEDED", results=[dict(target="server-a", output="Linux")]
+        )
+        with (
+            patch(
+                "taskrail.application.remote_catalog.available",
+                return_value={"hosts": {"server-a": {}}},
+            ),
+            patch("taskrail.executor.client.request", return_value=response),
+        ):
+            run, status, state = self.run_mode("ssh-discussion")
+        self.assertEqual(status, "NO_CHANGES_REQUIRED", state["summary"])
+        self.assertEqual(state["plan_review"]["status"], "APPROVE")
+        self.assertEqual(state["answer"], "The server runs Linux.")
+        self.assertIn("## Answer\n\nThe server runs Linux.", (run / "report.md").read_text())
+
     def test_ssh_wait_stop_resume_observes_same_ticket(self):
         def pending_request(payload):
             self.assertEqual(payload["operation"], "run-ssh")

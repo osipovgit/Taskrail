@@ -116,7 +116,10 @@ title and link and shows previous questions and outcomes. Open **View earlier wo
 for the stages and delivery controls of a previous turn. **Return to the latest turn**
 opens the reply form again.
 
-- **Discussion** researches the current code and produces a free-form reviewed answer.
+- **Discussion** produces a free-form reviewed answer, including results from SSH
+  diagnostics. Earlier reviewed answers stay visible while a reply runs and after
+  it finishes. If a turn saved only the reviewer’s conclusion, Taskrail can display
+  its original answer from the intact, approved planner result.
 - **Plan** is read-only and produces a reviewed design in `design.md`, with options,
   trade-offs, risks, an implementation outline and open questions.
 - **Develop** can change project files. Switch back to Discussion to ask about the

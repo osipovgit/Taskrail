@@ -7,6 +7,7 @@ from taskrail.application import run_store
 from taskrail.core.paths import tool_paths
 from taskrail.observability.progress import clock
 from taskrail.web import delivery_state, history, lifecycle, run_errors, run_family, split_approvals
+from taskrail.web.discussion_answers import reviewed_answer
 from taskrail.web.run_activity import activity
 from taskrail.web.run_files import contained, optional_json, stage_telemetry, text_tail
 from taskrail.web.run_messages import public_messages
@@ -99,7 +100,6 @@ def index_view(state, stages):
         requirements=state.get("requirements", []),
         status=state.get("status"),
         summary=tool_paths(state.get("summary", ""), roots),
-        answer=state.get("answer"),
         roots=roots,
         changed_files=tool_paths(state.get("changed_files", []), roots),
         unverified=state.get("unverified", []),
@@ -115,9 +115,16 @@ def context_view(run, submission, state):
     started = run.joinpath(history.TASK_FILE).is_file()
     task = contained(run, history.TASK_FILE) if started else contained(submission, "task.md")
     indexed = run.joinpath("run.json").exists()
+    draft = history.task_draft(run, editable=True) if indexed else None
+    answer = state.get("answer")
+    if draft and draft["read_only"]:
+        answer = reviewed_answer(run, state)
     return dict(
-        conversation=history.previous_messages(task.parent, task.name) if task.is_file() else [],
-        draft=history.task_draft(run, editable=True) if indexed else None,
+        conversation=history.previous_messages(run, task.read_text(encoding="utf-8"))
+        if task.is_file()
+        else [],
+        draft=draft,
+        answer=answer,
         actions=lifecycle.actions(run, state, activity(run)),
         auto_approve=split_approvals.shown(run, state),
         delivery=delivery_state.view(run, state),

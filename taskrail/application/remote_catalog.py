@@ -73,9 +73,9 @@ def unavailable(catalog):
     return prompt_texts.text(reason_key, detail=catalog.get("detail", ""))
 
 
-def protect_sources(config):
+def protect_sources(config, parent=None):
     """Mask published credential filenames before capturing project files."""
-    inventory_inputs.capture(config)
+    inventory_inputs.capture(config, (parent or {}).get(inventory_inputs.KEY, ()))
     published = available().get("inventory_files", [])
     protected = config["protected_paths"]
     protected.extend(name for name in inventory_sources.named(config) if name not in protected)

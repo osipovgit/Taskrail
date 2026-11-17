@@ -109,7 +109,9 @@ inventories and installed inventory plugins. Dynamic sources can execute project
 code and contact their providers during discovery. Use trusted inventory sources
 and provide their dependencies and credentials in the application environment.
 Taskrail maps an agent's worktree path back to the original checkout before
-running Ansible. Child tasks inherit the operator's source selections. For YAML
+running Ansible. Replies retain inventory paths named earlier in the conversation
+and can add another source. Each reply resolves the requested group afresh. Child
+tasks inherit the parent's source selections. For YAML
 files found during research that the operator did not name, the executor can
 inspect static groups and literal inline variables without executing project code.
 
@@ -125,6 +127,12 @@ taskrail check --ssh --inventory-file "$ANSIBLE_INVENTORY" --inventory-group k8s
 This prints selected aliases. Taskrail tests SSH connectivity on the first SSH
 action. Login-shell exports apply to the CLI invocation; a running systemd user
 service has its own environment.
+
+The lookup receipt under `00-input/remote/` records either the selected aliases
+or the reason selection failed. Ansible can warn about ignored group keys and
+still resolve the hosts. For a connection failure, inspect the SSH ticket.
+Keep full `ansible-inventory --list` output out of scratch files and logs because
+it can include connection passwords.
 
 The application sends only SSH connection variables over the private executor
 socket. The executor validates them and keeps the resolved targets in memory.

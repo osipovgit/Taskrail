@@ -81,12 +81,13 @@ def open_state(config, run, request, ready):
         execution_context.restore(run, config, state)
         protect_sources(config)
         return state
+    parent = None
     if ready:
         parent = execution_context.submission_source(config, run)
         isolate(config, run.name)
         if parent is not None:
             worktree_followup.transfer(config, parent)
-    protect_sources(config)
+    protect_sources(config, parent)
     state = new_state(run, config, request)
     original_checkout.capture(run, config)
     return state
