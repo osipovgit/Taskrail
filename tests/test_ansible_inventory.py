@@ -305,7 +305,7 @@ class ProjectInventoryTests(unittest.TestCase):
         source = self.root / "cluster.yaml"
         source.write_text(
             "all:\n  vars:\n    ansible_user: operator\n"
-            f"    ansible_password: {SECRET}\n"
+            "    ansible_password: private-fixture-password\n"
             "  children:\n    workers:\n      become: true\n"
             "      ansible_python_interpreter: /usr/bin/python3\n"
             "      ansible_user: ignored-user\n"
