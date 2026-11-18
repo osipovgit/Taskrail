@@ -2,7 +2,17 @@
 
 from taskrail.application import check_parents, reviewed_artifacts, run_store
 from taskrail.core.schema import require
-from taskrail.web import delivery_launch, epic_launch, history, run_family
+from taskrail.web import delivery_launch, discussions, epic_launch, history, run_family
+
+
+def retry(launcher, run):
+    """Repeat the latest request as a new turn with its full conversation and checkout."""
+    name = discussions.current_turn(launcher.base, run.name)
+    run = history.checked_run(launcher.base, name)
+    require_standalone(run, "followup", run_store.read(run))
+    return launcher.submit(
+        dict(history.task_draft(run, editable=True), parent_run=name, submission_mode="followup")
+    )
 
 
 def restart(launcher, run):

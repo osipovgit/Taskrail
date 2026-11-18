@@ -75,6 +75,7 @@ def member_fields(run):
 
 def can_follow_up(run, state):
     """A stopped standalone run; a task or phase run continues through its parent."""
-    if state.get("status") == "RUNNING" or state.get(check_parents.PHASE):
+    active = state.get("status") in {"STARTING", "RUNNING"}
+    if active or state.get(check_parents.PHASE):
         return False
     return run.joinpath("run.json").is_file()

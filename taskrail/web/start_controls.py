@@ -4,7 +4,7 @@ A run on an overlapping project holds them back; the view says which one.
 """
 
 from taskrail.application import check_parents
-from taskrail.application.checkpoints import resume_available
+from taskrail.application.checkpoints import RESUMABLE, resume_available
 from taskrail.web import run_family
 
 RUN_INDEX = "run.json"
@@ -18,9 +18,13 @@ def starts(run, state, activity):
     blocked = not activity.held and (can_resume or follow_up)
     return dict(
         followup=free and follow_up,
+        retry=free and follow_up and state.get("status") != "NEEDS_GOAL",
         restart=restart(run, state, activity),
         resume=can_resume and free,
         resume_reason=reason,
+        resume_unavailable=reason
+        if not can_resume and not activity.held and state.get("status") in RESUMABLE
+        else None,
         waiting_for=activity.waiting if blocked else None,
     )
 

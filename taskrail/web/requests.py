@@ -55,7 +55,7 @@ RECORDED = (
     | TASK_ACTIONS
 )
 TASK_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,63}")
-ACTIONS = RECORDED | {RESUME, "restart", "stop", "delete"}
+ACTIONS = RECORDED | {RESUME, "restart", "retry", "stop", "delete"}
 ROOTS_KEY = '"roots":'
 
 
