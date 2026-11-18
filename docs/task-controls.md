@@ -4,22 +4,23 @@
 
 | Action | Required state | Result |
 |---|---|---|
-| Restart from scratch (standalone run) | Stopped run | Open the prefilled task form; submit explicitly to create a new run once no run is active on its projects |
+| Restart as new task (standalone run) | Stopped run | Open the prefilled task form to start a separate task from the original checkout. Previous outcomes stay in the original conversation |
+| Retry with context | Stopped standalone run with a goal, no active run on its projects | Repeat the latest request as a new conversation turn, retaining its mode, conditions, previous outcomes and working copy |
 | Add a goal | Goal needed | Edit the original submission, answer the clarification question in the Goal field and submit to start a new run |
 | Restart reviewed task (split child) | Latest attempt of the next unfinished task; no active writer | Start a linked attempt from the approved parent plan, directly at implementation; preserve previous edits and original preimages |
 | Restart this phase (integration review, Jenkins validation, server checks) | Latest stopped attempt of the phase | Start the phase again under the same delivery; the earlier run stays one of its attempts |
 | Correct integration findings | Rejected integration, no unfinished correction, remaining integration corrections | Start a fresh linked task with planning, plan review, implementation, local checks and result review; owned isolated branches also receive a verified commit |
 | Stop task | Running | Write a stop request; the worker cleans up opencode and saves an interruption checkpoint |
 | Continue from checkpoint | Eligible checkpoint, unchanged source, no active run on its projects | Append new attempts to the same run, starting at the interrupted stage; a stage that reported **Blocked** can continue too, with your note answering its question; an interrupted or blocked implementer first inspects its existing edits |
-| Send a follow-up Goal | Previous standalone run stopped, no active run on its projects | Start task understanding with the new Goal, inherited constraints and deferred checks. The original task and its public outcomes remain available as conversation history |
+| Send a follow-up message | Previous standalone run stopped, no active run on its projects | Start task understanding with the new message, inherited constraints and deferred checks. The original task and its public outcomes remain available as conversation history |
 | Discussion | New or follow-up submission | The reviewed answer appears in the task card, the report and the `answer` field of `taskrail status`. Ask another question in the same card. |
 | Plan | New or follow-up submission | Like Discussion, but the reviewed summary is a design document, saved as `design.md`; follow-ups refine it, a **Develop** follow-up implements it |
 | Confirm changes | A finished code change with planned server checks, after integration review for a split and any Jenkins validation | Accept the change; the server checks start only now |
 | Mark as done / Move back from Done | Stopped run | Move the run to the Done group, or return it to its computed group; nothing else changes |
 | Delete from history | Stopped/completed run; no active run of its split or delivery | Move run and launcher artifacts to local trash; leave source files untouched |
 
-A run on the same project holds back only what would start a worker: Continue, a
-follow-up and a task or phase restart. The run page names the active run's project
+A run on the same project holds back actions that would start a worker, including
+Continue, Retry with context, a follow-up and a task or phase restart. The run page names the active run's project
 instead of hiding the reason; Mark as done, Delete and the restart form stay usable.
 
 Each run page shows its mode (**Develop**, **Discussion** or **Plan**;
@@ -94,13 +95,17 @@ group, without signalling stored PIDs. Short checks may finish first. Closing th
 page does not stop work; stopping the managed service requests interruption.
 Continue retains frozen inputs, original preimages and approved scope. It verifies
 the task text, all four saved roles, project files and Git state before resuming.
-A missing or changed fingerprint requires Restart. Notes reach the agent verbatim
-within the existing permissions.
-For a changed split child use Restart reviewed task; for a standalone run use Restart.
+A missing or changed fingerprint requires a fresh attempt. Notes reach the agent
+verbatim within the existing permissions. For a changed split child use
+**Restart reviewed task**. For a standalone run use **Retry with context** to retain
+the conversation and current work, or **Restart as new task** to edit the submission
+and begin from the original checkout.
 None of these operations rolls back edits.
 
 Only `run_format: 3` runs are supported. Continue requires the exact application
-release identity; after a code update use Restart. Start a new task for any other
+release identity. After a code update, use **Retry with context** for a standalone
+run or the linked restart for an assigned task or phase. The card explains why a
+checkpoint is unavailable. Start a new task for any other
 format. Only supported runs can supply parent context or start a child or delivery phase.
 
 Allow all actions and its family-wide revocation are described once in
@@ -112,9 +117,19 @@ continuation with a different outcome returns the run to its computed group.
 Use **Continue the conversation** to ask a question, revise a proposal or request a code
 change. The next message keeps the current mode until you choose another. Each turn
 has its own run, worktree, stages and independent review. The card keeps its original
-title and link and shows previous questions and outcomes. Open **View earlier workflow**
+title and link. Previous outcomes appear at the top, each in its own collapsed block
+labelled with its question. Expand a block to read the full result. Expanded blocks
+stay open during polling. Open **View earlier workflow**
 for the stages and delivery controls of a previous turn. **Return to the latest turn**
 opens the reply form again.
+
+If a request stops before finishing, **Continue from checkpoint** resumes the saved
+stage when its checkpoint is usable. **Retry with context** repeats the same request
+from task understanding in a new turn. It preserves the complete conversation,
+current mode, committed changes and pending tracked or untracked files in a new
+worktree. It uses the current Taskrail build and settings. The earlier attempts stay
+available. Retrying needs no message. To clarify or change the request, write a new
+message under **Continue the conversation** and optionally switch modes.
 
 - **Discussion** produces a free-form reviewed answer, including results from SSH
   diagnostics. Earlier reviewed answers stay visible while a reply runs and after
@@ -152,7 +167,7 @@ A child turn retains its snapshotted context even if its ancestor is removed.
 
 Same-origin and CSRF-token checks apply to every mutation (`POST /api/tasks`,
 `/api/actions`, `/api/decision`). `/api/actions` accepts
-`{"id":"run-id","action":"restart|resume|stop|delete"}`, and a continuation may add `"note"`. Restart returns a `draft` for a standalone run,
+`{"id":"run-id","action":"restart|retry|resume|stop|delete"}`, and a continuation may add `"note"`. Retry accepts a standalone conversation's first or latest run ID and repeats its latest request through the follow-up workflow. It returns the new turn ID and `discussion_root`. Restart returns a `draft` for a standalone run,
 launches a linked attempt for an eligible split child, integration, validation or server phase,
 and refuses corrective writers. `/api/tasks` accepts the task fields plus the booleans `read_only`,
 `design`, `decompose` and `auto_approve`, and optionally `parent_run` with `submission_mode`
@@ -178,6 +193,7 @@ taskrail submit --followup RUN --mode discussion --goal "Explain the change"
 taskrail status RUN                       # status, answer, worker activity, approval, delivery step
 taskrail decide RUN alternative --text "Use tox instead"
 taskrail action RUN resume --note "python3 is installed now"
+taskrail action RUN retry                 # repeat the latest request with conversation and workspace
 taskrail submit --json payload.json       # the fields of POST /api/tasks
 ```
 

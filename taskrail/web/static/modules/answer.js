@@ -64,3 +64,16 @@ export function answerCard(text, goal, title = 'Answer') {
   section.append(el('h3', title), answerContent(text));
   return section;
 }
+
+export function previousAnswer(turn) {
+  const title = turn.answer ? (turn.mode === 'plan' ? 'Design document' : 'Answer') : 'Conclusion';
+  const details = el('details', undefined, 'previous-answer');
+  details.csKey = 'turn:' + turn.run;
+  const goal = (turn.goal || turn.run).split(/\r?\n/u)[0];
+  const label = goal.length > 100 ? goal.slice(0, 100) + '…' : goal;
+  details.append(
+    el('summary', title + ' · ' + label),
+    answerCard(turn.answer || turn.summary || '', turn.goal, title),
+  );
+  return details;
+}

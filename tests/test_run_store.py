@@ -39,7 +39,9 @@ class RunStoreTests(unittest.TestCase):
         atomic_json(self.run / "checkpoint.json", dict(run_format=3, stage="planner"))
         self.assertTrue(checkpoints.resume_available(self.run, state)[0])
         state["release_identity"] = "other-release"
-        self.assertIn("Restart", checkpoints.resume_available(self.run, state)[1])
+        self.assertEqual(
+            checkpoints.resume_available(self.run, state), (False, run_store.RELEASE_ERROR)
+        )
         state = current_run(dict(status="INTERRUPTED"))
         atomic_json(self.run / "checkpoint.json", dict(stage="planner"))
         self.assertIn("run format", checkpoints.resume_available(self.run, state)[1])

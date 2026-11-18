@@ -118,6 +118,20 @@ class CliApiTests(unittest.TestCase):
                     else:
                         state["answer"] = f"Reviewed {expected}"
                     atomic_json(run / "run.json", current_run(state))
+            code, retried = self.call("action", root, "retry")
+            self.assertEqual(code, 0, retried)
+            self.assertEqual(retried["discussion_root"], root)
+            text = (self.runs / ".submissions" / retried["id"] / "task.md").read_text()
+            latest = TaskDraft.submitted(run)
+            self.assertEqual(TaskDraft(text).fields(), latest.fields())
+            self.assertEqual(
+                task_modes.selected(TaskDraft(text).metadata),
+                task_modes.selected(latest.metadata),
+            )
+            history = json.loads(text.partition(HISTORY)[2])
+            self.assertEqual(len(history), len(turns))
+            self.assertEqual(history[0]["answer"], "Reviewed plan")
+            self.assertEqual(history[-1]["run"], run.name)
 
     def test_decide_answers_the_pending_ticket_and_status_shows_it(self):
         atomic_json(self.run / "run.json", current_run(dict(status="RUNNING", summary="Planning")))

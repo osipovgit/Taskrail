@@ -16,9 +16,11 @@ from taskrail.application import (
     delivery_confirmation,
     execution_context,
     mode_rules,
+    run_setup,
 )
 from taskrail.application.live import execute_task
 from taskrail.application.source_guard import SourceGuard
+from taskrail.application.task_config import configuration
 from taskrail.core.files import atomic_json, digest
 from taskrail.web import delivery_launch, delivery_state, requests, submissions, task_form
 from taskrail.web.history import HISTORY, TaskDraft, conversation, previous_messages, task_draft
@@ -175,6 +177,87 @@ class TaskControlTests(unittest.TestCase):
         self.assertEqual(previous_messages(child)[0]["goal"], "Return 2")
         self.assertEqual(task_draft(child)["goal"], "Explain the result")
         self.assertNotIn("Answer only", task_draft(child)["constraints"])
+
+    def start_record(self, name, **outcome):
+        """Create the real isolated checkout and sealed inputs without running a provider."""
+        run = self.runs / name
+        task = self.runs / ".submissions" / name / "task.md"
+        config = configuration(task, self.settings)
+        with patch("taskrail.application.remote_catalog.available", return_value={}):
+            state = run_setup.open_state(config, run, dict(resume=False, plan_response=None), True)
+        state.update(outcome)
+        atomic_json(run / "run.json", state)
+        return state
+
+    def test_retry_repeats_latest_request_with_full_history_and_pending_work_after_update(self):
+        with patch.object(submissions, "start_worker", return_value=None):
+            first = self.launcher.submit(dict(self.payload, read_only=True))["id"]
+            first_state = self.start_record(
+                first, status="NO_CHANGES_REQUIRED", answer="## First result\nReviewed findings."
+            )
+            second = self.launcher.submit(
+                dict(
+                    goal="Investigate the findings in depth.",
+                    criteria="Explain each result.",
+                    constraints="Inspect only.",
+                    parent_run=first,
+                    submission_mode="discussion",
+                )
+            )["id"]
+            second_state = self.start_record(
+                second,
+                status="BLOCKED",
+                summary="Missing inventory binding.",
+                release_identity="previous-build",
+            )
+            old_run = self.runs / second
+            atomic_json(old_run / "checkpoint.json", current_run(dict(stage="planner")))
+            old_task = (old_run / "00-input/task.md").read_bytes()
+            working = Path(second_state["roots"]["project"])
+            (working / "hello.py").write_text("Earlier pending edit\n")
+            (working / "notes.txt").write_text("Keep this untracked file\n")
+            controls = run_view(self.runs, second)["actions"]
+            self.assertFalse(controls["resume"])
+            self.assertTrue(controls["retry"])
+            self.assertIn("different Taskrail build", controls["resume_unavailable"])
+            result = self.launcher.action(dict(id=first, action="retry"))
+            third = result["id"]
+            self.assertEqual(result["discussion_root"], first)
+            self.assertEqual(
+                [row["run"] for row in run_view(self.runs, third)["conversation"]], [first, second]
+            )
+            third_state = self.start_record(third)
+        retried = self.runs / third
+        self.assertEqual(
+            TaskDraft.submitted(retried).fields(), TaskDraft.submitted(old_run).fields()
+        )
+        self.assertTrue(TaskDraft.submitted(retried).metadata["read_only"])
+        self.assertEqual(previous_messages(retried)[0]["answer"], first_state["answer"])
+        self.assertEqual(previous_messages(retried)[1]["summary"], second_state["summary"])
+        new_working = Path(third_state["roots"]["project"])
+        self.assertNotEqual(new_working, working)
+        self.assertEqual((new_working / "hello.py").read_text(), "Earlier pending edit\n")
+        self.assertEqual((new_working / "notes.txt").read_text(), "Keep this untracked file\n")
+        self.assertEqual((old_run / "00-input/task.md").read_bytes(), old_task)
+        self.assertFalse((retried / "checkpoint.json").exists())
+        self.assertEqual(third_state["results"], {})
+        self.assertEqual((self.repo / "hello.py").read_text(), "def hello():\n    return 1\n")
+
+    def test_retry_refuses_active_and_assigned_runs(self):
+        index = json.loads((self.run / "run.json").read_text())
+        for update in (
+            dict(status="STARTING"),
+            dict(status="RUNNING"),
+            dict(phase="task"),
+            dict(phase="server"),
+        ):
+            with self.subTest(update=update):
+                atomic_json(self.run / "run.json", dict(index, **update))
+                self.assertFalse(run_view(self.runs, self.run.name)["actions"]["retry"])
+                with patch.object(submissions, "start_worker") as start:
+                    with self.assertRaises(ValueError):
+                        self.launcher.action(dict(id=self.run.name, action="retry"))
+                    start.assert_not_called()
 
     def test_only_a_server_check_names_its_confirmed_change(self):
         for fields in (

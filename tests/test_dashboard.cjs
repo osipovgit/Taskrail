@@ -726,6 +726,44 @@ async function main() {
   assert.equal(state.composing, false);
   console.log('Assigned task restart uses the action API without opening a detached draft.');
 
+  const stopped = {
+    ...assigned,
+    id: 'analysis',
+    phase: null,
+    actions: {
+      retry: true,
+      restart: true,
+      resume: false,
+      resume_unavailable: 'This checkpoint belongs to a different Taskrail build.',
+    },
+  };
+  state.selected = 'research';
+  app.render(stopped);
+  const retryButton = all(nodes.chat).find((node) => node.textContent === 'Retry with context');
+  assert.equal(retryButton.hidden, false);
+  assert.equal(retryButton.disabled, false);
+  assert.ok(all(nodes.chat).some((node) => node.textContent === 'Restart as new task'));
+  assert.ok(
+    all(nodes.chat).some((node) => node.textContent.includes(stopped.actions.resume_unavailable)),
+  );
+  calls.length = 0;
+  globalThis.fetch = async (url, options) => {
+    calls.push([url, options?.body && JSON.parse(options.body)]);
+    const value =
+      url === '/api/actions'
+        ? { id: 'analysis-retry', discussion_root: 'research', status: 'STARTING' }
+        : url === '/api/runs'
+          ? [{ id: 'research', latest: 'analysis-retry', members: ['analysis', 'analysis-retry'] }]
+          : { ...stopped, id: 'analysis-retry', status: 'STARTING', actions: {} };
+    return { ok: true, json: async () => value };
+  };
+  await retryButton.onclick();
+  assert.deepEqual(calls[0], ['/api/actions', { id: 'analysis', action: 'retry' }]);
+  assert.equal(state.selected, 'research');
+  assert.equal(state.currentRun.id, 'analysis-retry');
+  assert.equal(state.composing, false);
+  console.log('Retry repeats the latest request in its conversation without a new goal.');
+
   app.render({
     ...assigned,
     id: 'prior',
@@ -793,6 +831,33 @@ async function main() {
   assert.equal(answers[1].querySelector('script'), undefined);
   assert.ok(all(nodes.chat).some((node) => node.textContent === 'Task, review and activity'));
   assert.ok(all(nodes.chat).every((node) => node.textContent !== question.summary));
+
+  const earlierResults = all(nodes.chat).filter((node) => node.className === 'previous-answer');
+  assert.equal(earlierResults.length, 1);
+  assert.equal(Boolean(earlierResults[0].open), false);
+  const currentActions = all(nodes.chat).find((node) => node.className === 'run-actions');
+  assert.ok(all(nodes.chat).indexOf(earlierResults[0]) < all(nodes.chat).indexOf(currentActions));
+  earlierResults[0].open = true;
+  const repeated = {
+    ...question,
+    status: 'RUNNING',
+    conversation: [
+      ...question.conversation,
+      { run: 'analysis', goal: 'Which projects?', summary: 'Further inspection was interrupted.' },
+    ],
+  };
+  app.render(repeated);
+  const afterPoll = all(nodes.chat).filter((node) => node.className === 'previous-answer');
+  assert.equal(afterPoll.length, 2);
+  assert.equal(afterPoll[0].open, true);
+  assert.equal(Boolean(afterPoll[1].open), false);
+  assert.notEqual(afterPoll[0].csKey, afterPoll[1].csKey);
+  assert.ok(all(afterPoll[0]).some((node) => node.textContent === 'Two projects.'));
+  assert.ok(
+    all(afterPoll[1]).some((node) => node.textContent === 'Further inspection was interrupted.'),
+  );
+  app.render({ ...repeated, status: 'NO_CHANGES_REQUIRED' });
+  assert.equal(all(nodes.chat).filter((node) => node.className === 'previous-answer').length, 2);
 
   const planTurn = {
     ...question,

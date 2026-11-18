@@ -1,5 +1,5 @@
 import { badge, detail, el, list, showError } from './dom.js';
-import { answerCard } from './answer.js';
+import { answerCard, previousAnswer } from './answer.js';
 import { renderMonitor } from './monitor.js';
 import { executionCard, stageCard, tickStageTimers } from './stages.js';
 import { deliverySection } from './epic.js';
@@ -246,8 +246,9 @@ export function addRoot(alias = '', path = '') {
 }
 
 const ACTIONS = [
-  ['restart', 'Restart from scratch'],
   ['resume', 'Continue from checkpoint'],
+  ['retry', 'Retry with context'],
+  ['restart', 'Restart as new task'],
   ['stop', 'Stop task'],
   ['done', 'Mark as done'],
   ['reopen', 'Move back from Done'],
@@ -255,7 +256,10 @@ const ACTIONS = [
   ['delete', 'Delete from history'],
 ];
 const ACTION_TITLES = {
-  restart: 'Edit the task before starting a new run. No rollback.',
+  retry:
+    'Repeat the latest request in this conversation with previous results and the current workspace.',
+  restart:
+    'Open a new task from the original checkout with editable goal and conditions. Conversation history stays in this card.',
   stop: 'Stop the worker and save a checkpoint. Partial edits are preserved.',
   done: 'Move this run to Done. Nothing in the project changes.',
   reopen: 'Return this run to its computed group.',
@@ -286,6 +290,7 @@ function actionButtons(data, embedded = false) {
     button.disabled = state.actionPending || !available;
     // Unavailable actions are hidden rather than shown disabled.
     button.hidden = !available;
+    if (action === 'retry' && state.turn) button.hidden = true;
     if (action === 'delete') {
       button.className = 'danger';
       if (state.turn) button.hidden = true;
@@ -301,6 +306,9 @@ function actionButtons(data, embedded = false) {
   if (data.actions?.waiting_for) {
     const hint = data.status === 'NEEDS_GOAL' ? '' : '. Continue becomes available when it stops.';
     actions.append(el('p', data.actions.waiting_for + hint, 'muted'));
+  }
+  if (data.actions?.resume_unavailable) {
+    actions.append(el('p', 'Checkpoint unavailable. ' + data.actions.resume_unavailable, 'muted'));
   }
   if (data.actions?.resume) {
     const note = el('textarea', undefined, 'resume-note');
@@ -383,7 +391,11 @@ const isRun = (focus) => Boolean(focus) && !focus.includes(':');
 
 // Everything one run shows; a run inside its parent's card has no delivery of its own.
 export function runBody(data, embedded = false, child = null) {
-  const nodes = [...runHeader(data, embedded), actionButtons(data, embedded)];
+  const nodes = [
+    ...runHeader(data, embedded),
+    ...previousResults(data),
+    actionButtons(data, embedded),
+  ];
   if (state.turn && !embedded) {
     const latest = el('button', 'Return to the latest turn');
     latest.onclick = () => showRun(state.selected).catch(showError);
@@ -404,18 +416,6 @@ export function runBody(data, embedded = false, child = null) {
   for (const job of data.execution_jobs || []) nodes.push(executionCard(job));
   if (data.actions?.stop_requested)
     nodes.push(el('p', 'Stop requested. Waiting for process cleanup and checkpoint.', 'muted'));
-  for (const turn of data.conversation || []) {
-    const earlier = turn.answer
-      ? answerCard(turn.answer, turn.goal, turn.mode === 'plan' ? 'Design document' : 'Answer')
-      : answerCard(turn.summary || '', turn.goal, 'Conclusion');
-    const discussion = state.runs.find((run) => run.id === state.selected && run.latest);
-    if (discussion && (turn.run === discussion.id || discussion.members.includes(turn.run))) {
-      const show = el('button', 'View earlier workflow');
-      show.onclick = () => showRun(discussion.id, '', turn.run).catch(showError);
-      earlier.append(show);
-    }
-    nodes.push(earlier);
-  }
   const research = !data.phase && data.draft?.read_only;
   if (data.answer && research) {
     nodes.push(
@@ -435,6 +435,19 @@ export function runBody(data, embedded = false, child = null) {
     nodes.push(details);
   } else nodes.push(...records);
   return nodes;
+}
+
+function previousResults(data) {
+  return (data.conversation || []).map((turn) => {
+    const earlier = previousAnswer(turn);
+    const discussion = state.runs.find((run) => run.id === state.selected && run.latest);
+    if (discussion && (turn.run === discussion.id || discussion.members.includes(turn.run))) {
+      const show = el('button', 'View earlier workflow');
+      show.onclick = () => showRun(discussion.id, '', turn.run).catch(showError);
+      earlier.append(show);
+    }
+    return earlier;
+  });
 }
 
 function workflowRecords(data) {
@@ -550,7 +563,7 @@ export async function runAction(action, extra = {}, runId = state.selected) {
     // A new or continued task run opens inside its parent; the parent keeps its focus.
     const thread = state.runs.find((run) => run.id === state.selected && run.latest);
     if (action === 'delete') select(thread && runId !== thread.id ? thread.id : result.id);
-    else if (result.id !== runId) select(result.id);
+    else if (result.id !== runId) select(result.discussion_root || result.id);
     state.runs = await get('/api/runs');
     menu();
   } catch (error) {

@@ -30,7 +30,7 @@ def load_checkpoint(run, state):
         checkpoint = json.loads(path.read_text())
         run_store.validate(checkpoint)
         return checkpoint
-    raise ValueError("No safe checkpoint. Restart creates a fresh run against current source.")
+    raise ValueError("No safe checkpoint is available for this run.")
 
 
 def resume_available(run, state):

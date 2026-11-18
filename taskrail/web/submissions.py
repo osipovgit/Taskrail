@@ -81,14 +81,15 @@ class TaskLauncher:
             return self.launch(launch, sources)
 
     def action(self, payload):
-        """Restart drafts, stop, delete or continue an existing run."""
+        """Retry requests, offer restart drafts, stop, delete or continue a run."""
         requests.validate_action(payload)
         run = history.checked_run(self.base, payload[ID])
         action = payload["action"]
         if action != "delete":
             history.run_store.read(run)
-        if action == "restart":
-            return restarts.restart(self, run)
+        restart = {"restart": restarts.restart, "retry": restarts.retry}.get(action)
+        if restart:
+            return restart(self, run)
         if action == "stop":
             return lifecycle.request_stop(run)
         if action == "delete":

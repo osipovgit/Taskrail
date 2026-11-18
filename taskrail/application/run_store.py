@@ -7,7 +7,7 @@ from taskrail.core.schema import require
 
 FORMAT = 3
 FORMAT_ERROR = "Unsupported run format; start a new task"
-RELEASE_ERROR = "Run was created by a different release; use Restart"
+RELEASE_ERROR = "This checkpoint belongs to a different Taskrail build."
 
 
 def supported(state):
