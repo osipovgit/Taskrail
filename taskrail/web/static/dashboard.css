@@ -237,7 +237,46 @@ section.running {
 }
 
 .reviewed-answer {
-  border-inline-start: 3px solid var(--accent);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin: 0;
+  padding: 16px 0;
+  border: 0;
+  background: transparent;
+}
+
+.conversation-history {
+  margin-top: 12px;
+  border-inline-start: 4px solid var(--accent);
+  background: var(--accent-soft);
+}
+
+.conversation-message {
+  min-width: 0;
+  max-width: min(78ch, 100% - 24px);
+  padding: 14px 18px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  overflow-wrap: anywhere;
+}
+
+.user-message {
+  align-self: flex-end;
+  border-end-end-radius: 4px;
+  background: var(--message);
+}
+
+.assistant-message {
+  align-self: flex-start;
+  border-end-start-radius: 4px;
+  background: var(--surface);
+}
+
+.message-label {
+  margin: 0 0 8px;
+  color: var(--muted);
+  font-size: 12px;
 }
 
 .answer-text {
@@ -282,6 +321,10 @@ section.running {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   line-height: 1.6;
+}
+
+.conversation-message > .text {
+  margin: 0;
 }
 
 p.text.muted {
@@ -331,6 +374,20 @@ details[open] > summary::before {
 
 summary:hover {
   color: var(--fg);
+}
+
+.previous-answer {
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.previous-answer > summary {
+  width: 100%;
+  color: var(--fg);
+  font-size: 14px;
+  overflow-wrap: anywhere;
 }
 
 .task-fold {

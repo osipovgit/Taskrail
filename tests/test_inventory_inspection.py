@@ -142,6 +142,8 @@ class InventoryInspectionTests(unittest.TestCase):
             receipt = json.loads(denied.read_text())
             self.assertEqual(receipt["request"], missing)
             self.assertEqual(receipt["result"]["status"], "REJECTED")
+            self.assertEqual(receipt["result"]["source"], str(self.file))
+            self.assertEqual(receipt["result"]["resolver"], "ansible")
             self.assertIn("Missing group", receipt["result"]["detail"])
             self.assertNotIn(SECRET, refusal)
             self.assertEqual(json.loads((run / "run.json").read_text())[inventory.KEY], {})
@@ -390,7 +392,7 @@ class InventoryInspectionTests(unittest.TestCase):
             (FIXTURE, "missing", "selected group is absent"),
             ("k8s: [" + SECRET, "k8s", "Invalid static YAML"),
             ("k8s: {hosts: [" + SECRET + "]}", "k8s", "mapping for hosts"),
-            ("k8s: {" + SECRET + ": {}}", "k8s", "only hosts, vars and children"),
+            ("k8s: {" + SECRET + ": {}}", "k8s", "contains no hosts"),
             (FIXTURE.replace(SECRET, "{{ lookup() }}"), "k8s", "Invalid static YAML"),
             (
                 FIXTURE.replace(

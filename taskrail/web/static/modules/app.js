@@ -438,16 +438,20 @@ export function runBody(data, embedded = false, child = null) {
 }
 
 function previousResults(data) {
-  return (data.conversation || []).map((turn) => {
+  if (!data.conversation?.length) return [];
+  const history = el('section', undefined, 'conversation-history');
+  history.append(el('h3', 'Previous messages'));
+  const discussion = state.runs.find((run) => run.id === state.selected && run.latest);
+  for (const turn of data.conversation) {
     const earlier = previousAnswer(turn);
-    const discussion = state.runs.find((run) => run.id === state.selected && run.latest);
     if (discussion && (turn.run === discussion.id || discussion.members.includes(turn.run))) {
       const show = el('button', 'View earlier workflow');
       show.onclick = () => showRun(discussion.id, '', turn.run).catch(showError);
       earlier.append(show);
     }
-    return earlier;
-  });
+    history.append(earlier);
+  }
+  return [history];
 }
 
 function workflowRecords(data) {

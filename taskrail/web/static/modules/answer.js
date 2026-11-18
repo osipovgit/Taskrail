@@ -60,8 +60,14 @@ export function answerContent(text) {
 
 export function answerCard(text, goal, title = 'Answer') {
   const section = el('section', undefined, 'reviewed-answer');
-  if (goal) section.append(el('h3', 'Question'), el('p', goal, 'text'));
-  section.append(el('h3', title), answerContent(text));
+  if (goal) {
+    const question = el('div', undefined, 'conversation-message user-message');
+    question.append(el('h3', 'You', 'message-label'), el('p', goal, 'text'));
+    section.append(question);
+  }
+  const response = el('div', undefined, 'conversation-message assistant-message');
+  response.append(el('h3', title, 'message-label'), answerContent(text));
+  section.append(response);
   return section;
 }
 

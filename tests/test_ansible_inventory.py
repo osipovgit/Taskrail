@@ -10,13 +10,23 @@ from unittest.mock import patch
 
 from git_fixture import repository
 
-from taskrail.application import ansible_inventory, inventory_inputs, remote_catalog, run_setup
+from taskrail.application import (
+    ansible_inventory,
+    attempt_session,
+    execution_context,
+    inventory_inputs,
+    remote_catalog,
+    run_setup,
+)
 from taskrail.application.task_config import configuration
+from taskrail.application.workflow_state import Workflow
 from taskrail.core.files import atomic_json
 from taskrail.executor import inventory, inventory_file
 from taskrail.executor.service import ExecutorServer
 from taskrail.executor.store import TicketStore
 from taskrail.interactions import inventory_lookup
+from taskrail.interactions.actions import Actions
+from taskrail.interactions.session import StageSession
 
 SECRET = "private-fixture-password"
 FIXTURES = Path(__file__).with_name("fixtures") / "ansible-inventory"
@@ -210,6 +220,40 @@ class ProjectInventoryTests(unittest.TestCase):
         self.assertEqual(selection["file"], str(source))
         catalog = inventory_lookup.discover(config, selection)
         self.assertEqual(set(catalog["hosts"]), {"worker15"}, catalog)
+        run = self.root / "reply"
+        restored = configuration(task, settings, roots_override=state["roots"])
+        execution_context.restore(run, restored, state)
+        for number, settings in enumerate((config, restored)):
+            workflow = Workflow(settings, run, state, dict(options, debug=False))
+            workflow.flow["stage"] = "planner"
+            workflow.guard.capture()
+            folder = run / f"{number:02}-plan"
+            folder.mkdir()
+            (folder / "events.jsonl").touch()
+            record = dict(stage="planner", role="planner", timeout_seconds=60)
+            environment = attempt_session.session_environment(workflow, None, None)
+            session = StageSession((folder, record), state, environment, {})
+            with patch.object(inventory, "load", side_effect=AssertionError("Static fallback")):
+                for path in (worktree / source.name, source):
+                    payload = dict(
+                        schema_version=1,
+                        status="INVENTORY_REQUEST",
+                        path=str(path),
+                        group="workers",
+                    )
+                    response = Actions(session).route(
+                        dict(
+                            status="OK",
+                            final_text=json.dumps(payload),
+                            sessions=["test"],
+                            final_message_id=f"{number}-{path}",
+                        )
+                    )
+                    self.assertIn('"resolver": "ansible"', response)
+                    self.assertIn("worker15", response)
+                    self.assertIn("binding", state[inventory.KEY])
+                    self.assertEqual(state[inventory.KEY]["file"], str(source))
+                    self.assertNotIn("ansible_password", response)
 
     def test_credentials_in_named_ini_and_external_vars_are_masked_before_planning(self):
         source = self.root / "hosts.ini"
@@ -255,3 +299,30 @@ class ProjectInventoryTests(unittest.TestCase):
             feedback = self.discover(source, "workers")
         self.assertIn("exited with code 17", feedback["detail"])
         self.assertNotIn(SECRET, json.dumps(feedback))
+
+    @unittest.skipUnless(shutil.which("ansible-inventory"), "requires the project Ansible CLI")
+    def test_static_lookup_matches_ansible_with_ignored_group_keys(self):
+        source = self.root / "cluster.yaml"
+        source.write_text(
+            "all:\n  vars:\n    ansible_user: operator\n"
+            f"    ansible_password: {SECRET}\n"
+            "  children:\n    workers:\n      become: true\n"
+            "      ansible_python_interpreter: /usr/bin/python3\n"
+            "      ansible_user: ignored-user\n"
+            "      hosts:\n        node1: {ansible_host: 192.0.2.15}\n"
+            "    unrelated:\n      custom_metadata: ignored\n"
+            "      hosts:\n        other: {ansible_host: 192.0.2.99}\n"
+        )
+        config = {"roots": {"repo": self.root}}
+        selection = inventory_lookup.source(config, {"path": str(source), "group": "workers"})
+        with patch.object(ansible_inventory, "resolve", wraps=ansible_inventory.resolve) as native:
+            static = inventory_lookup.discover(config, selection)
+            native.assert_not_called()
+            resolved = remote_catalog.discover(selection)
+            native.assert_called_once_with(selection)
+        self.assertEqual(static["hosts"], resolved["hosts"])
+        self.assertEqual(
+            static["hosts"],
+            {"node1": {"hostname": "192.0.2.15", "username": "operator", "port": 22}},
+        )
+        self.assertNotIn(SECRET, json.dumps(static))

@@ -114,6 +114,9 @@ and can add another source. Each reply resolves the requested group afresh. Chil
 tasks inherit the parent's source selections. For YAML
 files found during research that the operator did not name, the executor can
 inspect static groups and literal inline variables without executing project code.
+Like Ansible's YAML plugin, this static reader ignores unrelated group keys;
+connection variables must be inside `vars` or a host mapping. It still rejects
+malformed `hosts`, `vars` and `children` mappings.
 
 Ansible discovers a colocated `ansible.cfg` or uses `ANSIBLE_CONFIG` from the
 application environment. The explicit source takes precedence over the default
@@ -129,7 +132,9 @@ action. Login-shell exports apply to the CLI invocation; a running systemd user
 service has its own environment.
 
 The lookup receipt under `00-input/remote/` records either the selected aliases
-or the reason selection failed. Ansible can warn about ignored group keys and
+or the reason selection failed. Once the source is selected, it also records its
+resolved path and resolver (`ansible` or `static-yaml`), including failed lookups.
+Ansible can warn about ignored group keys and
 still resolve the hosts. For a connection failure, inspect the SSH ticket.
 Keep full `ansible-inventory --list` output out of scratch files and logs because
 it can include connection passwords.

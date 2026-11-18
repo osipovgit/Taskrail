@@ -49,8 +49,7 @@ class Groups:
             return
         self._seen.add(marker)
         group = mapping(group, "a group")
-        if set(group) - {"hosts", "vars", "children"}:
-            raise InventoryError("A static inventory group accepts only hosts, vars and children.")
+        # Ansible's YAML plugin ignores unrelated group keys while resolving these mappings.
         variables = self.variables.setdefault(name, {})
         variables.update(mapping(group.get("vars"), "group vars"))
         self.collect_hosts(name, mapping(group.get("hosts"), "hosts"))
