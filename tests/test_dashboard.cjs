@@ -833,7 +833,19 @@ async function main() {
   assert.ok(all(nodes.chat).every((node) => node.textContent !== question.summary));
 
   const earlierResults = all(nodes.chat).filter((node) => node.className === 'previous-answer');
+  const historyBlock = all(nodes.chat).find((node) => node.className === 'conversation-history');
+  assert.ok(historyBlock);
+  assert.ok(all(historyBlock).some((node) => node.textContent === 'Previous messages'));
   assert.equal(earlierResults.length, 1);
+  assert.ok(all(historyBlock).includes(earlierResults[0]));
+  const messages = all(earlierResults[0]).filter((node) =>
+    node.className?.includes('conversation-message'),
+  );
+  assert.equal(messages.length, 2);
+  assert.ok(messages[0].className.includes('user-message'));
+  assert.ok(all(messages[0]).some((node) => node.textContent === 'Which projects?'));
+  assert.ok(messages[1].className.includes('assistant-message'));
+  assert.ok(all(messages[1]).some((node) => node.textContent === 'Two projects.'));
   assert.equal(Boolean(earlierResults[0].open), false);
   const currentActions = all(nodes.chat).find((node) => node.className === 'run-actions');
   assert.ok(all(nodes.chat).indexOf(earlierResults[0]) < all(nodes.chat).indexOf(currentActions));

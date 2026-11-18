@@ -117,8 +117,9 @@ continuation with a different outcome returns the run to its computed group.
 Use **Continue the conversation** to ask a question, revise a proposal or request a code
 change. The next message keeps the current mode until you choose another. Each turn
 has its own run, worktree, stages and independent review. The card keeps its original
-title and link. Previous outcomes appear at the top, each in its own collapsed block
-labelled with its question. Expand a block to read the full result. Expanded blocks
+title and link. A highlighted **Previous messages** panel at the top keeps each
+earlier turn in its own collapsed block labelled with its question. Expand it to
+read the question on the right and the response on the left. Expanded blocks
 stay open during polling. Open **View earlier workflow**
 for the stages and delivery controls of a previous turn. **Return to the latest turn**
 opens the reply form again.
